@@ -588,9 +588,9 @@ export interface ErpPurchaseOrdersS539Dcf81BRow {
   created_at: string | null;
   updated_at: string | null;
   order_no: string;
-  order_date: string;
+  order_date: any;
   supplier_id: number | null;  // FK -> erp_suppliers_s_539dcf81_b.id
-  delivery_date: string | null;
+  delivery_date: any | null;
   total_amount: number | null;
   tax_amount: number | null;
   discount_amount: number | null;
@@ -779,9 +779,9 @@ export interface ErpSalesOrdersS539Dcf81BRow {
   created_at: string | null;
   updated_at: string | null;
   order_no: string;
-  order_date: string;
+  order_date: any;
   customer_id: number | null;  // FK -> erp_customers_s_539dcf81_b.id
-  delivery_date: string | null;
+  delivery_date: any | null;
   total_amount: number | null;
   tax_amount: number | null;
   discount_amount: number | null;

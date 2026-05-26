@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, Row, Col, InputNumber } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
@@ -215,71 +215,76 @@ export function Customers() {
           form.resetFields();
           setEditingCustomer(null);
         }}
-        footer={null}
+        footer={
+          <Space>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="客户编码"
-            name="code"
-            rules={[{ required: true, message: '请输入客户编码' }]}
-          >
-            <Input placeholder="请输入客户编码" disabled={!!editingCustomer} />
-          </Form.Item>
-          <Form.Item
-            label="客户名称"
-            name="name"
-            rules={[{ required: true, message: '请输入客户名称' }]}
-          >
-            <Input placeholder="请输入客户名称" />
-          </Form.Item>
-          <Form.Item label="简称" name="short_name">
-            <Input placeholder="请输入简称" />
-          </Form.Item>
-          <Form.Item label="类型" name="type" initialValue="enterprise">
-            <Select>
-              <Option value="enterprise">企业</Option>
-              <Option value="individual">个人</Option>
-              <Option value="government">政府</Option>
-              <Option value="other">其他</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item label="等级" name="level" initialValue="normal">
-            <Select>
-              <Option value="vip">VIP</Option>
-              <Option value="important">重要</Option>
-              <Option value="normal">普通</Option>
-              <Option value="potential">潜在</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item label="联系人" name="contact_name">
-            <Input placeholder="请输入联系人" />
-          </Form.Item>
-          <Form.Item label="联系电话" name="contact_phone">
-            <Input placeholder="请输入联系电话" />
-          </Form.Item>
-          <Form.Item label="地址" name="address">
-            <Input placeholder="请输入地址" />
-          </Form.Item>
-          <Form.Item label="税号" name="tax_no">
-            <Input placeholder="请输入税号" />
-          </Form.Item>
-          <Form.Item label="信用额度" name="credit_limit" initialValue={0}>
-            <Input type="number" placeholder="请输入信用额度" />
-          </Form.Item>
-          <Form.Item label="状态" name="status" initialValue="active">
-            <Select>
-              <Option value="active">启用</Option>
-              <Option value="inactive">停用</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="客户编码"
+                name="code"
+                rules={[{ required: true, message: '请输入客户编码' }]}
+              >
+                <Input placeholder="请输入客户编码" disabled={!!editingCustomer} />
+              </Form.Item>
+              <Form.Item
+                label="客户名称"
+                name="name"
+                rules={[{ required: true, message: '请输入客户名称' }]}
+              >
+                <Input placeholder="请输入客户名称" />
+              </Form.Item>
+              <Form.Item label="简称" name="short_name">
+                <Input placeholder="请输入简称" />
+              </Form.Item>
+              <Form.Item label="类型" name="type" initialValue="enterprise">
+                <Select>
+                  <Option value="enterprise">企业</Option>
+                  <Option value="individual">个人</Option>
+                  <Option value="government">政府</Option>
+                  <Option value="other">其他</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item label="等级" name="level" initialValue="normal">
+                <Select>
+                  <Option value="vip">VIP</Option>
+                  <Option value="important">重要</Option>
+                  <Option value="normal">普通</Option>
+                  <Option value="potential">潜在</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item label="联系人" name="contact_name">
+                <Input placeholder="请输入联系人" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="联系电话" name="contact_phone">
+                <Input placeholder="请输入联系电话" />
+              </Form.Item>
+              <Form.Item label="地址" name="address">
+                <Input placeholder="请输入地址" />
+              </Form.Item>
+              <Form.Item label="税号" name="tax_no">
+                <Input placeholder="请输入税号" />
+              </Form.Item>
+              <Form.Item label="信用额度" name="credit_limit" initialValue={0}>
+                <InputNumber placeholder="请输入信用额度" />
+              </Form.Item>
+              <Form.Item label="状态" name="status" initialValue="active">
+                <Select>
+                  <Option value="active">启用</Option>
+                  <Option value="inactive">停用</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>

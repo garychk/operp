@@ -236,7 +236,7 @@ export function ProLayout() {
       fixSiderbar
       fixedHeader
       splitMenus={false}
-      title="ERP 管理系统"
+      title="Supabase ERP"
       logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
       menuDataRender={() => menuData}
       location={{ pathname: location.pathname }}

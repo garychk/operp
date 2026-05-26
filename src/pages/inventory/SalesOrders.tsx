@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
+import dayjs from 'dayjs';
 
 type SalesOrder = Tables['erp_sales_orders_s_539dcf81_b']['Row'];
 type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
@@ -90,7 +91,14 @@ export function SalesOrders() {
 
   const handleEdit = (record: SalesOrder) => {
     setEditingOrder(record);
-    form.setFieldsValue(record);
+    const formValues = { ...record }; // 创建副本，不修改原对象
+    if (formValues.order_date) {
+      formValues.order_date = dayjs(formValues.order_date); // 转换为 dayjs 对象
+    }
+    if (formValues.delivery_date) {
+      formValues.delivery_date = dayjs(formValues.delivery_date); // 转换为 dayjs 对象
+    }
+    form.setFieldsValue(formValues);
     setIsModalOpen(true);
   };
 
@@ -121,7 +129,7 @@ export function SalesOrders() {
     setEditingOrder(null);
     form.setFieldsValue({
       order_no: `SO${Date.now().toString().slice(-8)}`,
-      order_date: new Date().toISOString().split('T')[0],
+      order_date: dayjs(new Date()),
       customer_id: undefined,
       delivery_date: '',
       total_amount: 0,
@@ -220,8 +228,8 @@ export function SalesOrders() {
   ];
 
   return (
-    <Card variant="borderless" title="销售订单" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增订单</Button>}>      
-      
+    <Card variant="borderless" title="销售订单" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增订单</Button>}>
+
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="搜索订单号或客户..."
@@ -248,88 +256,91 @@ export function SalesOrders() {
           form.resetFields();
           setEditingOrder(null);
         }}
-        footer={null}
+        footer={<Space>
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="订单号"
-            name="order_no"
-            rules={[{ required: true, message: '请输入订单号' }]}
-          >
-            <Input placeholder="请输入订单号" disabled={!!editingOrder} />
-          </Form.Item>
-          <Form.Item
-            label="客户"
-            name="customer_id"
-            rules={[{ required: true, message: '请选择客户' }]}
-          >
-            <Select placeholder="请选择客户">
-              {customers.map((c) => (
-                <Option key={c.id} value={c.id}>{c.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item
-            label="订单日期"
-            name="order_date"
-            rules={[{ required: true, message: '请选择订单日期' }]}
-          >
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item label="交货日期" name="delivery_date">
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item label="总金额" name="total_amount" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入总金额" />
-          </Form.Item>
-          <Form.Item label="税额" name="tax_amount" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入税额" />
-          </Form.Item>
-          <Form.Item label="折扣金额" name="discount_amount" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入折扣金额" />
-          </Form.Item>
-          <Form.Item label="应收金额" name="receivable_amount" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入应收金额" />
-          </Form.Item>
-          <Form.Item label="币种" name="currency" initialValue="CNY">
-            <Select>
-              <Option value="CNY">人民币</Option>
-              <Option value="USD">美元</Option>
-              <Option value="EUR">欧元</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item label="交货地址" name="delivery_address">
-            <Input placeholder="请输入交货地址" />
-          </Form.Item>
-          <Form.Item label="联系人" name="contact_person">
-            <Input placeholder="请输入联系人" />
-          </Form.Item>
-          <Form.Item label="联系电话" name="contact_phone">
-            <Input placeholder="请输入联系电话" />
-          </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <TextArea rows={3} placeholder="请输入备注" />
-          </Form.Item>
-          <Form.Item label="状态" name="status" initialValue="draft">
-            <Select>
-              <Option value="draft">草稿</Option>
-              <Option value="pending">待审批</Option>
-              <Option value="approved">已审批</Option>
-              <Option value="partially_delivered">部分发货</Option>
-              <Option value="delivered">已发货</Option>
-              <Option value="closed">已关闭</Option>
-              <Option value="cancelled">已取消</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="订单号"
+                name="order_no"
+                rules={[{ required: true, message: '请输入订单号' }]}
+              >
+                <Input placeholder="请输入订单号" disabled={!!editingOrder} />
+              </Form.Item>
+              <Form.Item
+                label="客户"
+                name="customer_id"
+                rules={[{ required: true, message: '请选择客户' }]}
+              >
+                <Select placeholder="请选择客户">
+                  {customers.map((c) => (
+                    <Option key={c.id} value={c.id}>{c.name}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item
+                label="订单日期"
+                name="order_date"
+                rules={[{ required: true, message: '请选择订单日期' }]}
+              >
+                <DatePicker />
+              </Form.Item>
+              <Form.Item label="交货日期" name="delivery_date">
+                <DatePicker />
+              </Form.Item>
+              <Form.Item label="总金额" name="total_amount" initialValue={0}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入总金额" />
+              </Form.Item>
+              <Form.Item label="税额" name="tax_amount" initialValue={0}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入税额" />
+              </Form.Item>
+              <Form.Item label="折扣金额" name="discount_amount" initialValue={0}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入折扣金额" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="应收金额" name="receivable_amount" initialValue={0}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入应收金额" />
+              </Form.Item>
+              <Form.Item label="币种" name="currency" initialValue="CNY">
+                <Select>
+                  <Option value="CNY">人民币</Option>
+                  <Option value="USD">美元</Option>
+                  <Option value="EUR">欧元</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item label="交货地址" name="delivery_address">
+                <Input placeholder="请输入交货地址" />
+              </Form.Item>
+              <Form.Item label="联系人" name="contact_person">
+                <Input placeholder="请输入联系人" />
+              </Form.Item>
+              <Form.Item label="联系电话" name="contact_phone">
+                <Input placeholder="请输入联系电话" />
+              </Form.Item>
+              <Form.Item label="备注" name="remark">
+                <TextArea rows={1} placeholder="请输入备注" />
+              </Form.Item>
+              <Form.Item label="状态" name="status" initialValue="draft">
+                <Select>
+                  <Option value="draft">草稿</Option>
+                  <Option value="pending">待审批</Option>
+                  <Option value="approved">已审批</Option>
+                  <Option value="partially_delivered">部分发货</Option>
+                  <Option value="delivered">已发货</Option>
+                  <Option value="closed">已关闭</Option>
+                  <Option value="cancelled">已取消</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>
