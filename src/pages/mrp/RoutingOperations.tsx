@@ -1,12 +1,34 @@
-import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Checkbox } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import { logWithTiming } from '../../utils/logger';
-import type { Tables } from '../../utils/supabase';
+import { useEffect, useState } from "react";
+import {
+  Button,
+  Input,
+  Table,
+  Tag,
+  Modal,
+  Form,
+  Select,
+  Space,
+  Card,
+  message,
+  InputNumber,
+  Checkbox,
+  Row,
+  Col,
+  DatePicker,
+} from "antd";
+import {
+  PlusOutlined,
+  SearchOutlined,
+  DeleteOutlined,
+  EditOutlined,
+} from "@ant-design/icons";
+import { supabase } from "../../utils/supabase";
+import { logWithTiming } from "../../utils/logger";
+import type { Tables } from "../../utils/supabase";
+import dayjs from "dayjs";
 
-type Routing = Tables['erp_routing_operations_s_539dcf81_b']['Row'];
-type Product = Tables['erp_products_s_539dcf81_b']['Row'];
+type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
+type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 
@@ -14,7 +36,7 @@ export function RoutingOperations() {
   const [routings, setRoutings] = useState<Routing[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRouting, setEditingRouting] = useState<Routing | null>(null);
   const [form] = Form.useForm();
@@ -28,16 +50,16 @@ export function RoutingOperations() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_routing_operations_s_539dcf81_b')
-        .select('*')
-        .eq('is_deleted', 'n')
-        .order('created_at', { ascending: false });
+        .from("erp_routing_operations_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       setRoutings(data || []);
     } catch (error) {
-      console.error('Error fetching routings:', error);
-      message.error('获取数据失败');
+      console.error("Error fetching routings:", error);
+      message.error("获取数据失败");
     } finally {
       setLoading(false);
     }
@@ -46,44 +68,44 @@ export function RoutingOperations() {
   const fetchProducts = async () => {
     try {
       const { data, error } = await supabase
-        .from('erp_products_s_539dcf81_b')
-        .select('*')
-        .eq('is_deleted', 'n')
-        .eq('is_manufactured', true);
+        .from("erp_products_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n")
+        .eq("is_manufactured", true);
       if (error) throw error;
       setProducts(data || []);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error("Error fetching products:", error);
     }
   };
 
   const handleSubmit = async (values: any) => {
     try {
       if (editingRouting) {
-        await logWithTiming('更新工艺路线', 'UPDATE', async () => {
+        await logWithTiming("更新工艺路线", "UPDATE", async () => {
           const { error } = await supabase
-            .from('erp_routing_operations_s_539dcf81_b')
+            .from("erp_routing_operations_s_539dcf81_b")
             .update(values)
-            .eq('id', editingRouting.id);
+            .eq("id", editingRouting.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success("更新成功");
       } else {
-        await logWithTiming('新增工艺路线', 'INSERT', async () => {
+        await logWithTiming("新增工艺路线", "INSERT", async () => {
           const { error } = await supabase
-            .from('erp_routing_operations_s_539dcf81_b')
+            .from("erp_routing_operations_s_539dcf81_b")
             .insert([values]);
           if (error) throw error;
         });
-        message.success('新增成功');
+        message.success("新增成功");
       }
       setIsModalOpen(false);
       form.resetFields();
       setEditingRouting(null);
       fetchRoutings();
     } catch (error) {
-      console.error('Error saving routing:', error);
-      message.error('保存失败');
+      console.error("Error saving routing:", error);
+      message.error("保存失败");
     }
   };
 
@@ -91,6 +113,8 @@ export function RoutingOperations() {
     setEditingRouting(record);
     form.setFieldsValue({
       ...record,
+      effective_date: record.effective_date ? dayjs(record.effective_date) : undefined,
+      expiry_date: record.expiry_date ? dayjs(record.expiry_date) : undefined,
       is_default: record.is_default ?? true,
       is_active: record.is_active ?? true,
     });
@@ -99,22 +123,22 @@ export function RoutingOperations() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该工艺路线吗？',
+      title: "确认删除",
+      content: "确定要删除该工艺路线吗？",
       onOk: async () => {
         try {
-          await logWithTiming('删除工艺路线', 'DELETE', async () => {
+          await logWithTiming("删除工艺路线", "DELETE", async () => {
             const { error } = await supabase
-              .from('erp_routing_operations_s_539dcf81_b')
-              .update({ is_deleted: 'y' })
-              .eq('id', id);
+              .from("erp_routing_operations_s_539dcf81_b")
+              .update({ is_deleted: "y" })
+              .eq("id", id);
             if (error) throw error;
           });
-          message.success('删除成功');
+          message.success("删除成功");
           fetchRoutings();
         } catch (error) {
-          console.error('Error deleting routing:', error);
-          message.error('删除失败');
+          console.error("Error deleting routing:", error);
+          message.error("删除失败");
         }
       },
     });
@@ -123,78 +147,89 @@ export function RoutingOperations() {
   const handleAdd = () => {
     setEditingRouting(null);
     form.setFieldsValue({
-      routing_no: '',
+      routing_no: "",
       product_id: undefined,
-      version: '1.0',
+      version: "1.0",
       is_default: true,
       is_active: true,
-      effective_date: new Date().toISOString().split('T')[0],
-      expiry_date: '',
+      effective_date: dayjs(new Date()),
+      expiry_date: "",
       total_standard_hours: 0,
-      remark: '',
+      remark: "",
     });
     setIsModalOpen(true);
   };
 
   const getProductName = (productId: number | null) => {
     const product = products.find((p) => p.id === productId);
-    return product?.name || '-';
+    return product?.name || "-";
   };
 
   const filteredRoutings = routings.filter(
     (r) =>
       r.routing_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getProductName(r.product_id).toLowerCase().includes(searchTerm.toLowerCase())
+      getProductName(r.product_id)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()),
   );
 
   const columns = [
     {
-      title: '工艺路线编号',
-      dataIndex: 'routing_no',
-      key: 'routing_no',
+      title: "工艺路线编号",
+      dataIndex: "routing_no",
+      key: "routing_no",
     },
     {
-      title: '产品',
-      dataIndex: 'product_id',
-      key: 'product_id',
+      title: "产品",
+      dataIndex: "product_id",
+      key: "product_id",
       render: (productId: number) => getProductName(productId),
     },
     {
-      title: '版本',
-      dataIndex: 'version',
-      key: 'version',
+      title: "版本",
+      dataIndex: "version",
+      key: "version",
     },
     {
-      title: '标准工时',
-      dataIndex: 'total_standard_hours',
-      key: 'total_standard_hours',
+      title: "标准工时",
+      dataIndex: "total_standard_hours",
+      key: "total_standard_hours",
       render: (hours: number) => `${hours}小时`,
     },
     {
-      title: '默认',
-      dataIndex: 'is_default',
-      key: 'is_default',
-      render: (isDefault: boolean) => (isDefault ? '是' : '否'),
+      title: "默认",
+      dataIndex: "is_default",
+      key: "is_default",
+      render: (isDefault: boolean) => (isDefault ? "是" : "否"),
     },
     {
-      title: '状态',
-      dataIndex: 'is_active',
-      key: 'is_active',
+      title: "状态",
+      dataIndex: "is_active",
+      key: "is_active",
       render: (isActive: boolean) => (
-        <Tag color={isActive ? 'success' : 'default'}>
-          {isActive ? '启用' : '停用'}
+        <Tag color={isActive ? "success" : "default"}>
+          {isActive ? "启用" : "停用"}
         </Tag>
       ),
     },
     {
-      title: '操作',
-      key: 'action',
+      title: "操作",
+      key: "action",
       render: (_: any, record: Routing) => (
         <Space size="middle">
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button
+            type="text"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
             编辑
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDelete(record.id)}
+          >
             删除
           </Button>
         </Space>
@@ -203,8 +238,15 @@ export function RoutingOperations() {
   ];
 
   return (
-    <Card variant="borderless" title="工艺路线管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工艺路线</Button>}>
-
+    <Card
+      variant="borderless"
+      title="工艺路线管理"
+      extra={
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          新增工艺路线
+        </Button>
+      }
+    >
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="搜索工艺路线编号或产品..."
@@ -224,61 +266,96 @@ export function RoutingOperations() {
       />
 
       <Modal
-        title={editingRouting ? '编辑工艺路线' : '新增工艺路线'}
+        title={editingRouting ? "编辑工艺路线" : "新增工艺路线"}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
           setEditingRouting(null);
         }}
-        footer={<Space>
-          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-          <Button type="primary" onClick={() => form.submit()}>
-            保存
-          </Button>
-        </Space>}
+        footer={
+          <Space>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
         width={600}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="工艺路线编号"
-            name="routing_no"
-            rules={[{ required: true, message: '请输入工艺路线编号' }]}
-          >
-            <Input placeholder="请输入工艺路线编号" disabled={!!editingRouting} />
-          </Form.Item>
-          <Form.Item
-            label="产品"
-            name="product_id"
-            rules={[{ required: true, message: '请选择产品' }]}
-          >
-            <Select placeholder="请选择产品" disabled={!!editingRouting}>
-              {products.map((p) => (
-                <Option key={p.id} value={p.id}>{p.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="版本" name="version" initialValue="1.0">
-            <Input placeholder="请输入版本" />
-          </Form.Item>
-          <Form.Item label="标准工时(小时)" name="total_standard_hours" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入标准工时" />
-          </Form.Item>
-          <Form.Item label="设为默认工艺路线" name="is_default" valuePropName="checked" initialValue={true}>
-            <Checkbox />
-          </Form.Item>
-          <Form.Item label="生效日期" name="effective_date">
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item label="失效日期" name="expiry_date">
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={3} placeholder="请输入备注" />
-          </Form.Item>
-          <Form.Item label="启用" name="is_active" valuePropName="checked" initialValue={true}>
-            <Checkbox />
-          </Form.Item>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmit}
+          style={{ marginTop: 16 }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="工艺路线编号"
+                name="routing_no"
+                rules={[{ required: true, message: "请输入工艺路线编号" }]}
+              >
+                <Input
+                  placeholder="请输入工艺路线编号"
+                  disabled={!!editingRouting}
+                />
+              </Form.Item>
+              <Form.Item
+                label="产品"
+                name="product_id"
+                rules={[{ required: true, message: "请选择产品" }]}
+              >
+                <Select placeholder="请选择产品" disabled={!!editingRouting}>
+                  {products.map((p) => (
+                    <Option key={p.id} value={p.id}>
+                      {p.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item label="版本" name="version" initialValue="1.0">
+                <Input placeholder="请输入版本" />
+              </Form.Item>
+              <Form.Item
+                label="标准工时(小时)"
+                name="total_standard_hours"
+                initialValue={0}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="请输入标准工时"
+                />
+              </Form.Item>
+              <Form.Item
+                label="设为默认工艺路线"
+                name="is_default"
+                valuePropName="checked"
+                initialValue={true}
+              >
+                <Checkbox />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="生效日期" name="effective_date">
+                <DatePicker />
+              </Form.Item>
+              <Form.Item label="失效日期" name="expiry_date">
+                <DatePicker />
+              </Form.Item>
+              <Form.Item label="备注" name="remark">
+                <Input.TextArea rows={5} placeholder="请输入备注" />
+              </Form.Item>
+              <Form.Item
+                label="启用"
+                name="is_active"
+                valuePropName="checked"
+                initialValue={true}
+              >
+                <Checkbox />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>

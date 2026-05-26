@@ -1,12 +1,32 @@
-import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Checkbox } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import type { Tables } from '../../utils/supabase';
-import { logWithTiming } from '../../utils/logger';
+import { useEffect, useState } from "react";
+import {
+  Button,
+  Input,
+  Table,
+  Tag,
+  Modal,
+  Form,
+  Select,
+  Space,
+  Card,
+  message,
+  InputNumber,
+  Checkbox,
+  Row,
+  Col,
+} from "antd";
+import {
+  PlusOutlined,
+  SearchOutlined,
+  DeleteOutlined,
+  EditOutlined,
+} from "@ant-design/icons";
+import { supabase } from "../../utils/supabase";
+import type { Tables } from "../../utils/supabase";
+import { logWithTiming } from "../../utils/logger";
 
-type Product = Tables['erp_products_s_539dcf81_b']['Row'];
-type ProductCategory = Tables['erp_product_categories_s_539dcf81_b']['Row'];
+type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
+type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 
@@ -14,7 +34,7 @@ export function Products() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [form] = Form.useForm();
@@ -28,16 +48,16 @@ export function Products() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_products_s_539dcf81_b')
-        .select('*')
-        .eq('is_deleted', 'n')
-        .order('created_at', { ascending: false });
+        .from("erp_products_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n")
+        .order("created_at", { ascending: false });
 
       if (error) throw error;
       setProducts(data || []);
     } catch (error) {
-      console.error('Error fetching products:', error);
-      message.error('获取数据失败');
+      console.error("Error fetching products:", error);
+      message.error("获取数据失败");
     } finally {
       setLoading(false);
     }
@@ -46,62 +66,62 @@ export function Products() {
   const fetchCategories = async () => {
     try {
       const { data, error } = await supabase
-        .from('erp_product_categories_s_539dcf81_b')
-        .select('*')
-        .eq('is_deleted', 'n');
+        .from("erp_product_categories_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n");
       if (error) throw error;
       setCategories(data || []);
     } catch (error) {
-      console.error('Error fetching categories:', error);
+      console.error("Error fetching categories:", error);
     }
   };
 
   const handleSubmit = async (values: any) => {
     try {
       if (editingProduct) {
-        await logWithTiming('更新物料', 'UPDATE', async () => {
+        await logWithTiming("更新物料", "UPDATE", async () => {
           const { error } = await supabase
-            .from('erp_products_s_539dcf81_b')
+            .from("erp_products_s_539dcf81_b")
             .update(values)
-            .eq('id', editingProduct.id);
+            .eq("id", editingProduct.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success("更新成功");
       } else {
-        await logWithTiming('新增物料', 'INSERT', async () => {
+        await logWithTiming("新增物料", "INSERT", async () => {
           const { error } = await supabase
-            .from('erp_products_s_539dcf81_b')
+            .from("erp_products_s_539dcf81_b")
             .insert([values]);
           if (error) throw error;
         });
-        message.success('新增成功');
+        message.success("新增成功");
       }
       setIsModalOpen(false);
       form.resetFields();
       setEditingProduct(null);
       fetchProducts();
     } catch (error) {
-      console.error('Error saving product:', error);
-      message.error('保存失败');
+      console.error("Error saving product:", error);
+      message.error("保存失败");
     }
   };
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该产品吗？',
+      title: "确认删除",
+      content: "确定要删除该产品吗？",
       onOk: async () => {
         try {
           const { error } = await supabase
-            .from('erp_products_s_539dcf81_b')
-            .update({ is_deleted: 'y' })
-            .eq('id', id);
+            .from("erp_products_s_539dcf81_b")
+            .update({ is_deleted: "y" })
+            .eq("id", id);
           if (error) throw error;
-          message.success('删除成功');
+          message.success("删除成功");
           fetchProducts();
         } catch (error) {
-          console.error('Error deleting product:', error);
-          message.error('删除失败');
+          console.error("Error deleting product:", error);
+          message.error("删除失败");
         }
       },
     });
@@ -121,13 +141,13 @@ export function Products() {
   const handleAdd = () => {
     setEditingProduct(null);
     form.setFieldsValue({
-      code: '',
-      name: '',
-      short_name: '',
+      code: "",
+      name: "",
+      short_name: "",
       category_id: undefined,
-      specification: '',
-      unit: '件',
-      barcode: '',
+      specification: "",
+      unit: "件",
+      barcode: "",
       purchase_price: 0,
       sale_price: 0,
       cost_price: 0,
@@ -137,81 +157,90 @@ export function Products() {
       is_purchased: true,
       is_sold: true,
       is_manufactured: false,
-      status: 'active',
+      status: "active",
     });
     setIsModalOpen(true);
   };
 
   const getCategoryName = (categoryId: number | null) => {
     const category = categories.find((c) => c.id === categoryId);
-    return category?.name || '-';
+    return category?.name || "-";
   };
 
   const filteredProducts = products.filter(
     (p) =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.code.toLowerCase().includes(searchTerm.toLowerCase())
+      p.code.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const columns = [
     {
-      title: '产品编码',
-      dataIndex: 'code',
-      key: 'code',
+      title: "产品编码",
+      dataIndex: "code",
+      key: "code",
     },
     {
-      title: '产品名称',
-      dataIndex: 'name',
-      key: 'name',
+      title: "产品名称",
+      dataIndex: "name",
+      key: "name",
     },
     {
-      title: '类别',
-      dataIndex: 'category_id',
-      key: 'category_id',
+      title: "类别",
+      dataIndex: "category_id",
+      key: "category_id",
       render: (categoryId: number) => getCategoryName(categoryId),
     },
     {
-      title: '规格',
-      dataIndex: 'specification',
-      key: 'specification',
-      render: (text: string) => text || '-',
+      title: "规格",
+      dataIndex: "specification",
+      key: "specification",
+      render: (text: string) => text || "-",
     },
     {
-      title: '单位',
-      dataIndex: 'unit',
-      key: 'unit',
+      title: "单位",
+      dataIndex: "unit",
+      key: "unit",
     },
     {
-      title: '采购价',
-      dataIndex: 'purchase_price',
-      key: 'purchase_price',
+      title: "采购价",
+      dataIndex: "purchase_price",
+      key: "purchase_price",
       render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
     },
     {
-      title: '销售价',
-      dataIndex: 'sale_price',
-      key: 'sale_price',
+      title: "销售价",
+      dataIndex: "sale_price",
+      key: "sale_price",
       render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
     },
     {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
+      title: "状态",
+      dataIndex: "status",
+      key: "status",
       render: (status: string) => (
-        <Tag color={status === 'active' ? 'success' : 'default'}>
-          {status === 'active' ? '启用' : '停用'}
+        <Tag color={status === "active" ? "success" : "default"}>
+          {status === "active" ? "启用" : "停用"}
         </Tag>
       ),
     },
     {
-      title: '操作',
-      key: 'action',
+      title: "操作",
+      key: "action",
       render: (_: any, record: Product) => (
         <Space size="middle">
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button
+            type="text"
+            icon={<EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
             编辑
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDelete(record.id)}
+          >
             删除
           </Button>
         </Space>
@@ -220,8 +249,15 @@ export function Products() {
   ];
 
   return (
-    <Card variant="borderless" title="产品管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增产品</Button>}>      
-      
+    <Card
+      variant="borderless"
+      title="产品管理"
+      extra={
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          新增产品
+        </Button>
+      }
+    >
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="搜索产品名称或编码..."
@@ -241,91 +277,141 @@ export function Products() {
       />
 
       <Modal
-        title={editingProduct ? '编辑产品' : '新增产品'}
+        title={editingProduct ? "编辑产品" : "新增产品"}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
           setEditingProduct(null);
         }}
-        footer={null}
-        width={600}
+        footer={
+          <Space>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
+        width={900}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="产品编码"
-            name="code"
-            rules={[{ required: true, message: '请输入产品编码' }]}
-          >
-            <Input placeholder="请输入产品编码" disabled={!!editingProduct} />
-          </Form.Item>
-          <Form.Item
-            label="产品名称"
-            name="name"
-            rules={[{ required: true, message: '请输入产品名称' }]}
-          >
-            <Input placeholder="请输入产品名称" />
-          </Form.Item>
-          <Form.Item label="简称" name="short_name">
-            <Input placeholder="请输入简称" />
-          </Form.Item>
-          <Form.Item label="类别" name="category_id">
-            <Select placeholder="请选择类别">
-              {categories.map((c) => (
-                <Option key={c.id} value={c.id}>{c.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="规格" name="specification">
-            <Input placeholder="请输入规格" />
-          </Form.Item>
-          <Form.Item label="单位" name="unit" initialValue="件">
-            <Input placeholder="请输入单位" />
-          </Form.Item>
-          <Form.Item label="条码" name="barcode">
-            <Input placeholder="请输入条码" />
-          </Form.Item>
-          <Form.Item label="采购价" name="purchase_price" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入采购价" />
-          </Form.Item>
-          <Form.Item label="销售价" name="sale_price" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入销售价" />
-          </Form.Item>
-          <Form.Item label="成本价" name="cost_price" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入成本价" />
-          </Form.Item>
-          <Form.Item label="安全库存" name="safety_stock" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入安全库存" />
-          </Form.Item>
-          <Form.Item label="最大库存" name="max_stock" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入最大库存" />
-          </Form.Item>
-          <Form.Item label="最小库存" name="min_stock" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入最小库存" />
-          </Form.Item>
-          <Form.Item label="可采购" name="is_purchased" valuePropName="checked" initialValue={true}>
-            <Checkbox />
-          </Form.Item>
-          <Form.Item label="可销售" name="is_sold" valuePropName="checked" initialValue={true}>
-            <Checkbox />
-          </Form.Item>
-          <Form.Item label="可生产" name="is_manufactured" valuePropName="checked" initialValue={false}>
-            <Checkbox />
-          </Form.Item>
-          <Form.Item label="状态" name="status" initialValue="active">
-            <Select>
-              <Option value="active">启用</Option>
-              <Option value="inactive">停用</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
-          </Form.Item>
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handleSubmit}
+          style={{ marginTop: 16 }}
+        >
+          <Row gutter={16}>
+            <Col span={8}>
+              <Form.Item
+                label="产品编码"
+                name="code"
+                rules={[{ required: true, message: "请输入产品编码" }]}
+              >
+                <Input
+                  placeholder="请输入产品编码"
+                  disabled={!!editingProduct}
+                />
+              </Form.Item>
+              <Form.Item
+                label="产品名称"
+                name="name"
+                rules={[{ required: true, message: "请输入产品名称" }]}
+              >
+                <Input placeholder="请输入产品名称" />
+              </Form.Item>
+              <Form.Item label="简称" name="short_name">
+                <Input placeholder="请输入简称" />
+              </Form.Item>
+              <Form.Item label="类别" name="category_id">
+                <Select placeholder="请选择类别">
+                  {categories.map((c) => (
+                    <Option key={c.id} value={c.id}>
+                      {c.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item label="规格" name="specification">
+                <Input placeholder="请输入规格" />
+              </Form.Item>
+              <Form.Item label="单位" name="unit" initialValue="件">
+                <Input placeholder="请输入单位" />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="条码" name="barcode">
+                <Input placeholder="请输入条码" />
+              </Form.Item>
+              <Form.Item label="采购价" name="purchase_price" initialValue={0}>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="请输入采购价"
+                />
+              </Form.Item>
+              <Form.Item label="销售价" name="sale_price" initialValue={0}>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="请输入销售价"
+                />
+              </Form.Item>
+              <Form.Item label="成本价" name="cost_price" initialValue={0}>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="请输入成本价"
+                />
+              </Form.Item>
+              <Form.Item label="安全库存" name="safety_stock" initialValue={0}>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="请输入安全库存"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item label="最大库存" name="max_stock" initialValue={0}>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="请输入最大库存"
+                />
+              </Form.Item>
+              <Form.Item label="最小库存" name="min_stock" initialValue={0}>
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="请输入最小库存"
+                />
+              </Form.Item>
+              <Form.Item
+                label="可采购"
+                name="is_purchased"
+                valuePropName="checked"
+                initialValue={true}
+              >
+                <Checkbox />
+              </Form.Item>
+              <Form.Item
+                label="可销售"
+                name="is_sold"
+                valuePropName="checked"
+                initialValue={true}
+              >
+                <Checkbox />
+              </Form.Item>
+              <Form.Item
+                label="可生产"
+                name="is_manufactured"
+                valuePropName="checked"
+                initialValue={false}
+              >
+                <Checkbox />
+              </Form.Item>
+              <Form.Item label="状态" name="status" initialValue="active">
+                <Select>
+                  <Option value="active">启用</Option>
+                  <Option value="inactive">停用</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>

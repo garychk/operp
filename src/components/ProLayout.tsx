@@ -88,6 +88,7 @@ const menuData = [
     name: '生产制造',
     icon: <ToolOutlined />,
     children: [
+      { path: '/mrp/departments', name: '部门管理', icon: <TeamOutlined /> },
       { path: '/mrp/boms', name: 'BOM管理', icon: <BranchesOutlined /> },
       { path: '/mrp/routings', name: '工艺路线', icon: <SettingOutlined /> },
       { path: '/mrp/workcenters', name: '工作中心', icon: <ToolOutlined /> },
@@ -123,6 +124,7 @@ const pathToNameMap: Record<string, string> = {
   '/inventory/stock': '库存查询',
   '/inventory/purchase': '采购订单',
   '/inventory/sales': '销售订单',
+  '/mrp/departments': '部门管理',
   '/mrp/boms': 'BOM管理',
   '/mrp/routings': '工艺路线',
   '/mrp/workcenters': '工作中心',

@@ -21,6 +21,7 @@ import { Inventory } from './pages/inventory/Inventory';
 import { PurchaseOrders } from './pages/inventory/PurchaseOrders';
 import { SalesOrders } from './pages/inventory/SalesOrders';
 import { Boms } from './pages/mrp/Boms';
+import { Departments } from './pages/mrp/Departments';
 import { RoutingOperations } from './pages/mrp/RoutingOperations';
 import { WorkCenters } from './pages/mrp/WorkCenters';
 import { Operations } from './pages/mrp/Operations';
@@ -69,7 +70,8 @@ function AppContent() {
         </Route>
         
         <Route path="mrp">
-          <Route index element={<Navigate to="boms" replace />} />
+          <Route index element={<Navigate to="departments" replace />} />
+          <Route path="departments" element={<Departments />} />
           <Route path="boms" element={<Boms />} />
           <Route path="routings" element={<RoutingOperations />} />
           <Route path="workcenters" element={<WorkCenters />} />

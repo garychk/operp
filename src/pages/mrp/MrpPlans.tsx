@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message,DatePicker } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
+import dayjs from 'dayjs';
 
 type MrpPlan = Tables['erp_mrp_plans_s_539dcf81_b']['Row'];
 
@@ -100,7 +101,7 @@ export function MrpPlans() {
   const handleAdd = () => {
     form.setFieldsValue({
       plan_no: `MRP${Date.now().toString().slice(-8)}`,
-      plan_date: new Date().toISOString().split('T')[0],
+      plan_date: dayjs(new Date()),
       start_date: '',
       end_date: '',
       plan_type: 'master',
@@ -240,11 +241,14 @@ export function MrpPlans() {
               <Option value="procurement">采购计划</Option>
             </Select>
           </Form.Item>
+          <Form.Item label="计划日期" name="plan_date">
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
           <Form.Item label="开始日期" name="start_date">
-            <Input type="date" />
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="结束日期" name="end_date">
-            <Input type="date" />
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="备注" name="remark">
             <TextArea rows={3} placeholder="请输入备注" />

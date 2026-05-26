@@ -62,6 +62,7 @@ const menuItems: MenuItem[] = [
     icon: <Factory size={20} />,
     path: '/mrp',
     children: [
+      { title: '部门管理', icon: <Users size={16} />, path: '/mrp/departments' },
       { title: 'BOM管理', icon: <GitBranch size={16} />, path: '/mrp/boms' },
       { title: '工艺路线', icon: <Settings size={16} />, path: '/mrp/routings' },
       { title: '工作中心', icon: <Factory size={16} />, path: '/mrp/workcenters' },
