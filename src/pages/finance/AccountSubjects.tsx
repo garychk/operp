@@ -196,7 +196,12 @@ export function AccountSubjects() {
           setEditingSubject(null);
           form.resetFields();
         }}
-        footer={null}
+        footer={<Space>
+              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+              <Button type="primary" onClick={() => form.submit()}>
+                保存
+              </Button>
+            </Space>}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item
@@ -231,14 +236,6 @@ export function AccountSubjects() {
               <Option value="debit">借方</Option>
               <Option value="credit">贷方</Option>
             </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
           </Form.Item>
         </Form>
       </Modal>

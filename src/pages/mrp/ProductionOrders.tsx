@@ -301,7 +301,12 @@ export function ProductionOrders() {
           form.resetFields();
           setEditingOrder(null);
         }}
-        footer={null}
+        footer={<Space>
+              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+              <Button type="primary" onClick={() => form.submit()}>
+                保存
+              </Button>
+            </Space>}
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
@@ -367,14 +372,6 @@ export function ProductionOrders() {
               <Option value="closed">已关闭</Option>
               <Option value="cancelled">已取消</Option>
             </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
           </Form.Item>
         </Form>
       </Modal>

@@ -189,7 +189,12 @@ export function Vouchers() {
           setIsModalOpen(false);
           form.resetFields();
         }}
-        footer={null}
+        footer={<Space>
+              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+              <Button type="primary" onClick={() => form.submit()}>
+                保存
+              </Button>
+            </Space>}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item
@@ -219,14 +224,6 @@ export function Vouchers() {
           </Form.Item>
           <Form.Item label="摘要" name="remark">
             <TextArea rows={3} placeholder="请输入摘要" />
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
           </Form.Item>
         </Form>
       </Modal>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
@@ -246,85 +246,88 @@ export function FixedAssets() {
           form.resetFields();
           setEditingAsset(null);
         }}
-        footer={null}
+        footer={<Space>
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="资产编号"
-            name="asset_no"
-            rules={[{ required: true, message: '请输入资产编号' }]}
-          >
-            <Input placeholder="请输入资产编号" disabled={!!editingAsset} />
-          </Form.Item>
-          <Form.Item
-            label="资产名称"
-            name="asset_name"
-            rules={[{ required: true, message: '请输入资产名称' }]}
-          >
-            <Input placeholder="请输入资产名称" />
-          </Form.Item>
-          <Form.Item
-            label="类别"
-            name="category_id"
-            rules={[{ required: true, message: '请选择类别' }]}
-          >
-            <Select placeholder="请选择类别">
-              {categories.map((c) => (
-                <Option key={c.id} value={c.id}>{c.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="规格型号" name="model">
-            <Input placeholder="请输入规格型号" />
-          </Form.Item>
-          <Form.Item label="数量" name="quantity" initialValue={1}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入数量" />
-          </Form.Item>
-          <Form.Item label="单位" name="unit" initialValue="台">
-            <Input placeholder="请输入单位" />
-          </Form.Item>
-          <Form.Item label="购置日期" name="purchase_date">
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item label="采购价格" name="purchase_price" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入采购价格" />
-          </Form.Item>
-          <Form.Item label="原值" name="original_value" initialValue={0}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入原值" />
-          </Form.Item>
-          <Form.Item label="折旧方法" name="depreciation_method" initialValue="straight_line">
-            <Select>
-              <Option value="straight_line">直线法</Option>
-              <Option value="double_declining">双倍余额递减法</Option>
-              <Option value="sum_of_years">年数总和法</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item label="使用年限(月)" name="useful_life_months" initialValue={60}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入使用年限" />
-          </Form.Item>
-          <Form.Item label="残值率(%)" name="residual_rate" initialValue={5}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入残值率" />
-          </Form.Item>
-          <Form.Item label="存放地点" name="location">
-            <Input placeholder="请输入存放地点" />
-          </Form.Item>
-          <Form.Item label="状态" name="status" initialValue="in_use">
-            <Select>
-              <Option value="in_use">使用中</Option>
-              <Option value="idle">闲置</Option>
-              <Option value="scrapped">报废</Option>
-              <Option value="transferred">已转移</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="资产编号"
+                name="asset_no"
+                rules={[{ required: true, message: '请输入资产编号' }]}
+              >
+                <Input placeholder="请输入资产编号" disabled={!!editingAsset} />
+              </Form.Item>
+              <Form.Item
+                label="资产名称"
+                name="asset_name"
+                rules={[{ required: true, message: '请输入资产名称' }]}
+              >
+                <Input placeholder="请输入资产名称" />
+              </Form.Item>
+              <Form.Item
+                label="类别"
+                name="category_id"
+                rules={[{ required: true, message: '请选择类别' }]}
+              >
+                <Select placeholder="请选择类别">
+                  {categories.map((c) => (
+                    <Option key={c.id} value={c.id}>{c.name}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item label="规格型号" name="model">
+                <Input placeholder="请输入规格型号" />
+              </Form.Item>
+              <Form.Item label="数量" name="quantity" initialValue={1}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入数量" />
+              </Form.Item>
+              <Form.Item label="单位" name="unit" initialValue="台">
+                <Input placeholder="请输入单位" />
+              </Form.Item>
+              <Form.Item label="购置日期" name="purchase_date">
+                <Input type="date" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="采购价格" name="purchase_price" initialValue={0}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入采购价格" />
+              </Form.Item>
+              <Form.Item label="原值" name="original_value" initialValue={0}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入原值" />
+              </Form.Item>
+              <Form.Item label="折旧方法" name="depreciation_method" initialValue="straight_line">
+                <Select>
+                  <Option value="straight_line">直线法</Option>
+                  <Option value="double_declining">双倍余额递减法</Option>
+                  <Option value="sum_of_years">年数总和法</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item label="使用年限(月)" name="useful_life_months" initialValue={60}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入使用年限" />
+              </Form.Item>
+              <Form.Item label="残值率(%)" name="residual_rate" initialValue={5}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入残值率" />
+              </Form.Item>
+              <Form.Item label="存放地点" name="location">
+                <Input placeholder="请输入存放地点" />
+              </Form.Item>
+              <Form.Item label="状态" name="status" initialValue="in_use">
+                <Select>
+                  <Option value="in_use">使用中</Option>
+                  <Option value="idle">闲置</Option>
+                  <Option value="scrapped">报废</Option>
+                  <Option value="transferred">已转移</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>

@@ -217,7 +217,12 @@ export function MrpPlans() {
           setIsModalOpen(false);
           form.resetFields();
         }}
-        footer={null}
+        footer={<Space>
+              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+              <Button type="primary" onClick={() => form.submit()}>
+                保存
+              </Button>
+            </Space>}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item
@@ -250,14 +255,6 @@ export function MrpPlans() {
               <Option value="running">计算中</Option>
               <Option value="completed">已完成</Option>
             </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
           </Form.Item>
         </Form>
       </Modal>

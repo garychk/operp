@@ -211,8 +211,8 @@ export function Operations() {
   ];
 
   return (
-    <Card variant="borderless" title="工序管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工序</Button>}>      
-      
+    <Card variant="borderless" title="工序管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工序</Button>}>
+
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="搜索工序名称或编码..."
@@ -239,7 +239,12 @@ export function Operations() {
           form.resetFields();
           setEditingOperation(null);
         }}
-        footer={null}
+        footer={<Space>
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
@@ -284,14 +289,6 @@ export function Operations() {
               <Option value="active">启用</Option>
               <Option value="inactive">停用</Option>
             </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
           </Form.Item>
         </Form>
       </Modal>

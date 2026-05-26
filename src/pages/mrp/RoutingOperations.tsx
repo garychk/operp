@@ -203,8 +203,8 @@ export function RoutingOperations() {
   ];
 
   return (
-    <Card variant="borderless" title="工艺路线管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工艺路线</Button>}>      
-      
+    <Card variant="borderless" title="工艺路线管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工艺路线</Button>}>
+
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="搜索工艺路线编号或产品..."
@@ -231,7 +231,12 @@ export function RoutingOperations() {
           form.resetFields();
           setEditingRouting(null);
         }}
-        footer={null}
+        footer={<Space>
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
@@ -273,14 +278,6 @@ export function RoutingOperations() {
           </Form.Item>
           <Form.Item label="启用" name="is_active" valuePropName="checked" initialValue={true}>
             <Checkbox />
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
           </Form.Item>
         </Form>
       </Modal>

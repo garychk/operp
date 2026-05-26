@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Checkbox } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Checkbox, Row, Col } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
@@ -208,8 +208,8 @@ export function Boms() {
   ];
 
   return (
-    <Card variant="borderless" title="BOM管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增BOM</Button>}>      
-      
+    <Card variant="borderless" title="BOM管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增BOM</Button>}>
+
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="搜索BOM编号或产品..."
@@ -236,60 +236,63 @@ export function Boms() {
           form.resetFields();
           setEditingBom(null);
         }}
-        footer={null}
+        footer={<Space>
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="BOM编号"
-            name="bom_no"
-            rules={[{ required: true, message: '请输入BOM编号' }]}
-          >
-            <Input placeholder="请输入BOM编号" disabled={!!editingBom} />
-          </Form.Item>
-          <Form.Item
-            label="产品"
-            name="product_id"
-            rules={[{ required: true, message: '请选择产品' }]}
-          >
-            <Select placeholder="请选择产品" disabled={!!editingBom}>
-              {products.map((p) => (
-                <Option key={p.id} value={p.id}>{p.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="版本" name="version" initialValue="1.0">
-            <Input placeholder="请输入版本" />
-          </Form.Item>
-          <Form.Item label="数量" name="quantity" initialValue={1}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入数量" />
-          </Form.Item>
-          <Form.Item label="单位" name="unit" initialValue="件">
-            <Input placeholder="请输入单位" />
-          </Form.Item>
-          <Form.Item label="设为默认BOM" name="is_default" valuePropName="checked" initialValue={true}>
-            <Checkbox />
-          </Form.Item>
-          <Form.Item label="生效日期" name="effective_date">
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item label="失效日期" name="expiry_date">
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={3} placeholder="请输入备注" />
-          </Form.Item>
-          <Form.Item label="启用" name="is_active" valuePropName="checked" initialValue={true}>
-            <Checkbox />
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="BOM编号"
+                name="bom_no"
+                rules={[{ required: true, message: '请输入BOM编号' }]}
+              >
+                <Input placeholder="请输入BOM编号" disabled={!!editingBom} />
+              </Form.Item>
+              <Form.Item
+                label="产品"
+                name="product_id"
+                rules={[{ required: true, message: '请选择产品' }]}
+              >
+                <Select placeholder="请选择产品" disabled={!!editingBom}>
+                  {products.map((p) => (
+                    <Option key={p.id} value={p.id}>{p.name}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item label="版本" name="version" initialValue="1.0">
+                <Input placeholder="请输入版本" />
+              </Form.Item>
+              <Form.Item label="数量" name="quantity" initialValue={1}>
+                <InputNumber style={{ width: '100%' }} placeholder="请输入数量" />
+              </Form.Item>
+              <Form.Item label="单位" name="unit" initialValue="件">
+                <Input placeholder="请输入单位" />
+              </Form.Item>
+              <Form.Item label="设为默认BOM" name="is_default" valuePropName="checked" initialValue={true}>
+                <Checkbox />
+              </Form.Item>
+              <Form.Item label="生效日期" name="effective_date">
+                <Input type="date" />
+              </Form.Item>
+              <Form.Item label="失效日期" name="expiry_date">
+                <Input type="date" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="备注" name="remark">
+                <Input.TextArea rows={3} placeholder="请输入备注" />
+              </Form.Item>
+              <Form.Item label="启用" name="is_active" valuePropName="checked" initialValue={true}>
+                <Checkbox />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </Card>

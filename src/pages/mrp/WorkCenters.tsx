@@ -215,8 +215,8 @@ export function WorkCenters() {
   ];
 
   return (
-    <Card variant="borderless" title="工作中心管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工作中心</Button>}>      
-      
+    <Card variant="borderless" title="工作中心管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工作中心</Button>}>
+
       <div style={{ marginBottom: 16 }}>
         <Input
           placeholder="搜索工作中心名称或编码..."
@@ -243,7 +243,12 @@ export function WorkCenters() {
           form.resetFields();
           setEditingWorkCenter(null);
         }}
-        footer={null}
+        footer={<Space>
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item
@@ -289,14 +294,6 @@ export function WorkCenters() {
               <Option value="active">启用</Option>
               <Option value="inactive">停用</Option>
             </Select>
-          </Form.Item>
-          <Form.Item style={{ textAlign: 'right' }}>
-            <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" htmlType="submit">
-                保存
-              </Button>
-            </Space>
           </Form.Item>
         </Form>
       </Modal>
