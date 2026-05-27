@@ -163,18 +163,17 @@ export function Vouchers() {
   ];
 
   return (
-    <Card variant="borderless" title="凭证管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增凭证</Button>}>      
-      
-      <div style={{ marginBottom: 16 }}>
+    <Card variant="borderless" title="凭证管理" extra={
+      <Space>
         <Input
           placeholder="搜索凭证号或摘要..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增凭证</Button>
+      </Space>
+    }>
       <Table
         columns={columns}
         dataSource={filteredVouchers}

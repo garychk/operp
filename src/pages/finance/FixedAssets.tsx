@@ -222,18 +222,17 @@ export function FixedAssets() {
   ];
 
   return (
-    <Card variant="borderless" title="固定资产管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增资产</Button>}>
-
-      <div style={{ marginBottom: 16 }}>
+    <Card variant="borderless" title="固定资产管理" extra={
+      <Space>
         <Input
           placeholder="搜索资产编号或名称..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增资产</Button>
+      </Space>
+    }>
       <Table
         columns={columns}
         dataSource={filteredAssets}

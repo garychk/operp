@@ -176,17 +176,15 @@ export function AssetCategories() {
   ];
 
   return (
-    <Card variant="borderless" title="资产类别管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增类别</Button>}>
-
-      <div style={{ marginBottom: 16 }}>
-        <Input
-          placeholder="搜索类别代码或名称..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
-        />
-      </div>
+    <Card variant="borderless" title="资产类别管理" extra={<Space>
+      <Input
+        placeholder="搜索类别代码或名称..."
+        prefix={<SearchOutlined />}
+        value={searchTerm}
+        onChange={(e) => setSearchTerm(e.target.value)}
+      />
+      <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增类别</Button>
+    </Space>}>
 
       <Table
         columns={columns}
@@ -205,11 +203,11 @@ export function AssetCategories() {
           form.resetFields();
         }}
         footer={<Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" onClick={() => form.submit()}>
-                保存
-              </Button>
-            </Space>}
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item

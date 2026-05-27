@@ -186,18 +186,17 @@ export function Suppliers() {
   ];
 
   return (
-    <Card variant="borderless" title="供应商管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增供应商</Button>}>      
-      
-      <div style={{ marginBottom: 16 }}>
+    <Card variant="borderless" title="供应商管理" extra={
+      <Space>
         <Input
           placeholder="搜索供应商名称或编码..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增供应商</Button>
+      </Space>
+    }>      
       <Table
         columns={columns}
         dataSource={filteredSuppliers}

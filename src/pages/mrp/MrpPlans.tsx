@@ -191,18 +191,17 @@ export function MrpPlans() {
   ];
 
   return (
-    <Card variant="borderless" title="MRP计划管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增计划</Button>}>      
-      
-      <div style={{ marginBottom: 16 }}>
+    <Card variant="borderless" title="MRP计划管理" extra={
+      <Space>
         <Input
           placeholder="搜索计划号..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+      <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增计划</Button>
+      </Space>
+    }>
       <Table
         columns={columns}
         dataSource={filteredPlans}

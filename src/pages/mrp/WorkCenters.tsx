@@ -215,18 +215,18 @@ export function WorkCenters() {
   ];
 
   return (
-    <Card variant="borderless" title="工作中心管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工作中心</Button>}>
-
-      <div style={{ marginBottom: 16 }}>
+    <Card variant="borderless" title="工作中心管理" extra={
+      <Space>
         <Input
           placeholder="搜索工作中心名称或编码..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增工作中心</Button>
+        </Space>
+      }
+    >
       <Table
         columns={columns}
         dataSource={filteredWorkCenters}

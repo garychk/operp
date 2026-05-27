@@ -300,7 +300,7 @@ export function SalesDeliveries() {
     if (record.order_id) {
       fetchSalesOrderDetails(record.order_id);
     }
-    const formValues = { ...record };
+    const formValues = { ...record, delivery_date: dayjs(record.delivery_date) };
     form.setFieldsValue(formValues);
     setIsModalOpen(true);
   };
@@ -614,18 +614,17 @@ export function SalesDeliveries() {
   }), { amount: 0 });
 
   return (
-    <Card variant="borderless" title="销售出货单" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增出货单</Button>}>
-
-      <div style={{ marginBottom: 16 }}>
+    <Card variant="borderless" title="销售出货单" extra={
+      <Space>
         <Input
           placeholder="搜索出货单号、客户或销售订单..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增出货单</Button>
+      </Space>
+    }>
       <Table
         columns={columns}
         dataSource={filteredDeliveries}
@@ -737,7 +736,7 @@ export function SalesDeliveries() {
           setDetails([]);
         }}
         footer={null}
-        width={900}
+        width={'80%'}
       >
         {selectedDelivery && (
           <Card extra={

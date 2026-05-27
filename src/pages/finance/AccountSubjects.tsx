@@ -168,18 +168,18 @@ export function AccountSubjects() {
   ];
 
   return (
-    <Card variant="borderless" title="会计科目管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增科目</Button>}>
-
-      <div style={{ marginBottom: 16 }}>
+    <Card variant="borderless" title="会计科目管理" extra={
+      <Space>
         <Input
           placeholder="搜索科目代码或名称..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增科目</Button>
+        </Space>
+      }
+    > 
       <Table
         columns={columns}
         dataSource={filteredSubjects}

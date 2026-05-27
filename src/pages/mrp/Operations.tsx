@@ -245,21 +245,19 @@ export function Operations() {
       variant="borderless"
       title="工序管理"
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增工序
-        </Button>
-      }
-    >
-      <div style={{ marginBottom: 16 }}>
-        <Input
+        <Space>
+          <Input
           placeholder="搜索工序名称或编码..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          新增工序
+        </Button>
+        </Space>
+      }
+    >
       <Table
         columns={columns}
         dataSource={filteredOperations}

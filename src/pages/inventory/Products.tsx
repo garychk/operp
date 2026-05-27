@@ -253,21 +253,19 @@ export function Products() {
       variant="borderless"
       title="产品管理"
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增产品
-        </Button>
+        <Space>
+          <Input
+            placeholder="搜索产品名称或编码..."
+            prefix={<SearchOutlined />}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            新增产品
+          </Button>
+        </Space>
       }
     >
-      <div style={{ marginBottom: 16 }}>
-        <Input
-          placeholder="搜索产品名称或编码..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
-        />
-      </div>
-
       <Table
         columns={columns}
         dataSource={filteredProducts}

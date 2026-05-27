@@ -215,18 +215,17 @@ export function Warehouses() {
   ];
 
   return (
-    <Card variant="borderless" title="仓库管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增仓库</Button>}>      
-      
-      <div style={{ marginBottom: 16 }}>
-        <Input
-          placeholder="搜索仓库名称或编码..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
-        />
-      </div>
-
+    <Card variant="borderless" title="仓库管理" extra={
+      <Space>
+          <Input
+            placeholder="搜索仓库名称或编码..."
+            prefix={<SearchOutlined />}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增仓库</Button>
+      </Space>  
+    }>
       <Table
         columns={columns}
         dataSource={filteredWarehouses}

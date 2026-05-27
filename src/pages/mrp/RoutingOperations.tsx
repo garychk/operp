@@ -242,21 +242,19 @@ export function RoutingOperations() {
       variant="borderless"
       title="工艺路线管理"
       extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增工艺路线
-        </Button>
-      }
-    >
-      <div style={{ marginBottom: 16 }}>
-        <Input
+        <Space>
+          <Input
           placeholder="搜索工艺路线编号或产品..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          新增工艺路线
+        </Button>
+        </Space>
+      }
+    >
       <Table
         columns={columns}
         dataSource={filteredRoutings}

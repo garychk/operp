@@ -473,18 +473,17 @@ export function PurchaseOrders() {
   }), { amount: 0, taxAmount: 0 });
 
   return (
-    <Card variant="borderless" title="采购订单" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增订单</Button>}>
-
-      <div style={{ marginBottom: 16 }}>
+    <Card variant="borderless" title="采购订单" extra={
+      <Space>
         <Input
           placeholder="搜索订单号或供应商..."
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 300 }}
         />
-      </div>
-
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增订单</Button>
+      </Space>
+    }>
       <Table
         columns={columns}
         dataSource={filteredOrders}
