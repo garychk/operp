@@ -8,6 +8,8 @@ import {
   ShoppingOutlined,
   ShoppingCartOutlined,
   FileTextOutlined,
+  ProfileOutlined,
+  TruckOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -18,7 +20,9 @@ const menuItems: MenuProps['items'] = [
   { key: 'warehouses', label: '仓库管理', icon: <AppstoreOutlined /> },
   { key: 'stock', label: '库存管理', icon: <ShoppingOutlined /> },
   { key: 'purchase', label: '采购订单', icon: <ShoppingCartOutlined /> },
+  { key: 'purchase-receipts', label: '采购入库', icon: <ProfileOutlined /> },
   { key: 'sales', label: '销售订单', icon: <FileTextOutlined /> },
+  { key: 'sales-deliveries', label: '销售出货', icon: <TruckOutlined /> },
 ];
 
 export function InventoryModule() {

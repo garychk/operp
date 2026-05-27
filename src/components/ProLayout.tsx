@@ -25,6 +25,7 @@ import {
   FileTextOutlined,
   LogoutOutlined,
   UserOutlined,
+  TruckOutlined,
 } from '@ant-design/icons';
 import { supabase } from '../utils/supabase';
 import { logOperation } from '../utils/logger';
@@ -81,7 +82,9 @@ const menuData = [
       { path: '/inventory/warehouses', name: '仓库管理', icon: <AppstoreOutlined /> },
       { path: '/inventory/stock', name: '库存查询', icon: <ShoppingOutlined /> },
       { path: '/inventory/purchase', name: '采购订单', icon: <ShoppingCartOutlined /> },
+      { path: '/inventory/purchase-receipts', name: '采购入库', icon: <InboxOutlined /> },
       { path: '/inventory/sales', name: '销售订单', icon: <RiseOutlined /> },
+      { path: '/inventory/sales-deliveries', name: '销售出货', icon: <TruckOutlined /> },
     ],
   },
   {
@@ -125,7 +128,9 @@ const pathToNameMap: Record<string, string> = {
   '/inventory/warehouses': '仓库管理',
   '/inventory/stock': '库存查询',
   '/inventory/purchase': '采购订单',
+  '/inventory/purchase-receipts': '采购入库',
   '/inventory/sales': '销售订单',
+  '/inventory/sales-deliveries': '销售出货',
   '/mrp/departments': '部门管理',
   '/mrp/boms': 'BOM管理',
   '/mrp/routings': '工艺路线',

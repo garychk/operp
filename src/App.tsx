@@ -21,6 +21,8 @@ import { Warehouses } from './pages/inventory/Warehouses';
 import { Inventory } from './pages/inventory/Inventory';
 import { PurchaseOrders } from './pages/inventory/PurchaseOrders';
 import { SalesOrders } from './pages/inventory/SalesOrders';
+import { PurchaseReceipts } from './pages/inventory/PurchaseReceipts';
+import { SalesDeliveries } from './pages/inventory/SalesDeliveries';
 import { Boms } from './pages/mrp/Boms';
 import { Departments } from './pages/mrp/Departments';
 import { RoutingOperations } from './pages/mrp/RoutingOperations';
@@ -68,7 +70,9 @@ function AppContent() {
           <Route path="warehouses" element={<Warehouses />} />
           <Route path="stock" element={<Inventory />} />
           <Route path="purchase" element={<PurchaseOrders />} />
+          <Route path="purchase-receipts" element={<PurchaseReceipts />} />
           <Route path="sales" element={<SalesOrders />} />
+          <Route path="sales-deliveries" element={<SalesDeliveries />} />
         </Route>
         
         <Route path="mrp">

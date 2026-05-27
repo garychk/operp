@@ -468,7 +468,7 @@ CREATE TABLE IF NOT EXISTS public.erp_purchase_order_details_s_539dcf81_b (
     quantity DECIMAL(18, 4) DEFAULT 0,
     unit_price DECIMAL(18, 4) DEFAULT 0,
     amount DECIMAL(18, 2) DEFAULT 0,
-    tax_rate DECIMAL(5, 4) DEFAULT 0,
+    tax_rate DECIMAL(5, 2) DEFAULT 0,
     tax_amount DECIMAL(18, 2) DEFAULT 0,
     received_quantity DECIMAL(18, 4) DEFAULT 0,
     remark TEXT
@@ -553,7 +553,7 @@ CREATE TABLE IF NOT EXISTS public.erp_sales_order_details_s_539dcf81_b (
     quantity DECIMAL(18, 4) DEFAULT 0,
     unit_price DECIMAL(18, 4) DEFAULT 0,
     amount DECIMAL(18, 2) DEFAULT 0,
-    tax_rate DECIMAL(5, 4) DEFAULT 0,
+    tax_rate DECIMAL(5, 2) DEFAULT 0,
     tax_amount DECIMAL(18, 2) DEFAULT 0,
     delivered_quantity DECIMAL(18, 4) DEFAULT 0,
     remark TEXT
