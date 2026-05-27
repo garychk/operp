@@ -601,8 +601,8 @@ export function PurchaseOrders() {
         {selectedOrder && (
           <Card extra={
             <Space>
-              <span>供应商: {getSupplierName(selectedOrder.supplier_id)}</span>
-              <span>订单日期: {selectedOrder.order_date}</span>
+              <Tag color="magenta">供应商: {getSupplierName(selectedOrder.supplier_id)}</Tag>
+              <Tag color="blue">订单日期: {selectedOrder.order_date}</Tag>
               <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
             </Space>
           }>

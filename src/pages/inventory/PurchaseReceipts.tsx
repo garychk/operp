@@ -751,9 +751,9 @@ export function PurchaseReceipts() {
         {selectedReceipt && (
           <Card extra={
             <Space>
-              <span>供应商: {getSupplierName(selectedReceipt.supplier_id)}</span>
-              <span>仓库: {getWarehouseName(selectedReceipt.warehouse_id)}</span>
-              <span>入库日期: {selectedReceipt.receipt_date}</span>
+              <Tag color="magenta">供应商: {getSupplierName(selectedReceipt.supplier_id)}</Tag>
+              <Tag color="blue">仓库: {getWarehouseName(selectedReceipt.warehouse_id)}</Tag>
+              <Tag color="lime">入库日期: {selectedReceipt.receipt_date}</Tag>
               <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
             </Space>
             }>

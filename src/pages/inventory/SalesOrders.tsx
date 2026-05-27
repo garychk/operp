@@ -609,8 +609,8 @@ export function SalesOrders() {
         {selectedOrder && (
           <Card extra={
             <Space>
-              <span>客户: {getCustomerName(selectedOrder.customer_id)}</span>
-              <span>订单日期: {selectedOrder.order_date}</span>
+              <Tag color="blue">客户: {getCustomerName(selectedOrder.customer_id)}</Tag>
+              <Tag color="lime">订单日期: {selectedOrder.order_date}</Tag>
               <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
             </Space>
             }>

@@ -741,9 +741,9 @@ export function SalesDeliveries() {
         {selectedDelivery && (
           <Card extra={
             <Space>
-              <span>客户: {getCustomerName(selectedDelivery.customer_id)}</span>
-              <span>仓库: {getWarehouseName(selectedDelivery.warehouse_id)}</span>
-              <span>出货日期: {selectedDelivery.delivery_date}</span>
+              <Tag color="blue">客户: {getCustomerName(selectedDelivery.customer_id)}</Tag>
+              <Tag color="lime">仓库: {getWarehouseName(selectedDelivery.warehouse_id)}</Tag>
+              <Tag color="orange">出货日期: {selectedDelivery.delivery_date}</Tag>
               <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
             </Space>
             }>
