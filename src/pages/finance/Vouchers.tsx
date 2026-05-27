@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker } from 'antd';
 import { PlusOutlined, SearchOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
+import dayjs from 'dayjs';
 
 type Voucher = Tables['erp_vouchers_s_539dcf81_b']['Row'];
 
@@ -79,7 +80,7 @@ export function Vouchers() {
   const handleAdd = () => {
     form.setFieldsValue({
       voucher_no: `PZ${Date.now().toString().slice(-8)}`,
-      voucher_date: new Date().toISOString().split('T')[0],
+      voucher_date: dayjs(new Date()),
       type: 'general',
       total_amount: 0,
       remark: '',
@@ -209,7 +210,7 @@ export function Vouchers() {
             name="voucher_date"
             rules={[{ required: true, message: '请选择日期' }]}
           >
-            <Input type="date" />
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="类型" name="type" initialValue="general">
             <Select>

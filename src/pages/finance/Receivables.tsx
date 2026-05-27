@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
+import dayjs from 'dayjs';
 
 type Receivable = Tables['erp_receivables_s_539dcf81_b']['Row'];
 type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
@@ -92,7 +93,11 @@ export function Receivables() {
 
   const handleEdit = (record: Receivable) => {
     setEditingReceivable(record);
-    form.setFieldsValue(record);
+    form.setFieldsValue({
+      ...record,
+      doc_date: dayjs(record.doc_date),
+      due_date: dayjs(record.due_date),
+    });
     setIsModalOpen(true);
   };
 
@@ -125,7 +130,7 @@ export function Receivables() {
       customer_id: undefined,
       doc_type: 'invoice',
       doc_no: '',
-      doc_date: new Date().toISOString().split('T')[0],
+      doc_date: dayjs(new Date()),
       due_date: '',
       amount: 0,
       remark: '',
@@ -278,10 +283,10 @@ export function Receivables() {
             name="doc_date"
             rules={[{ required: true, message: '请选择单据日期' }]}
           >
-            <Input type="date" />
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="到期日" name="due_date">
-            <Input type="date" />
+            <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item
             label="金额"

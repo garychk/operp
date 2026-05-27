@@ -82,6 +82,7 @@ export function Logs() {
       title: '操作用户',
       dataIndex: 'username',
       width: 120,
+      ellipsis: true,
     },
     {
       title: '操作类型',
@@ -130,9 +131,8 @@ export function Logs() {
   ];
 
   return (
-    <Card variant="borderless" title="系统日志">
-      <Card style={{ marginBottom: 16 }}>
-        <Space size="middle">
+    <Card variant="borderless" title="系统日志" extra={
+      <Space size="middle">
           <Input
             placeholder="用户名"
             value={searchUsername}
@@ -156,13 +156,13 @@ export function Logs() {
             重置
           </Button>
         </Space>
-      </Card>
+    }>
       <Table
         columns={columns}
         dataSource={logs}
         loading={loading}
         rowKey="id"
-        scroll={{ x: 1400 }}
+        scroll={{ x: 1400, y: 680 }}
         pagination={{
           pageSize: 20,
           showSizeChanger: true,

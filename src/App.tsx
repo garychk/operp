@@ -13,6 +13,7 @@ import { Vouchers } from './pages/finance/Vouchers';
 import { Receivables } from './pages/finance/Receivables';
 import { Payables } from './pages/finance/Payables';
 import { FixedAssets } from './pages/finance/FixedAssets';
+import { AssetCategories } from './pages/finance/AssetCategories';
 import { Customers } from './pages/inventory/Customers';
 import { Suppliers } from './pages/inventory/Suppliers';
 import { Products } from './pages/inventory/Products';
@@ -56,6 +57,7 @@ function AppContent() {
           <Route path="receivables" element={<Receivables />} />
           <Route path="payables" element={<Payables />} />
           <Route path="assets" element={<FixedAssets />} />
+          <Route path="asset-categories" element={<AssetCategories />} />
         </Route>
         
         <Route path="inventory" >

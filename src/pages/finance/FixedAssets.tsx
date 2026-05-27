@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
+import dayjs from 'dayjs';
 
 type FixedAsset = Tables['erp_fixed_assets_s_539dcf81_b']['Row'];
 type AssetCategory = Tables['erp_asset_categories_s_539dcf81_b']['Row'];
@@ -92,7 +93,10 @@ export function FixedAssets() {
 
   const handleEdit = (record: FixedAsset) => {
     setEditingAsset(record);
-    form.setFieldsValue(record);
+    form.setFieldsValue({
+      ...record,
+      purchase_date: dayjs(record.purchase_date),
+    });
     setIsModalOpen(true);
   };
 
@@ -128,7 +132,7 @@ export function FixedAssets() {
       model: '',
       quantity: 1,
       unit: '台',
-      purchase_date: new Date().toISOString().split('T')[0],
+      purchase_date: dayjs(new Date()),
       purchase_price: 0,
       original_value: 0,
       depreciation_method: 'straight_line',
@@ -292,7 +296,7 @@ export function FixedAssets() {
                 <Input placeholder="请输入单位" />
               </Form.Item>
               <Form.Item label="购置日期" name="purchase_date">
-                <Input type="date" />
+                <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={12}>

@@ -41,6 +41,7 @@ const menuItems: MenuItem[] = [
       { title: '应收账款', icon: <TrendingUp size={16} />, path: '/finance/receivables' },
       { title: '应付账款', icon: <TrendingDown size={16} />, path: '/finance/payables' },
       { title: '固定资产', icon: <Building2 size={16} />, path: '/finance/assets' },
+      { title: '资产类别', icon: <Boxes size={16} />, path: '/finance/asset-categories' },
     ],
   },
   {

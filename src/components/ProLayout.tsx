@@ -67,6 +67,7 @@ const menuData = [
       { path: '/finance/receivables', name: '应收账款', icon: <RiseOutlined /> },
       { path: '/finance/payables', name: '应付账款', icon: <FallOutlined /> },
       { path: '/finance/assets', name: '固定资产', icon: <BuildOutlined /> },
+      { path: '/finance/asset-categories', name: '资产类别', icon: <ContainerOutlined /> },
     ],
   },
   {
@@ -117,6 +118,7 @@ const pathToNameMap: Record<string, string> = {
   '/finance/receivables': '应收账款',
   '/finance/payables': '应付账款',
   '/finance/assets': '固定资产',
+  '/finance/asset-categories': '资产类别',
   '/inventory/customers': '客户管理',
   '/inventory/suppliers': '供应商管理',
   '/inventory/products': '物料管理',
