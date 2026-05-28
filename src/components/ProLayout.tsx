@@ -158,8 +158,22 @@ export function ProLayout() {
   ]);
   const [activeTabKey, setActiveTabKey] = useState('/');
   const [user, setUser] = useState<UserInfo | null>(null);
-  const [dark, setDark] = useState(false);
-  const [ismix, setMix] = useState(true);
+  const [dark, setDark] = useState(() => {
+    const saved = localStorage.getItem('erp-dark-mode');
+    return saved !== null ? JSON.parse(saved) : false;
+  });
+  const [ismix, setMix] = useState(() => {
+    const saved = localStorage.getItem('erp-layout-mix');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('erp-dark-mode', JSON.stringify(dark));
+  }, [dark]);
+
+  useEffect(() => {
+    localStorage.setItem('erp-layout-mix', JSON.stringify(ismix));
+  }, [ismix]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
