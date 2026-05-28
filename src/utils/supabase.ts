@@ -47,8 +47,12 @@ import type {
 
 // const supabaseUrl = 'https://spb-8vb5nhr43wo8yt73.supabase.opentrust.net';
 // const supabaseKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNwYi04dmI1bmhyNDN3bzh5dDczIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzM3NzE4ODgsImV4cCI6MjA4OTM0Nzg4OH0.6P3g6CWOqwg0nZead9La_20uOe_3rXKLj78y7L0p5bU';
-const supabaseUrl = 'https://fzcjguglarborefokgko.supabase.co';
-const supabaseKey = 'sb_publishable_DHNldTEniWrIO-sqJyUD_A_QToqSrRI';
+// remote
+// const supabaseUrl = 'https://fzcjguglarborefokgko.supabase.co';
+// const supabaseKey = 'sb_publishable_DHNldTEniWrIO-sqJyUD_A_QToqSrRI';
+// local
+const supabaseUrl = 'http://localhost:8008';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE';
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 (window as any).supabase = supabase;

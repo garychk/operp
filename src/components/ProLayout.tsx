@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { ProLayout as AntProLayout } from '@ant-design/pro-components';
-import { Tabs, Avatar, Button, Dropdown } from 'antd';
+import { Tabs, Avatar, Button, Dropdown, Tag } from 'antd';
 import {
   DashboardOutlined,
   BookOutlined,
@@ -253,9 +253,7 @@ export function ProLayout() {
         <div onClick={() => navigate(item.path || '/')}>{dom}</div>
       )}
       headerContentRender={() => (
-        <div style={{ display: 'flex', alignItems: 'center', height: '100%' }}>
-          <span>V1.0</span>
-        </div>
+        <Tag color="gold">V1.0</Tag>
       )}
       rightContentRender={() => (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
