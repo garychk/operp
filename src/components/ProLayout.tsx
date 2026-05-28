@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { ProLayout as AntProLayout, PageContainer, ProCard } from '@ant-design/pro-components';
-import { Tabs, Avatar, Button, Dropdown, Tag, Space } from 'antd';
+import { Tabs, Avatar, Button, Dropdown, Tag, Space, ConfigProvider, theme, Switch } from 'antd';
 import {
   DashboardOutlined,
   BookOutlined,
@@ -26,10 +26,12 @@ import {
   LogoutOutlined,
   TruckOutlined,
   SunFilled,
-  MoonFilled,
+  MoonOutlined,
   InfoCircleFilled,
   QuestionCircleFilled,
   GithubFilled,
+  PicLeftOutlined,
+  PicCenterOutlined,
 } from '@ant-design/icons';
 import { supabase } from '../utils/supabase';
 import { logOperation } from '../utils/logger';
@@ -157,6 +159,7 @@ export function ProLayout() {
   const [activeTabKey, setActiveTabKey] = useState('/');
   const [user, setUser] = useState<UserInfo | null>(null);
   const [dark, setDark] = useState(false);
+  const [ismix, setMix] = useState(true);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -193,17 +196,21 @@ export function ProLayout() {
   }, []);
 
   const handleLogout = async () => {
+    console.log('logout');
     await supabase.auth.signOut();
   };
 
   const addTab = useCallback((path: string) => {
     const label = pathToNameMap[path] || '未命名';
-    const existingTab = tabs.find((tab) => tab.key === path);
-    if (!existingTab) {
-      setTabs((prev) => [...prev, { key: path, label, closable: true, path }]);
-    }
+    setTabs((prev) => {
+      const existingTab = prev.find((tab) => tab.key === path);
+      if (!existingTab) {
+        return [...prev, { key: path, label, closable: true, path }];
+      }
+      return prev;
+    });
     setActiveTabKey(path);
-  }, [tabs]);
+  }, []);
 
   const removeTab = useCallback((targetKey: string) => {
     let newActiveKey = activeTabKey;
@@ -243,94 +250,99 @@ export function ProLayout() {
     label: tab.label,
     closable: tab.closable,
   }));
-
+  const defaultAvatar = 'https://gw.alipayobjects.com/zos/antfincdn/efFD%24IOql2/weixintupian_20170331104822.jpg';
   return (
-    <AntProLayout
-      layout="mix"
-      fixSiderbar
-      fixedHeader
-      splitMenus={false}
-      title="Supabase ERP"
-      logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
-      route={{ routes: menuData }}
-      location={{ pathname: location.pathname }}
-      menuItemRender={(item, dom) => (
-        <div onClick={() => navigate(item.path || '/')}>{dom}</div>
-      )}
-      headerContentRender={() => (
-        <Tag color="gold">V1.0</Tag>
-      )}
-      avatarProps={{
-        src: user?.avatar || '',
-        size: 'small',
-        title: user?.nick || '',
-        render: (props, dom) => {
-          return (
-            user ?
-              (<Dropdown
-                menu={{
-                  items: [
-                    {
-                      key: 'logout',
-                      icon: <LogoutOutlined />,
-                      label: '退出登录',
-                      onClick: handleLogout,
-                    },
-                  ],
-                }}
-              >
-                {dom}
-              </Dropdown>) : (
-                <Button
-                  size='small'
-                  type="primary"
-                  onClick={() => {
-                    if (typeof (window as any).AIApp !== 'undefined') {
-                      (window as any).AIApp.Auth?.login();
-                    } else {
-                      window.location.href = '/login';
-                    }
+    <ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
+      <AntProLayout
+        layout={ismix ? 'mix' : 'side'}
+        fixSiderbar
+        fixedHeader
+        splitMenus={false}
+        title="Supabase ERP"
+        logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
+        route={{ routes: menuData }}
+        location={{ pathname: location.pathname }}
+        menuItemRender={(item, dom) => (
+          <div onClick={() => navigate(item.path || '/')}>{dom}</div>
+        )}
+        headerContentRender={() => (
+          <Tag color="gold">V1.0</Tag>
+        )}
+        avatarProps={{
+          src: user?.avatar || defaultAvatar,
+          size: 'small',
+          // title: user?.nick || '',
+          render: (props, dom) => {
+            return (
+              user ?
+                (<Dropdown
+                  menu={{
+                    items: [
+                      {
+                        key: 'logout',
+                        icon: <LogoutOutlined />,
+                        label: '退出登录',
+                        onClick: handleLogout,
+                      },
+                    ],
                   }}
                 >
-                  登录
-                </Button>
-              )
-          );
-        }
-      }}
-      actionsRender={() => [
-        dark ? (
-          <SunFilled key="theme" onClick={() => setDark(false)} />
-        ) : (
-          <MoonFilled key="theme" onClick={() => setDark(true)} />
-        ),
-        <InfoCircleFilled key="info" />,
-        <QuestionCircleFilled key="question" />,
-        <GithubFilled key="github" />
-      ]}
-      footerRender={() => (
-        <div style={{ textAlign: 'center', padding: 12, color: '#999' }}>
-          © 2026 Supabase ERP
-        </div>
-      )}
-    >
-      <PageContainer title={false} >        
-        <ProCard>
-          <Tabs
-            activeKey={activeTabKey}
-            onChange={handleTabChange}
-            type="editable-card"
-            hideAdd
-            items={tabItems}
-            onEdit={(targetKey, action) => {
-              if (action === 'remove') {
-                removeTab(targetKey as string);
-              }
-            }}
-          />
-          <Outlet />
-        </ProCard>
-      </PageContainer>
-    </AntProLayout>
+                  {dom}
+                </Dropdown>) : (
+                  <Button
+                    size='small'
+                    type="primary"
+                    onClick={() => {
+                      if (typeof (window as any).AIApp !== 'undefined') {
+                        (window as any).AIApp.Auth?.login();
+                      } else {
+                        window.location.href = '/login';
+                      }
+                    }}
+                  >
+                    登录
+                  </Button>
+                )
+            );
+          }
+        }}
+        actionsRender={() => [
+          dark ? (
+            <SunFilled key="theme" onClick={() => setDark(false)} />
+          ) : (
+            <MoonOutlined key="theme" onClick={() => setDark(true)} />
+          ),
+          ismix ? (
+            <PicLeftOutlined key="mix" onClick={() => setMix(false)} />
+          ):(<PicCenterOutlined key="mix" onClick={() => setMix(true)} />),
+          <InfoCircleFilled key="info" />,
+          <QuestionCircleFilled key="question" />,
+          <GithubFilled key="github" />
+        ]}
+        footerRender={() => (
+          <div style={{ textAlign: 'center', padding: 12, color: '#999' }}>
+            © 2026 Supabase ERP
+          </div>
+        )}
+      >
+        <PageContainer title={false} >
+          <ProCard>
+            <Tabs
+              activeKey={activeTabKey}
+              onChange={handleTabChange}
+              type="editable-card"
+              hideAdd
+              items={tabItems}
+              onEdit={(targetKey, action) => {
+                if (action === 'remove') {
+                  removeTab(targetKey as string);
+                }
+              }}
+            />
+            <Outlet />
+          </ProCard>
+        </PageContainer>
+      </AntProLayout>
+    </ConfigProvider>
   );
 }

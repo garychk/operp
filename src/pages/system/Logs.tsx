@@ -162,7 +162,7 @@ export function Logs() {
         dataSource={logs}
         loading={loading}
         rowKey="id"
-        scroll={{ x: 1400, y: 680 }}
+        scroll={{ x: 1400, y: 660 }}
         pagination={{
           pageSize: 20,
           showSizeChanger: true,
