@@ -36,6 +36,7 @@ import {
 import { supabase } from '../utils/supabase';
 import { logOperation } from '../utils/logger';
 import heroLogo from '../assets/favicon.svg';
+import defaultAvatar from '../assets/avatar.png';
 
 interface TabItem {
   key: string;
@@ -264,7 +265,6 @@ export function ProLayout() {
     label: tab.label,
     closable: tab.closable,
   }));
-  const defaultAvatar = 'https://gw.alipayobjects.com/zos/antfincdn/efFD%24IOql2/weixintupian_20170331104822.jpg';
   return (
     <ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
       <AntProLayout
