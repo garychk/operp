@@ -162,7 +162,7 @@ export function Layout() {
         </nav>
 
         <div className="p-4 border-t border-slate-700 text-sm text-slate-400">
-          <p>© 2024 ERP System</p>
+          <p>© 2026 Supabase ERP</p>
         </div>
       </aside>
 

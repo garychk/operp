@@ -20,10 +20,12 @@ import {
   SearchOutlined,
   DeleteOutlined,
   EditOutlined,
+  SettingOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import { Categories } from "./Categories";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
@@ -37,6 +39,7 @@ export function Products() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -260,6 +263,12 @@ export function Products() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+          <Button
+            icon={<SettingOutlined />}
+            onClick={() => setIsCategoryModalOpen(true)}
+          >
+            类别管理
+          </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             新增产品
           </Button>
@@ -411,6 +420,17 @@ export function Products() {
             </Col>
           </Row>
         </Form>
+      </Modal>
+
+      <Modal
+        title="物料类别管理"
+        open={isCategoryModalOpen}
+        onCancel={() => setIsCategoryModalOpen(false)}
+        footer={null}
+        width={800}
+        destroyOnClose
+      >
+        <Categories />
       </Modal>
     </Card>
   );
