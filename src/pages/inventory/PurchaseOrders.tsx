@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker, Divider } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ShoppingCartOutlined } from '@ant-design/icons';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker, Divider, Typography } from 'antd';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ShoppingCartOutlined, FormOutlined, RightOutlined, LeftOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
@@ -13,6 +13,7 @@ type Product = Tables['erp_products_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 const { TextArea } = Input;
+const { Text, Link } = Typography;
 
 export function PurchaseOrders() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -506,11 +507,19 @@ export function PurchaseOrders() {
             保存
           </Button>
         </Space>}
-        width={600}
-      >
+        width={900}
+      >        
+        <Card extra={[
+          <Space>
+           <Button type='dashed' color="purple"  size="small" icon={<CheckOutlined />}>审核</Button>
+           <Button type='dashed' color="purple"  size="small" icon={<PrinterOutlined />}>打印</Button>
+           <Button type="default" size="small" icon={<LeftOutlined />}></Button>
+           <Button type="default" size="small" icon={<RightOutlined />}></Button>
+        </Space>
+        ]}>
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item
                 label="订单号"
                 name="order_no"
@@ -549,7 +558,7 @@ export function PurchaseOrders() {
                 <InputNumber style={{ width: '100%' }} placeholder="请输入应付金额" />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item label="币种" name="currency" initialValue="CNY">
                 <Select>
                   <Option value="CNY">人民币</Option>
@@ -581,8 +590,13 @@ export function PurchaseOrders() {
                 </Select>
               </Form.Item>
             </Col>
+            <Col span={8}>
+                  
+                    <Space><FormOutlined /><Text underline>修改历史</Text></Space>
+            </Col>
           </Row>
         </Form>
+        </Card>
       </Modal>
 
       <Modal

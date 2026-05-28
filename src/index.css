@@ -24,3 +24,37 @@ body {
 .ant-pro-page-container-children-container {
   padding: 0px !important;
 }
+
+/* 统一修改 Input 为只有底部边框 */
+.ant-input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  transition: border-color 0.3s;
+}
+.ant-input:focus {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+/* 如果需要覆盖其他 Input 变体 */
+/* .ant-input-number {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.ant-input-number:focus-within {
+  border-color: var(--accent);
+  box-shadow: none;
+}
+
+.ant-input-password {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+
+.ant-input-password:focus {
+  border-color: var(--accent);
+  box-shadow: none;
+} */
