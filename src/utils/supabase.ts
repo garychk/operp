@@ -54,8 +54,34 @@ import type {
 const supabaseUrl = 'http://192.168.0.20:8008';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE';
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export let supabase = createClient(supabaseUrl, supabaseKey);
 (window as any).supabase = supabase;
+
+const recreateSupabaseClient = () => {
+  supabase = createClient(supabaseUrl, supabaseKey);
+  (window as any).supabase = supabase;
+};
+
+if (typeof window !== 'undefined') {
+  let lastVisibilityChange = 0;
+  
+  const handleVisibilityChange = async () => {
+    if (document.visibilityState === 'visible') {
+      const now = Date.now();
+      const timeSinceLastChange = now - lastVisibilityChange;
+      lastVisibilityChange = now;
+      
+      if (timeSinceLastChange > 3000) {
+        recreateSupabaseClient();
+      } else {
+        await supabase.auth.getSession();
+      }
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('focus', handleVisibilityChange);
+}
 
 export type Tables = {
   erp_companies_s_539dcf81_b: { Row: ErpCompaniesS539Dcf81BRow };
