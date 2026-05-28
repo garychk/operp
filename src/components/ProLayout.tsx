@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { ProLayout as AntProLayout } from '@ant-design/pro-components';
-import { Tabs, Avatar, Button, Dropdown, Tag } from 'antd';
+import { ProLayout as AntProLayout, PageContainer, ProCard } from '@ant-design/pro-components';
+import { Tabs, Avatar, Button, Dropdown, Tag, Space } from 'antd';
 import {
   DashboardOutlined,
   BookOutlined,
@@ -24,8 +24,12 @@ import {
   MenuOutlined,
   FileTextOutlined,
   LogoutOutlined,
-  UserOutlined,
   TruckOutlined,
+  SunFilled,
+  MoonFilled,
+  InfoCircleFilled,
+  QuestionCircleFilled,
+  GithubFilled,
 } from '@ant-design/icons';
 import { supabase } from '../utils/supabase';
 import { logOperation } from '../utils/logger';
@@ -62,7 +66,7 @@ const menuData = [
     path: '/finance',
     name: '财务管理',
     icon: <BookOutlined />,
-    children: [
+    routes: [
       { path: '/finance/subjects', name: '会计科目', icon: <ContainerOutlined /> },
       { path: '/finance/vouchers', name: '凭证管理', icon: <ProfileOutlined /> },
       { path: '/finance/receivables', name: '应收账款', icon: <RiseOutlined /> },
@@ -75,7 +79,7 @@ const menuData = [
     path: '/inventory',
     name: '进销存管理',
     icon: <ShoppingOutlined />,
-    children: [
+    routes: [
       { path: '/inventory/customers', name: '客户管理', icon: <TeamOutlined /> },
       { path: '/inventory/suppliers', name: '供应商管理', icon: <ShopOutlined /> },
       { path: '/inventory/products', name: '物料管理', icon: <InboxOutlined /> },
@@ -91,7 +95,7 @@ const menuData = [
     path: '/mrp',
     name: '生产制造',
     icon: <ToolOutlined />,
-    children: [
+    routes: [
       { path: '/mrp/departments', name: '部门管理', icon: <TeamOutlined /> },
       { path: '/mrp/boms', name: 'BOM管理', icon: <BranchesOutlined /> },
       { path: '/mrp/routings', name: '工艺路线', icon: <SettingOutlined /> },
@@ -105,7 +109,7 @@ const menuData = [
     path: '/system',
     name: '系统管理',
     icon: <SettingOutlined />,
-    children: [
+    routes: [
       { path: '/system/users', name: '用户管理', icon: <TeamOutlined /> },
       { path: '/system/roles', name: '角色管理', icon: <SafetyOutlined /> },
       { path: '/system/menus', name: '菜单管理', icon: <MenuOutlined /> },
@@ -152,6 +156,7 @@ export function ProLayout() {
   ]);
   const [activeTabKey, setActiveTabKey] = useState('/');
   const [user, setUser] = useState<UserInfo | null>(null);
+  const [dark, setDark] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -247,7 +252,7 @@ export function ProLayout() {
       splitMenus={false}
       title="Supabase ERP"
       logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
-      menuDataRender={() => menuData}
+      route={{ routes: menuData }}
       location={{ pathname: location.pathname }}
       menuItemRender={(item, dom) => (
         <div onClick={() => navigate(item.path || '/')}>{dom}</div>
@@ -255,50 +260,62 @@ export function ProLayout() {
       headerContentRender={() => (
         <Tag color="gold">V1.0</Tag>
       )}
-      rightContentRender={() => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {user ? (
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    key: 'logout',
-                    icon: <LogoutOutlined />,
-                    label: '退出登录',
-                    onClick: handleLogout,
-                  },
-                ],
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <Avatar src={user.avatar} icon={<UserOutlined />} size="small" />
-                <span style={{ color: '#333' }}>{user.nick}</span>
-              </div>
-            </Dropdown>
-          ) : (
-            <Button
-              type="primary"
-              onClick={() => {
-                if (typeof (window as any).AIApp !== 'undefined') {
-                  (window as any).AIApp.Auth?.login();
-                } else {
-                  window.location.href = '/login';
-                }
-              }}
-            >
-              登录
-            </Button>
-          )}
-        </div>
-      )}
+      avatarProps={{
+        src: user?.avatar || '',
+        size: 'small',
+        title: user?.nick || '',
+        render: (props, dom) => {
+          return (
+            user ?
+              (<Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: 'logout',
+                      icon: <LogoutOutlined />,
+                      label: '退出登录',
+                      onClick: handleLogout,
+                    },
+                  ],
+                }}
+              >
+                {dom}
+              </Dropdown>) : (
+                <Button
+                  size='small'
+                  type="primary"
+                  onClick={() => {
+                    if (typeof (window as any).AIApp !== 'undefined') {
+                      (window as any).AIApp.Auth?.login();
+                    } else {
+                      window.location.href = '/login';
+                    }
+                  }}
+                >
+                  登录
+                </Button>
+              )
+          );
+        }
+      }}
+      actionsRender={() => [
+        dark ? (
+          <SunFilled key="theme" onClick={() => setDark(false)} />
+        ) : (
+          <MoonFilled key="theme" onClick={() => setDark(true)} />
+        ),
+        <InfoCircleFilled key="info" />,
+        <QuestionCircleFilled key="question" />,
+        <GithubFilled key="github" />
+      ]}
       footerRender={() => (
         <div style={{ textAlign: 'center', padding: 12, color: '#999' }}>
           © 2026 Supabase ERP
         </div>
       )}
     >
-      <div style={{ background: '#f0f2f5', minHeight: 'calc(100vh - 120px)' }}>
-        <div style={{ background: '#fff', padding: '2px' }}>
+      <PageContainer title={false} >        
+        <ProCard>
           <Tabs
             activeKey={activeTabKey}
             onChange={handleTabChange}
@@ -311,11 +328,9 @@ export function ProLayout() {
               }
             }}
           />
-        </div>
-        <div style={{ padding: 0, background: '#fff', minHeight: 'calc(100vh - 160px)' }}>
           <Outlet />
-        </div>
-      </div>
+        </ProCard>
+      </PageContainer>
     </AntProLayout>
   );
 }
