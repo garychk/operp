@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker, Divider, Typography } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ShoppingCartOutlined, FormOutlined, RightOutlined, LeftOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker, Divider, Typography, Splitter, Timeline, Collapse } from 'antd';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ShoppingCartOutlined, FormOutlined, RightOutlined, LeftOutlined, CheckOutlined, PrinterOutlined, ExpandAltOutlined, CompressOutlined, CloseOutlined, FullscreenOutlined, HistoryOutlined, CaretRightOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
@@ -22,6 +22,7 @@ export function PurchaseOrders() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isExpand, setIsExpand] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
@@ -131,7 +132,10 @@ export function PurchaseOrders() {
 
   const handleDetailSubmit = async (values: any) => {
     try {
-      if (!selectedOrder) return;
+      if (!selectedOrder) {
+        message.error('请先选择采购订单');
+        return;
+      }
 
       values.amount = (values.quantity || 0) * (values.unit_price || 0);
       values.tax_amount = values.amount * ((values.tax_rate || 0) / 100);
@@ -191,7 +195,7 @@ export function PurchaseOrders() {
     }
   };
 
-  const handleEdit = (record: PurchaseOrder) => {
+  const handleEdit = async (record: PurchaseOrder) => {
     setEditingOrder(record);
     const formValues = { ...record };
     if (formValues.order_date) {
@@ -201,6 +205,8 @@ export function PurchaseOrders() {
       formValues.delivery_date = dayjs(formValues.delivery_date);
     }
     form.setFieldsValue(formValues);
+    setSelectedOrder(record);
+    await fetchDetails(record.id);
     setIsModalOpen(true);
   };
 
@@ -249,11 +255,6 @@ export function PurchaseOrders() {
       status: 'draft',
     });
     setIsModalOpen(true);
-  };
-
-  const handleViewDetails = (record: PurchaseOrder) => {
-    setSelectedOrder(record);
-    fetchDetails(record.id);
   };
 
   const handleAddDetail = () => {
@@ -383,10 +384,7 @@ export function PurchaseOrders() {
       title: '操作',
       key: 'action',
       render: (_: any, record: PurchaseOrder) => (
-        <Space size="middle">
-          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetails(record)}>
-            明细
-          </Button>
+        <Space size="small">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
@@ -494,12 +492,20 @@ export function PurchaseOrders() {
       />
 
       <Modal
-        title={editingOrder ? '编辑采购订单' : '新增采购订单'}
+        title={<Space>
+          <ShoppingCartOutlined />
+          <span>{editingOrder ? '编辑采购订单' : '新增采购订单'}</span>
+          <Button type="default" size="small" icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />} onClick={() => setIsExpand(!isExpand)}></Button>
+          <Button type="default" size="small" icon={<LeftOutlined />}></Button>
+          <Button type="default" size="small" icon={<RightOutlined />}></Button>
+          <Tag>按ESC键可关闭</Tag>
+        </Space>}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
           setEditingOrder(null);
+          setIsExpand(false);
         }}
         footer={<Space>
           <Button onClick={() => setIsModalOpen(false)}>取消</Button>
@@ -507,136 +513,146 @@ export function PurchaseOrders() {
             保存
           </Button>
         </Space>}
-        width={900}
-      >        
-        <Card extra={[
-          <Space>
-           <Button type='dashed' color="purple"  size="small" icon={<CheckOutlined />}>审核</Button>
-           <Button type='dashed' color="purple"  size="small" icon={<PrinterOutlined />}>打印</Button>
-           <Button type="default" size="small" icon={<LeftOutlined />}></Button>
-           <Button type="default" size="small" icon={<RightOutlined />}></Button>
-        </Space>
-        ]}>
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                label="订单号"
-                name="order_no"
-                rules={[{ required: true, message: '请输入订单号' }]}
-              >
-                <Input placeholder="请输入订单号" disabled={!!editingOrder} />
-              </Form.Item>
-              <Form.Item
-                label="供应商"
-                name="supplier_id"
-                rules={[{ required: true, message: '请选择供应商' }]}
-              >
-                <Select placeholder="请选择供应商">
-                  {suppliers.map((s) => (
-                    <Option key={s.id} value={s.id}>{s.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="订单日期"
-                name="order_date"
-                rules={[{ required: true, message: '请选择订单日期' }]}
-              >
-                <DatePicker />
-              </Form.Item>
-              <Form.Item label="交货日期" name="delivery_date">
-                <DatePicker />
-              </Form.Item>
-              <Form.Item label="总金额" name="total_amount" initialValue={0}>
-                <InputNumber style={{ width: '100%' }} placeholder="请输入总金额" />
-              </Form.Item>
-              <Form.Item label="税额" name="tax_amount" initialValue={0}>
-                <InputNumber style={{ width: '100%' }} placeholder="请输入税额" />
-              </Form.Item>
-              <Form.Item label="应付金额" name="payable_amount" initialValue={0}>
-                <InputNumber style={{ width: '100%' }} placeholder="请输入应付金额" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="币种" name="currency" initialValue="CNY">
-                <Select>
-                  <Option value="CNY">人民币</Option>
-                  <Option value="USD">美元</Option>
-                  <Option value="EUR">欧元</Option>
-                </Select>
-              </Form.Item>
-              <Form.Item label="交货地址" name="delivery_address">
-                <Input placeholder="请输入交货地址" />
-              </Form.Item>
-              <Form.Item label="联系人" name="contact_person">
-                <Input placeholder="请输入联系人" />
-              </Form.Item>
-              <Form.Item label="联系电话" name="contact_phone">
-                <Input placeholder="请输入联系电话" />
-              </Form.Item>
-              <Form.Item label="备注" name="remark">
-                <TextArea rows={3} placeholder="请输入备注" />
-              </Form.Item>
-              <Form.Item label="状态" name="status" initialValue="draft">
-                <Select>
-                  <Option value="draft">草稿</Option>
-                  <Option value="pending">待审批</Option>
-                  <Option value="approved">已审批</Option>
-                  <Option value="partially_received">部分收货</Option>
-                  <Option value="received">已收货</Option>
-                  <Option value="closed">已关闭</Option>
-                  <Option value="cancelled">已取消</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-                  
-                    <Space><FormOutlined /><Text underline>修改历史</Text></Space>
-            </Col>
-          </Row>
-        </Form>
-        </Card>
-      </Modal>
-
-      <Modal
-        title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <ShoppingCartOutlined />
-          {selectedOrder?.order_no} - 采购订单明细
-        </div>}
-        open={!!selectedOrder}
-        onCancel={() => {
-          setSelectedOrder(null);
-          setDetails([]);
+        width={isExpand ? '100%' : 1200}
+        styles={{
+          body: isExpand ? { height: 'calc(90vh - 50px)', overflow: 'auto' } : { height: 800, overflow: 'auto' }
         }}
-        footer={null}
-        width={1200}
+        style={{ top: isExpand ? 16 : 100 }}
+        keyboard
       >
-        {selectedOrder && (
-          <Card extra={
+        <div>
+          <Collapse defaultActiveKey={['1']} expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}>
+            <Collapse.Panel header="采购订单头" key="1" extra={[
             <Space>
-              <Tag color="magenta">供应商: {getSupplierName(selectedOrder.supplier_id)}</Tag>
-              <Tag color="blue">订单日期: {selectedOrder.order_date}</Tag>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
+              <Button type='dashed' color="purple" size="small" icon={<CheckOutlined />}>审核</Button>
+              <Button type='dashed' color="purple" size="small" icon={<PrinterOutlined />}>打印</Button>
             </Space>
-          }>
-            <Table
-              columns={detailColumns}
-              dataSource={details}
-              rowKey="id"
-              pagination={false}
-              summary={() => (
-                <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={5} align="right"><strong>合计</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={2}></Table.Summary.Cell>
-                  <Table.Summary.Cell index={3} align="right"><strong>¥{detailTotal.taxAmount.toFixed(2)}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={4} colSpan={2}></Table.Summary.Cell>
-                </Table.Summary.Row>
-              )}
-            />
-          </Card>
-        )}
+          ]}>
+            <Splitter>
+            <Splitter.Panel defaultSize="80%" min="20%" max="80%">
+              <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: '0 16px 0 0' }}>
+                <Row gutter={16}>
+                  <Col span={12}>
+                    <Form.Item
+                      label="订单号"
+                      name="order_no"
+                      rules={[{ required: true, message: '请输入订单号' }]}
+                    >
+                      <Input placeholder="请输入订单号" disabled={!!editingOrder} />
+                    </Form.Item>
+                    <Form.Item
+                      label="供应商"
+                      name="supplier_id"
+                      rules={[{ required: true, message: '请选择供应商' }]}
+                    >
+                      <Select placeholder="请选择供应商">
+                        {suppliers.map((s) => (
+                          <Option key={s.id} value={s.id}>{s.name}</Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    <Form.Item
+                      label="订单日期"
+                      name="order_date"
+                      rules={[{ required: true, message: '请选择订单日期' }]}
+                    >
+                      <DatePicker />
+                    </Form.Item>
+                    <Form.Item label="交货日期" name="delivery_date">
+                      <DatePicker />
+                    </Form.Item>
+                    <Form.Item label="总金额" name="total_amount" initialValue={0}>
+                      <InputNumber style={{ width: '100%' }} placeholder="请输入总金额" />
+                    </Form.Item>
+                    <Form.Item label="税额" name="tax_amount" initialValue={0}>
+                      <InputNumber style={{ width: '100%' }} placeholder="请输入税额" />
+                    </Form.Item>
+                    <Form.Item label="应付金额" name="payable_amount" initialValue={0}>
+                      <InputNumber style={{ width: '100%' }} placeholder="请输入应付金额" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={12}>
+                    <Form.Item label="币种" name="currency" initialValue="CNY">
+                      <Select>
+                        <Option value="CNY">人民币</Option>
+                        <Option value="USD">美元</Option>
+                        <Option value="EUR">欧元</Option>
+                      </Select>
+                    </Form.Item>
+                    <Form.Item label="交货地址" name="delivery_address">
+                      <Input placeholder="请输入交货地址" />
+                    </Form.Item>
+                    <Form.Item label="联系人" name="contact_person">
+                      <Input placeholder="请输入联系人" />
+                    </Form.Item>
+                    <Form.Item label="联系电话" name="contact_phone">
+                      <Input placeholder="请输入联系电话" />
+                    </Form.Item>
+                    <Form.Item label="备注" name="remark">
+                      <TextArea rows={5} placeholder="请输入备注" />
+                    </Form.Item>
+                    <Form.Item label="状态" name="status" initialValue="draft">
+                      <Select>
+                        <Option value="draft">草稿</Option>
+                        <Option value="pending">待审批</Option>
+                        <Option value="approved">已审批</Option>
+                        <Option value="partially_received">部分收货</Option>
+                        <Option value="received">已收货</Option>
+                        <Option value="closed">已关闭</Option>
+                        <Option value="cancelled">已取消</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </Form>
+            </Splitter.Panel>
+            <Splitter.Panel>
+              <div style={{ padding: '0 0 0 16px' }}>
+                <Space><HistoryOutlined /><Text underline>单据历史</Text></Space>
+                <Divider />
+                <Timeline
+                  items={[
+                    {
+                      content: 'Create a services site 2015-09-01',
+                    },
+                    {
+                      content: 'Solve initial network problems 2015-09-01',
+                    },
+                    {
+                      content: 'Technical testing 2015-09-01',
+                    },
+                    {
+                      content: 'Network problems being solved 2015-09-01',
+                    },
+                  ]}
+                />
+              </div>
+            </Splitter.Panel>
+          </Splitter>
+          </Collapse.Panel>
+            <Collapse.Panel header="采购订单明细" key="2" extra={
+              <Space>
+                <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
+              </Space>
+            }>
+              <Table
+                columns={detailColumns}
+                dataSource={details}
+                rowKey="id"
+                pagination={false}
+                summary={() => (
+                  <Table.Summary.Row>
+                    <Table.Summary.Cell index={0} colSpan={5} align="right"><strong>合计</strong></Table.Summary.Cell>
+                    <Table.Summary.Cell index={1} align="left"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
+                    <Table.Summary.Cell index={2}></Table.Summary.Cell>
+                    <Table.Summary.Cell index={3} align="left"><strong>¥{detailTotal.taxAmount.toFixed(2)}</strong></Table.Summary.Cell>
+                    <Table.Summary.Cell index={4} colSpan={2}></Table.Summary.Cell>
+                  </Table.Summary.Row>
+                )}
+              />
+            </Collapse.Panel>
+          </Collapse>
+        </div>
       </Modal>
 
       <Modal
