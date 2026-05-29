@@ -4,6 +4,7 @@ import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
+import { SupaModal } from '../../components/SupaModal';
 import dayjs from 'dayjs';
 
 type PurchaseOrder = Tables['erp_purchase_orders_s_539dcf81_b']['Row'];
@@ -13,7 +14,6 @@ type Product = Tables['erp_products_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 const { TextArea } = Input;
-const { Text, Link } = Typography;
 
 export function PurchaseOrders() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -22,7 +22,6 @@ export function PurchaseOrders() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isExpand, setIsExpand] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<PurchaseOrder | null>(null);
@@ -490,172 +489,133 @@ export function PurchaseOrders() {
         loading={loading}
         pagination={{ pageSize: 10 }}
       />
-
-      <Modal
-        title={<Space>
-          <ShoppingCartOutlined />
-          <span>{editingOrder ? '编辑采购订单' : '新增采购订单'}</span>
-          <Button type="default" size="small" icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />} onClick={() => setIsExpand(!isExpand)}></Button>
-          <Button type="default" size="small" icon={<LeftOutlined />}></Button>
-          <Button type="default" size="small" icon={<RightOutlined />}></Button>
-          <Tag>按ESC键可关闭</Tag>
-        </Space>}
+      <SupaModal
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
           setEditingOrder(null);
-          setIsExpand(false);
         }}
-        footer={<Space>
-          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-          <Button type="primary" onClick={() => form.submit()}>
-            保存
-          </Button>
-        </Space>}
-        width={isExpand ? '100%' : 1200}
-        styles={{
-          body: isExpand ? { height: 'calc(90vh - 50px)', overflow: 'auto' } : { height: 800, overflow: 'auto' }
-        }}
-        style={{ top: isExpand ? 16 : 100 }}
-        keyboard
-      >
-        <div>
-          <Collapse defaultActiveKey={['1']} expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}>
-            <Collapse.Panel header="采购订单头" key="1" extra={[
-            <Space>
-              <Button type='dashed' color="purple" size="small" icon={<CheckOutlined />}>审核</Button>
-              <Button type='dashed' color="purple" size="small" icon={<PrinterOutlined />}>打印</Button>
-            </Space>
-          ]}>
-            <Splitter>
-            <Splitter.Panel defaultSize="80%" min="20%" max="80%">
-              <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: '0 16px 0 0' }}>
-                <Row gutter={16}>
-                  <Col span={12}>
-                    <Form.Item
-                      label="订单号"
-                      name="order_no"
-                      rules={[{ required: true, message: '请输入订单号' }]}
-                    >
-                      <Input placeholder="请输入订单号" disabled={!!editingOrder} />
-                    </Form.Item>
-                    <Form.Item
-                      label="供应商"
-                      name="supplier_id"
-                      rules={[{ required: true, message: '请选择供应商' }]}
-                    >
-                      <Select placeholder="请选择供应商">
-                        {suppliers.map((s) => (
-                          <Option key={s.id} value={s.id}>{s.name}</Option>
-                        ))}
-                      </Select>
-                    </Form.Item>
-                    <Form.Item
-                      label="订单日期"
-                      name="order_date"
-                      rules={[{ required: true, message: '请选择订单日期' }]}
-                    >
-                      <DatePicker />
-                    </Form.Item>
-                    <Form.Item label="交货日期" name="delivery_date">
-                      <DatePicker />
-                    </Form.Item>
-                    <Form.Item label="总金额" name="total_amount" initialValue={0}>
-                      <InputNumber style={{ width: '100%' }} placeholder="请输入总金额" />
-                    </Form.Item>
-                    <Form.Item label="税额" name="tax_amount" initialValue={0}>
-                      <InputNumber style={{ width: '100%' }} placeholder="请输入税额" />
-                    </Form.Item>
-                    <Form.Item label="应付金额" name="payable_amount" initialValue={0}>
-                      <InputNumber style={{ width: '100%' }} placeholder="请输入应付金额" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={12}>
-                    <Form.Item label="币种" name="currency" initialValue="CNY">
-                      <Select>
-                        <Option value="CNY">人民币</Option>
-                        <Option value="USD">美元</Option>
-                        <Option value="EUR">欧元</Option>
-                      </Select>
-                    </Form.Item>
-                    <Form.Item label="交货地址" name="delivery_address">
-                      <Input placeholder="请输入交货地址" />
-                    </Form.Item>
-                    <Form.Item label="联系人" name="contact_person">
-                      <Input placeholder="请输入联系人" />
-                    </Form.Item>
-                    <Form.Item label="联系电话" name="contact_phone">
-                      <Input placeholder="请输入联系电话" />
-                    </Form.Item>
-                    <Form.Item label="备注" name="remark">
-                      <TextArea rows={5} placeholder="请输入备注" />
-                    </Form.Item>
-                    <Form.Item label="状态" name="status" initialValue="draft">
-                      <Select>
-                        <Option value="draft">草稿</Option>
-                        <Option value="pending">待审批</Option>
-                        <Option value="approved">已审批</Option>
-                        <Option value="partially_received">部分收货</Option>
-                        <Option value="received">已收货</Option>
-                        <Option value="closed">已关闭</Option>
-                        <Option value="cancelled">已取消</Option>
-                      </Select>
-                    </Form.Item>
-                  </Col>
-                </Row>
-              </Form>
-            </Splitter.Panel>
-            <Splitter.Panel>
-              <div style={{ padding: '0 0 0 16px' }}>
-                <Space><HistoryOutlined /><Text underline>单据历史</Text></Space>
-                <Divider />
-                <Timeline
-                  items={[
-                    {
-                      content: 'Create a services site 2015-09-01',
-                    },
-                    {
-                      content: 'Solve initial network problems 2015-09-01',
-                    },
-                    {
-                      content: 'Technical testing 2015-09-01',
-                    },
-                    {
-                      content: 'Network problems being solved 2015-09-01',
-                    },
-                  ]}
-                />
-              </div>
-            </Splitter.Panel>
-          </Splitter>
-          </Collapse.Panel>
-            <Collapse.Panel header="采购订单明细" key="2" extra={
-              <Space>
-                <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
-              </Space>
-            }>
-              <Table
-                columns={detailColumns}
-                dataSource={details}
-                rowKey="id"
-                pagination={false}
-                summary={() => (
-                  <Table.Summary.Row>
-                    <Table.Summary.Cell index={0} colSpan={5} align="right"><strong>合计</strong></Table.Summary.Cell>
-                    <Table.Summary.Cell index={1} align="left"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
-                    <Table.Summary.Cell index={2}></Table.Summary.Cell>
-                    <Table.Summary.Cell index={3} align="left"><strong>¥{detailTotal.taxAmount.toFixed(2)}</strong></Table.Summary.Cell>
-                    <Table.Summary.Cell index={4} colSpan={2}></Table.Summary.Cell>
-                  </Table.Summary.Row>
-                )}
-              />
-            </Collapse.Panel>
-          </Collapse>
-        </div>
-      </Modal>
-
-      <Modal
+        title={
+          <>
+            <ShoppingCartOutlined />
+            <span>{editingOrder ? '编辑采购订单' : '新增采购订单'}</span>
+          </>
+        }
+        headerExtra={
+          <Space>
+            <Button type='dashed' color="purple" size="small" icon={<CheckOutlined />}>审核</Button>
+            <Button type='dashed' color="purple" size="small" icon={<PrinterOutlined />}>打印</Button>
+          </Space>
+        }
+        headerPanelTitle="采购订单头"
+        detailPanelTitle="采购订单明细"
+        detailExtra={
+          <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
+        }
+        form={form}
+        formEle={
+          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: '0 16px 0 0' }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="订单号"
+                  name="order_no"
+                  rules={[{ required: true, message: '请输入订单号' }]}
+                >
+                  <Input placeholder="请输入订单号" disabled={!!editingOrder} />
+                </Form.Item>
+                <Form.Item
+                  label="供应商"
+                  name="supplier_id"
+                  rules={[{ required: true, message: '请选择供应商' }]}
+                >
+                  <Select placeholder="请选择供应商">
+                    {suppliers.map((s) => (
+                      <Option key={s.id} value={s.id}>{s.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="订单日期"
+                  name="order_date"
+                  rules={[{ required: true, message: '请选择订单日期' }]}
+                >
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label="交货日期" name="delivery_date">
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label="总金额" name="total_amount" initialValue={0}>
+                  <InputNumber style={{ width: '100%' }} placeholder="请输入总金额" />
+                </Form.Item>
+                <Form.Item label="税额" name="tax_amount" initialValue={0}>
+                  <InputNumber style={{ width: '100%' }} placeholder="请输入税额" />
+                </Form.Item>
+                <Form.Item label="应付金额" name="payable_amount" initialValue={0}>
+                  <InputNumber style={{ width: '100%' }} placeholder="请输入应付金额" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="币种" name="currency" initialValue="CNY">
+                  <Select>
+                    <Option value="CNY">人民币</Option>
+                    <Option value="USD">美元</Option>
+                    <Option value="EUR">欧元</Option>
+                  </Select>
+                </Form.Item>
+                <Form.Item label="交货地址" name="delivery_address">
+                  <Input placeholder="请输入交货地址" />
+                </Form.Item>
+                <Form.Item label="联系人" name="contact_person">
+                  <Input placeholder="请输入联系人" />
+                </Form.Item>
+                <Form.Item label="联系电话" name="contact_phone">
+                  <Input placeholder="请输入联系电话" />
+                </Form.Item>
+                <Form.Item label="备注" name="remark">
+                  <TextArea rows={5} placeholder="请输入备注" />
+                </Form.Item>
+                <Form.Item label="状态" name="status" initialValue="draft">
+                  <Select>
+                    <Option value="draft">草稿</Option>
+                    <Option value="pending">待审批</Option>
+                    <Option value="approved">已审批</Option>
+                    <Option value="partially_received">部分收货</Option>
+                    <Option value="received">已收货</Option>
+                    <Option value="closed">已关闭</Option>
+                    <Option value="cancelled">已取消</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        }
+        tableEle={
+          <Table
+            columns={detailColumns}
+            dataSource={details}
+            rowKey="id"
+            pagination={false}
+            summary={() => (
+              <Table.Summary.Row>
+                <Table.Summary.Cell index={0} colSpan={5} align="right"><strong>合计</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={1} align="left"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={2}></Table.Summary.Cell>
+                <Table.Summary.Cell index={3} align="left"><strong>¥{detailTotal.taxAmount.toFixed(2)}</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={4} colSpan={2}></Table.Summary.Cell>
+              </Table.Summary.Row>
+            )}
+          />
+        }
+        footer={
+          <Space>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()}>保存</Button>
+          </Space>
+        }
+      />
+      <SupaModal
         title={editingDetail ? '编辑采购订单明细' : '新增采购订单明细'}
         open={isDetailModalOpen}
         onCancel={() => {
@@ -669,63 +629,67 @@ export function PurchaseOrders() {
             保存
           </Button>
         </Space>}
-        width={500}
-      >
-        <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="产品"
-            name="product_id"
-            rules={[{ required: true, message: '请选择产品' }]}
-          >
-            <Select
-              placeholder="请选择产品"
-              onChange={(value) => {
-                const price = getProductPrice(value as number);
-                detailForm.setFieldsValue({ unit_price: price });
-              }}
+        width={1000}
+        height={500}
+        form={detailForm}
+        formEle={
+          <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ marginRight: 16 }}>
+            <Form.Item
+              label="产品"
+              name="product_id"
+              rules={[{ required: true, message: '请选择产品' }]}
             >
-              {products.map((p) => (
-                <Option key={p.id} value={p.id}>{p.code} - {p.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="数量"
-                name="quantity"
-                rules={[{ required: true, message: '请输入数量' }]}
+              <Select
+                placeholder="请选择产品"
+                onChange={(value) => {
+                  const price = getProductPrice(value as number);
+                  detailForm.setFieldsValue({ unit_price: price });
+                }}
               >
-                <InputNumber min={0} max={9999} style={{ width: '100%' }} placeholder="请输入数量" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                label="单价"
-                name="unit_price"
-                rules={[{ required: true, message: '请输入单价' }]}
-              >
-                <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入单价" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item label="税率(%)" name="tax_rate" initialValue={13}>
-                <InputNumber min={0} max={100} step={0.1} style={{ width: '100%' }} placeholder="请输入税率" />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="金额" name="amount">
-                <InputNumber disabled style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item label="备注" name="remark">
-            <Input placeholder="请输入备注" />
-          </Form.Item>
-        </Form>
-      </Modal>
+                {products.map((p) => (
+                  <Option key={p.id} value={p.id}>{p.code} - {p.name}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="数量"
+                  name="quantity"
+                  rules={[{ required: true, message: '请输入数量' }]}
+                >
+                  <InputNumber min={0} max={9999} style={{ width: '100%' }} placeholder="请输入数量" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label="单价"
+                  name="unit_price"
+                  rules={[{ required: true, message: '请输入单价' }]}
+                >
+                  <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入单价" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item label="税率(%)" name="tax_rate" initialValue={13}>
+                  <InputNumber min={0} max={100} step={0.1} style={{ width: '100%' }} placeholder="请输入税率" />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="金额" name="amount">
+                  <InputNumber disabled style={{ width: '100%' }} />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item label="备注" name="remark">
+              <Input placeholder="请输入备注" />
+            </Form.Item>
+          </Form>}
+      >
+
+      </SupaModal>
     </Card>
   );
 }
