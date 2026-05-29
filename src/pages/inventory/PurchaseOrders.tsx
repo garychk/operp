@@ -614,6 +614,7 @@ export function PurchaseOrders() {
             <Button type="primary" onClick={() => form.submit()}>保存</Button>
           </Space>
         }
+        height={680}
       />
       <SupaModal
         title={editingDetail ? '编辑采购订单明细' : '新增采购订单明细'}

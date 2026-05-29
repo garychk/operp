@@ -26,6 +26,7 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import dayjs from 'dayjs';
+import SupaModal from "../../components/SupaModal";
 
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
@@ -249,14 +250,14 @@ export function Boms() {
       extra={
         <Space>
           <Input
-          placeholder="搜索BOM编号或产品..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增BOM
-        </Button>
+            placeholder="搜索BOM编号或产品..."
+            prefix={<SearchOutlined />}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            新增BOM
+          </Button>
         </Space>
       }
     >
@@ -268,7 +269,7 @@ export function Boms() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
+      <SupaModal
         title={editingBom ? "编辑BOM" : "新增BOM"}
         open={isModalOpen}
         onCancel={() => {
@@ -284,79 +285,93 @@ export function Boms() {
             </Button>
           </Space>
         }
-        width={600}
+        width={1000}
+        height={680}
+        headerPanelTitle="BOM主档"
+        detailPanelTitle="子项明细"
+        form={form}
+        formEle={
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+            style={{ marginRight: 16 }}
+          >
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="BOM编号"
+                  name="bom_no"
+                  rules={[{ required: true, message: "请输入BOM编号" }]}
+                >
+                  <Input placeholder="请输入BOM编号" disabled={!!editingBom} />
+                </Form.Item>
+                <Form.Item
+                  label="产品"
+                  name="product_id"
+                  rules={[{ required: true, message: "请选择产品" }]}
+                >
+                  <Select placeholder="请选择产品" disabled={!!editingBom}>
+                    {products.map((p) => (
+                      <Option key={p.id} value={p.id}>
+                        {p.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="版本" name="version" initialValue="1.0">
+                  <Input placeholder="请输入版本" />
+                </Form.Item>
+                <Form.Item label="数量" name="quantity" initialValue={1}>
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入数量"
+                  />
+                </Form.Item>
+                <Form.Item label="单位" name="unit" initialValue="件">
+                  <Input placeholder="请输入单位" />
+                </Form.Item>                
+              </Col>
+              <Col span={12}>
+                <Form.Item label="生效日期" name="effective_date">
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item label="失效日期" name="expiry_date">
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item label="备注" name="remark">
+                  <Input.TextArea rows={2} placeholder="请输入备注" />
+                </Form.Item>
+                <Form.Item
+                  label="启用"
+                  name="is_active"
+                  valuePropName="checked"
+                  initialValue={true}
+                >
+                  <Checkbox />
+                </Form.Item>
+                <Form.Item
+                  label="设为默认BOM"
+                  name="is_default"
+                  valuePropName="checked"
+                  initialValue={true}
+                >
+                  <Checkbox />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        }
+        detailExtra={
+          <Space>
+            <Button type="link" size="small" onClick={() => form.submit()} icon={<PlusOutlined />}>
+              新增子项
+            </Button>
+          </Space>
+        }
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-          style={{ marginTop: 16 }}
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="BOM编号"
-                name="bom_no"
-                rules={[{ required: true, message: "请输入BOM编号" }]}
-              >
-                <Input placeholder="请输入BOM编号" disabled={!!editingBom} />
-              </Form.Item>
-              <Form.Item
-                label="产品"
-                name="product_id"
-                rules={[{ required: true, message: "请选择产品" }]}
-              >
-                <Select placeholder="请选择产品" disabled={!!editingBom}>
-                  {products.map((p) => (
-                    <Option key={p.id} value={p.id}>
-                      {p.name}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item label="版本" name="version" initialValue="1.0">
-                <Input placeholder="请输入版本" />
-              </Form.Item>
-              <Form.Item label="数量" name="quantity" initialValue={1}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="请输入数量"
-                />
-              </Form.Item>
-              <Form.Item label="单位" name="unit" initialValue="件">
-                <Input placeholder="请输入单位" />
-              </Form.Item>
-              <Form.Item
-                label="设为默认BOM"
-                name="is_default"
-                valuePropName="checked"
-                initialValue={true}
-              >
-                <Checkbox />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="生效日期" name="effective_date">
-                <DatePicker />
-              </Form.Item>
-              <Form.Item label="失效日期" name="expiry_date">
-                <DatePicker />
-              </Form.Item>
-              <Form.Item label="备注" name="remark">
-                <Input.TextArea rows={3} placeholder="请输入备注" />
-              </Form.Item>
-              <Form.Item
-                label="启用"
-                name="is_active"
-                valuePropName="checked"
-                initialValue={true}
-              >
-                <Checkbox />
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
+
+      </SupaModal>
     </Card>
   );
 }

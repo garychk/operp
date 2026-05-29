@@ -26,6 +26,7 @@ import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import { Categories } from "./Categories";
+import SupaModal from "../../components/SupaModal";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
@@ -112,7 +113,7 @@ export function Products() {
   const handleDelete = async (id: number) => {
     Modal.confirm({
       title: "确认删除",
-      content: "确定要删除该产品吗？",
+      content: "确定要删除该物料吗？",
       onOk: async () => {
         try {
           const { error } = await supabase
@@ -178,12 +179,12 @@ export function Products() {
 
   const columns = [
     {
-      title: "产品编码",
+      title: "物料编码",
       dataIndex: "code",
       key: "code",
     },
     {
-      title: "产品名称",
+      title: "物料名称",
       dataIndex: "name",
       key: "name",
     },
@@ -254,11 +255,11 @@ export function Products() {
   return (
     <Card
       variant="borderless"
-      title="产品管理"
+      title="物料管理"
       extra={
         <Space>
           <Input
-            placeholder="搜索产品名称或编码..."
+            placeholder="搜索物料名称或编码..."
             prefix={<SearchOutlined />}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -270,7 +271,7 @@ export function Products() {
             类别管理
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增产品
+            新增物料
           </Button>
         </Space>
       }
@@ -283,8 +284,8 @@ export function Products() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
-        title={editingProduct ? "编辑产品" : "新增产品"}
+      <SupaModal
+        title={editingProduct ? "编辑物料" : "新增物料"}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -299,32 +300,33 @@ export function Products() {
             </Button>
           </Space>
         }
-        width={900}
-      >
-        <Form
+        width={'70%'}
+        height={650}
+        form={form}
+        formEle={<Form
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
-          style={{ marginTop: 16 }}
+          style={{ marginRight: 16 }}
         >
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
-                label="产品编码"
+                label="物料编码"
                 name="code"
-                rules={[{ required: true, message: "请输入产品编码" }]}
+                rules={[{ required: true, message: "请输入物料编码" }]}
               >
                 <Input
-                  placeholder="请输入产品编码"
+                  placeholder="请输入物料编码"
                   disabled={!!editingProduct}
                 />
               </Form.Item>
               <Form.Item
-                label="产品名称"
+                label="物料名称"
                 name="name"
-                rules={[{ required: true, message: "请输入产品名称" }]}
+                rules={[{ required: true, message: "请输入物料名称" }]}
               >
-                <Input placeholder="请输入产品名称" />
+                <Input placeholder="请输入物料名称" />
               </Form.Item>
               <Form.Item label="简称" name="short_name">
                 <Input placeholder="请输入简称" />
@@ -419,9 +421,8 @@ export function Products() {
               </Form.Item>
             </Col>
           </Row>
-        </Form>
-      </Modal>
-
+        </Form>}
+      ></SupaModal>
       <Modal
         title="物料类别管理"
         open={isCategoryModalOpen}

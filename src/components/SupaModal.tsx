@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider } from 'antd';
-import { CompressOutlined, FullscreenOutlined, LeftOutlined, RightOutlined, CaretRightOutlined, HistoryOutlined } from '@ant-design/icons';
+import { CompressOutlined, FullscreenOutlined, LeftOutlined, RightOutlined, CaretRightOutlined, HistoryOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 
 interface SupaModalProps {
@@ -15,8 +15,8 @@ interface SupaModalProps {
   detailPanelTitle?: string;
   detailExtra?: React.ReactNode;
   tableEle?: React.ReactNode;
-  width?: number;
-  height?: number;
+  width?: string | number;
+  height?: string | number;
 }
 
 export function SupaModal({
@@ -63,6 +63,8 @@ export function SupaModal({
           />
           <Button type="default" size="small" icon={<LeftOutlined />} />
           <Button type="default" size="small" icon={<RightOutlined />} />
+          <Button type='default' size="small" icon={<CheckOutlined />} color="purple" />
+          <Button type='default' size="small" icon={<PrinterOutlined />} />
           <Tag>按ESC键可关闭</Tag>
         </Space>
       }
