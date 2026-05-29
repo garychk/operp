@@ -1,7 +1,7 @@
 # Supabase ERP 管理系统
 
 一个功能完整的企业资源计划（ERP）系统，采用现代前端技术栈构建。
-
+![alt text](image.png)
 ---
 
 ## 🛠️ 技术栈
