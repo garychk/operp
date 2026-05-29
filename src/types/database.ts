@@ -703,8 +703,8 @@ export interface ErpRoutingOperationsS539Dcf81BRow {
   version: string | null;
   is_default: boolean | null;
   is_active: boolean | null;
-  effective_date: string | null;
-  expiry_date: string | null;
+  effective_date: any | null;
+  expiry_date: any | null;
   total_standard_hours: number | null;
   remark: string | null;
 }
