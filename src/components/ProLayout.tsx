@@ -331,7 +331,7 @@ export function ProLayout() {
           ):(<PicCenterOutlined key="mix" onClick={() => setMix(true)} />),
           <InfoCircleFilled key="info" />,
           <QuestionCircleFilled key="question" />,
-          <GithubFilled key="github" />
+          <GithubFilled key="github" onClick={() => window.open('https://gitee.com/garychk/supabase-erp', '_blank')} />
         ]}
         footerRender={() => (
           <div style={{ textAlign: 'center', padding: 12, color: '#999' }}>
