@@ -321,10 +321,10 @@ export function ProLayout() {
           }
         }}
         actionsRender={() => [
-          dark ? (
-            <SunFilled key="theme" onClick={() => setDark(false)} />
+          dark ? (            
+            <MoonOutlined key="theme" onClick={() => setDark(false)} />
           ) : (
-            <MoonOutlined key="theme" onClick={() => setDark(true)} />
+            <SunFilled key="theme" onClick={() => setDark(true)} />
           ),
           ismix ? (
             <PicLeftOutlined key="mix" onClick={() => setMix(false)} />
