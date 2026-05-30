@@ -289,10 +289,13 @@ export function RoutingOperations() {
     setEditingDetail(null);
     detailForm.setFieldsValue({
       sequence_no: details.length + 1,
-      operation_name: "",
-      work_center_id: undefined,
+      operation_id: undefined,
+      next_operation_id: undefined,
       standard_hours: 0,
-      description: "",
+      setup_hours: 0,
+      labor_rate: 0,
+      overhead_rate: 0,
+      is_inspection_required: false,
     });
     setIsDetailModalOpen(true);
   };
@@ -426,22 +429,34 @@ export function RoutingOperations() {
       render: (operationId: number) => getOperationName(operationId),
     },
     {
-      title: "工作中心",
-      dataIndex: "work_center_id",
-      key: "work_center_id",
-      render: (workCenterId: number) => getWorkCenterName(workCenterId),
-    },
-    {
       title: "标准工时(小时)",
       dataIndex: "standard_hours",
       key: "standard_hours",
       render: (hours: number) => hours || 0,
     },
     {
-      title: "描述",
-      dataIndex: "description",
-      key: "description",
-      render: (text: string) => text || "-",
+      title: "准备工时(小时)",
+      dataIndex: "setup_hours",
+      key: "setup_hours",
+      render: (hours: number) => hours || 0,
+    },
+    {
+      title: "人工费率",
+      dataIndex: "labor_rate",
+      key: "labor_rate",
+      render: (rate: number) => rate || 0,
+    },
+    {
+      title: "制造费用率",
+      dataIndex: "overhead_rate",
+      key: "overhead_rate",
+      render: (rate: number) => rate || 0,
+    },
+    {
+      title: "是否检验",
+      dataIndex: "is_inspection_required",
+      key: "is_inspection_required",
+      render: (isRequired: boolean) => (isRequired ? "是" : "否"),
     },
     {
       title: "操作",
@@ -626,50 +641,99 @@ export function RoutingOperations() {
         height={400}
       >
         <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ marginRight: 16 }}>
-            <Form.Item
-              label="序号"
-              name="sequence_no"
-              rules={[{ required: true, message: "请输入序号" }]}
-            >
-              <InputNumber min={1} style={{ width: "100%" }} placeholder="请输入序号" />
-            </Form.Item>
-            <Form.Item
-              label="工序名称"
-              name="operation_id"
-              rules={[{ required: true, message: "请选择工序" }]}
-            >
-              <Select placeholder="请选择工序">
-                {operations.map((op) => (
-                  <Option key={op.id} value={op.id}>
-                    {op.name}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-            <Form.Item label="工作中心" name="work_center_id">
-              <Select placeholder="请选择工作中心" allowClear>
-                {workCenters.map((wc) => (
-                  <Option key={wc.id} value={wc.id}>
-                    {wc.name}
-                  </Option>
-                ))}
-              </Select>
-            </Form.Item>
-            <Form.Item
-              label="标准工时(小时)"
-              name="standard_hours"
-              initialValue={0}
-            >
-              <InputNumber
-                min={0}
-                step={0.1}
-                style={{ width: "100%" }}
-                placeholder="请输入标准工时"
-              />
-            </Form.Item>
-            <Form.Item label="描述" name="description">
-              <Input.TextArea rows={3} placeholder="请输入描述" />
-            </Form.Item>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="序号"
+                  name="sequence_no"
+                  rules={[{ required: true, message: "请输入序号" }]}
+                >
+                  <InputNumber min={1} style={{ width: "100%" }} placeholder="请输入序号" />
+                </Form.Item>
+                <Form.Item
+                  label="工序名称"
+                  name="operation_id"
+                  rules={[{ required: true, message: "请选择工序" }]}
+                >
+                  <Select placeholder="请选择工序">
+                    {operations.map((op) => (
+                      <Option key={op.id} value={op.id}>
+                        {op.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="下一道工序" name="next_operation_id">
+                  <Select placeholder="请选择下一道工序" allowClear>
+                    {operations.map((op) => (
+                      <Option key={op.id} value={op.id}>
+                        {op.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="标准工时(小时)"
+                  name="standard_hours"
+                  initialValue={0}
+                >
+                  <InputNumber
+                    min={0}
+                    step={0.1}
+                    style={{ width: "100%" }}
+                    placeholder="请输入标准工时"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="准备工时(小时)"
+                  name="setup_hours"
+                  initialValue={0}
+                >
+                  <InputNumber
+                    min={0}
+                    step={0.1}
+                    style={{ width: "100%" }}
+                    placeholder="请输入准备工时"
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label="人工费率"
+                  name="labor_rate"
+                  initialValue={0}
+                >
+                  <InputNumber
+                    min={0}
+                    step={0.0001}
+                    precision={4}
+                    style={{ width: "100%" }}
+                    placeholder="请输入人工费率"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="制造费用率"
+                  name="overhead_rate"
+                  initialValue={0}
+                >
+                  <InputNumber
+                    min={0}
+                    step={0.0001}
+                    precision={4}
+                    style={{ width: "100%" }}
+                    placeholder="请输入制造费用率"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="是否需要检验"
+                  name="is_inspection_required"
+                  valuePropName="checked"
+                  initialValue={false}
+                >
+                  <Checkbox />
+                </Form.Item>
+              </Col>
+            </Row>
           </Form>
       </Modal>
     </Card>

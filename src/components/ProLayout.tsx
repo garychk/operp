@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { ProLayout as AntProLayout, PageContainer, ProCard } from '@ant-design/pro-components';
-import { Tabs, Avatar, Button, Dropdown, Tag, Space, ConfigProvider, theme, Switch } from 'antd';
+import { Tabs, Button, Dropdown, Tag, ConfigProvider, theme } from 'antd';
 import {
   DashboardOutlined,
   BookOutlined,

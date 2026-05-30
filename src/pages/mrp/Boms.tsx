@@ -30,21 +30,32 @@ import SupaModal from "../../components/SupaModal";
 
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
+type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
+type BomDetail = Tables["erp_bom_details_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 
 export function Boms() {
   const [boms, setBoms] = useState<Bom[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [operations, setOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingBom, setEditingBom] = useState<Bom | null>(null);
+  const [selectedBom, setSelectedBom] = useState<Bom | null>(null);
+  const [details, setDetails] = useState<BomDetail[]>([]);
+  const [editingDetail, setEditingDetail] = useState<BomDetail | null>(null);
   const [form] = Form.useForm();
+  const [detailForm] = Form.useForm();
 
   useEffect(() => {
     fetchBoms();
     fetchProducts();
+    fetchAllProducts();
+    fetchOperations();
   }, []);
 
   const fetchBoms = async () => {
@@ -80,6 +91,48 @@ export function Boms() {
     }
   };
 
+  const fetchAllProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("erp_products_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n");
+      if (error) throw error;
+      setAllProducts(data || []);
+    } catch (error) {
+      console.error("Error fetching all products:", error);
+    }
+  };
+
+  const fetchOperations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("erp_operations_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n");
+      if (error) throw error;
+      setOperations(data || []);
+    } catch (error) {
+      console.error("Error fetching operations:", error);
+    }
+  };
+
+  const fetchDetails = async (bomId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from("erp_bom_details_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n")
+        .eq("bom_id", bomId)
+        .order("line_no");
+      if (error) throw error;
+      setDetails(data || []);
+    } catch (error) {
+      console.error("Error fetching details:", error);
+      message.error("获取明细失败");
+    }
+  };
+
   const handleSubmit = async (values: any) => {
     try {
       if (editingBom) {
@@ -110,8 +163,50 @@ export function Boms() {
     }
   };
 
-  const handleEdit = (record: Bom) => {
+  const handleDetailSubmit = async (values: any) => {
+    try {
+      if (!selectedBom) {
+        message.error("请先选择BOM");
+        return;
+      }
+
+      // 验证物料不能与 BOM 主档相同
+      if (values.material_id === selectedBom.product_id) {
+        message.error('子项物料不能与 BOM 主档物料相同');
+        return;
+      }
+
+      if (editingDetail) {
+        await supabase
+          .from("erp_bom_details_s_539dcf81_b")
+          .update(values)
+          .eq("id", editingDetail.id);
+        message.success("更新成功");
+      } else {
+        const maxLineNo = details.length > 0 ? Math.max(...details.map(d => d.line_no || 0)) : 0;
+        values.bom_id = selectedBom.id;
+        values.line_no = maxLineNo + 1;
+        values.is_deleted = "n";
+
+        const { error } = await supabase
+          .from("erp_bom_details_s_539dcf81_b")
+          .insert([values]);
+        if (error) throw error;
+        message.success("新增成功");
+      }
+      setIsDetailModalOpen(false);
+      detailForm.resetFields();
+      setEditingDetail(null);
+      fetchDetails(selectedBom.id);
+    } catch (error) {
+      console.error("Error saving detail:", error);
+      message.error("保存失败");
+    }
+  };
+
+  const handleEdit = async (record: Bom) => {
     setEditingBom(record);
+    setSelectedBom(record);
     form.setFieldsValue({
       ...record,
       effective_date: dayjs(record.effective_date),
@@ -119,6 +214,7 @@ export function Boms() {
       is_default: record.is_default ?? true,
       is_active: record.is_active ?? true,
     });
+    await fetchDetails(record.id);
     setIsModalOpen(true);
   };
 
@@ -147,6 +243,8 @@ export function Boms() {
 
   const handleAdd = () => {
     setEditingBom(null);
+    setSelectedBom(null);
+    setDetails([]);
     form.setFieldsValue({
       bom_no: "",
       product_id: undefined,
@@ -162,9 +260,78 @@ export function Boms() {
     setIsModalOpen(true);
   };
 
+  const handleAddDetail = () => {
+    setEditingDetail(null);
+    detailForm.setFieldsValue({
+      line_no: details.length + 1,
+      material_id: undefined,
+      quantity: 0,
+      unit: "",
+      loss_rate: 0,
+      operation_id: undefined,
+      remark: "",
+    });
+    setIsDetailModalOpen(true);
+  };
+
+  const handleMaterialChange = (materialId: number) => {
+    const unit = getMaterialUnit(materialId);
+    detailForm.setFieldValue('unit', unit);
+    
+    // 验证物料不能与 BOM 主档相同
+    if (selectedBom && materialId === selectedBom.product_id) {
+      message.error('子项物料不能与 BOM 主档物料相同');
+      detailForm.setFieldValue('material_id', undefined);
+      detailForm.setFieldValue('unit', '');
+    }
+  };
+
+  const handleEditDetail = (record: BomDetail) => {
+    setEditingDetail(record);
+    detailForm.setFieldsValue(record);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleDeleteDetail = async (id: number) => {
+    Modal.confirm({
+      title: "确认删除",
+      content: "确定要删除该子项吗？",
+      onOk: async () => {
+        try {
+          await supabase
+            .from("erp_bom_details_s_539dcf81_b")
+            .update({ is_deleted: "y" })
+            .eq("id", id);
+          message.success("删除成功");
+          if (selectedBom) {
+            fetchDetails(selectedBom.id);
+          }
+        } catch (error) {
+          console.error("Error deleting detail:", error);
+          message.error("删除失败");
+        }
+      },
+    });
+  };
+
   const getProductName = (productId: number | null) => {
     const product = products.find((p) => p.id === productId);
     return product?.name || "-";
+  };
+
+  const getMaterialName = (materialId: number | null) => {
+    const product = allProducts.find((p) => p.id === materialId);
+    return product?.name || "-";
+  };
+
+  const getMaterialUnit = (materialId: number | null) => {
+    const product = allProducts.find((p) => p.id === materialId);
+    return product?.unit || "";
+  };
+
+  const getOperationName = (operationId: number | null) => {
+    const operation = operations.find((o) => o.id === operationId);
+    return operation?.name || "-";
   };
 
   const filteredBoms = boms.filter(
@@ -236,6 +403,62 @@ export function Boms() {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
           >
+            删除
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  const detailColumns = [
+    {
+      title: "行号",
+      dataIndex: "line_no",
+      key: "line_no",
+    },
+    {
+      title: "物料",
+      dataIndex: "material_id",
+      key: "material_id",
+      render: (materialId: number) => getMaterialName(materialId),
+    },
+    {
+      title: "数量",
+      dataIndex: "quantity",
+      key: "quantity",
+    },
+    {
+      title: "单位",
+      dataIndex: "unit",
+      key: "unit",
+    },
+    {
+      title: "损耗率",
+      dataIndex: "loss_rate",
+      key: "loss_rate",
+      render: (rate: number) => (rate ? (rate * 100).toFixed(2) + "%" : "0%"),
+    },
+    {
+      title: "工序",
+      dataIndex: "operation_id",
+      key: "operation_id",
+      render: (operationId: number) => getOperationName(operationId),
+    },
+    {
+      title: "备注",
+      dataIndex: "remark",
+      key: "remark",
+      render: (text: string) => text || "-",
+    },
+    {
+      title: "操作",
+      key: "action",
+      render: (_: any, record: BomDetail) => (
+        <Space size="middle">
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
+            编辑
+          </Button>
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)}>
             删除
           </Button>
         </Space>
@@ -363,15 +586,114 @@ export function Boms() {
           </Form>
         }
         detailExtra={
+          <Button type="link" size="small" onClick={handleAddDetail} icon={<PlusOutlined />}>
+            新增子项
+          </Button>
+        }
+        tableEle={
+          <Table
+            columns={detailColumns}
+            dataSource={details}
+            rowKey="id"
+            pagination={false}
+          />
+        }
+      >
+      </SupaModal>
+
+      <Modal
+        title={editingDetail ? "编辑BOM子项" : "新增BOM子项"}
+        open={isDetailModalOpen}
+        onCancel={() => {
+          setIsDetailModalOpen(false);
+          detailForm.resetFields();
+          setEditingDetail(null);
+        }}
+        footer={
           <Space>
-            <Button type="link" size="small" onClick={() => form.submit()} icon={<PlusOutlined />}>
-              新增子项
+            <Button onClick={() => setIsDetailModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => detailForm.submit()}>
+              保存
             </Button>
           </Space>
         }
+        width={800}
       >
-
-      </SupaModal>
+        <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="行号"
+                name="line_no"
+                rules={[{ required: true, message: "请输入行号" }]}
+              >
+                <InputNumber min={1} style={{ width: "100%" }} placeholder="请输入行号" />
+              </Form.Item>
+              <Form.Item
+                label="物料"
+                name="material_id"
+                rules={[{ required: true, message: "请选择物料" }]}
+              >
+                <Select placeholder="请选择物料" onChange={handleMaterialChange}>
+                  {allProducts.map((p) => (
+                    <Option 
+                      key={p.id} 
+                      value={p.id} 
+                      disabled={selectedBom && p.id === selectedBom.product_id}
+                    >
+                      {p.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item
+                label="数量"
+                name="quantity"
+                initialValue={0}
+              >
+                <InputNumber
+                  min={0}
+                  step={0.000001}
+                  precision={6}
+                  style={{ width: "100%" }}
+                  placeholder="请输入数量"
+                />
+              </Form.Item>
+              <Form.Item label="单位" name="unit">
+                <Input placeholder="请输入单位" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="损耗率"
+                name="loss_rate"
+                initialValue={0}
+              >
+                <InputNumber
+                  min={0}
+                  max={1}
+                  step={0.0001}
+                  precision={4}
+                  style={{ width: "100%" }}
+                  placeholder="请输入损耗率"
+                />
+              </Form.Item>
+              <Form.Item label="工序" name="operation_id">
+                <Select placeholder="请选择工序" allowClear>
+                  {operations.map((o) => (
+                    <Option key={o.id} value={o.id}>
+                      {o.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item label="备注" name="remark">
+                <Input.TextArea rows={3} placeholder="请输入备注" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
+      </Modal>
     </Card>
   );
 }
