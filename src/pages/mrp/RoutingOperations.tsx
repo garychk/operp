@@ -24,12 +24,14 @@ import {
   ShoppingOutlined,
   CheckOutlined,
   PrinterOutlined,
+  AppstoreOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
+import { RoutingMap } from "../../components/RoutingMap";
 
 type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
 type RoutingDetail = Tables["erp_routing_operation_details_s_539dcf81_b"]["Row"];
@@ -136,6 +138,11 @@ export function RoutingOperations() {
       console.error("Error fetching details:", error);
       message.error("获取明细失败");
     }
+  };
+
+  const handleShowMap = async (record: Routing) => {
+    await fetchDetails(record.id);
+    setSelectedRouting(record);
   };
 
   const handleSubmit = async (values: any) => {
@@ -405,6 +412,13 @@ export function RoutingOperations() {
           </Button>
           <Button
             type="text"
+            icon={<AppstoreOutlined />}
+            onClick={() => handleShowMap(record)}
+          >
+            图形
+          </Button>
+          <Button
+            type="text"
             danger
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
@@ -500,6 +514,12 @@ export function RoutingOperations() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+      />
+
+      <RoutingMap
+        details={details}
+        operations={operations}
+        routingNo={selectedRouting?.routing_no || ""}
       />
 
       <SupaModal
