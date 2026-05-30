@@ -25,11 +25,13 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import dayjs from "dayjs";
+import SupaModal from "../../components/SupaModal";
 
 type ProductionOrder = Tables["erp_production_orders_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
+type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 
@@ -38,6 +40,7 @@ export function ProductionOrders() {
   const [products, setProducts] = useState<Product[]>([]);
   const [boms, setBoms] = useState<Bom[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
+  const [routings, setRoutings] = useState<Routing[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -51,6 +54,7 @@ export function ProductionOrders() {
     fetchProducts();
     fetchBoms();
     fetchWorkCenters();
+    fetchRoutings();
   }, []);
 
   const fetchOrders = async () => {
@@ -113,6 +117,20 @@ export function ProductionOrders() {
     }
   };
 
+  const fetchRoutings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("erp_routing_operations_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n")
+        .eq("is_active", true);
+      if (error) throw error;
+      setRoutings(data || []);
+    } catch (error) {
+      console.error("Error fetching routings:", error);
+    }
+  };
+
   const handleSubmit = async (values: any) => {
     try {
       if (editingOrder) {
@@ -145,7 +163,13 @@ export function ProductionOrders() {
 
   const handleEdit = (record: ProductionOrder) => {
     setEditingOrder(record);
-    form.setFieldsValue(record);
+    form.setFieldsValue({ ...record
+      ,order_date: dayjs(record.order_date)
+      ,planned_start_date: dayjs(record.planned_start_date)
+      ,planned_end_date: dayjs(record.planned_end_date)
+      ,actual_start_date: dayjs(record.actual_start_date)
+      ,actual_end_date: dayjs(record.actual_end_date)
+     });
     setIsModalOpen(true);
   };
 
@@ -179,9 +203,14 @@ export function ProductionOrders() {
       order_date: dayjs(new Date()),
       product_id: undefined,
       bom_id: undefined,
+      routing_id: undefined,
       planned_quantity: 1,
+      completed_quantity: 0,
+      scrapped_quantity: 0,
       planned_start_date: "",
       planned_end_date: "",
+      actual_start_date: "",
+      actual_end_date: "",
       work_center_id: undefined,
       priority: 1,
       remark: "",
@@ -316,14 +345,14 @@ export function ProductionOrders() {
       extra={
         <Space>
           <Input
-          placeholder="搜索订单号或产品..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增订单
-        </Button>
+            placeholder="搜索订单号或产品..."
+            prefix={<SearchOutlined />}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            新增订单
+          </Button>
         </Space>
       }
     >
@@ -335,7 +364,7 @@ export function ProductionOrders() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
+      <SupaModal
         title={editingOrder ? "编辑生产订单" : "新增生产订单"}
         open={isModalOpen}
         onCancel={() => {
@@ -351,98 +380,151 @@ export function ProductionOrders() {
             </Button>
           </Space>
         }
-        width={600}
+        width={'60%'}
+        height={680}
+        form={form}
+        formEle={
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+            style={{ marginRight: 16 }}
+          >
+            <Row gutter={16}>
+              <Col span={8}>
+                <Form.Item
+                  label="订单号"
+                  name="order_no"
+                  rules={[{ required: true, message: "请输入订单号" }]}
+                >
+                  <Input placeholder="请输入订单号" disabled={!!editingOrder} />
+                </Form.Item>
+                <Form.Item
+                  label="订单日期"
+                  name="order_date"
+                  rules={[{ required: true, message: "请选择订单日期" }]}
+                >
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item
+                  label="产品"
+                  name="product_id"
+                  rules={[{ required: true, message: "请选择产品" }]}
+                >
+                  <Select placeholder="请选择产品" disabled={!!editingOrder}>
+                    {products.map((p) => (
+                      <Option key={p.id} value={p.id}>
+                        {p.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="BOM" name="bom_id">
+                  <Select placeholder="请选择BOM">
+                    {boms.map((b) => (
+                      <Option key={b.id} value={b.id}>
+                        {b.bom_no}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="工艺路线" name="routing_id">
+                  <Select placeholder="请选择工艺路线" allowClear>
+                    {routings.map((r) => (
+                      <Option key={r.id} value={r.id}>
+                        {r.routing_no}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item
+                  label="计划数量"
+                  name="planned_quantity"
+                  initialValue={1}
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入计划数量"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="完成数量"
+                  name="completed_quantity"
+                  initialValue={0}
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入完成数量"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="报废数量"
+                  name="scrapped_quantity"
+                  initialValue={0}
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入报废数量"
+                  />
+                </Form.Item>
+                <Form.Item label="计划开始日期" name="planned_start_date">
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item label="计划结束日期" name="planned_end_date">
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+
+              </Col>
+              <Col span={8}>
+                <Form.Item label="实际开始日期" name="actual_start_date">
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item label="实际结束日期" name="actual_end_date">
+                  <DatePicker style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item label="工作中心" name="work_center_id">
+                  <Select placeholder="请选择工作中心">
+                    {workCenters.map((w) => (
+                      <Option key={w.id} value={w.id}>
+                        {w.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="优先级" name="priority" initialValue={1}>
+                  <Select>
+                    <Option value={1}>低</Option>
+                    <Option value={2}>中</Option>
+                    <Option value={3}>高</Option>
+                    <Option value={4}>紧急</Option>
+                  </Select>
+                </Form.Item>
+                <Form.Item label="状态" name="status" initialValue="draft">
+                  <Select>
+                    <Option value="draft">草稿</Option>
+                    <Option value="planned">已计划</Option>
+                    <Option value="released">已下达</Option>
+                    <Option value="in_progress">生产中</Option>
+                    <Option value="completed">已完成</Option>
+                    <Option value="closed">已关闭</Option>
+                    <Option value="cancelled">已取消</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={24}>
+                <Form.Item label="备注" name="remark">
+                  <Input.TextArea rows={2} placeholder="请输入备注" />
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        }
+        headerPanelTitle="生产订单"
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-          style={{ marginTop: 16 }}
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="订单号"
-                name="order_no"
-                rules={[{ required: true, message: "请输入订单号" }]}
-              >
-                <Input placeholder="请输入订单号" disabled={!!editingOrder} />
-              </Form.Item>
-              <Form.Item
-                label="产品"
-                name="product_id"
-                rules={[{ required: true, message: "请选择产品" }]}
-              >
-                <Select placeholder="请选择产品" disabled={!!editingOrder}>
-                  {products.map((p) => (
-                    <Option key={p.id} value={p.id}>
-                      {p.name}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item label="BOM" name="bom_id">
-                <Select placeholder="请选择BOM">
-                  {boms.map((b) => (
-                    <Option key={b.id} value={b.id}>
-                      {b.bom_no}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="计划数量"
-                name="planned_quantity"
-                initialValue={1}
-              >
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="请输入计划数量"
-                />
-              </Form.Item>
-              <Form.Item label="计划开始日期" name="planned_start_date">
-                <DatePicker style={{ width: "100%" }} />
-              </Form.Item>
-              <Form.Item label="计划结束日期" name="planned_end_date">
-                <DatePicker style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="工作中心" name="work_center_id">
-                <Select placeholder="请选择工作中心">
-                  {workCenters.map((w) => (
-                    <Option key={w.id} value={w.id}>
-                      {w.name}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item label="优先级" name="priority" initialValue={1}>
-                <Select>
-                  <Option value={1}>低</Option>
-                  <Option value={2}>中</Option>
-                  <Option value={3}>高</Option>
-                  <Option value={4}>紧急</Option>
-                </Select>
-              </Form.Item>
-              <Form.Item label="备注" name="remark">
-                <Input.TextArea rows={5} placeholder="请输入备注" />
-              </Form.Item>
-              <Form.Item label="状态" name="status" initialValue="draft">
-                <Select>
-                  <Option value="draft">草稿</Option>
-                  <Option value="planned">已计划</Option>
-                  <Option value="released">已下达</Option>
-                  <Option value="in_progress">生产中</Option>
-                  <Option value="completed">已完成</Option>
-                  <Option value="closed">已关闭</Option>
-                  <Option value="cancelled">已取消</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
+
+      </SupaModal>
     </Card>
   );
 }
