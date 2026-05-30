@@ -25,7 +25,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
 
   const getOperationName = (operationId: number | null) => {
     const operation = operations.find((op) => op.id === operationId);
-    return operation?.name || "未知工序";
+    return '🕒 '+operation?.name || "未知工序";
   };
   // 滤镜配置
   const FILTERS = {
@@ -48,7 +48,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
     diamond: { size: 80 },
     layout: { timelineY: 400, cardsY: 250, tipsGap: 160 },
     timeline: { startX: 250, endX: 1850 },
-    text: { fontFamily: 'Inter, Helvetica, Arial, sans-serif' },
+    text: { fontFamily: 'Inter, Helvetica, Arial, sans-serif',lineHeight: 20 },
   }
   const updateInfoNode = (graph: Graph, mouseX: number, mouseY: number, data?: NodeData) => {
     let infoNode = graph.getCellById("info-node");
@@ -61,15 +61,15 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
 准备工时: ${data.setupHours}小时
 人工费率: ${data.laborRate}
 制造费用率: ${data.overheadRate}
-${data.isInspection ? "⚠️ 需要检验" : ""}`;
+${data.isInspection ? "需要检验⚠️ " : ""}`;
 
-      const nodeWidth = 220;
-      const nodeHeight = 200;
-      const offsetX = 120;
-      const offsetY = 60;
+      const nodeWidth = 140;
+      const nodeHeight = 175;
+      const offsetX = 10;
+      const offsetY = 30;
 
       const newX = mouseX + offsetX;
-      const newY = mouseY - offsetY;
+      const newY = mouseY + offsetY;
 
       if (infoNode) {
         infoNode.attr("label/text", infoText);
@@ -90,11 +90,12 @@ ${data.isInspection ? "⚠️ 需要检验" : ""}`;
               filter: FILTERS.tips[1],
             },
             label: {
-              text: `<pre>${infoText}</pre>`,
+              text: infoText,
               fill: "#333",
               fontSize: 12,
               textAnchor: "start",
               textVerticalAnchor: "top",
+              ...CONFIG.text,
               refX: 10,
               refY: 10,
             },
@@ -160,13 +161,37 @@ ${data.isInspection ? "⚠️ 需要检验" : ""}`;
 
     graphRef.current = graph;
 
+    const titleText = `💡工艺路线图 - ${routingNo || "请选择工艺路线"}`;
+    graph.addNode({
+      id: "title-node",
+      x: 10,
+      y: 10,
+      width: 280,
+      height: 36,
+      attrs: {
+        body: {
+          fill: "#ffffff00",
+          stroke: "none",
+          rx: 4,
+          ry: 4,
+        },
+        label: {
+          text: titleText,
+          fill: "#000000",
+          fontSize: 14,
+          fontWeight: "bold",
+          ...CONFIG.text,
+        },
+      },
+    });
+
     if (details.length === 0) {
       setLoading(false);
       return;
     }
 
-    const nodeWidth = 120;
-    const nodeHeight = 60;
+    const nodeWidth = 80;
+    const nodeHeight = 40;
     const horizontalGap = 80;
     const verticalGap = 100;
 
@@ -196,10 +221,11 @@ ${data.isInspection ? "⚠️ 需要检验" : ""}`;
         attrs: {
           body: {
             fill: isInspection ? "#eaeefa" : "#eaeefa",
-            stroke: isInspection ? "#faad14" : "#1890ff",
-            strokeWidth: 0,
+            stroke: isInspection ? "#31d0c6" : "#1890ff",
+            strokeWidth: 2,
             rx: 6,
             ry: 6,
+            filter: FILTERS.tips[2],
           },
           label: {
             text: getOperationName(detail.operation_id),
@@ -335,10 +361,7 @@ ${data.isInspection ? "⚠️ 需要检验" : ""}`;
   }, [details, operations]);
 
   return (
-    <Card
-      title={`工艺路线图 - ${routingNo || "请选择工艺路线"}`}
-      style={{ marginTop: 16 }}
-    >
+    <>
       <Spin spinning={loading} indicator={<span>正在渲染工艺路线图...</span>}>
         <div
           ref={containerRef}
@@ -363,6 +386,6 @@ ${data.isInspection ? "⚠️ 需要检验" : ""}`;
           请在上方表格中选择一条工艺路线查看图形
         </div>
       )}
-    </Card>
+    </>
   );
 }
