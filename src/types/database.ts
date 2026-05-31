@@ -850,7 +850,7 @@ export interface ErpVouchersS539Dcf81BRow {
   created_at: string | null;
   updated_at: string | null;
   voucher_no: string;
-  voucher_date: string;
+  voucher_date: string | any | null;
   period_id: number | null;  // FK -> erp_accounting_periods_s_539dcf81_b.id
   type: string | null;
   source_doc_no: string | null;
