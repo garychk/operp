@@ -4,7 +4,7 @@ import { SearchOutlined, ReloadOutlined, DeleteOutlined, EyeOutlined } from '@an
 import type { ColumnsType } from 'antd/es/table';
 import { Dayjs } from 'dayjs';
 import { supabase } from '../../utils/supabase';
-import type { DescriptionsProps } from 'antd';
+import SupaModal from '../../components/SupaModal';
 
 interface Log {
   id: number;
@@ -276,12 +276,13 @@ export function Logs() {
           }}
         />
       </Card>
-      <Modal
+      <SupaModal
         title="日志详情"
         open={isDetailModalOpen}
         onCancel={handleCloseDetailModal}
         footer={null}
         width={800}
+        height={500}
       >
         {currentLog && (
             <Descriptions column={1} size='small' bordered>
@@ -306,7 +307,7 @@ export function Logs() {
             </Descriptions.Item>
           </Descriptions>
         )}
-      </Modal>
+      </SupaModal>
     </>
   );
 }
