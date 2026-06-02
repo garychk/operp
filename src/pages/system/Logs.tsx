@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Table, Card, DatePicker, Input, Button, Space, Tag, message, Popconfirm } from 'antd';
-import { SearchOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { Table, Card, DatePicker, Input, Button, Space, Tag, message, Popconfirm, Modal,Descriptions } from 'antd';
+import { SearchOutlined, ReloadOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { Dayjs } from 'dayjs';
 import { supabase } from '../../utils/supabase';
+import type { DescriptionsProps } from 'antd';
 
 interface Log {
   id: number;
@@ -28,6 +29,8 @@ export function Logs() {
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [currentLog, setCurrentLog] = useState<Log | null>(null);
 
   const fetchLogs = async (page = 1, pageSize = 20) => {
     setLoading(true);
@@ -37,7 +40,7 @@ export function Logs() {
         .select('*', { count: 'exact' })
         .eq('is_deleted', 'n')
         .order('created_at', { ascending: false });
-      
+
       if (searchUsername) {
         query = query.ilike('username', `%${searchUsername}%`);
       }
@@ -46,13 +49,13 @@ export function Logs() {
       }
       if (dateRange && dateRange[0] && dateRange[1]) {
         query = query.gte('created_at', dateRange[0].format('YYYY-MM-DD'))
-                     .lte('created_at', dateRange[1].format('YYYY-MM-DD'));
+          .lte('created_at', dateRange[1].format('YYYY-MM-DD'));
       }
-      
+
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
       const { data, error, count } = await query.range(from, to);
-      
+
       if (error) throw error;
       setLogs(data || []);
       setTotal(count || 0);
@@ -91,7 +94,7 @@ export function Logs() {
         .from('sys_logs')
         .update({ is_deleted: 'y' })
         .eq('id', id);
-      
+
       if (error) throw error;
       message.success('删除成功');
       fetchLogs(pagination.current, pagination.pageSize);
@@ -106,7 +109,7 @@ export function Logs() {
         .from('sys_logs')
         .update({ is_deleted: 'y' })
         .in('id', selectedRowKeys);
-      
+
       if (error) throw error;
       message.success('批量删除成功');
       setSelectedRowKeys([]);
@@ -118,6 +121,16 @@ export function Logs() {
 
   const handleSelectChange = (newSelectedRowKeys: React.Key[]) => {
     setSelectedRowKeys(newSelectedRowKeys);
+  };
+
+  const handleViewDetail = (log: Log) => {
+    setCurrentLog(log);
+    setIsDetailModalOpen(true);
+  };
+
+  const handleCloseDetailModal = () => {
+    setIsDetailModalOpen(false);
+    setCurrentLog(null);
   };
 
   const columns: ColumnsType<Log> = [
@@ -180,16 +193,21 @@ export function Logs() {
       title: '操作',
       key: 'action',
       render: (_, record) => (
-        <Popconfirm
-          title="确定删除这条日志吗？"
-          onConfirm={() => handleDelete(record.id)}
-          okText="确定"
-          cancelText="取消"
-        >
-          <Button type="text" danger icon={<DeleteOutlined />}>
-            删除
+        <Space>
+          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+            详情
           </Button>
-        </Popconfirm>
+          <Popconfirm
+            title="确定删除这条日志吗？"
+            onConfirm={() => handleDelete(record.id)}
+            okText="确定"
+            cancelText="取消"
+          >
+            <Button type="text" danger icon={<DeleteOutlined />}>
+              删除
+            </Button>
+          </Popconfirm>
+        </Space>
       ),
     },
   ];
@@ -200,20 +218,21 @@ export function Logs() {
   };
 
   return (
-    <Card variant="borderless" title="系统日志" extra={
-      <Space size="middle">
-        {selectedRowKeys.length > 0 && (
-          <Popconfirm
-            title={`确定删除选中的 ${selectedRowKeys.length} 条日志吗？`}
-            onConfirm={handleBatchDelete}
-            okText="确定"
-            cancelText="取消"
-          >
-            <Button type="primary" danger icon={<DeleteOutlined />}>
-              批量删除 ({selectedRowKeys.length})
-            </Button>
-          </Popconfirm>
-        )}
+    <>
+      <Card variant="borderless" title="系统日志" extra={
+        <Space size="middle">
+          {selectedRowKeys.length > 0 && (
+            <Popconfirm
+              title={`确定删除选中的 ${selectedRowKeys.length} 条日志吗？`}
+              onConfirm={handleBatchDelete}
+              okText="确定"
+              cancelText="取消"
+            >
+              <Button type="primary" danger icon={<DeleteOutlined />}>
+                批量删除 ({selectedRowKeys.length})
+              </Button>
+            </Popconfirm>
+          )}
           <Input
             placeholder="用户名"
             value={searchUsername}
@@ -237,25 +256,57 @@ export function Logs() {
             重置
           </Button>
         </Space>
-    }>
-      <Table
-        columns={columns}
-        dataSource={logs}
-        loading={loading}
-        rowKey="id"
-        scroll={{ y: 500 }}
-        size="small"
-        rowSelection={rowSelection}
-        pagination={{
-          current: pagination.current,
-          pageSize: pagination.pageSize,
-          showSizeChanger: true,
-          pageSizeOptions: ['10', '20', '50', '100'],
-          showTotal: (total) => `共 ${total} 条`,
-          total,
-          onChange: handlePageChange,
-        }}
-      />
-    </Card>
+      }>
+        <Table
+          columns={columns}
+          dataSource={logs}
+          loading={loading}
+          rowKey="id"
+          scroll={{ y: 500 }}
+          size="small"
+          rowSelection={rowSelection}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            showSizeChanger: true,
+            pageSizeOptions: ['10', '20', '50', '100'],
+            showTotal: (total) => `共 ${total} 条`,
+            total,
+            onChange: handlePageChange,
+          }}
+        />
+      </Card>
+      <Modal
+        title="日志详情"
+        open={isDetailModalOpen}
+        onCancel={handleCloseDetailModal}
+        footer={null}
+        width={800}
+      >
+        {currentLog && (
+            <Descriptions column={1} size='small' bordered>
+            <Descriptions.Item label="日志ID">{currentLog.id}</Descriptions.Item>
+            <Descriptions.Item label="操作用户">{currentLog.username}</Descriptions.Item>
+            <Descriptions.Item label="操作类型">{currentLog.operation}</Descriptions.Item>
+            <Descriptions.Item label="请求方法">{currentLog.method}</Descriptions.Item>
+            <Descriptions.Item label="请求参数">{currentLog.params || '-'}</Descriptions.Item>
+            <Descriptions.Item label="IP地址">{currentLog.ip}</Descriptions.Item>
+            <Descriptions.Item label="User Agent">{currentLog.user_agent || '-'}</Descriptions.Item>
+            <Descriptions.Item label="执行时长">{currentLog.execute_time} ms</Descriptions.Item>
+            <Descriptions.Item label="状态">
+              <Tag color={currentLog.status === '1' || currentLog.status === 'success' ? 'success' : 'error'}>
+                {currentLog.status === '1' || currentLog.status === 'success' ? '成功' : '失败'}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label="操作时间">
+              {new Date(currentLog.created_at).toLocaleString()}
+            </Descriptions.Item>
+            <Descriptions.Item label="错误信息">
+              <span className="detail-value error-msg">{currentLog.error_msg || '无'}</span>
+            </Descriptions.Item>
+          </Descriptions>
+        )}
+      </Modal>
+    </>
   );
 }
