@@ -4,6 +4,7 @@ import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
+import SupaModal from '../../components/SupaModal';
 
 type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
 
@@ -205,7 +206,7 @@ export function Suppliers() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
+      <SupaModal
         title={editingSupplier ? '编辑供应商' : '新增供应商'}
         open={isModalOpen}
         onCancel={() => {
@@ -213,6 +214,8 @@ export function Suppliers() {
           form.resetFields();
           setEditingSupplier(null);
         }}
+        width={800}
+        height={660}
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>取消</Button>
@@ -222,7 +225,8 @@ export function Suppliers() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
+        <Card>
+        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -291,7 +295,8 @@ export function Suppliers() {
             </Col>
           </Row>
         </Form>
-      </Modal>
+        </Card>
+      </SupaModal>
     </Card>
   );
 }
