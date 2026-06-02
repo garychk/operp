@@ -535,7 +535,16 @@ export function Boms() {
                   name="product_id"
                   rules={[{ required: true, message: "请选择产品" }]}
                 >
-                  <Select placeholder="请选择产品" disabled={!!editingBom}>
+                  <Select 
+                    placeholder="请选择产品" 
+                    disabled={!!editingBom}
+                    onChange={(value) => {
+                      const product = products.find((p) => p.id === value);
+                      if (product) {
+                        form.setFieldValue('bom_no', product.code || `BOM-${value}`);
+                      }
+                    }}
+                  >
                     {products.map((p) => (
                       <Option key={p.id} value={p.id}>
                         {p.name}
