@@ -411,8 +411,8 @@ export interface ErpPayablesS539Dcf81BRow {
   supplier_id: number | null;  // FK -> erp_suppliers_s_539dcf81_b.id
   doc_type: string | null;
   doc_no: string;
-  doc_date: string;
-  due_date: string | null;
+  doc_date: string | any;
+  due_date: string | any;
   amount: number | null;
   paid_amount: number | null;
   balance: number | null;

@@ -17,6 +17,7 @@ interface SupaModalProps {
   tableEle?: React.ReactNode;
   width?: string | number;
   height?: string | number;
+  children?: React.ReactNode;
 }
 
 export function SupaModal({
@@ -33,6 +34,7 @@ export function SupaModal({
   tableEle,
   width = 1200,
   height = 800,
+  children,
 }: SupaModalProps) {
   const [isExpand, setIsExpand] = useState(false);
 
@@ -79,43 +81,47 @@ export function SupaModal({
       keyboard
     >
       <div>
-        <Collapse defaultActiveKey={['1']} expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}>
-          <Collapse.Panel header={headerPanelTitle} key="1" extra={headerExtra}>
-            <Splitter>
-              <Splitter.Panel defaultSize="80%" min="20%" max="80%">
-                {formEle}
-              </Splitter.Panel>
-              <Splitter.Panel>
-                <div style={{ padding: '0 0 0 16px' }}>
-                  <Space>
-                    <HistoryOutlined />
-                    <span style={{ textDecoration: 'underline' }}>单据历史</span>
-                  </Space>
-                  <Divider />
-                  <Timeline
-                    items={[
-                      {
-                        content: 'Create a services site 2015-09-01',
-                      },
-                      {
-                        content: 'Solve initial network problems 2015-09-01',
-                      },
-                      {
-                        content: 'Technical testing 2015-09-01',
-                      },
-                      {
-                        content: 'Network problems being solved 2015-09-01',
-                      },
-                    ]}
-                  />
-                </div>
-              </Splitter.Panel>
-            </Splitter>
-          </Collapse.Panel>
-          <Collapse.Panel header={detailPanelTitle} key="2" extra={detailExtra}>
-            {tableEle}
-          </Collapse.Panel>
-        </Collapse>
+        {children || (
+          <Collapse defaultActiveKey={['1']} expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}>
+            <Collapse.Panel header={headerPanelTitle} key="1" extra={headerExtra}>
+              <Splitter>
+                <Splitter.Panel defaultSize="80%" min="20%" max="80%">
+                  {formEle}
+                </Splitter.Panel>
+                <Splitter.Panel>
+                  <div style={{ padding: '0 0 0 16px' }}>
+                    <Space>
+                      <HistoryOutlined />
+                      <span style={{ textDecoration: 'underline' }}>单据历史</span>
+                    </Space>
+                    <Divider />
+                    <Timeline
+                      items={[
+                        {
+                          content: 'Create a services site 2015-09-01',
+                        },
+                        {
+                          content: 'Solve initial network problems 2015-09-01',
+                        },
+                        {
+                          content: 'Technical testing 2015-09-01',
+                        },
+                        {
+                          content: 'Network problems being solved 2015-09-01',
+                        },
+                      ]}
+                    />
+                  </div>
+                </Splitter.Panel>
+              </Splitter>
+            </Collapse.Panel>
+            {tableEle && (
+              <Collapse.Panel header={detailPanelTitle} key="2" extra={detailExtra}>
+                {tableEle}
+              </Collapse.Panel>
+            )}
+          </Collapse>
+        )}
       </div>
     </Modal>
   );

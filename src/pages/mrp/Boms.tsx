@@ -260,7 +260,8 @@ export function Boms() {
     setIsModalOpen(true);
   };
 
-  const handleAddDetail = () => {
+  const handleAddDetail = (e: any) => {
+    e.preventDefault();
     setEditingDetail(null);
     detailForm.setFieldsValue({
       line_no: details.length + 1,
@@ -508,7 +509,7 @@ export function Boms() {
             </Button>
           </Space>
         }
-        width={1000}
+        width={'60%'}
         height={680}
         headerPanelTitle="BOM主档"
         detailPanelTitle="子项明细"

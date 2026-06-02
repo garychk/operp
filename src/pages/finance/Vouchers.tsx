@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker, Row, Col } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker, Row, Col, Switch } from 'antd';
 import { PlusOutlined, SearchOutlined, EyeOutlined, DeleteOutlined, EditOutlined, AccountBookOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
@@ -24,6 +24,7 @@ export function Vouchers() {
   const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
   const [details, setDetails] = useState<VoucherDetail[]>([]);
   const [editingDetail, setEditingDetail] = useState<VoucherDetail | null>(null);
+  const [isDebit, setIsDebit] = useState(true);
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
 
@@ -245,6 +246,9 @@ export function Vouchers() {
 
   const handleEditDetail = (record: VoucherDetail) => {
     setEditingDetail(record);
+    if(record.debit_amount){
+      setIsDebit(record.debit_amount > 0);
+    }    
     detailForm.setFieldsValue(record);
     setIsDetailModalOpen(true);
   };
@@ -547,23 +551,30 @@ export function Vouchers() {
                 ))}
               </Select>
             </Form.Item>
-            <Form.Item label="摘要" name="summary">
-              <TextArea rows={3} placeholder="请输入摘要" />
-            </Form.Item>
+            
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item label="借方金额" name="debit_amount" initialValue={0}>
-                  <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入借方金额" />
+                <Form.Item label="借贷方向">
+                  <Switch checkedChildren="借方" unCheckedChildren="贷方" checked={isDebit} onChange={setIsDebit} />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="贷方金额" name="credit_amount" initialValue={0}>
-                  <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入贷方金额" />
+                {isDebit ? (
+                  <Form.Item label="借方金额" name="debit_amount" initialValue={0}>
+                  <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入借方金额" />
                 </Form.Item>
+                ) : (
+                  <Form.Item label="贷方金额" name="credit_amount" initialValue={0}>
+                    <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入贷方金额" />
+                  </Form.Item>
+                )}
               </Col>
             </Row>
             <Form.Item label="辅助核算类型" name="auxiliary_type">
               <Input placeholder="请输入辅助核算类型" />
+            </Form.Item>
+            <Form.Item label="摘要" name="summary">
+              <TextArea rows={3} placeholder="请输入摘要" />
             </Form.Item>
           </Form>}
       />

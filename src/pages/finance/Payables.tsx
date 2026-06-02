@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker, Row, Col } from 'antd';
+import dayjs from 'dayjs';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
+import SupaModal from '../../components/SupaModal';
 
 type Payable = Tables['erp_payables_s_539dcf81_b']['Row'];
 type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
@@ -92,7 +94,14 @@ export function Payables() {
 
   const handleEdit = (record: Payable) => {
     setEditingPayable(record);
-    form.setFieldsValue(record);
+    const formValues = { ...record };
+    if (formValues.doc_date) {
+      formValues.doc_date = dayjs(formValues.doc_date);
+    }
+    if (formValues.due_date) {
+      formValues.due_date = dayjs(formValues.due_date);
+    }
+    form.setFieldsValue(formValues);
     setIsModalOpen(true);
   };
 
@@ -125,7 +134,7 @@ export function Payables() {
       supplier_id: undefined,
       doc_type: 'invoice',
       doc_no: '',
-      doc_date: new Date().toISOString().split('T')[0],
+      doc_date: dayjs(),
       due_date: '',
       amount: 0,
       remark: '',
@@ -231,70 +240,80 @@ export function Payables() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
+      <SupaModal
         title={editingPayable ? '编辑应付账款' : '新增应付账款'}
         open={isModalOpen}
+        width={600}
+        height={440}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
           setEditingPayable(null);
         }}
         footer={<Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" onClick={() => form.submit()}>
-                保存
-              </Button>
-            </Space>}
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="供应商"
-            name="supplier_id"
-            rules={[{ required: true, message: '请选择供应商' }]}
-          >
-            <Select placeholder="请选择供应商">
-              {suppliers.map((s) => (
-                <Option key={s.id} value={s.id}>{s.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="单据类型" name="doc_type" initialValue="invoice">
-            <Select>
-              <Option value="invoice">发票</Option>
-              <Option value="order">订单</Option>
-              <Option value="other">其他</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            label="单据号"
-            name="doc_no"
-            rules={[{ required: true, message: '请输入单据号' }]}
-          >
-            <Input placeholder="请输入单据号" disabled={!!editingPayable} />
-          </Form.Item>
-          <Form.Item
-            label="单据日期"
-            name="doc_date"
-            rules={[{ required: true, message: '请选择单据日期' }]}
-          >
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item label="到期日" name="due_date">
-            <Input type="date" />
-          </Form.Item>
-          <Form.Item
-            label="金额"
-            name="amount"
-            rules={[{ required: true, message: '请输入金额' }]}
-            initialValue={0}
-          >
-            <InputNumber style={{ width: '100%' }} placeholder="请输入金额" />
-          </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={3} placeholder="请输入备注" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        <Card>
+          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="供应商"
+                  name="supplier_id"
+                  rules={[{ required: true, message: '请选择供应商' }]}
+                >
+                  <Select placeholder="请选择供应商">
+                    {suppliers.map((s) => (
+                      <Option key={s.id} value={s.id}>{s.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="单据类型" name="doc_type" initialValue="invoice">
+                  <Select>
+                    <Option value="invoice">发票</Option>
+                    <Option value="order">订单</Option>
+                    <Option value="other">其他</Option>
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="单据号"
+                  name="doc_no"
+                  rules={[{ required: true, message: '请输入单据号' }]}
+                >
+                  <Input placeholder="请输入单据号" disabled={!!editingPayable} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label="单据日期"
+                  name="doc_date"
+                  rules={[{ required: true, message: '请选择单据日期' }]}
+                >
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label="到期日" name="due_date">
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item
+                  label="金额"
+                  name="amount"
+                  rules={[{ required: true, message: '请输入金额' }]}
+                  initialValue={0}
+                >
+                  <InputNumber style={{ width: '100%' }} placeholder="请输入金额" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item label="备注" name="remark">
+              <Input.TextArea rows={3} placeholder="请输入备注" />
+            </Form.Item>
+          </Form>
+        </Card>
+      </SupaModal>
     </Card>
   );
 }

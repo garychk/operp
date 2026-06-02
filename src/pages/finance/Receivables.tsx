@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker } from 'antd';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker, Row, Col } from 'antd';
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
+import SupaModal from '../../components/SupaModal';
 
 type Receivable = Tables['erp_receivables_s_539dcf81_b']['Row'];
 type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
@@ -236,70 +237,80 @@ export function Receivables() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
+      <SupaModal
         title={editingReceivable ? '编辑应收账款' : '新增应收账款'}
         open={isModalOpen}
+        width={600}
+        height={440}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
           setEditingReceivable(null);
         }}
         footer={<Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-              <Button type="primary" onClick={() => form.submit()}>
-                保存
-              </Button>
-            </Space>}
+          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button type="primary" onClick={() => form.submit()}>
+            保存
+          </Button>
+        </Space>}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Form.Item
-            label="客户"
-            name="customer_id"
-            rules={[{ required: true, message: '请选择客户' }]}
-          >
-            <Select placeholder="请选择客户">
-              {customers.map((c) => (
-                <Option key={c.id} value={c.id}>{c.name}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item label="单据类型" name="doc_type" initialValue="invoice">
-            <Select>
-              <Option value="invoice">发票</Option>
-              <Option value="order">订单</Option>
-              <Option value="other">其他</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            label="单据号"
-            name="doc_no"
-            rules={[{ required: true, message: '请输入单据号' }]}
-          >
-            <Input placeholder="请输入单据号" disabled={!!editingReceivable} />
-          </Form.Item>
-          <Form.Item
-            label="单据日期"
-            name="doc_date"
-            rules={[{ required: true, message: '请选择单据日期' }]}
-          >
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item label="到期日" name="due_date">
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            label="金额"
-            name="amount"
-            rules={[{ required: true, message: '请输入金额' }]}
-            initialValue={0}
-          >
-            <InputNumber style={{ width: '100%' }} placeholder="请输入金额" />
-          </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <Input.TextArea rows={3} placeholder="请输入备注" />
-          </Form.Item>
-        </Form>
-      </Modal>
+        <Card>
+          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="客户"
+                  name="customer_id"
+                  rules={[{ required: true, message: '请选择客户' }]}
+                >
+                  <Select placeholder="请选择客户">
+                    {customers.map((c) => (
+                      <Option key={c.id} value={c.id}>{c.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="单据类型" name="doc_type" initialValue="invoice">
+                  <Select>
+                    <Option value="invoice">发票</Option>
+                    <Option value="order">订单</Option>
+                    <Option value="other">其他</Option>
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="单据号"
+                  name="doc_no"
+                  rules={[{ required: true, message: '请输入单据号' }]}
+                >
+                  <Input placeholder="请输入单据号" disabled={!!editingReceivable} />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label="单据日期"
+                  name="doc_date"
+                  rules={[{ required: true, message: '请选择单据日期' }]}
+                >
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label="到期日" name="due_date">
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item
+                  label="金额"
+                  name="amount"
+                  rules={[{ required: true, message: '请输入金额' }]}
+                  initialValue={0}
+                >
+                  <InputNumber style={{ width: '100%' }} placeholder="请输入金额" />
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item label="备注" name="remark">
+              <Input.TextArea rows={3} placeholder="请输入备注" />
+            </Form.Item>
+          </Form>
+        </Card>
+      </SupaModal>
     </Card>
   );
 }
