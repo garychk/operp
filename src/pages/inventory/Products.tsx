@@ -302,6 +302,7 @@ export function Products() {
         }
         width={'70%'}
         height={650}
+        headerPanelTitle="物料主档"
         form={form}
         formEle={<Form
           form={form}

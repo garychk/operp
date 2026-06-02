@@ -5,6 +5,7 @@ import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
+import SupaModal from '../../components/SupaModal';
 
 type SalesDelivery = Tables['erp_sales_deliveries_s_539dcf81_b']['Row'];
 type SalesDeliveryDetail = Tables['erp_sales_delivery_details_s_539dcf81_b']['Row'];
@@ -183,9 +184,9 @@ export function SalesDeliveries() {
   const handleDetailSubmit = async (values: any) => {
     try {
       if (!selectedDelivery) return;
-      
+
       values.amount = (values.quantity || 0) * (values.unit_price || 0);
-      
+
       if (editingDetail) {
         await supabase
           .from('erp_sales_delivery_details_s_539dcf81_b')
@@ -197,7 +198,7 @@ export function SalesDeliveries() {
         values.line_no = maxLineNo + 1;
         values.delivery_id = selectedDelivery.id;
         values.is_deleted = 'n';
-        
+
         console.log('SalesDeliveries: Inserting detail with values:', values);
         const { data, error } = await supabase
           .from('erp_sales_delivery_details_s_539dcf81_b')
@@ -205,7 +206,7 @@ export function SalesDeliveries() {
         console.log('SalesDeliveries: Insert result:', data, error);
         if (error) throw error;
         message.success('新增成功');
-        
+
         if (values.order_detail_id) {
           await updateOrderDetailDeliveredQuantity(values.order_detail_id, values.quantity || 0);
         }
@@ -229,13 +230,13 @@ export function SalesDeliveries() {
         .eq('id', orderDetailId)
         .single();
       if (error) throw error;
-      
+
       const newDeliveredQty = (data.delivered_quantity || 0) + quantity;
       await supabase
         .from('erp_sales_order_details_s_539dcf81_b')
         .update({ delivered_quantity: newDeliveredQty as number })
         .eq('id', orderDetailId);
-      
+
       if (data.order_id) {
         await updateSalesOrderStatus(data.order_id);
       }
@@ -252,17 +253,17 @@ export function SalesDeliveries() {
         .eq('order_id', orderId)
         .eq('is_deleted', 'n');
       if (error) throw error;
-      
+
       const allDelivered = data.every(d => (d.delivered_quantity || 0) >= (d.quantity || 0));
       const someDelivered = data.some(d => (d.delivered_quantity || 0) > 0);
-      
+
       let status = 'approved';
       if (allDelivered) {
         status = 'delivered';
       } else if (someDelivered) {
         status = 'partially_delivered';
       }
-      
+
       await supabase
         .from('erp_sales_orders_s_539dcf81_b')
         .update({ status })
@@ -280,14 +281,14 @@ export function SalesDeliveries() {
         .eq('is_deleted', 'n')
         .eq('delivery_id', deliveryId);
       if (error) throw error;
-      
+
       const totalAmount = data?.reduce((sum, d) => sum + (d.amount || 0), 0) || 0;
-      
+
       await supabase
         .from('erp_sales_deliveries_s_539dcf81_b')
         .update({ total_amount: totalAmount })
         .eq('id', deliveryId);
-      
+
       fetchDeliveries();
     } catch (error) {
       console.error('Error updating delivery total:', error);
@@ -633,7 +634,7 @@ export function SalesDeliveries() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
+      <SupaModal
         title={editingDelivery ? '编辑销售出货单' : '新增销售出货单'}
         open={isModalOpen}
         onCancel={() => {
@@ -649,120 +650,103 @@ export function SalesDeliveries() {
             保存
           </Button>
         </Space>}
-        width={600}
-      >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="出货单号"
-                name="delivery_no"
-                rules={[{ required: true, message: '请输入出货单号' }]}
-              >
-                <Input placeholder="请输入出货单号" disabled={!!editingDelivery} />
-              </Form.Item>
-              <Form.Item
-                label="关联销售订单"
-                name="order_id"
-              >
-                <Select 
-                  placeholder="请选择销售订单" 
-                  onChange={handleOrderChange}
-                  allowClear
+        width={'60%'}
+        form={form}
+        formEle={
+          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="出货单号"
+                  name="delivery_no"
+                  rules={[{ required: true, message: '请输入出货单号' }]}
                 >
-                  {salesOrders.map((o) => (
-                    <Option key={o.id} value={o.id}>{o.order_no}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="客户"
-                name="customer_id"
-                rules={[{ required: true, message: '请选择客户' }]}
-              >
-                <Select placeholder="请选择客户">
-                  {customers.map((c) => (
-                    <Option key={c.id} value={c.id}>{c.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="仓库"
-                name="warehouse_id"
-                rules={[{ required: true, message: '请选择仓库' }]}
-              >
-                <Select placeholder="请选择仓库">
-                  {warehouses.map((w) => (
-                    <Option key={w.id} value={w.id}>{w.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="出货日期"
-                name="delivery_date"
-                rules={[{ required: true, message: '请选择出货日期' }]}
-              >
-                <DatePicker />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="总金额" name="total_amount" initialValue={0}>
-                <InputNumber disabled style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item label="备注" name="remark">
-                <TextArea rows={4} placeholder="请输入备注" />
-              </Form.Item>
-              <Form.Item label="状态" name="status" initialValue="draft">
-                <Select>
-                  <Option value="draft">草稿</Option>
-                  <Option value="pending">待审核</Option>
-                  <Option value="approved">已审核</Option>
-                  <Option value="cancelled">已取消</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
-
-      <Modal
-        title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <TruckOutlined />
-          {selectedDelivery?.delivery_no} - 销售出货单明细
-        </div>}
-        open={!!selectedDelivery}
-        onCancel={() => {
-          setSelectedDelivery(null);
-          setDetails([]);
-        }}
-        footer={null}
-        width={'80%'}
+                  <Input placeholder="请输入出货单号" disabled={!!editingDelivery} />
+                </Form.Item>
+                <Form.Item
+                  label="关联销售订单"
+                  name="order_id"
+                >
+                  <Select
+                    placeholder="请选择销售订单"
+                    onChange={handleOrderChange}
+                    allowClear
+                  >
+                    {salesOrders.map((o) => (
+                      <Option key={o.id} value={o.id}>{o.order_no}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="客户"
+                  name="customer_id"
+                  rules={[{ required: true, message: '请选择客户' }]}
+                >
+                  <Select placeholder="请选择客户">
+                    {customers.map((c) => (
+                      <Option key={c.id} value={c.id}>{c.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="仓库"
+                  name="warehouse_id"
+                  rules={[{ required: true, message: '请选择仓库' }]}
+                >
+                  <Select placeholder="请选择仓库">
+                    {warehouses.map((w) => (
+                      <Option key={w.id} value={w.id}>{w.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  label="出货日期"
+                  name="delivery_date"
+                  rules={[{ required: true, message: '请选择出货日期' }]}
+                >
+                  <DatePicker />
+                </Form.Item>
+                <Form.Item label="总金额" name="total_amount" initialValue={0}>
+                  <InputNumber disabled style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label="状态" name="status" initialValue="draft">
+                  <Select>
+                    <Option value="draft">草稿</Option>
+                    <Option value="pending">待审核</Option>
+                    <Option value="approved">已审核</Option>
+                    <Option value="cancelled">已取消</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+            <Form.Item label="备注" name="remark">
+              <TextArea rows={2} placeholder="请输入备注" />
+            </Form.Item>
+          </Form>
+        }
+        tableEle={<Table
+          columns={detailColumns}
+          dataSource={details}
+          rowKey="id"
+          pagination={false}
+          summary={() => (
+            <Table.Summary.Row>
+              <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>合计</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={2} colSpan={2}></Table.Summary.Cell>
+            </Table.Summary.Row>
+          )}
+        />}
+        detailExtra={
+          <Space>
+            <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
+          </Space>
+        }
       >
-        {selectedDelivery && (
-          <Card extra={
-            <Space>
-              <Tag color="blue">客户: {getCustomerName(selectedDelivery.customer_id)}</Tag>
-              <Tag color="lime">仓库: {getWarehouseName(selectedDelivery.warehouse_id)}</Tag>
-              <Tag color="orange">出货日期: {selectedDelivery.delivery_date}</Tag>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
-            </Space>
-            }>
-            <Table
-              columns={detailColumns}
-              dataSource={details}
-              rowKey="id"
-              pagination={false}
-              summary={() => (
-                <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>合计</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={2} colSpan={2}></Table.Summary.Cell>
-                </Table.Summary.Row>
-              )}
-            />
-          </Card>
-        )}
-      </Modal>
+
+      </SupaModal>
 
       <Modal
         title={editingDetail ? '编辑销售出货明细' : '新增销售出货明细'}
@@ -785,7 +769,7 @@ export function SalesDeliveries() {
             label="关联订单明细"
             name="order_detail_id"
           >
-            <Select 
+            <Select
               placeholder="选择关联的销售订单明细"
               onChange={handleOrderDetailChange}
               allowClear
@@ -807,8 +791,8 @@ export function SalesDeliveries() {
             name="product_id"
             rules={[{ required: true, message: '请选择产品' }]}
           >
-            <Select 
-              placeholder="请选择产品" 
+            <Select
+              placeholder="请选择产品"
               onChange={(value) => {
                 const price = getProductPrice(value as number);
                 detailForm.setFieldsValue({ unit_price: price });

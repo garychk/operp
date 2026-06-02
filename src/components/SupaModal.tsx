@@ -67,7 +67,7 @@ export function SupaModal({
           <Button type="default" size="small" icon={<RightOutlined />} />
           <Button type='default' size="small" icon={<CheckOutlined />} color="purple" />
           <Button type='default' size="small" icon={<PrinterOutlined />} />
-          <Tag>按ESC键可关闭</Tag>
+          <Tag color="magenta">按ESC键可关闭</Tag>
         </Space>
       }
       open={open}

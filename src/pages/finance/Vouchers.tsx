@@ -535,10 +535,11 @@ export function Vouchers() {
             保存
           </Button>
         </Space>}
-        width={1000}
-        height={500}
+        width={600}
+        height={450}
         form={detailForm}
-        formEle={
+      >
+        <Card>
           <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ marginRight: 16 }}>
             <Form.Item
               label="会计科目"
@@ -561,11 +562,11 @@ export function Vouchers() {
               <Col span={12}>
                 {isDebit ? (
                   <Form.Item label="借方金额" name="debit_amount" initialValue={0}>
-                  <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入借方金额" />
+                  <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入借方金额" />
                 </Form.Item>
                 ) : (
                   <Form.Item label="贷方金额" name="credit_amount" initialValue={0}>
-                    <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入贷方金额" />
+                    <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入贷方金额" />
                   </Form.Item>
                 )}
               </Col>
@@ -576,8 +577,10 @@ export function Vouchers() {
             <Form.Item label="摘要" name="summary">
               <TextArea rows={3} placeholder="请输入摘要" />
             </Form.Item>
-          </Form>}
-      />
+          </Form>
+        </Card>
+      </SupaModal>
+      
     </Card>
   );
 }
