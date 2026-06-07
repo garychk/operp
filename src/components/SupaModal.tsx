@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider } from 'antd';
 import { CompressOutlined, FullscreenOutlined, LeftOutlined, RightOutlined, CaretRightOutlined, HistoryOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
+import { PrintDesigner } from 'operp-print-designer';
+import 'operp-print-designer/dist/operp-print-designer.css';
 
 interface SupaModalProps {
   open: boolean;
@@ -37,6 +39,7 @@ export function SupaModal({
   children,
 }: SupaModalProps) {
   const [isExpand, setIsExpand] = useState(false);
+  const [openDesigner, setOpenDesigner] = useState(false);
 
   const handleCancel = () => {
     setIsExpand(false);
@@ -53,6 +56,7 @@ export function SupaModal({
   };
 
   return (
+    <>
     <Modal
       title={
         <Space>
@@ -66,7 +70,7 @@ export function SupaModal({
           <Button type="default" size="small" icon={<LeftOutlined />} />
           <Button type="default" size="small" icon={<RightOutlined />} />
           <Button type='default' size="small" icon={<CheckOutlined />} color="purple" />
-          <Button type='default' size="small" icon={<PrinterOutlined />} />
+          <Button type='default' size="small" icon={<PrinterOutlined />} onClick={() => setOpenDesigner(true)} />
           <Tag color="magenta">按ESC键可关闭</Tag>
         </Space>
       }
@@ -124,6 +128,29 @@ export function SupaModal({
         )}
       </div>
     </Modal>
+    <Modal
+      title="打印设计"
+      open={openDesigner}
+      onCancel={() => setOpenDesigner(false)}
+      width={'80%'}
+      styles={{
+        body: { height: 'calc(90vh - 50px)', overflow: 'auto' },
+      }}
+      style={{ top: 16 }}
+      keyboard
+      footer={null}
+    >
+    <PrintDesigner
+      isPreview={false}
+      onSave={(data: any) => {
+        console.log('保存模板:', data);
+      }}
+      onPrint={() => {
+        console.log('打印');
+      }}
+    />
+    </Modal>
+    </>
   );
 }
 
