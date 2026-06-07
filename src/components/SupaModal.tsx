@@ -141,12 +141,9 @@ export function SupaModal({
       footer={null}
     >
     <PrintDesigner
-      isPreview={false}
+      isPreview={true}
       onSave={(data: any) => {
         console.log('保存模板:', data);
-      }}
-      onPrint={() => {
-        console.log('打印');
       }}
     />
     </Modal>
