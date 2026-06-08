@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider } from 'antd';
 import { CompressOutlined, FullscreenOutlined, LeftOutlined, RightOutlined, CaretRightOutlined, HistoryOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
-import { PrintDesigner } from 'operp-print-designer';
+import  PrintDesigner  from 'operp-print-designer';
 import 'operp-print-designer/dist/operp-print-designer.css';
 
 interface SupaModalProps {
@@ -141,7 +141,7 @@ export function SupaModal({
       footer={null}
     >
     <PrintDesigner
-      isPreview={true}
+      isPreview={false}
       onSave={(data: any) => {
         console.log('保存模板:', data);
       }}
