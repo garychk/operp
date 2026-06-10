@@ -1,4 +1,5 @@
 @import 'antd/dist/reset.css';
+@tailwind utilities;
 
 :root {
   --text: #6b6375;

@@ -239,18 +239,26 @@ export const Login: React.FC = () => {
   ];
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
-    }}>
+    <div
+      className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8"
+      style={{
+        background: `
+          radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.38), transparent 28%),
+          radial-gradient(circle at 85% 20%, rgba(168, 85, 247, 0.34), transparent 30%),
+          radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.24), transparent 36%),
+          linear-gradient(135deg, #020617 0%, #0f172a 45%, #312e81 100%)
+        `,
+      }}
+    >
       <Card
+        className="relative z-10"
         style={{
-          width: 450,
-          boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-          borderRadius: '12px'
+          width: 'min(450px, 100%)',
+          boxShadow: '0 24px 70px rgba(2, 6, 23, 0.38)',
+          borderRadius: '16px',
+          border: '1px solid rgba(255,255,255,0.42)',
+          background: 'rgba(255,255,255,0.9)',
+          backdropFilter: 'blur(18px)',
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
