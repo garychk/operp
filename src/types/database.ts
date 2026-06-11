@@ -909,7 +909,7 @@ export interface SysLogsRow {
   username: string | null;
   operation: string;
   method: string | null;
-  params: string | null;
+  params: Record<string, unknown> | null;
   ip: string | null;
   user_agent: string | null;
   execute_time: number | null;

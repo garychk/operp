@@ -1,9 +1,20 @@
-import { useState } from 'react';
-import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider } from 'antd';
+import { useEffect, useState } from 'react';
+import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider, Empty, Spin } from 'antd';
 import { CompressOutlined, FullscreenOutlined, LeftOutlined, RightOutlined, CaretRightOutlined, HistoryOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import  PrintDesigner  from 'operp-print-designer';
 import 'operp-print-designer/dist/operp-print-designer.css';
+import { supabase } from '../utils/supabase';
+
+interface HistoryLog {
+  id: number;
+  username: string | null;
+  operation: string;
+  method: string | null;
+  status: string | null;
+  error_msg: string | null;
+  created_at: string | null;
+}
 
 interface SupaModalProps {
   open: boolean;
@@ -17,6 +28,8 @@ interface SupaModalProps {
   detailPanelTitle?: string;
   detailExtra?: React.ReactNode;
   tableEle?: React.ReactNode;
+  historyTable?: string;
+  historyRecordId?: string | number | null;
   width?: string | number;
   height?: string | number;
   children?: React.ReactNode;
@@ -34,12 +47,46 @@ export function SupaModal({
   detailPanelTitle = '单据明细',
   detailExtra,
   tableEle,
+  historyTable,
+  historyRecordId,
   width = 1200,
   height = 800,
   children,
 }: SupaModalProps) {
   const [isExpand, setIsExpand] = useState(false);
   const [openDesigner, setOpenDesigner] = useState(false);
+  const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchHistoryLogs = async () => {
+      if (!open || !historyTable || historyRecordId === null || historyRecordId === undefined) {
+        setHistoryLogs([]);
+        return;
+      }
+
+      setHistoryLoading(true);
+      const { data, error } = await supabase
+        .from('sys_logs')
+        .select('id, username, operation, method, status, error_msg, created_at')
+        .eq('is_deleted', 'n')
+        .eq('params->>table', historyTable)
+        .eq('params->>recordId', String(historyRecordId))
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) {
+        console.error('Failed to fetch document history:', error);
+        setHistoryLogs([]);
+      } else {
+        setHistoryLogs(data || []);
+      }
+
+      setHistoryLoading(false);
+    };
+
+    fetchHistoryLogs();
+  }, [open, historyTable, historyRecordId]);
 
   const handleCancel = () => {
     setIsExpand(false);
@@ -54,6 +101,25 @@ export function SupaModal({
     handleReset();
     handleCancel();
   };
+
+  const historyItems = historyLogs.map((log) => ({
+    color: log.status === '1' || log.status === 'success' ? 'green' : 'red',
+    content: (
+      <Space direction="vertical" size={2}>
+        <Space wrap>
+          <span>{log.operation}</span>
+          {log.method && <Tag>{log.method}</Tag>}
+          <span style={{ color: '#666' }}>{log.username || 'anonymous'}</span>
+        </Space>
+        <span style={{ color: '#999', fontSize: 12 }}>
+          {log.created_at ? new Date(log.created_at).toLocaleString() : '-'}
+        </span>
+        {log.error_msg && (
+          <span style={{ color: '#cf1322', fontSize: 12 }}>{log.error_msg}</span>
+        )}
+      </Space>
+    ),
+  }));
 
   return (
     <>
@@ -99,22 +165,13 @@ export function SupaModal({
                       <span style={{ textDecoration: 'underline' }}>单据历史</span>
                     </Space>
                     <Divider />
-                    <Timeline
-                      items={[
-                        {
-                          content: 'Create a services site 2015-09-01',
-                        },
-                        {
-                          content: 'Solve initial network problems 2015-09-01',
-                        },
-                        {
-                          content: 'Technical testing 2015-09-01',
-                        },
-                        {
-                          content: 'Network problems being solved 2015-09-01',
-                        },
-                      ]}
-                    />
+                    <Spin spinning={historyLoading}>
+                      {historyItems.length > 0 ? (
+                        <Timeline items={historyItems} />
+                      ) : (
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史记录" />
+                      )}
+                    </Spin>
                   </div>
                 </Splitter.Panel>
               </Splitter>

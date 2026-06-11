@@ -37,15 +37,15 @@ type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
 type RoutingDetail = Tables["erp_routing_operation_details_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
-type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
+const routingTable = "erp_routing_operations_s_539dcf81_b";
+const routingDetailTable = "erp_routing_operation_details_s_539dcf81_b";
 
 export function RoutingOperations() {
   const [routings, setRoutings] = useState<Routing[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
-  const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -61,7 +61,6 @@ export function RoutingOperations() {
     fetchRoutings();
     fetchProducts();
     fetchOperations();
-    fetchWorkCenters();
   }, []);
 
   const fetchOperations = async () => {
@@ -75,19 +74,6 @@ export function RoutingOperations() {
       setOperations(data || []);
     } catch (error) {
       console.error("Error fetching operations:", error);
-    }
-  };
-
-  const fetchWorkCenters = async () => {
-    try {
-      const { data, error } = await supabase
-        .from("erp_work_centers_s_539dcf81_b")
-        .select("*")
-        .eq("is_deleted", "n");
-      if (error) throw error;
-      setWorkCenters(data || []);
-    } catch (error) {
-      console.error("Error fetching work centers:", error);
     }
   };
 
@@ -150,19 +136,27 @@ export function RoutingOperations() {
       if (editingRouting) {
         await logWithTiming("更新工艺路线", "UPDATE", async () => {
           const { error } = await supabase
-            .from("erp_routing_operations_s_539dcf81_b")
+            .from(routingTable)
             .update(values)
             .eq("id", editingRouting.id);
           if (error) throw error;
-        });
+        }, { table: routingTable, recordId: editingRouting.id });
         message.success("更新成功");
       } else {
-        await logWithTiming("新增工艺路线", "INSERT", async () => {
-          const { error } = await supabase
-            .from("erp_routing_operations_s_539dcf81_b")
-            .insert([values]);
+        const logParams: { table: string; recordId?: number } = {
+          table: routingTable,
+        };
+        const data = await logWithTiming("新增工艺路线", "INSERT", async () => {
+          const { data, error } = await supabase
+            .from(routingTable)
+            .insert([values])
+            .select()
+            .single();
           if (error) throw error;
-        });
+          logParams.recordId = data.id;
+          return data;
+        }, logParams);
+        setSelectedRouting(data);
         message.success("新增成功");
       }
       setIsModalOpen(false);
@@ -189,7 +183,6 @@ export function RoutingOperations() {
           .eq("id", editingDetail.id);
         message.success("更新成功");
       } else {
-        const maxSeqNo = details.length > 0 ? Math.max(...details.map(d => d.sequence_no)) : 0;
         values.routing_id = selectedRouting.id;
         values.is_deleted = "n";
 
@@ -255,15 +248,16 @@ export function RoutingOperations() {
         try {
           await logWithTiming("删除工艺路线", "DELETE", async () => {
             const { error } = await supabase
-              .from("erp_routing_operations_s_539dcf81_b")
+              .from(routingTable)
               .update({ is_deleted: "y" })
               .eq("id", id);
             if (error) throw error;
-            await supabase
-              .from("erp_routing_operation_details_s_539dcf81_b")
+            const { error: detailError } = await supabase
+              .from(routingDetailTable)
               .update({ is_deleted: "y" })
               .eq("routing_id", id);
-          });
+            if (detailError) throw detailError;
+          }, { table: routingTable, recordId: id });
           message.success("删除成功");
           fetchRoutings();
         } catch (error) {
@@ -344,11 +338,6 @@ export function RoutingOperations() {
   const getOperationName = (operationId: number | null) => {
     const operation = operations.find((op) => op.id === operationId);
     return operation?.name || "-";
-  };
-
-  const getWorkCenterName = (workCenterId: number | null) => {
-    const workCenter = workCenters.find((w) => w.id === workCenterId);
-    return workCenter?.name || "-";
   };
 
   const filteredRoutings = routings.filter(
@@ -528,6 +517,7 @@ export function RoutingOperations() {
           setIsModalOpen(false);
           form.resetFields();
           setEditingRouting(null);
+          setSelectedRouting(null);
         }}
         title={
           <>
@@ -543,6 +533,8 @@ export function RoutingOperations() {
         }
         headerPanelTitle="工艺路线头"
         detailPanelTitle="工艺路线工序明细"
+        historyTable={routingTable}
+        historyRecordId={editingRouting?.id || selectedRouting?.id}
         detailExtra={
           <Button type="link" size="small" icon={<PlusOutlined />} onClick={handleAddDetail}>新增工序</Button>
         }

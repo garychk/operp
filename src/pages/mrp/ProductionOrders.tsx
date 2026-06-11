@@ -34,6 +34,7 @@ type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
+const productionOrderTable = "erp_production_orders_s_539dcf81_b";
 
 export function ProductionOrders() {
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
@@ -136,19 +137,27 @@ export function ProductionOrders() {
       if (editingOrder) {
         await logWithTiming("更新生产订单", "UPDATE", async () => {
           const { error } = await supabase
-            .from("erp_production_orders_s_539dcf81_b")
+            .from(productionOrderTable)
             .update(values)
             .eq("id", editingOrder.id);
           if (error) throw error;
-        });
+        }, { table: productionOrderTable, recordId: editingOrder.id });
         message.success("更新成功");
       } else {
-        await logWithTiming("新增生产订单", "INSERT", async () => {
-          const { error } = await supabase
-            .from("erp_production_orders_s_539dcf81_b")
-            .insert([values]);
+        const logParams: { table: string; recordId?: number } = {
+          table: productionOrderTable,
+        };
+        const data = await logWithTiming("新增生产订单", "INSERT", async () => {
+          const { data, error } = await supabase
+            .from(productionOrderTable)
+            .insert([values])
+            .select()
+            .single();
           if (error) throw error;
-        });
+          logParams.recordId = data.id;
+          return data;
+        }, logParams);
+        setEditingOrder(data);
         message.success("新增成功");
       }
       setIsModalOpen(false);
@@ -181,11 +190,11 @@ export function ProductionOrders() {
         try {
           await logWithTiming("删除生产订单", "DELETE", async () => {
             const { error } = await supabase
-              .from("erp_production_orders_s_539dcf81_b")
+              .from(productionOrderTable)
               .update({ is_deleted: "y" })
               .eq("id", id);
             if (error) throw error;
-          });
+          }, { table: productionOrderTable, recordId: id });
           message.success("删除成功");
           fetchOrders();
         } catch (error) {
@@ -382,6 +391,8 @@ export function ProductionOrders() {
         }
         width={'60%'}
         height={680}
+        historyTable={productionOrderTable}
+        historyRecordId={editingOrder?.id}
         form={form}
         formEle={
           <Form

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker, Row, Col, Switch } from 'antd';
-import { PlusOutlined, SearchOutlined, EyeOutlined, DeleteOutlined, EditOutlined, AccountBookOutlined } from '@ant-design/icons';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, AccountBookOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SupaModal } from '../../components/SupaModal';
+import { logWithTiming } from '../../utils/logger';
 import dayjs from 'dayjs';
 
 type Voucher = Tables['erp_vouchers_s_539dcf81_b']['Row'];
@@ -12,6 +13,8 @@ type AccountSubject = Tables['erp_account_subjects_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 const { TextArea } = Input;
+const voucherTable = 'erp_vouchers_s_539dcf81_b';
+const voucherDetailTable = 'erp_voucher_details_s_539dcf81_b';
 
 export function Vouchers() {
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
@@ -37,7 +40,7 @@ export function Vouchers() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_vouchers_s_539dcf81_b')
+        .from(voucherTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('voucher_date', { ascending: false });
@@ -69,7 +72,7 @@ export function Vouchers() {
   const fetchDetails = async (voucherId: number) => {
     try {
       const { data, error } = await supabase
-        .from('erp_voucher_details_s_539dcf81_b')
+        .from(voucherDetailTable)
         .select('*')
         .eq('is_deleted', 'n')
         .eq('voucher_id', voucherId)
@@ -85,22 +88,30 @@ export function Vouchers() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingVoucher) {
-        const { error } = await supabase
-          .from('erp_vouchers_s_539dcf81_b')
-          .update(values)
-          .eq('id', editingVoucher.id);
-        if (error) throw error;
+        await logWithTiming('更新凭证', 'UPDATE', async () => {
+          const { error } = await supabase
+            .from(voucherTable)
+            .update(values)
+            .eq('id', editingVoucher.id);
+          if (error) throw error;
+        }, { table: voucherTable, recordId: editingVoucher.id });
         message.success('更新成功');
       } else {
-        const { data, error } = await supabase
-          .from('erp_vouchers_s_539dcf81_b')
-          .insert([values])
-          .select();
-        if (error) throw error;
+        const logParams: { table: string; recordId?: number } = {
+          table: voucherTable,
+        };
+        const data = await logWithTiming('新增凭证', 'INSERT', async () => {
+          const { data, error } = await supabase
+            .from(voucherTable)
+            .insert([values])
+            .select()
+            .single();
+          if (error) throw error;
+          logParams.recordId = data.id;
+          return data;
+        }, logParams);
         message.success('新增成功');
-        if (data && data.length > 0) {
-          setSelectedVoucher(data[0]);
-        }
+        setSelectedVoucher(data);
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -127,7 +138,7 @@ export function Vouchers() {
 
       if (editingDetail) {
         await supabase
-          .from('erp_voucher_details_s_539dcf81_b')
+          .from(voucherDetailTable)
           .update(values)
           .eq('id', editingDetail.id);
         message.success('更新成功');
@@ -140,7 +151,7 @@ export function Vouchers() {
         values.is_deleted = 'n';
 
         const { error } = await supabase
-          .from('erp_voucher_details_s_539dcf81_b')
+          .from(voucherDetailTable)
           .insert([values]);
         if (error) throw error;
         message.success('新增成功');
@@ -159,7 +170,7 @@ export function Vouchers() {
   const updateVoucherTotal = async (voucherId: number) => {
     try {
       const { data, error } = await supabase
-        .from('erp_voucher_details_s_539dcf81_b')
+        .from(voucherDetailTable)
         .select('debit_amount, credit_amount')
         .eq('is_deleted', 'n')
         .eq('voucher_id', voucherId);
@@ -170,7 +181,7 @@ export function Vouchers() {
       const totalAmount = Math.max(totalDebit, totalCredit);
 
       await supabase
-        .from('erp_vouchers_s_539dcf81_b')
+        .from(voucherTable)
         .update({ total_amount: totalAmount })
         .eq('id', voucherId);
 
@@ -198,15 +209,18 @@ export function Vouchers() {
       content: '确定要删除该凭证吗？',
       onOk: async () => {
         try {
-          const { error } = await supabase
-            .from('erp_vouchers_s_539dcf81_b')
-            .update({ is_deleted: 'y' })
-            .eq('id', id);
-          if (error) throw error;
-          await supabase
-            .from('erp_voucher_details_s_539dcf81_b')
-            .update({ is_deleted: 'y' })
-            .eq('voucher_id', id);
+          await logWithTiming('删除凭证', 'DELETE', async () => {
+            const { error } = await supabase
+              .from(voucherTable)
+              .update({ is_deleted: 'y' })
+              .eq('id', id);
+            if (error) throw error;
+            const { error: detailError } = await supabase
+              .from(voucherDetailTable)
+              .update({ is_deleted: 'y' })
+              .eq('voucher_id', id);
+            if (detailError) throw detailError;
+          }, { table: voucherTable, recordId: id });
           message.success('删除成功');
           fetchVouchers();
         } catch (error) {
@@ -219,6 +233,7 @@ export function Vouchers() {
 
   const handleAdd = () => {
     setEditingVoucher(null);
+    setSelectedVoucher(null);
     setDetails([]);
     form.setFieldsValue({
       voucher_no: `V${Date.now().toString().slice(-8)}`,
@@ -260,7 +275,7 @@ export function Vouchers() {
       onOk: async () => {
         try {
           await supabase
-            .from('erp_voucher_details_s_539dcf81_b')
+            .from(voucherDetailTable)
             .update({ is_deleted: 'y' })
             .eq('id', id);
           message.success('删除成功');
@@ -438,6 +453,7 @@ export function Vouchers() {
           setIsModalOpen(false);
           form.resetFields();
           setEditingVoucher(null);
+          setSelectedVoucher(null);
         }}
         title={
           <>
@@ -447,6 +463,8 @@ export function Vouchers() {
         }
         headerPanelTitle="会计凭证"
         detailPanelTitle="分录明细"
+        historyTable={voucherTable}
+        historyRecordId={editingVoucher?.id || selectedVoucher?.id}
         detailExtra={
           <Button type="link" size="small" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
         }

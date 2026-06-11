@@ -32,6 +32,7 @@ type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
+const productTable = "erp_products_s_539dcf81_b";
 
 export function Products() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -85,19 +86,25 @@ export function Products() {
       if (editingProduct) {
         await logWithTiming("更新物料", "UPDATE", async () => {
           const { error } = await supabase
-            .from("erp_products_s_539dcf81_b")
+            .from(productTable)
             .update(values)
             .eq("id", editingProduct.id);
           if (error) throw error;
-        });
+        }, { table: productTable, recordId: editingProduct.id });
         message.success("更新成功");
       } else {
+        const logParams: { table: string; recordId?: number } = {
+          table: productTable,
+        };
         await logWithTiming("新增物料", "INSERT", async () => {
-          const { error } = await supabase
-            .from("erp_products_s_539dcf81_b")
-            .insert([values]);
+          const { data, error } = await supabase
+            .from(productTable)
+            .insert([values])
+            .select("id")
+            .single();
           if (error) throw error;
-        });
+          logParams.recordId = data.id;
+        }, logParams);
         message.success("新增成功");
       }
       setIsModalOpen(false);
@@ -303,6 +310,8 @@ export function Products() {
         width={'70%'}
         height={650}
         headerPanelTitle="物料主档"
+        historyTable={productTable}
+        historyRecordId={editingProduct?.id}
         form={form}
         formEle={<Form
           form={form}

@@ -14,15 +14,12 @@ import {
   Row,
   Col,
   DatePicker,
-  Divider,
 } from "antd";
 import {
   PlusOutlined,
   SearchOutlined,
   DeleteOutlined,
   EditOutlined,
-  EyeOutlined,
-  ShoppingCartOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
@@ -37,6 +34,8 @@ type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 const { TextArea } = Input;
+const salesOrderTable = "erp_sales_orders_s_539dcf81_b";
+const salesOrderDetailTable = "erp_sales_order_details_s_539dcf81_b";
 
 export function SalesOrders() {
   const [orders, setOrders] = useState<SalesOrder[]>([]);
@@ -129,19 +128,27 @@ export function SalesOrders() {
       if (editingOrder) {
         await logWithTiming("更新销售订单", "UPDATE", async () => {
           const { error } = await supabase
-            .from("erp_sales_orders_s_539dcf81_b")
+            .from(salesOrderTable)
             .update(values)
             .eq("id", editingOrder.id);
           if (error) throw error;
-        });
+        }, { table: salesOrderTable, recordId: editingOrder.id });
         message.success("更新成功");
       } else {
-        await logWithTiming("新增销售订单", "INSERT", async () => {
-          const { error } = await supabase
-            .from("erp_sales_orders_s_539dcf81_b")
-            .insert([values]);
+        const logParams: { table: string; recordId?: number } = {
+          table: salesOrderTable,
+        };
+        const data = await logWithTiming("新增销售订单", "INSERT", async () => {
+          const { data, error } = await supabase
+            .from(salesOrderTable)
+            .insert([values])
+            .select()
+            .single();
           if (error) throw error;
-        });
+          logParams.recordId = data.id;
+          return data;
+        }, logParams);
+        setSelectedOrder(data);
         message.success("新增成功");
       }
       setIsModalOpen(false);
@@ -245,15 +252,16 @@ export function SalesOrders() {
         try {
           await logWithTiming("删除销售订单", "DELETE", async () => {
             const { error } = await supabase
-              .from("erp_sales_orders_s_539dcf81_b")
+              .from(salesOrderTable)
               .update({ is_deleted: "y" })
               .eq("id", id);
             if (error) throw error;
-            await supabase
-              .from("erp_sales_order_details_s_539dcf81_b")
+            const { error: detailError } = await supabase
+              .from(salesOrderDetailTable)
               .update({ is_deleted: "y" })
               .eq("order_id", id);
-          });
+            if (detailError) throw detailError;
+          }, { table: salesOrderTable, recordId: id });
           message.success("删除成功");
           fetchOrders();
         } catch (error) {
@@ -266,6 +274,7 @@ export function SalesOrders() {
 
   const handleAdd = () => {
     setEditingOrder(null);
+    setSelectedOrder(null);
     form.setFieldsValue({
       order_no: `SO${Date.now().toString().slice(-8)}`,
       order_date: dayjs(new Date()),
@@ -557,6 +566,7 @@ export function SalesOrders() {
           setIsModalOpen(false);
           form.resetFields();
           setEditingOrder(null);
+          setSelectedOrder(null);
         }}
         footer={
           <Space>
@@ -568,6 +578,8 @@ export function SalesOrders() {
         }
         width={'70%'}
         height={680}
+        historyTable={salesOrderTable}
+        historyRecordId={editingOrder?.id || selectedOrder?.id}
         form={form}
         formEle={
           <Form

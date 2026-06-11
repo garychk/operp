@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker, Divider } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined, TruckOutlined } from '@ant-design/icons';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker } from 'antd';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
@@ -17,6 +17,8 @@ type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 const { TextArea } = Input;
+const salesDeliveryTable = 'erp_sales_deliveries_s_539dcf81_b';
+const salesDeliveryDetailTable = 'erp_sales_delivery_details_s_539dcf81_b';
 
 export function SalesDeliveries() {
   const [deliveries, setDeliveries] = useState<SalesDelivery[]>([]);
@@ -35,7 +37,7 @@ export function SalesDeliveries() {
   const [editingDetail, setEditingDetail] = useState<SalesDeliveryDetail | null>(null);
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
-  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [, setSelectedOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchDeliveries();
@@ -155,19 +157,27 @@ export function SalesDeliveries() {
       if (editingDelivery) {
         await logWithTiming('更新销售出货单', 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_sales_deliveries_s_539dcf81_b')
+            .from(salesDeliveryTable)
             .update(values)
             .eq('id', editingDelivery.id);
           if (error) throw error;
-        });
+        }, { table: salesDeliveryTable, recordId: editingDelivery.id });
         message.success('更新成功');
       } else {
-        await logWithTiming('新增销售出货单', 'INSERT', async () => {
-          const { error } = await supabase
-            .from('erp_sales_deliveries_s_539dcf81_b')
-            .insert([values]);
+        const logParams: { table: string; recordId?: number } = {
+          table: salesDeliveryTable,
+        };
+        const data = await logWithTiming('新增销售出货单', 'INSERT', async () => {
+          const { data, error } = await supabase
+            .from(salesDeliveryTable)
+            .insert([values])
+            .select()
+            .single();
           if (error) throw error;
-        });
+          logParams.recordId = data.id;
+          return data;
+        }, logParams);
+        setSelectedDelivery(data);
         message.success('新增成功');
       }
       setIsModalOpen(false);
@@ -297,6 +307,7 @@ export function SalesDeliveries() {
 
   const handleEdit = (record: SalesDelivery) => {
     setEditingDelivery(record);
+    setSelectedDelivery(record);
     setSelectedOrderId(record.order_id || null);
     if (record.order_id) {
       fetchSalesOrderDetails(record.order_id);
@@ -314,15 +325,16 @@ export function SalesDeliveries() {
         try {
           await logWithTiming('删除销售出货单', 'DELETE', async () => {
             const { error } = await supabase
-              .from('erp_sales_deliveries_s_539dcf81_b')
+              .from(salesDeliveryTable)
               .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
-            await supabase
-              .from('erp_sales_delivery_details_s_539dcf81_b')
+            const { error: detailError } = await supabase
+              .from(salesDeliveryDetailTable)
               .update({ is_deleted: 'y' })
               .eq('delivery_id', id);
-          });
+            if (detailError) throw detailError;
+          }, { table: salesDeliveryTable, recordId: id });
           message.success('删除成功');
           fetchDeliveries();
         } catch (error) {
@@ -335,6 +347,7 @@ export function SalesDeliveries() {
 
   const handleAdd = () => {
     setEditingDelivery(null);
+    setSelectedDelivery(null);
     setSelectedOrderId(null);
     setSalesOrderDetails([]);
     form.setFieldsValue({
@@ -641,6 +654,7 @@ export function SalesDeliveries() {
           setIsModalOpen(false);
           form.resetFields();
           setEditingDelivery(null);
+          setSelectedDelivery(null);
           setSelectedOrderId(null);
           setSalesOrderDetails([]);
         }}
@@ -651,6 +665,8 @@ export function SalesDeliveries() {
           </Button>
         </Space>}
         width={'60%'}
+        historyTable={salesDeliveryTable}
+        historyRecordId={editingDelivery?.id || selectedDelivery?.id}
         form={form}
         formEle={
           <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>

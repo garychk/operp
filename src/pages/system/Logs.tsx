@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Card, DatePicker, Input, Button, Space, Tag, message, Popconfirm, Modal,Descriptions } from 'antd';
+import { Table, Card, DatePicker, Input, Button, Space, Tag, message, Popconfirm, Descriptions } from 'antd';
 import { SearchOutlined, ReloadOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { Dayjs } from 'dayjs';
@@ -11,7 +11,7 @@ interface Log {
   username: string;
   operation: string;
   method: string;
-  params: string;
+  params: Record<string, unknown> | string | null;
   ip: string;
   user_agent: string;
   execute_time: number;
@@ -133,6 +133,11 @@ export function Logs() {
     setCurrentLog(null);
   };
 
+  const formatParams = (params: Log['params']) => {
+    if (!params) return '-';
+    return typeof params === 'string' ? params : JSON.stringify(params);
+  };
+
   const columns: ColumnsType<Log> = [
     {
       title: 'ID',
@@ -160,7 +165,7 @@ export function Logs() {
       title: '请求参数',
       dataIndex: 'params',
       ellipsis: true,
-      render: (params) => params || '-',
+      render: (params) => formatParams(params),
     },
     {
       title: 'IP地址',
@@ -290,7 +295,7 @@ export function Logs() {
             <Descriptions.Item label="操作用户">{currentLog.username}</Descriptions.Item>
             <Descriptions.Item label="操作类型">{currentLog.operation}</Descriptions.Item>
             <Descriptions.Item label="请求方法">{currentLog.method}</Descriptions.Item>
-            <Descriptions.Item label="请求参数">{currentLog.params || '-'}</Descriptions.Item>
+            <Descriptions.Item label="请求参数">{formatParams(currentLog.params)}</Descriptions.Item>
             <Descriptions.Item label="IP地址">{currentLog.ip}</Descriptions.Item>
             <Descriptions.Item label="User Agent">{currentLog.user_agent || '-'}</Descriptions.Item>
             <Descriptions.Item label="执行时长">{currentLog.execute_time} ms</Descriptions.Item>

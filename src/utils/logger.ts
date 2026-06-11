@@ -18,7 +18,7 @@ export async function logOperation(logParams: LogParams) {
       username,
       operation: logParams.operation,
       method: logParams.method,
-      params: logParams.params ? JSON.stringify(logParams.params) : null,
+      params: logParams.params || null,
       ip: '',
       user_agent: navigator.userAgent,
       execute_time: logParams.executeTime || 0,
@@ -33,7 +33,8 @@ export async function logOperation(logParams: LogParams) {
 export async function logWithTiming<T>(
   operation: string,
   method: string,
-  fn: () => Promise<T>
+  fn: () => Promise<T>,
+  params?: Record<string, any>
 ): Promise<T> {
   const startTime = Date.now();
   try {
@@ -42,6 +43,7 @@ export async function logWithTiming<T>(
     await logOperation({
       operation,
       method,
+      params,
       executeTime,
       status: 'success',
     });
@@ -51,6 +53,7 @@ export async function logWithTiming<T>(
     await logOperation({
       operation,
       method,
+      params,
       executeTime,
       status: 'error',
       errorMsg: error?.message || String(error),

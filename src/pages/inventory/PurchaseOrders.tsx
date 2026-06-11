@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker, Divider, Typography, Splitter, Timeline, Collapse } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ShoppingCartOutlined, FormOutlined, RightOutlined, LeftOutlined, CheckOutlined, PrinterOutlined, ExpandAltOutlined, CompressOutlined, CloseOutlined, FullscreenOutlined, HistoryOutlined, CaretRightOutlined } from '@ant-design/icons';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker } from 'antd';
+import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, ShoppingCartOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
@@ -14,6 +14,8 @@ type Product = Tables['erp_products_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 const { TextArea } = Input;
+const purchaseOrderTable = 'erp_purchase_orders_s_539dcf81_b';
+const purchaseOrderDetailTable = 'erp_purchase_order_details_s_539dcf81_b';
 
 export function PurchaseOrders() {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
@@ -104,19 +106,27 @@ export function PurchaseOrders() {
       if (editingOrder) {
         await logWithTiming('更新采购订单', 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_purchase_orders_s_539dcf81_b')
+            .from(purchaseOrderTable)
             .update(values)
             .eq('id', editingOrder.id);
           if (error) throw error;
-        });
+        }, { table: purchaseOrderTable, recordId: editingOrder.id });
         message.success('更新成功');
       } else {
-        await logWithTiming('新增采购订单', 'INSERT', async () => {
-          const { error } = await supabase
-            .from('erp_purchase_orders_s_539dcf81_b')
-            .insert([values]);
+        const logParams: { table: string; recordId?: number } = {
+          table: purchaseOrderTable,
+        };
+        const data = await logWithTiming('新增采购订单', 'INSERT', async () => {
+          const { data, error } = await supabase
+            .from(purchaseOrderTable)
+            .insert([values])
+            .select()
+            .single();
           if (error) throw error;
-        });
+          logParams.recordId = data.id;
+          return data;
+        }, logParams);
+        setSelectedOrder(data);
         message.success('新增成功');
       }
       setIsModalOpen(false);
@@ -221,11 +231,12 @@ export function PurchaseOrders() {
               .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
-            await supabase
-              .from('erp_purchase_order_details_s_539dcf81_b')
+            const { error: detailError } = await supabase
+              .from(purchaseOrderDetailTable)
               .update({ is_deleted: 'y' })
               .eq('order_id', id);
-          });
+            if (detailError) throw detailError;
+          }, { table: purchaseOrderTable, recordId: id });
           message.success('删除成功');
           fetchOrders();
         } catch (error) {
@@ -238,6 +249,7 @@ export function PurchaseOrders() {
 
   const handleAdd = () => {
     setEditingOrder(null);
+    setSelectedOrder(null);
     form.setFieldsValue({
       order_no: `PO${Date.now().toString().slice(-8)}`,
       order_date: dayjs(new Date()),
@@ -495,6 +507,7 @@ export function PurchaseOrders() {
           setIsModalOpen(false);
           form.resetFields();
           setEditingOrder(null);
+          setSelectedOrder(null);
         }}
         title={
           <>
@@ -510,6 +523,8 @@ export function PurchaseOrders() {
         }
         headerPanelTitle="采购订单头"
         detailPanelTitle="采购订单明细"
+        historyTable={purchaseOrderTable}
+        historyRecordId={editingOrder?.id || selectedOrder?.id}
         detailExtra={
           <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
         }

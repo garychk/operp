@@ -34,6 +34,8 @@ type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
 type BomDetail = Tables["erp_bom_details_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
+const bomTable = "erp_boms_s_539dcf81_b";
+const bomDetailTable = "erp_bom_details_s_539dcf81_b";
 
 export function Boms() {
   const [boms, setBoms] = useState<Bom[]>([]);
@@ -138,19 +140,27 @@ export function Boms() {
       if (editingBom) {
         await logWithTiming("更新BOM", "UPDATE", async () => {
           const { error } = await supabase
-            .from("erp_boms_s_539dcf81_b")
+            .from(bomTable)
             .update(values)
             .eq("id", editingBom.id);
           if (error) throw error;
-        });
+        }, { table: bomTable, recordId: editingBom.id });
         message.success("更新成功");
       } else {
-        await logWithTiming("新增BOM", "INSERT", async () => {
-          const { error } = await supabase
-            .from("erp_boms_s_539dcf81_b")
-            .insert([values]);
+        const logParams: { table: string; recordId?: number } = {
+          table: bomTable,
+        };
+        const data = await logWithTiming("新增BOM", "INSERT", async () => {
+          const { data, error } = await supabase
+            .from(bomTable)
+            .insert([values])
+            .select()
+            .single();
           if (error) throw error;
-        });
+          logParams.recordId = data.id;
+          return data;
+        }, logParams);
+        setSelectedBom(data);
         message.success("新增成功");
       }
       setIsModalOpen(false);
@@ -226,11 +236,16 @@ export function Boms() {
         try {
           await logWithTiming("删除BOM", "DELETE", async () => {
             const { error } = await supabase
-              .from("erp_boms_s_539dcf81_b")
+              .from(bomTable)
               .update({ is_deleted: "y" })
               .eq("id", id);
             if (error) throw error;
-          });
+            const { error: detailError } = await supabase
+              .from(bomDetailTable)
+              .update({ is_deleted: "y" })
+              .eq("bom_id", id);
+            if (detailError) throw detailError;
+          }, { table: bomTable, recordId: id });
           message.success("删除成功");
           fetchBoms();
         } catch (error) {
@@ -500,6 +515,7 @@ export function Boms() {
           setIsModalOpen(false);
           form.resetFields();
           setEditingBom(null);
+          setSelectedBom(null);
         }}
         footer={
           <Space>
@@ -513,6 +529,8 @@ export function Boms() {
         height={680}
         headerPanelTitle="BOM主档"
         detailPanelTitle="子项明细"
+        historyTable={bomTable}
+        historyRecordId={editingBom?.id || selectedBom?.id}
         form={form}
         formEle={
           <Form
