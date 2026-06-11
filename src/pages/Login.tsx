@@ -243,10 +243,10 @@ export const Login: React.FC = () => {
       className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8"
       style={{
         background: `
-          radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.38), transparent 28%),
-          radial-gradient(circle at 85% 20%, rgba(168, 85, 247, 0.34), transparent 30%),
-          radial-gradient(circle at 50% 100%, rgba(16, 185, 129, 0.24), transparent 36%),
-          linear-gradient(135deg, #020617 0%, #0f172a 45%, #312e81 100%)
+          radial-gradient(circle at 12% 18%, rgba(125, 211, 252, 0.5), transparent 30%),
+          radial-gradient(circle at 86% 16%, rgba(196, 181, 253, 0.42), transparent 32%),
+          radial-gradient(circle at 50% 96%, rgba(167, 243, 208, 0.42), transparent 36%),
+          linear-gradient(135deg, #f8fafc 0%, #e0f2fe 42%, #ede9fe 100%)
         `,
       }}
     >
@@ -254,10 +254,10 @@ export const Login: React.FC = () => {
         className="relative z-10"
         style={{
           width: 'min(450px, 100%)',
-          boxShadow: '0 24px 70px rgba(2, 6, 23, 0.38)',
+          boxShadow: '0 24px 70px rgba(59, 130, 246, 0.18)',
           borderRadius: '16px',
-          border: '1px solid rgba(255,255,255,0.42)',
-          background: 'rgba(255,255,255,0.9)',
+          border: '1px solid rgba(255,255,255,0.78)',
+          background: 'rgba(255,255,255,0.86)',
           backdropFilter: 'blur(18px)',
         }}
       >
