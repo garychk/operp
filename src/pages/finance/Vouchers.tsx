@@ -514,6 +514,7 @@ export function Vouchers() {
             </Row>
           </Form>
         }
+        detailData={details}
         tableEle={
           <Table
             columns={detailColumns}
