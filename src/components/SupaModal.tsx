@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider, Empty, Spin } from 'antd';
+import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider, Empty, Spin, message } from 'antd';
 import { CompressOutlined, FullscreenOutlined, LeftOutlined, RightOutlined, CaretRightOutlined, HistoryOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import  PrintDesigner  from 'operp-print-designer';
 import 'operp-print-designer/dist/operp-print-designer.css';
 import { supabase } from '../utils/supabase';
+import type { SysFormsInsert } from '../types/database';
 
 interface HistoryLog {
   id: number;
@@ -30,6 +31,8 @@ interface SupaModalProps {
   tableEle?: React.ReactNode;
   historyTable?: string;
   historyRecordId?: string | number | null;
+  formTable?: string;
+  formDescription?: string;
   width?: string | number;
   height?: string | number;
   children?: React.ReactNode;
@@ -49,14 +52,21 @@ export function SupaModal({
   tableEle,
   historyTable,
   historyRecordId,
+  formTable,
+  formDescription,
   width = 1200,
   height = 800,
   children,
 }: SupaModalProps) {
   const [isExpand, setIsExpand] = useState(false);
   const [openDesigner, setOpenDesigner] = useState(false);
+  const [templateData, setTemplateData] = useState<any>();
+  const [templateLoading, setTemplateLoading] = useState(false);
+  const [designerInstanceKey, setDesignerInstanceKey] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  const currentFormName = formTable || historyTable;
 
   useEffect(() => {
     const fetchHistoryLogs = async () => {
@@ -95,6 +105,99 @@ export function SupaModal({
 
   const handleReset = () => {
     form?.resetFields();
+  };
+
+  const loadTemplate = async (formName: string) => {
+    const { data, error } = await supabase
+      .from('sys_forms')
+      .select('print_template_json')
+      .eq('is_deleted', 'n')
+      .eq('form_name', formName)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Failed to fetch print template:', error);
+      message.error(`获取打印模板失败: ${error.message}`);
+      return undefined;
+    }
+
+    if (!data?.print_template_json) {
+      return undefined;
+    }
+
+    try {
+      return JSON.parse(data.print_template_json);
+    } catch (parseError) {
+      console.error('Failed to parse print template:', parseError);
+      message.error('打印模板数据格式不正确');
+      return undefined;
+    }
+  };
+
+  const handleOpenDesigner = async () => {
+    if (!currentFormName) {
+      message.error('缺少当前表单表名，无法打开打印设计');
+      return;
+    }
+
+    setOpenDesigner(true);
+    setTemplateData(undefined);
+    setTemplateLoading(true);
+
+    const loadedTemplate = await loadTemplate(currentFormName);
+
+    setTemplateData(loadedTemplate);
+    setDesignerInstanceKey((key) => key + 1);
+    setTemplateLoading(false);
+  };
+
+  const handleCloseDesigner = () => {
+    setOpenDesigner(false);
+    setTemplateData(undefined);
+    setTemplateLoading(false);
+  };
+
+  const handleSaveTemplate = async (data: any) => {
+    const formName = currentFormName;
+
+    if (!formName) {
+      message.error('缺少当前表单表名，无法保存打印模板');
+      return;
+    }
+
+    const templateJson = JSON.stringify(data);
+
+    const formSettings: SysFormsInsert = {
+      table_name: formName,
+      form_name: formName,
+      description: formDescription || formName,
+      print_template_json: templateJson,
+      form_config: {
+        headerPanelTitle,
+        detailPanelTitle,
+        hasDetail: Boolean(tableEle),
+      },
+      status: '1',
+      sort_order: 0,
+      is_deleted: 'n',
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('sys_forms')
+      .upsert(
+        formSettings,
+        { onConflict: 'form_name' },
+      );
+
+    if (error) {
+      console.error('Failed to save print template:', error);
+      message.error(`保存模板失败: ${error.message}`);
+      return;
+    }
+
+    message.success('打印模板保存成功');
+    handleCloseDesigner();
   };
 
   const combinedOnCancel = () => {
@@ -136,7 +239,7 @@ export function SupaModal({
           <Button type="default" size="small" icon={<LeftOutlined />} />
           <Button type="default" size="small" icon={<RightOutlined />} />
           <Button type='default' size="small" icon={<CheckOutlined />} color="purple" />
-          <Button type='default' size="small" icon={<PrinterOutlined />} onClick={() => setOpenDesigner(true)} />
+          <Button type='default' size="small" icon={<PrinterOutlined />} onClick={handleOpenDesigner} />
           <Tag color="magenta">按ESC键可关闭</Tag>
         </Space>
       }
@@ -188,8 +291,9 @@ export function SupaModal({
     <Modal
       title="打印设计"
       open={openDesigner}
-      onCancel={() => setOpenDesigner(false)}
+      onCancel={handleCloseDesigner}
       width={'80%'}
+      destroyOnHidden
       styles={{
         body: { height: 'calc(90vh - 50px)', overflow: 'auto' },
       }}
@@ -197,12 +301,16 @@ export function SupaModal({
       keyboard
       footer={null}
     >
-    <PrintDesigner
-      isPreview={false}
-      onSave={(data: any) => {
-        console.log('保存模板:', data);
-      }}
-    />
+    <Spin spinning={templateLoading}>
+      {!templateLoading && (
+        <PrintDesigner
+          key={`${currentFormName || 'unknown'}-${designerInstanceKey}`}
+          isPreview={false}
+          initialTemplateData={templateData}
+          onSave={handleSaveTemplate}
+        />
+      )}
+    </Spin>
     </Modal>
     </>
   );

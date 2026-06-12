@@ -901,6 +901,24 @@ export interface ErpWorkCentersS539Dcf81BRow {
 export type ErpWorkCentersS539Dcf81BInsert = Omit<ErpWorkCentersS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpWorkCentersS539Dcf81BUpdate = Partial<ErpWorkCentersS539Dcf81BInsert>;
 
+export interface SysFormsRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  table_name: string;
+  form_name: string;
+  description: string | null;
+  print_template_json: string | null;
+  form_config: Record<string, unknown> | null;
+  status: string | null;
+  sort_order: number | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export type SysFormsInsert = Omit<SysFormsRow, 'id' | 'corp_id' | 'emp_id' | 'created_at'>;
+export type SysFormsUpdate = Partial<SysFormsInsert>;
+
 export interface SysLogsRow {
   id: number;
   corp_id: string | null;

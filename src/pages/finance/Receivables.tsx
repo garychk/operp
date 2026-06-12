@@ -11,6 +11,7 @@ type Receivable = Tables['erp_receivables_s_539dcf81_b']['Row'];
 type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
+const tableName = 'erp_receivables_s_539dcf81_b';
 
 export function Receivables() {
   const [receivables, setReceivables] = useState<Receivable[]>([]);
@@ -253,6 +254,7 @@ export function Receivables() {
             保存
           </Button>
         </Space>}
+        historyTable={tableName}
       >
         <Card>
           <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
