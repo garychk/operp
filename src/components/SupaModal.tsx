@@ -6,6 +6,7 @@ import  PrintDesigner  from 'operp-print-designer';
 import 'operp-print-designer/dist/operp-print-designer.css';
 import { supabase } from '../utils/supabase';
 import type { SysFormsInsert } from '../types/database';
+import type { PrintDesignerDataSource } from 'operp-print-designer';
 
 interface HistoryLog {
   id: number;
@@ -63,6 +64,7 @@ export function SupaModal({
   const [isExpand, setIsExpand] = useState(false);
   const [openDesigner, setOpenDesigner] = useState(false);
   const [templateData, setTemplateData] = useState<any>();
+  const [printDataSource, setPrintDataSource] = useState<PrintDesignerDataSource>();
   const [templateLoading, setTemplateLoading] = useState(false);
   const [designerInstanceKey, setDesignerInstanceKey] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
@@ -109,7 +111,7 @@ export function SupaModal({
     form?.resetFields();
   };
 
-  const loadTemplate = async (formName: string, formData?: Record<string, any>, detailData?: any[]) => {
+  const loadTemplate = async (formName: string) => {
     const { data, error } = await supabase
       .from('sys_forms')
       .select('print_template_json')
@@ -128,48 +130,7 @@ export function SupaModal({
     }
 
     try {
-      const template = JSON.parse(data.print_template_json);
-      
-      // Build dataSources array based on provided data
-      const builtDataSources: any[] = [];
-      const now = Date.now();
-
-      // Add formData if provided and has values
-      if (formData && Object.keys(formData).length > 0) {
-        builtDataSources.push({
-          name: 'formData',
-          type: 'object',
-          data: JSON.stringify(formData),
-          createdAt: now,
-        });
-      }
-
-      // Add detailDatas if provided and has values
-      if (detailData && detailData.length > 0) {
-        builtDataSources.push({
-          name: 'detailDatas',
-          type: 'array',
-          data: JSON.stringify(detailData),
-          createdAt: now,
-        });
-      }
-
-      // Inject dataSources into template if it has dataSources property or create one
-      if (builtDataSources.length > 0) {
-        if (template.dataSources) {
-          // Merge with existing dataSources, avoiding duplicates by name
-          const existingNames = new Set(template.dataSources.map((ds: any) => ds.name));
-          builtDataSources.forEach((ds) => {
-            if (!existingNames.has(ds.name)) {
-              template.dataSources.push(ds);
-            }
-          });
-        } else {
-          template.dataSources = builtDataSources;
-        }
-      }
-
-      return template;
+      return JSON.parse(data.print_template_json);
     } catch (parseError) {
       console.error('Failed to parse print template:', parseError);
       message.error('打印模板数据格式不正确');
@@ -185,12 +146,13 @@ export function SupaModal({
 
     setOpenDesigner(true);
     setTemplateData(undefined);
+    setPrintDataSource({
+      data: form?.getFieldsValue() || {},
+      list: detailData || [],
+    });
     setTemplateLoading(true);
 
-    // Extract form data from form instance
-    const formData = form?.getFieldsValue();
-
-    const loadedTemplate = await loadTemplate(currentFormName, formData, detailData);
+    const loadedTemplate = await loadTemplate(currentFormName);
 
     setTemplateData(loadedTemplate);
     setDesignerInstanceKey((key) => key + 1);
@@ -200,6 +162,7 @@ export function SupaModal({
   const handleCloseDesigner = () => {
     setOpenDesigner(false);
     setTemplateData(undefined);
+    setPrintDataSource(undefined);
     setTemplateLoading(false);
   };
 
@@ -353,6 +316,7 @@ export function SupaModal({
           key={`${currentFormName || 'unknown'}-${designerInstanceKey}`}
           isPreview={false}
           initialTemplateData={templateData}
+          dataSource={printDataSource}
           onSave={handleSaveTemplate}
         />
       )}
