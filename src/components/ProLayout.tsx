@@ -33,24 +33,10 @@ import {
   PicLeftOutlined,
   PicCenterOutlined,
 } from '@ant-design/icons';
-import { supabase } from '../utils/supabase';
 import { logOperation } from '../utils/logger';
+import { useAuth } from '../contexts/AuthContext';
 import heroLogo from '../assets/favicon.svg';
 import defaultAvatar from '../assets/avatar.png';
-
-interface TabItem {
-  key: string;
-  label: string;
-  closable: boolean;
-  path: string;
-}
-
-interface UserInfo {
-  id: string;
-  email: string;
-  nick: string;
-  avatar: string;
-}
 
 interface TabItem {
   key: string;
@@ -154,11 +140,11 @@ const pathToNameMap: Record<string, string> = {
 export function ProLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [tabs, setTabs] = useState<TabItem[]>([
     { key: '/', label: '首页', closable: false, path: '/' },
   ]);
   const [activeTabKey, setActiveTabKey] = useState('/');
-  const [user, setUser] = useState<UserInfo | null>(null);
   const [dark, setDark] = useState(() => {
     const saved = localStorage.getItem('erp-dark-mode');
     return saved !== null ? JSON.parse(saved) : false;
@@ -177,42 +163,17 @@ export function ProLayout() {
   }, [ismix]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user) {
-        const userInfo = {
-          id: session.user.id,
-          email: session.user.email || '',
-          nick: session.user.user_metadata?.nick || session.user.email || '',
-          avatar: session.user.user_metadata?.avatar || '',
-        };
-        setUser(userInfo);
-        await logOperation({
-          operation: '用户登录',
-          method: 'LOGIN',
-          status: 'success',
-        });
-      } else if (event === 'SIGNED_OUT') {
-        setUser(null);
-      }
-    });
+    if (!user) return;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email || '',
-          nick: session.user.user_metadata?.nick || session.user.email || '',
-          avatar: session.user.user_metadata?.avatar || '',
-        });
-      }
+    logOperation({
+      operation: '用户登录',
+      method: 'LOGIN',
+      status: 'success',
     });
-
-    return () => subscription.unsubscribe();
-  }, []);
+  }, [user]);
 
   const handleLogout = async () => {
-    console.log('logout');
-    await supabase.auth.signOut();
+    await logout();
   };
 
   const addTab = useCallback((path: string) => {
@@ -283,10 +244,10 @@ export function ProLayout() {
           <Tag color="gold">V1.0</Tag>
         )}
         avatarProps={{
-          src: user?.avatar || defaultAvatar,
+          src: user?.profile.avatar_url || defaultAvatar,
           size: 'small',
-          // title: user?.nick || '',
-          render: (props, dom) => {
+          title: user?.profile.real_name || user?.profile.username || user?.auth.email || '',
+          render: (_props, dom) => {
             return (
               user ?
                 (<Dropdown
