@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabase';
+import { logOperation } from '../utils/logger';
 import type { SysRolesRow, SysUsersRow } from '../types/database';
 
 interface AuthContextType {
@@ -160,7 +161,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         return false;
       }
 
-      setUser(await loadAppUser(data.user));
+      const appUser = await loadAppUser(data.user);
+      setUser(appUser);
+      await logOperation({
+        operation: '用户登录',
+        method: 'LOGIN',
+        params: {
+          user_id: appUser.profile.id,
+          username: appUser.profile.username,
+        },
+        status: 'success',
+      });
       return true;
     } catch (err) {
       console.error('Login exception:', err);

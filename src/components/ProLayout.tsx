@@ -33,7 +33,6 @@ import {
   PicLeftOutlined,
   PicCenterOutlined,
 } from '@ant-design/icons';
-import { logOperation } from '../utils/logger';
 import { useAuth } from '../contexts/AuthContext';
 import heroLogo from '../assets/favicon.svg';
 import defaultAvatar from '../assets/avatar.png';
@@ -161,16 +160,6 @@ export function ProLayout() {
   useEffect(() => {
     localStorage.setItem('erp-layout-mix', JSON.stringify(ismix));
   }, [ismix]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    logOperation({
-      operation: '用户登录',
-      method: 'LOGIN',
-      status: 'success',
-    });
-  }, [user]);
 
   const handleLogout = async () => {
     await logout();

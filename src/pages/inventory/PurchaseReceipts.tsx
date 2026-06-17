@@ -5,6 +5,7 @@ import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
+import SupaModal from '../../components/SupaModal';
 
 type PurchaseReceipt = Tables['erp_purchase_receipts_s_539dcf81_b']['Row'];
 type PurchaseReceiptDetail = Tables['erp_purchase_receipt_details_s_539dcf81_b']['Row'];
@@ -643,7 +644,7 @@ export function PurchaseReceipts() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
+      <SupaModal
         title={editingReceipt ? '编辑采购入库单' : '新增采购入库单'}
         open={isModalOpen}
         onCancel={() => {
@@ -659,120 +660,105 @@ export function PurchaseReceipts() {
             保存
           </Button>
         </Space>}
-        width={600}
-      >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                label="入库单号"
-                name="receipt_no"
-                rules={[{ required: true, message: '请输入入库单号' }]}
-              >
-                <Input placeholder="请输入入库单号" disabled={!!editingReceipt} />
-              </Form.Item>
-              <Form.Item
-                label="关联采购订单"
-                name="order_id"
-              >
-                <Select 
-                  placeholder="请选择采购订单" 
-                  onChange={handleOrderChange}
-                  allowClear
+        width={1000}
+        height={600}
+        historyTable={"erp_purchase_receipts_s_539dcf81_b"}
+        historyRecordId={editingReceipt?.id}
+        form={form}
+        detailData={details}
+        detailExtra={
+         <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
+        }
+        formEle={
+          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  label="入库单号"
+                  name="receipt_no"
+                  rules={[{ required: true, message: '请输入入库单号' }]}
                 >
-                  {purchaseOrders.map((o) => (
-                    <Option key={o.id} value={o.id}>{o.order_no}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="供应商"
-                name="supplier_id"
-                rules={[{ required: true, message: '请选择供应商' }]}
-              >
-                <Select placeholder="请选择供应商">
-                  {suppliers.map((s) => (
-                    <Option key={s.id} value={s.id}>{s.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="仓库"
-                name="warehouse_id"
-                rules={[{ required: true, message: '请选择仓库' }]}
-              >
-                <Select placeholder="请选择仓库">
-                  {warehouses.map((w) => (
-                    <Option key={w.id} value={w.id}>{w.name}</Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item
-                label="入库日期"
-                name="receipt_date"
-                rules={[{ required: true, message: '请选择入库日期' }]}
-              >
-                <DatePicker />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item label="总金额" name="total_amount" initialValue={0}>
-                <InputNumber disabled style={{ width: '100%' }} />
-              </Form.Item>
-              <Form.Item label="备注" name="remark">
-                <TextArea rows={4} placeholder="请输入备注" />
-              </Form.Item>
-              <Form.Item label="状态" name="status" initialValue="draft">
-                <Select>
-                  <Option value="draft">草稿</Option>
-                  <Option value="pending">待审核</Option>
-                  <Option value="approved">已审核</Option>
-                  <Option value="cancelled">已取消</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>
-      </Modal>
-
-      <Modal
-        title={<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <LockOutlined />
-          {selectedReceipt?.receipt_no} - 采购入库单明细
-        </div>}
-        open={!!selectedReceipt}
-        onCancel={() => {
-          setSelectedReceipt(null);
-          setDetails([]);
-        }}
-        footer={null}
-        width={'80%'}
+                  <Input placeholder="请输入入库单号" disabled={!!editingReceipt} />
+                </Form.Item>
+                <Form.Item
+                  label="关联采购订单"
+                  name="order_id"
+                >
+                  <Select
+                    placeholder="请选择采购订单"
+                    onChange={handleOrderChange}
+                    allowClear
+                  >
+                    {purchaseOrders.map((o) => (
+                      <Option key={o.id} value={o.id}>{o.order_no}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="供应商"
+                  name="supplier_id"
+                  rules={[{ required: true, message: '请选择供应商' }]}
+                >
+                  <Select placeholder="请选择供应商">
+                    {suppliers.map((s) => (
+                      <Option key={s.id} value={s.id}>{s.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="仓库"
+                  name="warehouse_id"
+                  rules={[{ required: true, message: '请选择仓库' }]}
+                >
+                  <Select placeholder="请选择仓库">
+                    {warehouses.map((w) => (
+                      <Option key={w.id} value={w.id}>{w.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label="入库日期"
+                  name="receipt_date"
+                  rules={[{ required: true, message: '请选择入库日期' }]}
+                >
+                  <DatePicker />
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item label="总金额" name="total_amount" initialValue={0}>
+                  <InputNumber disabled style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item label="备注" name="remark">
+                  <TextArea rows={4} placeholder="请输入备注" />
+                </Form.Item>
+                <Form.Item label="状态" name="status" initialValue="draft">
+                  <Select>
+                    <Option value="draft">草稿</Option>
+                    <Option value="pending">待审核</Option>
+                    <Option value="approved">已审核</Option>
+                    <Option value="cancelled">已取消</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        }
+        tableEle={<Table
+          columns={detailColumns}
+          dataSource={details}
+          rowKey="id"
+          pagination={false}
+          summary={() => (
+            <Table.Summary.Row>
+              <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>合计</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={2} colSpan={3}></Table.Summary.Cell>
+            </Table.Summary.Row>
+          )}
+        />}
       >
-        {selectedReceipt && (
-          <Card extra={
-            <Space>
-              <Tag color="magenta">供应商: {getSupplierName(selectedReceipt.supplier_id)}</Tag>
-              <Tag color="blue">仓库: {getWarehouseName(selectedReceipt.warehouse_id)}</Tag>
-              <Tag color="lime">入库日期: {selectedReceipt.receipt_date}</Tag>
-              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
-            </Space>
-            }>
-            <Table
-              columns={detailColumns}
-              dataSource={details}
-              rowKey="id"
-              pagination={false}
-              summary={() => (
-                <Table.Summary.Row>
-                  <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>合计</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
-                  <Table.Summary.Cell index={2} colSpan={3}></Table.Summary.Cell>
-                </Table.Summary.Row>
-              )}
-            />
-          </Card>
-        )}
-      </Modal>
+       
+      </SupaModal>
 
       <Modal
         title={editingDetail ? '编辑采购入库明细' : '新增采购入库明细'}
