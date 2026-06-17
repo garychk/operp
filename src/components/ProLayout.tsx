@@ -279,9 +279,9 @@ export function ProLayout() {
           ismix ? (
             <PicLeftOutlined key="mix" onClick={() => setMix(false)} />
           ):(<PicCenterOutlined key="mix" onClick={() => setMix(true)} />),
-          <InfoCircleFilled key="info" />,
+         <InfoCircleFilled key="info" hidden={!ismix} />,
           <QuestionCircleFilled key="question" />,
-          <GithubFilled key="github" onClick={() => window.open('https://gitee.com/garychk/supabase-erp', '_blank')} />
+          <GithubFilled key="github" onClick={() => window.open('https://gitee.com/garychk/supabase-erp', '_blank')}  hidden={!ismix}/>
         ]}
         footerRender={() => (
           <div style={{ textAlign: 'center', padding: 12, color: '#999' }}>
