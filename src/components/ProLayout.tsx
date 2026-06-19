@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { ProLayout as AntProLayout, PageContainer, ProCard } from '@ant-design/pro-components';
 import { Tabs, Button, Dropdown, Tag, ConfigProvider, theme } from 'antd';
@@ -44,7 +44,14 @@ interface TabItem {
   path: string;
 }
 
-const menuData = [
+interface MenuRoute {
+  path: string;
+  name: string;
+  icon: React.ReactNode;
+  routes?: MenuRoute[];
+}
+
+const menuData: MenuRoute[] = [
   {
     path: '/',
     name: '首页',
@@ -161,6 +168,37 @@ export function ProLayout() {
     localStorage.setItem('erp-layout-mix', JSON.stringify(ismix));
   }, [ismix]);
 
+  const visibleMenuData = useMemo(() => {
+    if (!user || user.isSuperAdmin) {
+      return menuData;
+    }
+
+    const allowedPaths = new Set(user.menuPaths);
+
+    const filterRoutes = (routes: MenuRoute[]): MenuRoute[] => {
+      const result: MenuRoute[] = [];
+
+      routes.forEach((route) => {
+        const children = route.routes ? filterRoutes(route.routes) : undefined;
+        const visibleByPath = route.path === '/' || allowedPaths.has(route.path);
+        const visibleByChildren = Boolean(children?.length);
+
+        if (!visibleByPath && !visibleByChildren) {
+          return;
+        }
+
+        result.push({
+          ...route,
+          routes: children,
+        });
+      });
+
+      return result;
+    };
+
+    return filterRoutes(menuData);
+  }, [user]);
+
   const handleLogout = async () => {
     await logout();
   };
@@ -224,7 +262,7 @@ export function ProLayout() {
         splitMenus={false}
         title="Supabase ERP"
         logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
-        route={{ routes: menuData }}
+        route={{ routes: visibleMenuData }}
         location={{ pathname: location.pathname }}
         menuItemRender={(item, dom) => (
           <div onClick={() => navigate(item.path || '/')}>{dom}</div>

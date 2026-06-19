@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import type { Key } from 'react';
 import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, Popconfirm, message, Tag, Card, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -17,6 +18,7 @@ interface Menu {
   sort_order: number;
   status: string;
   created_at: string;
+  children?: Menu[];
 }
 
 const iconOptions = [
@@ -31,6 +33,7 @@ export function Menus() {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingMenu, setEditingMenu] = useState<Menu | null>(null);
+  const [expandedRowKeys, setExpandedRowKeys] = useState<Key[]>([]);
   const [form] = Form.useForm();
 
   const fetchMenus = async () => {
@@ -116,6 +119,52 @@ export function Menus() {
     return parent ? parent.menu_name : '未知';
   };
 
+  const menuTree = useMemo(() => {
+    const menuMap = new Map<number, Menu>();
+    const roots: Menu[] = [];
+
+    menus.forEach(menu => {
+      menuMap.set(menu.id, { ...menu, children: [] });
+    });
+
+    menus.forEach(menu => {
+      const node = menuMap.get(menu.id);
+      if (!node) return;
+
+      const parent = menu.parent_id ? menuMap.get(menu.parent_id) : null;
+      if (parent && parent.id !== node.id) {
+        parent.children = parent.children || [];
+        parent.children.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+
+    const removeEmptyChildren = (nodes: Menu[]): Menu[] =>
+      nodes.map(node => {
+        if (!node.children?.length) {
+          const { children, ...leaf } = node;
+          return leaf;
+        }
+
+        return {
+          ...node,
+          children: removeEmptyChildren(node.children),
+        };
+      });
+
+    return removeEmptyChildren(roots);
+  }, [menus]);
+
+  const defaultExpandedRowKeys = useMemo(
+    () => menus.filter(menu => menus.some(child => child.parent_id === menu.id)).map(menu => menu.id),
+    [menus],
+  );
+
+  useEffect(() => {
+    setExpandedRowKeys(defaultExpandedRowKeys);
+  }, [defaultExpandedRowKeys]);
+
   const columns: ColumnsType<Menu> = [
     {
       title: '菜单名称',
@@ -157,6 +206,7 @@ export function Menus() {
       title: '图标',
       dataIndex: 'icon',
       width: 120,
+      ellipsis: true,
     },
     {
       title: '排序',
@@ -196,9 +246,13 @@ export function Menus() {
 
       <Table
         columns={columns}
-        dataSource={menus}
+        dataSource={menuTree}
         loading={loading}
         rowKey="id"
+        expandable={{
+          expandedRowKeys,
+          onExpandedRowsChange: keys => setExpandedRowKeys([...keys]),
+        }}
         scroll={{ x: 1200 }}
       />
       <Modal

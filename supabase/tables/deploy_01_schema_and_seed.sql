@@ -1,3 +1,153 @@
+-- Supabase ERP consolidated deployment script
+-- Generated from smaller migration scripts for implementation convenience.
+-- Source files:
+--   supabase\tables\system_management_20240331.sql
+--   supabase\tables\001_erp_system_schema_a7x9m2p.sql
+--   supabase\tables\002_alter_sys_logs_params_jsonb.sql
+--   supabase\tables\003_create_sys_forms.sql
+--   supabase\tables\004_create_avatar_storage_bucket.sql
+
+
+-- ============================================================
+-- Begin: supabase\tables\system_management_20240331.sql
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.sys_users (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    real_name VARCHAR(100),
+    email VARCHAR(255),
+    phone VARCHAR(50),
+    avatar_url TEXT,
+    status CHAR(1) DEFAULT '1',
+    last_login_at TIMESTAMP WITH TIME ZONE,
+    is_deleted CHAR(1) DEFAULT 'n',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.sys_roles (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    role_code VARCHAR(100) NOT NULL UNIQUE,
+    role_name VARCHAR(100) NOT NULL,
+    description TEXT,
+    sort_order INTEGER DEFAULT 0,
+    status CHAR(1) DEFAULT '1',
+    is_deleted CHAR(1) DEFAULT 'n',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.sys_user_roles (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    user_id INTEGER NOT NULL REFERENCES public.sys_users(id) ON DELETE CASCADE,
+    role_id INTEGER NOT NULL REFERENCES public.sys_roles(id) ON DELETE CASCADE,
+    is_deleted CHAR(1) DEFAULT 'n',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(user_id, role_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.sys_menus (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    parent_id INTEGER DEFAULT 0,
+    menu_name VARCHAR(100) NOT NULL,
+    menu_code VARCHAR(100),
+    menu_type CHAR(1) DEFAULT 'M',
+    icon VARCHAR(100),
+    path VARCHAR(255),
+    component VARCHAR(255),
+    sort_order INTEGER DEFAULT 0,
+    status CHAR(1) DEFAULT '1',
+    is_deleted CHAR(1) DEFAULT 'n',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.sys_role_menus (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    role_id INTEGER NOT NULL REFERENCES public.sys_roles(id) ON DELETE CASCADE,
+    menu_id INTEGER NOT NULL REFERENCES public.sys_menus(id) ON DELETE CASCADE,
+    is_deleted CHAR(1) DEFAULT 'n',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(role_id, menu_id)
+);
+
+CREATE TABLE IF NOT EXISTS public.sys_logs (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    user_id INTEGER REFERENCES public.sys_users(id),
+    username VARCHAR(100),
+    operation VARCHAR(100) NOT NULL,
+    method VARCHAR(255),
+    params TEXT,
+    ip VARCHAR(50),
+    user_agent TEXT,
+    execute_time INTEGER,
+    status CHAR(1) DEFAULT '1',
+    error_msg TEXT,
+    is_deleted CHAR(1) DEFAULT 'n',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO public.sys_users (username, password_hash, real_name, email, phone, status) VALUES
+('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '系统管理员', 'admin@erp.com', '13800138000', '1'),
+('zhangsan', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '张三', 'zhangsan@erp.com', '13800138001', '1'),
+('lisi', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '李四', 'lisi@erp.com', '13800138002', '1');
+
+INSERT INTO public.sys_roles (role_code, role_name, description, sort_order, status) VALUES
+('super_admin', '超级管理员', '拥有所有权限', 1, '1'),
+('finance_manager', '财务经理', '财务管理权限', 2, '1'),
+('inventory_manager', '仓库管理员', '进销存管理权限', 3, '1'),
+('mrp_manager', '生产主管', 'MRP管理权限', 4, '1'),
+('operator', '普通操作员', '基本操作权限', 5, '1');
+
+INSERT INTO public.sys_user_roles (user_id, role_id) VALUES
+(1, 1),
+(2, 2),
+(2, 3),
+(3, 5);
+
+INSERT INTO public.sys_menus (parent_id, menu_name, menu_code, menu_type, icon, path, component, sort_order, status) VALUES
+(0, '系统管理', 'system', 'M', 'SettingOutlined', '/system', NULL, 100, '1'),
+(1, '用户管理', 'user', 'C', 'TeamOutlined', '/system/users', './pages/system/Users', 1, '1'),
+(1, '角色管理', 'role', 'C', 'SafetyOutlined', '/system/roles', './pages/system/Roles', 2, '1'),
+(1, '菜单管理', 'menu', 'C', 'MenuOutlined', '/system/menus', './pages/system/Menus', 3, '1'),
+(1, '系统日志', 'log', 'C', 'FileTextOutlined', '/system/logs', './pages/system/Logs', 4, '1');
+
+INSERT INTO public.sys_role_menus (role_id, menu_id) VALUES
+(1, 1),
+(1, 2),
+(1, 3),
+(1, 4),
+(1, 5);
+
+INSERT INTO public.sys_logs (user_id, username, operation, method, params, ip, status, created_at) VALUES
+(1, 'admin', '用户登录', 'POST /api/login', '{"username":"admin"}', '192.168.1.100', '1', NOW() - INTERVAL '1 hour'),
+(1, 'admin', '创建用户', 'POST /api/users', '{"username":"zhangsan"}', '192.168.1.100', '1', NOW() - INTERVAL '30 minutes'),
+(2, 'zhangsan', '用户登录', 'POST /api/login', '{"username":"zhangsan"}', '192.168.1.101', '1', NOW() - INTERVAL '20 minutes'),
+(2, 'zhangsan', '查询库存', 'GET /api/inventory', '{}', '192.168.1.101', '1', NOW() - INTERVAL '10 minutes');
+
+-- ============================================================
+-- End: supabase\tables\system_management_20240331.sql
+-- ============================================================
+
+-- ============================================================
+-- Begin: supabase\tables\001_erp_system_schema_a7x9m2p.sql
+-- ============================================================
 -- ERP 系统数据库表结构
 -- 包含财务管理、进销存管理、生产制造 MRP 三大核心模块
 
@@ -874,3 +1024,103 @@ CREATE TABLE IF NOT EXISTS public.erp_production_receipts_s_539dcf81_b (
     remark TEXT,
     status VARCHAR(20) DEFAULT 'draft'
 );
+
+-- ============================================================
+-- End: supabase\tables\001_erp_system_schema_a7x9m2p.sql
+-- ============================================================
+
+-- ============================================================
+-- Begin: supabase\tables\002_alter_sys_logs_params_jsonb.sql
+-- ============================================================
+-- Change sys_logs.params from text to jsonb for structured log filtering.
+ALTER TABLE public.sys_logs
+  ALTER COLUMN params TYPE jsonb
+  USING CASE
+    WHEN params IS NULL OR btrim(params) = '' THEN NULL
+    ELSE params::jsonb
+  END;
+
+CREATE INDEX IF NOT EXISTS idx_sys_logs_params_gin
+  ON public.sys_logs USING gin (params);
+
+
+alter table public.sys_users
+add column if not exists auth_id uuid unique references auth.users(id) on delete cascade;
+
+create index if not exists idx_sys_users_auth_id
+on public.sys_users(auth_id);
+
+-- ============================================================
+-- End: supabase\tables\002_alter_sys_logs_params_jsonb.sql
+-- ============================================================
+
+-- ============================================================
+-- Begin: supabase\tables\003_create_sys_forms.sql
+-- ============================================================
+-- Store per-business-form settings such as print templates and UI configuration.
+CREATE TABLE IF NOT EXISTS public.sys_forms (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    table_name VARCHAR(128) NOT NULL UNIQUE,
+    form_name VARCHAR(128) NOT NULL UNIQUE,
+    description TEXT,
+    print_template_json TEXT,
+    form_config JSONB DEFAULT '{}'::jsonb,
+    status CHAR(1) DEFAULT '1',
+    sort_order INTEGER DEFAULT 0,
+    is_deleted CHAR(1) DEFAULT 'n',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sys_forms_table_name
+  ON public.sys_forms(table_name);
+
+CREATE INDEX IF NOT EXISTS idx_sys_forms_form_name
+  ON public.sys_forms(form_name);
+
+CREATE INDEX IF NOT EXISTS idx_sys_forms_form_config_gin
+  ON public.sys_forms USING gin (form_config);
+
+-- ============================================================
+-- End: supabase\tables\003_create_sys_forms.sql
+-- ============================================================
+
+-- ============================================================
+-- Begin: supabase\tables\004_create_avatar_storage_bucket.sql
+-- ============================================================
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+    'avatars',
+    'avatars',
+    true,
+    2097152,
+    ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+ON CONFLICT (id) DO UPDATE SET
+    public = EXCLUDED.public,
+    file_size_limit = EXCLUDED.file_size_limit,
+    allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS "Public read avatars" ON storage.objects;
+CREATE POLICY "Public read avatars"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'avatars');
+
+DROP POLICY IF EXISTS "Authenticated users upload avatars" ON storage.objects;
+CREATE POLICY "Authenticated users upload avatars"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (bucket_id = 'avatars');
+
+DROP POLICY IF EXISTS "Authenticated users update avatars" ON storage.objects;
+CREATE POLICY "Authenticated users update avatars"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (bucket_id = 'avatars')
+WITH CHECK (bucket_id = 'avatars');
+
+-- ============================================================
+-- End: supabase\tables\004_create_avatar_storage_bucket.sql
+-- ============================================================

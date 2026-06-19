@@ -1,3 +1,12 @@
+-- Supabase ERP consolidated deployment script
+-- Generated from smaller migration scripts for implementation convenience.
+-- Source files:
+--   supabase\tables\011_apply_erp_tables_role_rls.sql
+
+
+-- ============================================================
+-- Begin: supabase\tables\011_apply_erp_tables_role_rls.sql
+-- ============================================================
 -- Apply data-driven role table permissions to ERP business tables only.
 -- This intentionally excludes sys_* tables to avoid locking the auth and
 -- permission bootstrap tables behind their own RLS checks.
@@ -39,3 +48,7 @@ BEGIN
     PERFORM public.install_role_table_rls(table_record.table_name);
   END LOOP;
 END $$;
+
+-- ============================================================
+-- End: supabase\tables\011_apply_erp_tables_role_rls.sql
+-- ============================================================

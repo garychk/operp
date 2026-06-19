@@ -1,3 +1,81 @@
+-- Supabase ERP consolidated deployment script
+-- Generated from smaller migration scripts for implementation convenience.
+-- Source files:
+--   supabase\tables\005_grant_system_management_permissions.sql
+--   supabase\tables\006_sys_roles_rls_policies.sql
+--   supabase\tables\007_create_role_table_permissions.sql
+
+
+-- ============================================================
+-- Begin: supabase\tables\005_grant_system_management_permissions.sql
+-- ============================================================
+-- Allow logged-in users to maintain system users, roles, menus, and permission links
+-- from the frontend system management pages.
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_user_roles TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.sys_user_roles_id_seq TO authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_users TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.sys_users_id_seq TO authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_roles TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.sys_roles_id_seq TO authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_menus TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.sys_menus_id_seq TO authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_role_menus TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.sys_role_menus_id_seq TO authenticated;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_logs TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.sys_logs_id_seq TO authenticated;
+
+-- ============================================================
+-- End: supabase\tables\005_grant_system_management_permissions.sql
+-- ============================================================
+
+-- ============================================================
+-- Begin: supabase\tables\006_sys_roles_rls_policies.sql
+-- ============================================================
+-- RLS policies for sys_roles.
+-- Keep role options readable for logged-in users while filtering soft-deleted rows.
+ALTER TABLE public.sys_roles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Authenticated users can read active roles" ON public.sys_roles;
+CREATE POLICY "Authenticated users can read active roles"
+ON public.sys_roles
+FOR SELECT
+TO authenticated
+USING (is_deleted = 'n');
+
+DROP POLICY IF EXISTS "Authenticated users can insert roles" ON public.sys_roles;
+CREATE POLICY "Authenticated users can insert roles"
+ON public.sys_roles
+FOR INSERT
+TO authenticated
+WITH CHECK (is_deleted = 'n');
+
+DROP POLICY IF EXISTS "Authenticated users can update roles" ON public.sys_roles;
+CREATE POLICY "Authenticated users can update roles"
+ON public.sys_roles
+FOR UPDATE
+TO authenticated
+USING (is_deleted = 'n')
+WITH CHECK (is_deleted = 'n');
+
+DROP POLICY IF EXISTS "Authenticated users can delete roles" ON public.sys_roles;
+CREATE POLICY "Authenticated users can delete roles"
+ON public.sys_roles
+FOR DELETE
+TO authenticated
+USING (is_deleted = 'n');
+
+-- ============================================================
+-- End: supabase\tables\006_sys_roles_rls_policies.sql
+-- ============================================================
+
+-- ============================================================
+-- Begin: supabase\tables\007_create_role_table_permissions.sql
+-- ============================================================
 -- Data-driven table permissions for role-based RLS.
 -- Frontend pages maintain rows in sys_role_table_permissions; table RLS policies
 -- can call has_table_permission(table_name, action_name) to enforce them.
@@ -221,3 +299,7 @@ FOR ALL
 TO authenticated
 USING (is_deleted = 'n')
 WITH CHECK (is_deleted = 'n');
+
+-- ============================================================
+-- End: supabase\tables\007_create_role_table_permissions.sql
+-- ============================================================

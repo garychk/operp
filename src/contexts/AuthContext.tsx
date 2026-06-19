@@ -21,6 +21,8 @@ export interface AppUser {
   auth: User;
   profile: SysUser;
   roles: Role[];
+  menuPaths: string[];
+  isSuperAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -41,6 +43,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
 
     let profile = existingProfile as SysUser | null;
+
+    if (!profile) {
+      const email = authUser.email ?? '';
+      if (email) {
+        const { data: emailProfile, error: emailProfileError } = await supabase
+          .from('sys_users')
+          .select('*')
+          .eq('email', email)
+          .eq('is_deleted', 'n')
+          .maybeSingle();
+
+        if (emailProfileError) {
+          throw emailProfileError;
+        }
+
+        if (emailProfile) {
+          const { data: linkedProfile, error: linkError } = await supabase
+            .from('sys_users')
+            .update({ auth_id: authUser.id })
+            .eq('id', emailProfile.id)
+            .select('*')
+            .single();
+
+          if (linkError) {
+            throw linkError;
+          }
+
+          profile = linkedProfile as SysUser;
+        }
+      }
+    }
 
     if (!profile) {
       const email = authUser.email ?? '';
@@ -101,10 +134,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       roles = (roleRows || []) as Role[];
     }
 
+    const { data: superAdminResult, error: superAdminError } = await supabase
+      .rpc('current_user_is_super_admin');
+
+    if (superAdminError) {
+      throw superAdminError;
+    }
+
+    const isSuperAdmin = Boolean(superAdminResult) || roles.some((role) => role.role_code === 'super_admin');
+    let menuPaths: string[] = [];
+
+    if (!isSuperAdmin && roleIds.length > 0) {
+      const { data: menus, error: menusError } = await supabase
+        .rpc('current_user_menu_paths');
+
+      if (menusError) {
+        throw menusError;
+      }
+
+      const rows = (menus || []) as Array<{ path: string | null }>;
+      menuPaths = Array.from(new Set(
+        rows
+          .map((menu) => menu.path)
+          .filter((path): path is string => typeof path === 'string' && path.length > 0),
+      ));
+    }
+
     return {
       auth: authUser,
       profile,
       roles,
+      menuPaths,
+      isSuperAdmin,
     };
   }, []);
 
