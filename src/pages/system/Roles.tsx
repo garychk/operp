@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Tag, TreeSelect, Card } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Tag, TreeSelect, Card, Tabs, Checkbox, Empty } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SafetyOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
@@ -21,15 +21,34 @@ interface Menu {
   parent_id: number;
 }
 
+interface SysTable {
+  id: number;
+  table_name: string;
+  table_label: string;
+  module_name: string;
+}
+
+interface TablePermission {
+  table_id: number;
+  can_select: boolean;
+  can_insert: boolean;
+  can_update: boolean;
+  can_delete: boolean;
+}
+
+type PermissionAction = 'can_select' | 'can_insert' | 'can_update' | 'can_delete';
+
 export function Roles() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
+  const [sysTables, setSysTables] = useState<SysTable[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [permissionModalVisible, setPermissionModalVisible] = useState(false);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
   const [currentRoleId, setCurrentRoleId] = useState<number | null>(null);
   const [selectedMenus, setSelectedMenus] = useState<number[]>([]);
+  const [tablePermissions, setTablePermissions] = useState<TablePermission[]>([]);
   const [form] = Form.useForm();
 
   const fetchRoles = async () => {
@@ -79,9 +98,42 @@ export function Roles() {
     }
   };
 
+  const fetchSysTables = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sys_tables')
+        .select('id, table_name, table_label, module_name')
+        .eq('is_deleted', 'n')
+        .eq('status', '1')
+        .order('module_name', { ascending: true })
+        .order('table_name', { ascending: true });
+
+      if (error) throw error;
+      setSysTables(data || []);
+    } catch (error) {
+      message.error('获取数据表列表失败');
+    }
+  };
+
+  const fetchRoleTablePermissions = async (roleId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('sys_role_table_permissions')
+        .select('table_id, can_select, can_insert, can_update, can_delete')
+        .eq('role_id', roleId)
+        .eq('is_deleted', 'n');
+
+      if (error) throw error;
+      setTablePermissions((data || []) as TablePermission[]);
+    } catch (error) {
+      message.error('获取表权限失败');
+    }
+  };
+
   useEffect(() => {
     fetchRoles();
     fetchMenus();
+    fetchSysTables();
   }, []);
 
   const handleAdd = () => {
@@ -114,7 +166,10 @@ export function Roles() {
 
   const handlePermission = async (record: Role) => {
     setCurrentRoleId(record.id);
-    await fetchRoleMenus(record.id);
+    await Promise.all([
+      fetchRoleMenus(record.id),
+      fetchRoleTablePermissions(record.id),
+    ]);
     setPermissionModalVisible(true);
   };
 
@@ -134,6 +189,33 @@ export function Roles() {
         const { error } = await supabase
           .from('sys_role_menus')
           .insert(inserts);
+        if (error) throw error;
+      }
+
+      const { error: deleteTablePermissionError } = await supabase
+        .from('sys_role_table_permissions')
+        .delete()
+        .eq('role_id', currentRoleId);
+
+      if (deleteTablePermissionError) throw deleteTablePermissionError;
+
+      const tablePermissionInserts = tablePermissions
+        .filter((permission) => (
+          permission.can_select ||
+          permission.can_insert ||
+          permission.can_update ||
+          permission.can_delete
+        ))
+        .map((permission) => ({
+          role_id: currentRoleId,
+          ...permission,
+        }));
+
+      if (tablePermissionInserts.length > 0) {
+        const { error } = await supabase
+          .from('sys_role_table_permissions')
+          .insert(tablePermissionInserts);
+
         if (error) throw error;
       }
       
@@ -185,6 +267,104 @@ export function Roles() {
     });
     return tree;
   };
+
+  const getTablePermission = (tableId: number) => (
+    tablePermissions.find((permission) => permission.table_id === tableId) || {
+      table_id: tableId,
+      can_select: false,
+      can_insert: false,
+      can_update: false,
+      can_delete: false,
+    }
+  );
+
+  const updateTablePermission = (tableId: number, action: PermissionAction, checked: boolean) => {
+    setTablePermissions((prev) => {
+      const current = prev.find((permission) => permission.table_id === tableId);
+      if (current) {
+        return prev.map((permission) => (
+          permission.table_id === tableId
+            ? { ...permission, [action]: checked }
+            : permission
+        ));
+      }
+
+      return [
+        ...prev,
+        {
+          table_id: tableId,
+          can_select: false,
+          can_insert: false,
+          can_update: false,
+          can_delete: false,
+          [action]: checked,
+        },
+      ];
+    });
+  };
+
+  const tablePermissionColumns: ColumnsType<SysTable> = [
+    {
+      title: '模块',
+      dataIndex: 'module_name',
+      width: 120,
+      render: (moduleName) => <Tag>{moduleName}</Tag>,
+    },
+    {
+      title: '数据表',
+      dataIndex: 'table_label',
+      render: (_, record) => (
+        <Space direction="vertical" size={0}>
+          <span>{record.table_label}</span>
+          <span style={{ color: '#999', fontSize: 12 }}>{record.table_name}</span>
+        </Space>
+      ),
+    },
+    {
+      title: '查询',
+      width: 70,
+      align: 'center',
+      render: (_, record) => (
+        <Checkbox
+          checked={getTablePermission(record.id).can_select}
+          onChange={(event) => updateTablePermission(record.id, 'can_select', event.target.checked)}
+        />
+      ),
+    },
+    {
+      title: '新增',
+      width: 70,
+      align: 'center',
+      render: (_, record) => (
+        <Checkbox
+          checked={getTablePermission(record.id).can_insert}
+          onChange={(event) => updateTablePermission(record.id, 'can_insert', event.target.checked)}
+        />
+      ),
+    },
+    {
+      title: '修改',
+      width: 70,
+      align: 'center',
+      render: (_, record) => (
+        <Checkbox
+          checked={getTablePermission(record.id).can_update}
+          onChange={(event) => updateTablePermission(record.id, 'can_update', event.target.checked)}
+        />
+      ),
+    },
+    {
+      title: '删除',
+      width: 70,
+      align: 'center',
+      render: (_, record) => (
+        <Checkbox
+          checked={getTablePermission(record.id).can_delete}
+          onChange={(event) => updateTablePermission(record.id, 'can_delete', event.target.checked)}
+        />
+      ),
+    },
+  ];
 
   const columns: ColumnsType<Role> = [
     {
@@ -286,16 +466,47 @@ export function Roles() {
         open={permissionModalVisible}
         onCancel={() => setPermissionModalVisible(false)}
         onOk={handleSavePermission}
-        width={500}
+        width={820}
       >
-        <TreeSelect
-          treeData={buildMenuTree(menus)}
-          value={selectedMenus}
-          onChange={setSelectedMenus}
-          treeCheckable
-          treeDefaultExpandAll
-          style={{ width: '100%' }}
-          placeholder="请选择菜单权限"
+        <Tabs
+          items={[
+            {
+              key: 'menus',
+              label: '菜单权限',
+              children: (
+                <TreeSelect
+                  treeData={buildMenuTree(menus)}
+                  value={selectedMenus}
+                  onChange={setSelectedMenus}
+                  treeCheckable
+                  treeDefaultExpandAll
+                  style={{ width: '100%' }}
+                  placeholder="请选择菜单权限"
+                />
+              ),
+            },
+            {
+              key: 'tables',
+              label: '表权限',
+              children: (
+                <Table
+                  columns={tablePermissionColumns}
+                  dataSource={sysTables}
+                  rowKey="id"
+                  pagination={{ pageSize: 8 }}
+                  size="small"
+                  scroll={{ y: 360 }}
+                  locale={{
+                    emptyText: (
+                      <Empty
+                        description="暂无可配置表，请先执行 007_create_role_table_permissions.sql 初始化 sys_tables"
+                      />
+                    ),
+                  }}
+                />
+              ),
+            },
+          ]}
         />
       </Modal>
     </Card>

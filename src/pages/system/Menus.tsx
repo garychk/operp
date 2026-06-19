@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, Popconfirm, message, Tag, Card } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, Popconfirm, message, Tag, Card, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
@@ -41,7 +41,7 @@ export function Menus() {
         .select('*')
         .eq('is_deleted', 'n')
         .order('sort_order', { ascending: true });
-      
+
       if (error) throw error;
       setMenus(data || []);
     } catch (error) {
@@ -192,8 +192,8 @@ export function Menus() {
   ];
 
   return (
-    <Card variant="borderless" title="菜单管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增菜单</Button>}>      
-      
+    <Card variant="borderless" title="菜单管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增菜单</Button>}>
+
       <Table
         columns={columns}
         dataSource={menus}
@@ -209,48 +209,57 @@ export function Menus() {
         width={600}
       >
         <Form form={form} layout="vertical" onFinish={handleSave}>
-          <Form.Item name="parent_id" label="上级菜单" initialValue={0}>
-            <Select>
-              <Select.Option value={0}>根菜单</Select.Option>
-              {menus.filter(m => m.menu_type === 'M').map(m => (
-                <Select.Option key={m.id} value={m.id}>{m.menu_name}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="menu_name" label="菜单名称" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="menu_code" label="菜单编码" rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="menu_type" label="菜单类型" initialValue="M">
-            <Select>
-              <Select.Option value="M">目录</Select.Option>
-              <Select.Option value="C">菜单</Select.Option>
-            </Select>
-          </Form.Item>
-          <Form.Item name="icon" label="图标">
-            <Select placeholder="请选择图标">
-              {iconOptions.map(icon => (
-                <Select.Option key={icon} value={icon}>{icon}</Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item name="path" label="路由路径">
-            <Input placeholder="如: /system/users" />
-          </Form.Item>
-          <Form.Item name="component" label="组件路径">
-            <Input placeholder="如: ./pages/system/Users" />
-          </Form.Item>
-          <Form.Item name="sort_order" label="排序" initialValue={0}>
-            <InputNumber min={0} />
-          </Form.Item>
-          <Form.Item name="status" label="状态" initialValue="1">
-            <Select>
-              <Select.Option value="1">启用</Select.Option>
-              <Select.Option value="0">禁用</Select.Option>
-            </Select>
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="parent_id" label="上级菜单" initialValue={0}>
+                <Select>
+                  <Select.Option value={0}>根菜单</Select.Option>
+                  {menus.filter(m => m.menu_type === 'M').map(m => (
+                    <Select.Option key={m.id} value={m.id}>{m.menu_name}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item name="menu_name" label="菜单名称" rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="menu_code" label="菜单编码" rules={[{ required: true }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="menu_type" label="菜单类型" initialValue="M">
+                <Select>
+                  <Select.Option value="M">目录</Select.Option>
+                  <Select.Option value="C">菜单</Select.Option>
+                </Select>
+              </Form.Item>
+              <Form.Item name="status" label="状态" initialValue="1">
+                <Select>
+                  <Select.Option value="1">启用</Select.Option>
+                  <Select.Option value="0">禁用</Select.Option>
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="icon" label="图标">
+                <Select placeholder="请选择图标">
+                  {iconOptions.map(icon => (
+                    <Select.Option key={icon} value={icon}>{icon}</Select.Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item name="path" label="路由路径">
+                <Input placeholder="如: /system/users" />
+              </Form.Item>
+              <Form.Item name="component" label="组件路径">
+                <Input placeholder="如: ./pages/system/Users" />
+              </Form.Item>
+              <Form.Item name="sort_order" label="排序" initialValue={0}>
+                <InputNumber min={0} />
+              </Form.Item>
+              
+            </Col>
+          </Row>
+
+
         </Form>
       </Modal>
     </Card>

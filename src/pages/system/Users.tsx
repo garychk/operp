@@ -16,6 +16,15 @@ interface User {
   status: string;
   last_login_at: string;
   created_at: string;
+  roles?: Role[];
+  role_ids?: number[];
+}
+
+interface Role {
+  id: number;
+  role_code: string;
+  role_name: string;
+  status: string;
 }
 
 interface AvatarUploadRequest {
@@ -28,6 +37,7 @@ const AVATAR_BUCKET = 'avatars';
 
 export function Users() {
   const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -105,14 +115,46 @@ export function Users() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      const { data: userRows, error } = await supabase
         .from('sys_users')
         .select('*')
         .eq('is_deleted', 'n')
         .order('created_at', { ascending: false });
       
       if (error) throw error;
-      setUsers(data || []);
+
+      const users = userRows || [];
+      const userIds = users.map((user) => user.id);
+      let userRoleMap = new Map<number, Role[]>();
+
+      if (userIds.length > 0) {
+        const { data: userRoleRows, error: userRolesError } = await supabase
+          .from('sys_user_roles')
+          .select('user_id, role_id, sys_roles(id, role_code, role_name, status)')
+          .in('user_id', userIds)
+          .eq('is_deleted', 'n');
+
+        if (userRolesError) throw userRolesError;
+
+        userRoleMap = (userRoleRows || []).reduce((map, row: any) => {
+          const role = Array.isArray(row.sys_roles) ? row.sys_roles[0] : row.sys_roles;
+          if (role) {
+            const currentRoles = map.get(row.user_id) || [];
+            currentRoles.push(role);
+            map.set(row.user_id, currentRoles);
+          }
+          return map;
+        }, new Map<number, Role[]>());
+      }
+
+      setUsers(users.map((user) => {
+        const userRoles = userRoleMap.get(user.id) || [];
+        return {
+          ...user,
+          roles: userRoles,
+          role_ids: userRoles.map((role) => role.id),
+        };
+      }));
     } catch (error) {
       message.error('获取用户列表失败');
     } finally {
@@ -120,8 +162,25 @@ export function Users() {
     }
   };
 
+  const fetchRoles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sys_roles')
+        .select('id, role_code, role_name, status')
+        .eq('is_deleted', 'n')
+        .eq('status', '1')
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      setRoles(data || []);
+    } catch (error) {
+      message.error('获取角色列表失败');
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
+    fetchRoles();
   }, []);
 
   const handleAdd = () => {
@@ -154,11 +213,14 @@ export function Users() {
 
   const handleSave = async (values: any) => {
     try {
+      const { role_ids = [], ...userValues } = values;
+      let savedUserId = editingUser?.id;
+
       if (editingUser) {
         await logWithTiming('更新用户', 'UPDATE', async () => {
           const { error } = await supabase
             .from('sys_users')
-            .update(values)
+            .update(userValues)
             .eq('id', editingUser.id);
           if (error) throw error;
         });
@@ -175,17 +237,44 @@ export function Users() {
         }
 
         await logWithTiming('创建用户', 'INSERT', async () => {
-          const { error } = await supabase
+          const { data: insertedUser, error } = await supabase
             .from('sys_users')
             .insert([{ 
-              ...values, 
+              ...userValues, 
               auth_id: signUpData.user?.id,
               password_hash: '$2a$10$using_supabase_auth' 
-            }]);
+            }])
+            .select('id')
+            .single();
           if (error) throw error;
+          savedUserId = insertedUser.id;
         });
         message.success('创建成功！默认密码: admin123');
       }
+
+      if (savedUserId) {
+        const selectedRoleIds = Array.isArray(role_ids) ? role_ids : [];
+        const { error: deleteRoleError } = await supabase
+          .from('sys_user_roles')
+          .delete()
+          .eq('user_id', savedUserId);
+
+        if (deleteRoleError) throw deleteRoleError;
+
+        const userRoleRows = selectedRoleIds.map((roleId: number) => ({
+          user_id: savedUserId,
+          role_id: roleId,
+        }));
+
+        if (userRoleRows.length > 0) {
+          const { error: insertRoleError } = await supabase
+            .from('sys_user_roles')
+            .insert(userRoleRows);
+
+          if (insertRoleError) throw insertRoleError;
+        }
+      }
+
       setModalVisible(false);
       fetchUsers();
     } catch (error) {
@@ -204,6 +293,7 @@ export function Users() {
       title: '用户名',
       dataIndex: 'username',
       width: 120,
+      ellipsis: true,
     },
     {
       title: '真实姓名',
@@ -219,6 +309,18 @@ export function Users() {
       title: '手机号',
       dataIndex: 'phone',
       width: 120,
+    },
+    {
+      title: '角色',
+      dataIndex: 'roles',
+      width: 220,
+      render: (userRoles: Role[] = []) => (
+        <Space size={[0, 4]} wrap>
+          {userRoles.length > 0 ? userRoles.map((role) => (
+            <Tag key={role.id} color="blue">{role.role_name}</Tag>
+          )) : '-'}
+        </Space>
+      ),
     },
     {
       title: '状态',
@@ -291,6 +393,17 @@ export function Users() {
               </Form.Item>
               <Form.Item name="phone" label="手机号" rules={[{ required: true }]}>
                 <Input />
+              </Form.Item>
+              <Form.Item name="role_ids" label="角色">
+                <Select
+                  mode="multiple"
+                  allowClear
+                  placeholder="请选择角色"
+                  options={roles.map((role) => ({
+                    label: role.role_name,
+                    value: role.id,
+                  }))}
+                />
               </Form.Item>
               <Form.Item name="status" label="状态" initialValue="1">
                 <Select>
