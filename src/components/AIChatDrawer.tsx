@@ -11,6 +11,7 @@ import { Bubble, Prompts, Sender, Welcome, XProvider } from '@ant-design/x';
 import { Button, Drawer, Flex, Input, Modal, Select, Space, Typography, message } from 'antd';
 import type { BubbleListRef } from '@ant-design/x/es/bubble';
 import { buildERPAnalysisContext } from '../utils/aiAnalysisTools';
+import { handleCreateSkill, type CreateFlowState } from '../utils/aiCreateTools';
 import './AIChatDrawer.css';
 
 interface AIChatDrawerProps {
@@ -79,6 +80,12 @@ const quickPrompts = [
     icon: <SendOutlined />,
     label: '库存排查',
     description: '如何排查库存数量和采购入库不一致',
+  },
+  {
+    key: 'business',
+    icon: <SendOutlined />,
+    label: '新增业务',
+    description: '帮我新增一个销售订单、采购订单、客户、供应商、物料等',
   },
 ];
 
@@ -205,6 +212,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [pendingCreate, setPendingCreate] = useState<CreateFlowState | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
   const [providers, setProviders] = useState<AIProviderConfig[]>(loadProviders);
   const [activeProviderId, setActiveProviderId] = useState(
@@ -282,6 +290,23 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     window.setTimeout(() => listRef.current?.scrollTo({ top: 'bottom' }), 0);
 
     try {
+      const createResult = await handleCreateSkill(prompt, pendingCreate);
+      if (createResult.status !== 'ignored') {
+        setPendingCreate(createResult.pending || null);
+        setMessages((prev) =>
+          prev.map((item) =>
+            item.id === assistantMessage.id
+              ? {
+                  ...item,
+                  content: createResult.reply || '已处理创建指令。',
+                  status: createResult.status === 'error' ? 'error' : 'success',
+                }
+              : item,
+          ),
+        );
+        return;
+      }
+
       const analysisContext = await buildERPAnalysisContext(prompt);
       if (analysisContext.domains.length) {
         message.info('已读取 ERP ' + analysisContext.domains.join(' / ') + ' 数据摘要');
@@ -369,7 +394,14 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
               />
               <Space size={4}>
                 {messages.length > 0 && (
-                  <Button type="text" size="small" onClick={() => setMessages([])}>
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={() => {
+                      setMessages([]);
+                      setPendingCreate(null);
+                    }}
+                  >
                     清空
                   </Button>
                 )}
