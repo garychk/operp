@@ -28,12 +28,13 @@ import {
   SunFilled,
   MoonOutlined,
   InfoCircleFilled,
-  QuestionCircleFilled,
   GithubFilled,
   PicLeftOutlined,
   PicCenterOutlined,
+  OpenAIOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
+import { AIChatDrawer } from './AIChatDrawer';
 import heroLogo from '../assets/favicon.svg';
 import defaultAvatar from '../assets/avatar.png';
 
@@ -159,6 +160,7 @@ export function ProLayout() {
     const saved = localStorage.getItem('erp-layout-mix');
     return saved !== null ? JSON.parse(saved) : true;
   });
+  const [aiChatOpen, setAiChatOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('erp-dark-mode', JSON.stringify(dark));
@@ -318,7 +320,11 @@ export function ProLayout() {
             <PicLeftOutlined key="mix" onClick={() => setMix(false)} />
           ):(<PicCenterOutlined key="mix" onClick={() => setMix(true)} />),
          <InfoCircleFilled key="info" hidden={!ismix} />,
-          <QuestionCircleFilled key="question" />,
+          <OpenAIOutlined
+            key="openai"
+            className={`ai-chat-action${aiChatOpen ? ' ai-chat-action-active' : ''}`}
+            onClick={() => setAiChatOpen(true)}
+          />,
           <GithubFilled key="github" onClick={() => window.open('https://gitee.com/garychk/supabase-erp', '_blank')}  hidden={!ismix}/>
         ]}
         footerRender={() => (
@@ -344,6 +350,7 @@ export function ProLayout() {
             <Outlet />
           </ProCard>
         </PageContainer>
+        <AIChatDrawer open={aiChatOpen} onClose={() => setAiChatOpen(false)} />
       </AntProLayout>
     </ConfigProvider>
   );
