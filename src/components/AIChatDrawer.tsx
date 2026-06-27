@@ -10,6 +10,7 @@ import {
 import { Bubble, Prompts, Sender, Welcome, XProvider } from '@ant-design/x';
 import { Button, Drawer, Flex, Input, Modal, Select, Space, Typography, message } from 'antd';
 import type { BubbleListRef } from '@ant-design/x/es/bubble';
+import { buildERPAnalysisContext } from '../utils/aiAnalysisTools';
 import './AIChatDrawer.css';
 
 interface AIChatDrawerProps {
@@ -281,7 +282,11 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     window.setTimeout(() => listRef.current?.scrollTo({ top: 'bottom' }), 0);
 
     try {
-      const reply = await requestAIReply(prompt, activeProvider);
+      const analysisContext = await buildERPAnalysisContext(prompt);
+      if (analysisContext.domains.length) {
+        message.info('已读取 ERP ' + analysisContext.domains.join(' / ') + ' 数据摘要');
+      }
+      const reply = await requestAIReply(analysisContext.prompt, activeProvider);
       setMessages((prev) =>
         prev.map((item) =>
           item.id === assistantMessage.id
