@@ -341,6 +341,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                 <Prompts
                   title="试试这些问题"
                   items={quickPrompts}
+                  vertical={true}
                   onItemClick={(info: { data: { description?: unknown } }) =>
                     submitMessage(String(info.data.description || ''))
                   }
@@ -378,6 +379,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             <Sender
               value={inputValue}
               loading={loading}
+              className='ai-chat-sender'
               onChange={setInputValue}
               onSubmit={() => submitMessage(inputValue)}
               placeholder={`使用 ${activeProvider.name} 提问`}

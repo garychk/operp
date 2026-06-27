@@ -43,6 +43,7 @@
 .ai-chat-provider-select {
   min-width: 220px;
   max-width: 300px;
+  border: none;
 }
 
 .ai-provider-card {
@@ -62,4 +63,7 @@
 
 .ai-provider-card-header .ant-input {
   flex: 1;
+}
+.ai-chat-sender textarea {
+  border: none !important;
 }
