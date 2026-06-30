@@ -175,6 +175,10 @@ export function ProLayout() {
       return menuData;
     }
 
+    if (user.menuPaths.length === 0) {
+      return menuData;
+    }
+
     const allowedPaths = new Set(user.menuPaths);
 
     const filterRoutes = (routes: MenuRoute[]): MenuRoute[] => {

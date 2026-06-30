@@ -254,22 +254,53 @@ export function Users() {
 
       if (savedUserId) {
         const selectedRoleIds = Array.isArray(role_ids) ? role_ids : [];
-        const { error: deleteRoleError } = await supabase
+        const selectedRoleIdSet = new Set<number>(selectedRoleIds);
+
+        const { data: existingRoleRows, error: fetchRoleError } = await supabase
           .from('sys_user_roles')
-          .delete()
+          .select('id, role_id, is_deleted')
           .eq('user_id', savedUserId);
 
-        if (deleteRoleError) throw deleteRoleError;
+        if (fetchRoleError) throw fetchRoleError;
 
-        const userRoleRows = selectedRoleIds.map((roleId: number) => ({
-          user_id: savedUserId,
-          role_id: roleId,
-        }));
+        const existingRoles = existingRoleRows || [];
+        const existingRoleIdSet = new Set(existingRoles.map((row) => row.role_id));
+        const rolesToDisable = existingRoles
+          .filter((row) => row.is_deleted === 'n' && !selectedRoleIdSet.has(row.role_id))
+          .map((row) => row.id);
+        const rolesToRestore = existingRoles
+          .filter((row) => row.is_deleted !== 'n' && selectedRoleIdSet.has(row.role_id))
+          .map((row) => row.id);
+        const rolesToInsert = selectedRoleIds
+          .filter((roleId: number) => !existingRoleIdSet.has(roleId))
+          .map((roleId: number) => ({
+            user_id: savedUserId,
+            role_id: roleId,
+            is_deleted: 'n',
+          }));
 
-        if (userRoleRows.length > 0) {
+        if (rolesToDisable.length > 0) {
+          const { error: disableRoleError } = await supabase
+            .from('sys_user_roles')
+            .delete()
+            .in('id', rolesToDisable);
+
+          if (disableRoleError) throw disableRoleError;
+        }
+
+        if (rolesToRestore.length > 0) {
+          const { error: restoreRoleError } = await supabase
+            .from('sys_user_roles')
+            .update({ is_deleted: 'n' })
+            .in('id', rolesToRestore);
+
+          if (restoreRoleError) throw restoreRoleError;
+        }
+
+        if (rolesToInsert.length > 0) {
           const { error: insertRoleError } = await supabase
             .from('sys_user_roles')
-            .insert(userRoleRows);
+            .insert(rolesToInsert);
 
           if (insertRoleError) throw insertRoleError;
         }
