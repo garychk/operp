@@ -123,18 +123,10 @@ const loadProviders = () => {
 };
 
 const createRequestBody = (prompt: string, provider: AIProviderConfig) => {
-  if (provider.apiType === 'ollama') {
-    return {
-      model: provider.model,
-      messages: [{ role: 'user', content: prompt }],
-      stream: false,
-    };
-  }
-
   return {
-    message: prompt,
     model: provider.model,
-    provider: provider.name,
+    messages: [{ role: 'user', content: prompt }],
+    stream: false,
   };
 };
 
@@ -171,7 +163,13 @@ const stringifyReply = (value: unknown): string => {
 
 const getReplyContent = (data: unknown) => {
   const record = data as Record<string, unknown>;
+  const choices = Array.isArray(record.choices) ? (record.choices as Record<string, unknown>[]) : [];
+  const firstChoice = choices[0];
+
   return (
+    stringifyReply(firstChoice?.message) ||
+    stringifyReply(firstChoice?.delta) ||
+    stringifyReply(firstChoice?.text) ||
     stringifyReply(record.reply) ||
     stringifyReply(record.content) ||
     stringifyReply(record.message) ||
@@ -201,7 +199,8 @@ async function requestAIReply(prompt: string, provider: AIProviderConfig) {
   });
 
   if (!response.ok) {
-    throw new Error(`AI 服务请求失败：${response.status}`);
+    const errorText = await response.text();
+    throw new Error(`AI 服务请求失败：${response.status}${errorText ? `，${errorText}` : ''}`);
   }
 
   const data = (await response.json()) as unknown;
@@ -434,7 +433,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       >
         <Flex vertical gap={12}>
           <Typography.Text type="secondary">
-            Ollama 可直接选择接口类型为 Ollama，接口地址填写 http://localhost:11434/api/chat。
+            DeepSeek/OpenAI 兼容接口请选择通用代理，接口地址填写 chat completions 地址；Ollama 选择 Ollama，接口地址填写 http://localhost:11434/api/chat。
           </Typography.Text>
           {providers.map((provider) => (
             <div className="ai-provider-card" key={provider.id}>
@@ -473,8 +472,8 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
               />
             </div>
           ))}
-          <Button icon={<PlusOutlined />} onClick={addProvider}>
-            新增 Ollama 配置
+          <Button icon={<PlusOutlined />} onClick={addProvider} type="primary">
+            新增大模型
           </Button>
         </Flex>
       </Modal>
