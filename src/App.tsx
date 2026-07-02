@@ -4,10 +4,6 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { ProLayout } from './components/ProLayout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
-import { FinanceModule } from './pages/finance/FinanceModule';
-import { InventoryModule } from './pages/inventory/InventoryModule';
-import { MrpModule } from './pages/mrp/MrpModule';
-import { SystemModule } from './pages/system/SystemModule';
 import { AccountSubjects } from './pages/finance/AccountSubjects';
 import { Vouchers } from './pages/finance/Vouchers';
 import { Receivables } from './pages/finance/Receivables';
@@ -111,3 +107,4 @@ function App() {
 }
 
 export default App;
+

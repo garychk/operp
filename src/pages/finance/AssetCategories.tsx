@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber } from 'antd';
+import { Button, Input, Table, Modal, Form, Select, Space, Card, message, InputNumber } from 'antd';
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
@@ -250,3 +250,4 @@ export function AssetCategories() {
     </Card>
   );
 }
+

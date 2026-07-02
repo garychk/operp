@@ -12,6 +12,8 @@ import { Button, Drawer, Flex, Input, Modal, Select, Space, Typography, message 
 import type { BubbleListRef } from '@ant-design/x/es/bubble';
 import { buildERPAnalysisContext } from '../utils/aiAnalysisTools';
 import { handleCreateSkill, type CreateFlowState } from '../utils/aiCreateTools';
+import { handleBusinessActionSkill } from '../utils/aiBusinessActionTools';
+import { useAuth } from '../contexts/AuthContext';
 import './AIChatDrawer.css';
 
 interface AIChatDrawerProps {
@@ -218,6 +220,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     () => localStorage.getItem(ACTIVE_STORAGE_KEY) || providers[0]?.id || defaultProviders[0].id,
   );
   const listRef = useRef<BubbleListRef>(null);
+  const { user } = useAuth();
 
   const activeProvider = useMemo(
     () => providers.find((item) => item.id === activeProviderId) || providers[0] || defaultProviders[0],
@@ -289,6 +292,22 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     window.setTimeout(() => listRef.current?.scrollTo({ top: 'bottom' }), 0);
 
     try {
+      const businessActionResult = await handleBusinessActionSkill(prompt, { id: user?.profile.id, username: user?.profile.username });
+      if (businessActionResult.status !== 'ignored') {
+        setMessages((prev) =>
+          prev.map((item) =>
+            item.id === assistantMessage.id
+              ? {
+                  ...item,
+                  content: businessActionResult.reply || '已处理业务动作。',
+                  status: businessActionResult.status === 'error' ? 'error' : 'success',
+                }
+              : item,
+          ),
+        );
+        return;
+      }
+
       const createResult = await handleCreateSkill(prompt, pendingCreate);
       if (createResult.status !== 'ignored') {
         setPendingCreate(createResult.pending || null);
@@ -480,3 +499,4 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     </Drawer>
   );
 }
+

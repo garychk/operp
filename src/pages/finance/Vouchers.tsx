@@ -5,6 +5,8 @@ import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SupaModal } from '../../components/SupaModal';
 import { logWithTiming } from '../../utils/logger';
+import { runBusinessAction } from '../../utils/businessEngine';
+import { useAuth } from '../../contexts/AuthContext';
 import dayjs from 'dayjs';
 
 type Voucher = Tables['erp_vouchers_s_539dcf81_b']['Row'];
@@ -30,6 +32,7 @@ export function Vouchers() {
   const [isDebit, setIsDebit] = useState(true);
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchVouchers();
@@ -203,6 +206,41 @@ export function Vouchers() {
     setIsModalOpen(true);
   };
 
+  const businessUser = { id: user?.profile.id, username: user?.profile.username };
+
+  const handlePost = (record: Voucher) => {
+    Modal.confirm({
+      title: '确认过账',
+      content: '过账前会校验凭证明细借贷是否平衡，确定继续吗？',
+      onOk: async () => {
+        try {
+          await runBusinessAction({ action: 'post', documentType: 'voucher', documentId: record.id, user: businessUser });
+          message.success('过账成功');
+          fetchVouchers();
+        } catch (error: any) {
+          console.error('Error posting voucher:', error);
+          message.error(error?.message || '过账失败');
+        }
+      },
+    });
+  };
+
+  const handleReversePost = (record: Voucher) => {
+    Modal.confirm({
+      title: '确认反过账',
+      content: '反过账后凭证将恢复为草稿，确定继续吗？',
+      onOk: async () => {
+        try {
+          await runBusinessAction({ action: 'reverse_post', documentType: 'voucher', documentId: record.id, user: businessUser });
+          message.success('反过账成功');
+          fetchVouchers();
+        } catch (error: any) {
+          console.error('Error reversing voucher:', error);
+          message.error(error?.message || '反过账失败');
+        }
+      },
+    });
+  };
   const handleDelete = async (id: number) => {
     Modal.confirm({
       title: '确认删除',
@@ -360,10 +398,19 @@ export function Vouchers() {
       key: 'action',
       render: (_: any, record: Voucher) => (
         <Space size="middle">
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          {record.status === 'posted' ? (
+            <Button type="text" onClick={() => handleReversePost(record)}>
+              反过账
+            </Button>
+          ) : (
+            <Button type="text" onClick={() => handlePost(record)}>
+              过账
+            </Button>
+          )}
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.status === 'posted'}>
             编辑
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} disabled={record.status === 'posted'}>
             删除
           </Button>
         </Space>
@@ -603,3 +650,7 @@ export function Vouchers() {
     </Card>
   );
 }
+
+
+
+

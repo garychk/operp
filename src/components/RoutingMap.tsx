@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Graph } from "@antv/x6";
-import { Spin, Card } from "antd";
+import { Spin } from "antd";
 
 interface RoutingMapProps {
   details: any[];
@@ -389,3 +389,5 @@ ${data.isInspection ? "需要检验⚠️ " : ""}`;
     </>
   );
 }
+
+

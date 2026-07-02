@@ -3,6 +3,8 @@ import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, I
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import { runBusinessAction } from '../../utils/businessEngine';
+import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import SupaModal from '../../components/SupaModal';
@@ -38,6 +40,7 @@ export function SalesDeliveries() {
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
   const [, setSelectedOrderId] = useState<number | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     fetchDeliveries();
@@ -305,6 +308,22 @@ export function SalesDeliveries() {
     }
   };
 
+  const businessUser = { id: user?.profile.id, username: user?.profile.username };
+
+  const runDeliveryAction = async (action: 'submit' | 'approve' | 'post' | 'reverse_post', record: SalesDelivery) => {
+    try {
+      await runBusinessAction({ action, documentType: 'sales_delivery', documentId: record.id, user: businessUser });
+      const successText = action === 'submit' ? '提交审批成功' : action === 'approve' ? '审核成功' : action === 'post' ? '过账成功' : '反过账成功';
+      message.success(successText);
+      fetchDeliveries();
+      if (selectedDelivery?.id === record.id) {
+        fetchDetails(record.id);
+      }
+    } catch (error: any) {
+      console.error('Error running delivery action:', error);
+      message.error(error?.message || '操作失败');
+    }
+  };
   const handleEdit = (record: SalesDelivery) => {
     setEditingDelivery(record);
     setSelectedDelivery(record);
@@ -490,6 +509,7 @@ export function SalesDeliveries() {
     draft: { text: '草稿', color: 'default' },
     pending: { text: '待审核', color: 'warning' },
     approved: { text: '已审核', color: 'success' },
+    posted: { text: '已过账', color: 'success' },
     cancelled: { text: '已取消', color: 'error' },
   };
 
@@ -545,10 +565,22 @@ export function SalesDeliveries() {
           <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetails(record)}>
             明细
           </Button>
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          {record.status === 'draft' && (
+            <Button type="text" onClick={() => runDeliveryAction('submit', record)}>提交</Button>
+          )}
+          {record.status === 'pending' && (
+            <Button type="text" onClick={() => runDeliveryAction('approve', record)}>审核</Button>
+          )}
+          {record.status === 'approved' && (
+            <Button type="text" onClick={() => runDeliveryAction('post', record)}>过账</Button>
+          )}
+          {record.status === 'posted' && (
+            <Button type="text" onClick={() => runDeliveryAction('reverse_post', record)}>反过账</Button>
+          )}
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.status === 'posted'}>
             编辑
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} disabled={record.status === 'posted'}>
             删除
           </Button>
         </Space>
@@ -850,3 +882,6 @@ export function SalesDeliveries() {
     </Card>
   );
 }
+
+
+
