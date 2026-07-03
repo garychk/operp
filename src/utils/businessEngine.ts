@@ -43,6 +43,7 @@ interface RunBusinessActionParams {
 
 const inventoryTable = 'erp_inventory_s_539dcf81_b';
 const inventoryTransactionTable = 'erp_inventory_transactions_s_539dcf81_b';
+const payableTable = 'erp_payables_s_539dcf81_b';
 
 const toNumber = (value: number | string | null | undefined) => Number(value || 0);
 const nearlyEqual = (a: number, b: number) => Math.abs(a - b) < 0.005;
@@ -221,6 +222,78 @@ async function applyInventoryDelta(line: StockPostingLine, signedQuantity: numbe
   if (error) throw error;
 }
 
+async function createPayableForPurchaseReceipt(document: any) {
+  const amount = toNumber(document.total_amount);
+  if (!document.supplier_id || amount <= 0) {
+    throw new Error('采购入库单缺少供应商或有效金额，不能生成应付');
+  }
+
+  const docNo = document.receipt_no;
+  const { data: existing, error: existingError } = await supabase
+    .from(payableTable)
+    .select('id, is_deleted')
+    .eq('source_type', 'purchase_receipt')
+    .eq('source_id', document.id)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  const payload = {
+    supplier_id: document.supplier_id,
+    doc_type: 'purchase_receipt',
+    doc_no: docNo,
+    source_type: 'purchase_receipt',
+    source_id: document.id,
+    source_no: docNo,
+    doc_date: normalizeDate(document.receipt_date),
+    due_date: normalizeDate(document.receipt_date),
+    amount,
+    paid_amount: 0,
+    balance: amount,
+    currency: 'CNY',
+    exchange_rate: 1,
+    status: 'open',
+    remark: `采购入库单 ${docNo} 过账自动生成`,
+    is_deleted: 'n',
+  };
+
+  if (existing) {
+    const { error } = await supabase.from(payableTable).update(payload).eq('id', existing.id);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await supabase.from(payableTable).insert([payload]);
+  if (error) throw error;
+}
+
+async function getReversiblePayableForPurchaseReceipt(document: any) {
+  const { data: payable, error } = await supabase
+    .from(payableTable)
+    .select('id, paid_amount, balance')
+    .eq('is_deleted', 'n')
+    .eq('source_type', 'purchase_receipt')
+    .eq('source_id', document.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!payable) return null;
+
+  if (toNumber(payable.paid_amount) > 0 || toNumber(payable.balance) < toNumber(document.total_amount)) {
+    throw new Error('该入库单生成的应付已发生付款或核销，不能反过账');
+  }
+
+  return payable;
+}
+
+async function removePayableById(payableId: number) {
+  const { error } = await supabase
+    .from(payableTable)
+    .update({ is_deleted: 'y', status: 'cancelled' })
+    .eq('id', payableId);
+
+  if (error) throw error;
+}
 async function insertInventoryTransaction(config: StockDocumentConfig, line: StockPostingLine, signedQuantity: number) {
   const unitCost = toNumber(line.unit_cost) || await getProductCost(line.product_id);
   const { error } = await supabase.from(inventoryTransactionTable).insert([{
@@ -272,6 +345,11 @@ export async function postStockDocument(config: StockDocumentConfig) {
       await insertInventoryTransaction(config, line, signedQuantity);
     }
 
+    if (config.documentType === 'purchase_receipt') {
+      const document = await fetchDocument('purchase_receipt', config.documentId);
+      await createPayableForPurchaseReceipt(document);
+    }
+
     const { error } = await supabase
       .from(config.headerTable)
       .update({ status: 'posted' })
@@ -294,6 +372,13 @@ export async function reverseStockDocument(config: StockDocumentConfig) {
       throw new Error('没有找到该单据的库存流水，不能反过账');
     }
 
+    let reversiblePayableId: number | null = null;
+    if (config.documentType === 'purchase_receipt') {
+      const document = await fetchDocument('purchase_receipt', config.documentId);
+      const payable = await getReversiblePayableForPurchaseReceipt(document);
+      reversiblePayableId = payable?.id ?? null;
+    }
+
     for (const transaction of transactions) {
       const reversalLine: StockPostingLine = {
         product_id: transaction.product_id,
@@ -303,6 +388,10 @@ export async function reverseStockDocument(config: StockDocumentConfig) {
         batch_no: transaction.batch_no,
       };
       await applyInventoryDelta(reversalLine, -toNumber(transaction.quantity), true);
+    }
+
+    if (reversiblePayableId) {
+      await removePayableById(reversiblePayableId);
     }
 
     const { error: markError } = await supabase
@@ -450,3 +539,7 @@ export async function runBusinessAction(params: RunBusinessActionParams) {
 
   throw new Error(`不支持的业务动作：${documentType}/${action}`);
 }
+
+
+
+

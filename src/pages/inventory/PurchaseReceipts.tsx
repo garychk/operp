@@ -553,10 +553,7 @@ export function PurchaseReceipts() {
       title: '操作',
       key: 'action',
       render: (_: any, record: PurchaseReceipt) => (
-        <Space size="middle">
-          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetails(record)}>
-            明细
-          </Button>
+        <Space>
           {record.status === 'draft' && (
             <Button type="text" onClick={() => runReceiptAction('submit', record)}>提交</Button>
           )}
@@ -692,7 +689,7 @@ export function PurchaseReceipts() {
             保存
           </Button>
         </Space>}
-        width={1000}
+        width={'70%'}
         height={600}
         historyTable={"erp_purchase_receipts_s_539dcf81_b"}
         historyRecordId={editingReceipt?.id}

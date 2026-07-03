@@ -411,6 +411,9 @@ export interface ErpPayablesS539Dcf81BRow {
   supplier_id: number | null;  // FK -> erp_suppliers_s_539dcf81_b.id
   doc_type: string | null;
   doc_no: string;
+  source_type: string | null;
+  source_id: number | null;
+  source_no: string | null;
   doc_date: string | any;
   due_date: string | any;
   amount: number | null;
@@ -1023,3 +1026,4 @@ export interface SysUsersRow {
 }
 export type SysUsersInsert = Omit<SysUsersRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type SysUsersUpdate = Partial<SysUsersInsert>;
+

@@ -382,6 +382,9 @@ CREATE TABLE IF NOT EXISTS public.erp_payables_s_539dcf81_b (
     supplier_id INTEGER REFERENCES public.erp_suppliers_s_539dcf81_b(id),
     doc_type VARCHAR(50),
     doc_no VARCHAR(50) NOT NULL,
+    source_type VARCHAR(50),
+    source_id INTEGER,
+    source_no VARCHAR(50),
     doc_date DATE NOT NULL,
     due_date DATE,
     amount DECIMAL(18, 2) DEFAULT 0,
@@ -1124,3 +1127,5 @@ WITH CHECK (bucket_id = 'avatars');
 -- ============================================================
 -- End: supabase\tables\004_create_avatar_storage_bucket.sql
 -- ============================================================
+
+

@@ -9,3 +9,6 @@
 \i supabase/tables/deploy_02_permissions_core.sql
 \i supabase/tables/deploy_03_system_rls_and_menu_permissions.sql
 \i supabase/tables/deploy_04_apply_erp_table_rls.sql
+\i supabase/tables/deploy_05_auth_super_admin.sql
+\i supabase/tables/deploy_06_payables_source_fields.sql
+
