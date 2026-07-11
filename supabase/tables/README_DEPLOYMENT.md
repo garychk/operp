@@ -4,12 +4,15 @@
 
 ## 推荐执行脚本
 
-实施人员只需要按顺序执行以下 4 个合并脚本：
+实施人员只需要按顺序执行以下 7 个合并脚本：
 
 1. `deploy_01_schema_and_seed.sql`
 2. `deploy_02_permissions_core.sql`
 3. `deploy_03_system_rls_and_menu_permissions.sql`
 4. `deploy_04_apply_erp_table_rls.sql`
+5. `deploy_05_auth_super_admin.sql`
+6. `deploy_06_payables_source_fields.sql`
+7. `deploy_07_system_config.sql`
 
 推荐在 Supabase Dashboard 的 SQL Editor 中逐个打开执行。每个脚本执行成功后，再执行下一个。
 
@@ -28,6 +31,7 @@
 - `sys_logs.params` 调整为 `jsonb`
 - `sys_users.auth_id`，用于绑定 Supabase Auth 用户
 - `sys_forms` 表
+- `sys_config` 表，用于按分类保存 JSON 系统设置
 - `avatars` Storage Bucket 和头像上传策略
 - 初始角色、用户、系统管理菜单、超级管理员菜单授权
 
@@ -62,6 +66,18 @@
 对所有 `erp_%` 业务表应用数据驱动的角色表权限 RLS。
 
 执行后，ERP 业务表访问由 `角色管理 -> 权限 -> 表权限` 中的配置决定。超级管理员默认拥有全部表权限。
+
+### 5. `deploy_05_auth_super_admin.sql`
+
+补充 Auth 超级管理员识别函数。
+
+### 6. `deploy_06_payables_source_fields.sql`
+
+补充应付账款来源单据字段。
+
+### 7. `deploy_07_system_config.sql`
+
+创建 `sys_config` 系统设置表、初始化基础/财务/制造/检验/AI 设置，新增“系统设置”菜单并应用表权限 RLS。
 
 ## 部署后必须配置
 
@@ -117,6 +133,9 @@
 - `deploy_02_permissions_core.sql`
 - `deploy_03_system_rls_and_menu_permissions.sql`
 - `deploy_04_apply_erp_table_rls.sql`
+- `deploy_05_auth_super_admin.sql`
+- `deploy_06_payables_source_fields.sql`
+- `deploy_07_system_config.sql`
 - `000_run_all_in_order.psql.sql`
 - `README_DEPLOYMENT.md`
 
@@ -125,4 +144,5 @@
 - 建议在空库执行初始部署。
 - 不要重复执行包含初始 `INSERT` 数据的脚本，避免唯一约束冲突。
 - 如果需要重复部署，请先确认目标库中没有同名角色、用户、菜单编码。
-- `deploy_04_apply_erp_table_rls.sql` 建议最后执行，避免 ERP 业务表 RLS 过早开启影响初始化。
+- `deploy_04_apply_erp_table_rls.sql` 建议在基础权限脚本之后执行，避免 ERP 业务表 RLS 过早开启影响初始化。
+- `deploy_07_system_config.sql` 用于新增系统设置，已有库升级时也可以单独执行。

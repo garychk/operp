@@ -109,6 +109,7 @@ const menuData: MenuRoute[] = [
       { path: '/system/users', name: '用户管理', icon: <TeamOutlined /> },
       { path: '/system/roles', name: '角色管理', icon: <SafetyOutlined /> },
       { path: '/system/menus', name: '菜单管理', icon: <MenuOutlined /> },
+      { path: '/system/settings', name: '系统设置', icon: <SettingOutlined /> },
       { path: '/system/logs', name: '系统日志', icon: <FileTextOutlined /> },
     ],
   },
@@ -141,6 +142,7 @@ const pathToNameMap: Record<string, string> = {
   '/system/users': '用户管理',
   '/system/roles': '角色管理',
   '/system/menus': '菜单管理',
+  '/system/settings': '系统设置',
   '/system/logs': '系统日志',
 };
 

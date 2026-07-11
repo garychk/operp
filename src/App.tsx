@@ -30,6 +30,7 @@ import { Users } from './pages/system/Users';
 import { Roles } from './pages/system/Roles';
 import { Menus } from './pages/system/Menus';
 import { Logs } from './pages/system/Logs';
+import { Settings } from './pages/system/Settings';
 
 function AppContent() {
   const { user } = useAuth();
@@ -87,6 +88,7 @@ function AppContent() {
           <Route path="users" element={<Users />} />
           <Route path="roles" element={<Roles />} />
           <Route path="menus" element={<Menus />} />
+          <Route path="settings" element={<Settings />} />
           <Route path="logs" element={<Logs />} />
         </Route>
       </Route>

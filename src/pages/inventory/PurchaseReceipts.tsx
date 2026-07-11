@@ -375,7 +375,6 @@ export function PurchaseReceipts() {
     setSelectedReceipt(record);
     fetchDetails(record.id);
   };
-
   const handleAddDetail = async () => {
     setEditingDetail(null);
     detailForm.setFieldsValue({
@@ -566,6 +565,7 @@ export function PurchaseReceipts() {
           {record.status === 'posted' && (
             <Button type="text" onClick={() => runReceiptAction('reverse_post', record)}>反过账</Button>
           )}
+          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetails(record)}>明细</Button>
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.status === 'posted'}>
             编辑
           </Button>

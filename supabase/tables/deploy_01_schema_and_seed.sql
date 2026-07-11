@@ -103,6 +103,26 @@ CREATE TABLE IF NOT EXISTS public.sys_logs (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS public.sys_config (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    category_code VARCHAR(100) NOT NULL UNIQUE,
+    category_name VARCHAR(100) NOT NULL,
+    config_json JSONB DEFAULT '{}'::jsonb,
+    description TEXT,
+    status CHAR(1) DEFAULT '1',
+    sort_order INTEGER DEFAULT 0,
+    is_deleted CHAR(1) DEFAULT 'n',
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sys_config_category_code
+  ON public.sys_config(category_code);
+
+CREATE INDEX IF NOT EXISTS idx_sys_config_config_json_gin
+  ON public.sys_config USING gin (config_json);
 INSERT INTO public.sys_users (username, password_hash, real_name, email, phone, status) VALUES
 ('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '系统管理员', 'admin@erp.com', '13800138000', '1'),
 ('zhangsan', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '张三', 'zhangsan@erp.com', '13800138001', '1'),
@@ -126,15 +146,22 @@ INSERT INTO public.sys_menus (parent_id, menu_name, menu_code, menu_type, icon, 
 (1, '用户管理', 'user', 'C', 'TeamOutlined', '/system/users', './pages/system/Users', 1, '1'),
 (1, '角色管理', 'role', 'C', 'SafetyOutlined', '/system/roles', './pages/system/Roles', 2, '1'),
 (1, '菜单管理', 'menu', 'C', 'MenuOutlined', '/system/menus', './pages/system/Menus', 3, '1'),
-(1, '系统日志', 'log', 'C', 'FileTextOutlined', '/system/logs', './pages/system/Logs', 4, '1');
+(1, '系统设置', 'setting', 'C', 'SettingOutlined', '/system/settings', './pages/system/Settings', 4, '1'),
+(1, '系统日志', 'log', 'C', 'FileTextOutlined', '/system/logs', './pages/system/Logs', 5, '1');
 
 INSERT INTO public.sys_role_menus (role_id, menu_id) VALUES
 (1, 1),
 (1, 2),
 (1, 3),
 (1, 4),
-(1, 5);
-
+(1, 5),
+(1, 6);
+INSERT INTO public.sys_config (category_code, category_name, config_json, description, sort_order, status) VALUES
+('basic', '基础设置', '{"companyName":"Supabase ERP","companyCode":"ERP","timezone":"Asia/Shanghai","language":"zh-CN","dateFormat":"YYYY-MM-DD","documentNoPrefix":"ERP","enableOperationLog":true}'::jsonb, '企业资料、默认语言、时区和单据号规则等全局基础参数。', 1, '1'),
+('finance', '财务设置', '{"baseCurrency":"CNY","defaultTaxRate":13,"accountingYearStartMonth":1,"voucherAutoPost":false,"allowBackdatedVoucher":false,"amountPrecision":2}'::jsonb, '本位币、税率、会计期间和凭证过账控制。', 2, '1'),
+('manufacturing', '制造设置', '{"mrpPlanningHorizonDays":30,"defaultLeadTimeDays":7,"allowBomVersionOverlap":false,"requireRoutingForProduction":true,"autoReserveMaterials":false,"scrapRatePrecision":4}'::jsonb, 'MRP、BOM、工艺路线和生产订单的默认行为。', 3, '1'),
+('quality', '检验设置', '{"incomingInspectionEnabled":true,"productionInspectionEnabled":true,"outgoingInspectionEnabled":false,"defaultSamplingRate":10,"blockUnqualifiedStock":true,"autoCreateInspectionTask":true}'::jsonb, '来料、生产和出货检验策略。', 4, '1'),
+('ai', 'AI设置', '{"enabled":true,"provider":"openai","model":"gpt-4.1-mini","temperature":0.3,"apiBaseUrl":"","redactSensitiveData":true,"maxContextMessages":12}'::jsonb, 'AI 助手、模型和生成参数。密钥建议放在服务端环境变量。', 5, '1');
 INSERT INTO public.sys_logs (user_id, username, operation, method, params, ip, status, created_at) VALUES
 (1, 'admin', '用户登录', 'POST /api/login', '{"username":"admin"}', '192.168.1.100', '1', NOW() - INTERVAL '1 hour'),
 (1, 'admin', '创建用户', 'POST /api/users', '{"username":"zhangsan"}', '192.168.1.100', '1', NOW() - INTERVAL '30 minutes'),

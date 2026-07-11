@@ -27,6 +27,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_role_menus TO authenticated;
 GRANT USAGE, SELECT ON SEQUENCE public.sys_role_menus_id_seq TO authenticated;
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_logs TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_config TO authenticated;
 GRANT USAGE, SELECT ON SEQUENCE public.sys_logs_id_seq TO authenticated;
 
 -- ============================================================

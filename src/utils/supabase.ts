@@ -44,6 +44,7 @@ import type {
   ErpProductionReportsS539Dcf81BRow,
   ErpProductionReceiptsS539Dcf81BRow,
   SysFormsRow,
+  SysConfigRow,
 } from '../types/database';
 
 // const supabaseUrl = 'https://spb-8vb5nhr43wo8yt73.supabase.opentrust.net';
@@ -129,4 +130,5 @@ export type Tables = {
   erp_production_reports_s_539dcf81_b: { Row: ErpProductionReportsS539Dcf81BRow };
   erp_production_receipts_s_539dcf81_b: { Row: ErpProductionReceiptsS539Dcf81BRow };
   sys_forms: { Row: SysFormsRow };
+  sys_config: { Row: SysConfigRow };
 };

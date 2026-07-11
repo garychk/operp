@@ -5,6 +5,7 @@ import {
   SafetyOutlined,
   MenuOutlined,
   FileTextOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -12,6 +13,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'users', label: '用户管理', icon: <TeamOutlined /> },
   { key: 'roles', label: '角色管理', icon: <SafetyOutlined /> },
   { key: 'menus', label: '菜单管理', icon: <MenuOutlined /> },
+  { key: 'settings', label: '系统设置', icon: <SettingOutlined /> },
   { key: 'logs', label: '系统日志', icon: <FileTextOutlined /> },
 ];
 
@@ -36,7 +38,7 @@ export function SystemModule() {
               系统管理
             </h2>
             <p style={{ fontSize: 12, color: '#8c8c8c', margin: '4px 0 0 0' }}>
-              用户、角色、权限、日志
+              用户、角色、权限、设置、日志
             </p>
           </div>
         </Card>
