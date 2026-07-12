@@ -161,7 +161,7 @@ INSERT INTO public.sys_config (category_code, category_name, config_json, descri
 ('finance', '财务设置', '{"baseCurrency":"CNY","defaultTaxRate":13,"accountingYearStartMonth":1,"voucherAutoPost":false,"allowBackdatedVoucher":false,"amountPrecision":2}'::jsonb, '本位币、税率、会计期间和凭证过账控制。', 2, '1'),
 ('manufacturing', '制造设置', '{"mrpPlanningHorizonDays":30,"defaultLeadTimeDays":7,"allowBomVersionOverlap":false,"requireRoutingForProduction":true,"autoReserveMaterials":false,"scrapRatePrecision":4}'::jsonb, 'MRP、BOM、工艺路线和生产订单的默认行为。', 3, '1'),
 ('quality', '检验设置', '{"incomingInspectionEnabled":true,"productionInspectionEnabled":true,"outgoingInspectionEnabled":false,"defaultSamplingRate":10,"blockUnqualifiedStock":true,"autoCreateInspectionTask":true}'::jsonb, '来料、生产和出货检验策略。', 4, '1'),
-('ai', 'AI设置', '{"enabled":true,"provider":"openai","model":"gpt-4.1-mini","temperature":0.3,"apiBaseUrl":"","redactSensitiveData":true,"maxContextMessages":12}'::jsonb, 'AI 助手、模型和生成参数。密钥建议放在服务端环境变量。', 5, '1');
+('ai', 'AI设置', '{"enabled":true,"providers":[{"id":"ollama","name":"Ollama 本地","endpoint":"http://localhost:11434/api/chat","model":"qwen2.5","apiType":"ollama"},{"id":"demo","name":"演示模式","endpoint":"","model":"demo","apiType":"proxy"}],"activeProviderId":"ollama","temperature":0.3,"redactSensitiveData":true,"maxContextMessages":12}'::jsonb, 'AI 助手、模型和生成参数。密钥建议放在服务端环境变量。', 5, '1');
 INSERT INTO public.sys_logs (user_id, username, operation, method, params, ip, status, created_at) VALUES
 (1, 'admin', '用户登录', 'POST /api/login', '{"username":"admin"}', '192.168.1.100', '1', NOW() - INTERVAL '1 hour'),
 (1, 'admin', '创建用户', 'POST /api/users', '{"username":"zhangsan"}', '192.168.1.100', '1', NOW() - INTERVAL '30 minutes'),

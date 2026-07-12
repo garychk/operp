@@ -28,7 +28,7 @@ VALUES
 ('finance', '财务设置', '{"baseCurrency":"CNY","defaultTaxRate":13,"accountingYearStartMonth":1,"voucherAutoPost":false,"allowBackdatedVoucher":false,"amountPrecision":2}'::jsonb, '本位币、税率、会计期间和凭证过账控制。', 2, '1'),
 ('manufacturing', '制造设置', '{"mrpPlanningHorizonDays":30,"defaultLeadTimeDays":7,"allowBomVersionOverlap":false,"requireRoutingForProduction":true,"autoReserveMaterials":false,"scrapRatePrecision":4}'::jsonb, 'MRP、BOM、工艺路线和生产订单的默认行为。', 3, '1'),
 ('quality', '检验设置', '{"incomingInspectionEnabled":true,"productionInspectionEnabled":true,"outgoingInspectionEnabled":false,"defaultSamplingRate":10,"blockUnqualifiedStock":true,"autoCreateInspectionTask":true}'::jsonb, '来料、生产和出货检验策略。', 4, '1'),
-('ai', 'AI设置', '{"enabled":true,"provider":"openai","model":"gpt-4.1-mini","temperature":0.3,"apiBaseUrl":"","redactSensitiveData":true,"maxContextMessages":12}'::jsonb, 'AI 助手、模型和生成参数。密钥建议放在服务端环境变量。', 5, '1')
+('ai', 'AI设置', '{"enabled":true,"providers":[{"id":"ollama","name":"Ollama 本地","endpoint":"http://localhost:11434/api/chat","model":"qwen2.5","apiType":"ollama"},{"id":"demo","name":"演示模式","endpoint":"","model":"demo","apiType":"proxy"}],"activeProviderId":"ollama","temperature":0.3,"redactSensitiveData":true,"maxContextMessages":12}'::jsonb, 'AI 助手、模型和生成参数。密钥建议放在服务端环境变量。', 5, '1')
 ON CONFLICT (category_code) DO UPDATE SET
     category_name = EXCLUDED.category_name,
     description = EXCLUDED.description,
@@ -36,6 +36,13 @@ ON CONFLICT (category_code) DO UPDATE SET
     status = EXCLUDED.status,
     is_deleted = 'n',
     updated_at = NOW();
+
+UPDATE public.sys_config
+SET config_json = '{"enabled":true,"providers":[{"id":"ollama","name":"Ollama 本地","endpoint":"http://localhost:11434/api/chat","model":"qwen2.5","apiType":"ollama"},{"id":"demo","name":"演示模式","endpoint":"","model":"demo","apiType":"proxy"}],"activeProviderId":"ollama","temperature":0.3,"redactSensitiveData":true,"maxContextMessages":12}'::jsonb,
+    updated_at = NOW()
+WHERE category_code = 'ai'
+  AND is_deleted = 'n'
+  AND NOT (config_json ? 'providers');
 
 INSERT INTO public.sys_menus (parent_id, menu_name, menu_code, menu_type, icon, path, component, sort_order, status)
 SELECT parent.id, '系统设置', 'setting', 'C', 'SettingOutlined', '/system/settings', './pages/system/Settings', 4, '1'

@@ -14,6 +14,17 @@ import { buildERPAnalysisContext } from '../utils/aiAnalysisTools';
 import { handleCreateSkill, type CreateFlowState } from '../utils/aiCreateTools';
 import { handleBusinessActionSkill } from '../utils/aiBusinessActionTools';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  createId,
+  createProvider,
+  defaultAISettings,
+  fetchAISettings,
+  normalizeAISettings,
+  providerTypeOptions,
+  saveAISettings,
+  type AIProviderConfig,
+  type AISettingsConfig,
+} from '../utils/aiConfig';
 import './AIChatDrawer.css';
 
 interface AIChatDrawerProps {
@@ -27,43 +38,6 @@ interface ChatMessage {
   content: string;
   status?: 'loading' | 'success' | 'error';
 }
-
-type AIProviderType = 'proxy' | 'ollama';
-
-interface AIProviderConfig {
-  id: string;
-  name: string;
-  endpoint: string;
-  model: string;
-  apiType: AIProviderType;
-  apiKey?: string;
-}
-
-const STORAGE_KEY = 'erp-ai-chat-providers';
-const ACTIVE_STORAGE_KEY = 'erp-ai-chat-active-provider';
-
-const defaultProviders: AIProviderConfig[] = [
-  {
-    id: 'ollama',
-    name: 'Ollama 本地',
-    endpoint: 'http://localhost:11434/api/chat',
-    model: 'qwen2.5',
-    apiType: 'ollama',
-  },
-  {
-    id: 'demo',
-    name: '演示模式',
-    endpoint: '',
-    model: 'demo',
-    apiType: 'proxy',
-  },
-];
-
-const providerTypeOptions = [
-  { label: '通用代理', value: 'proxy' },
-  { label: 'Ollama', value: 'ollama' },
-];
-
 const quickPrompts = [
   {
     key: 'erp',
@@ -91,38 +65,6 @@ const quickPrompts = [
   },
 ];
 
-const createId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-const createProvider = (): AIProviderConfig => ({
-  id: createId(),
-  name: 'Ollama 本地',
-  endpoint: 'http://localhost:11434/api/chat',
-  model: 'qwen2.5',
-  apiType: 'ollama',
-});
-
-const normalizeProvider = (provider: Partial<AIProviderConfig>): AIProviderConfig => ({
-  id: provider.id || createId(),
-  name: provider.name || '未命名模型',
-  endpoint: provider.endpoint || '',
-  model: provider.model || '',
-  apiType: provider.apiType || 'proxy',
-  apiKey: provider.apiKey,
-});
-
-const loadProviders = () => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return defaultProviders;
-    }
-
-    const parsed = JSON.parse(raw) as Partial<AIProviderConfig>[];
-    return parsed.length ? parsed.map(normalizeProvider) : defaultProviders;
-  } catch {
-    return defaultProviders;
-  }
-};
 
 const createRequestBody = (prompt: string, provider: AIProviderConfig) => {
   return {
@@ -215,15 +157,16 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pendingCreate, setPendingCreate] = useState<CreateFlowState | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
-  const [providers, setProviders] = useState<AIProviderConfig[]>(loadProviders);
-  const [activeProviderId, setActiveProviderId] = useState(
-    () => localStorage.getItem(ACTIVE_STORAGE_KEY) || providers[0]?.id || defaultProviders[0].id,
-  );
+  const [aiSettings, setAISettings] = useState<AISettingsConfig>(defaultAISettings);
+  const [configLoaded, setConfigLoaded] = useState(false);
   const listRef = useRef<BubbleListRef>(null);
+  const saveTimerRef = useRef<number | null>(null);
   const { user } = useAuth();
+  const providers = aiSettings.providers;
+  const activeProviderId = aiSettings.activeProviderId;
 
   const activeProvider = useMemo(
-    () => providers.find((item) => item.id === activeProviderId) || providers[0] || defaultProviders[0],
+    () => providers.find((item) => item.id === activeProviderId) || providers[0] || defaultAISettings.providers[0],
     [activeProviderId, providers],
   );
 
@@ -239,37 +182,79 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   );
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(providers));
-  }, [providers]);
+    if (!open || configLoaded) {
+      return;
+    }
+
+    fetchAISettings()
+      .then((settings) => {
+        setAISettings(settings);
+        setConfigLoaded(true);
+      })
+      .catch(() => {
+        setConfigLoaded(true);
+        message.error('读取AI设置失败，将使用默认配置');
+      });
+  }, [configLoaded, open]);
 
   useEffect(() => {
-    localStorage.setItem(ACTIVE_STORAGE_KEY, activeProvider.id);
-  }, [activeProvider.id]);
+    if (!configLoaded) {
+      return;
+    }
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = window.setTimeout(() => {
+      saveAISettings(normalizeAISettings(aiSettings)).catch(() => {
+        message.error('保存AI设置失败');
+      });
+    }, 600);
+
+    return () => {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [aiSettings, configLoaded]);
 
   const updateProvider = (id: string, patch: Partial<AIProviderConfig>) => {
-    setProviders((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    setAISettings((prev) => ({
+      ...prev,
+      providers: prev.providers.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    }));
   };
 
   const addProvider = () => {
     const next = createProvider();
-    setProviders((prev) => [...prev, next]);
-    setActiveProviderId(next.id);
+    setAISettings((prev) => ({
+      ...prev,
+      providers: [...prev.providers, next],
+      activeProviderId: next.id,
+    }));
   };
 
   const deleteProvider = (id: string) => {
-    setProviders((prev) => {
-      const next = prev.filter((item) => item.id !== id);
-      const safeNext = next.length ? next : defaultProviders;
-      if (id === activeProviderId) {
-        setActiveProviderId(safeNext[0].id);
-      }
-      return safeNext;
+    setAISettings((prev) => {
+      const next = prev.providers.filter((item) => item.id !== id);
+      const safeNext = next.length ? next : defaultAISettings.providers;
+      return {
+        ...prev,
+        providers: safeNext,
+        activeProviderId: id === prev.activeProviderId ? safeNext[0].id : prev.activeProviderId,
+      };
     });
   };
 
   const submitMessage = async (value: string) => {
     const prompt = value.trim();
     if (!prompt || loading) {
+      return;
+    }
+
+    if (!aiSettings.enabled) {
+      message.warning('AI助手已在系统设置中停用');
       return;
     }
 
@@ -408,7 +393,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                   label: `${item.name}${item.model ? ` / ${item.model}` : ''}`,
                   value: item.id,
                 }))}
-                onChange={setActiveProviderId}
+                onChange={(activeProviderId) => setAISettings((prev) => ({ ...prev, activeProviderId }))}
               />
               <Space size={4}>
                 {messages.length > 0 && (

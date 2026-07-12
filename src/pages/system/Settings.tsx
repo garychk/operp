@@ -18,9 +18,10 @@ import {
   Typography,
   message,
 } from 'antd';
-import { SaveOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import { createProvider, defaultAISettings, normalizeAISettings, providerTypeOptions } from '../../utils/aiConfig';
 
 type ConfigValue = string | number | boolean | null | ConfigObject | ConfigValue[];
 type ConfigObject = { [key: string]: ConfigValue };
@@ -162,31 +163,11 @@ const settingCategories: SettingCategory[] = [
   {
     code: 'ai',
     name: 'AI设置',
-    description: 'AI 助手、模型和生成参数。密钥建议放在服务端环境变量，不建议明文保存到前端可读表。',
-    defaults: {
-      enabled: true,
-      provider: 'openai',
-      model: 'gpt-4.1-mini',
-      temperature: 0.3,
-      apiBaseUrl: '',
-      redactSensitiveData: true,
-      maxContextMessages: 12,
-    },
+    description: 'AI 助手、大模型列表和生成参数。API Key 会随系统设置保存，请仅给可信管理员开放该表权限。',
+    defaults: defaultAISettings as unknown as ConfigObject,
     fields: [
       { name: 'enabled', label: '启用AI助手', kind: 'switch' },
-      {
-        name: 'provider',
-        label: '服务商',
-        kind: 'select',
-        options: [
-          { label: 'OpenAI', value: 'openai' },
-          { label: 'Azure OpenAI', value: 'azure-openai' },
-          { label: '本地兼容接口', value: 'openai-compatible' },
-        ],
-      },
-      { name: 'model', label: '默认模型', kind: 'text' },
       { name: 'temperature', label: '温度', kind: 'number', min: 0, max: 2, step: 0.1 },
-      { name: 'apiBaseUrl', label: 'API Base URL', kind: 'text', placeholder: '留空使用系统默认地址' },
       { name: 'redactSensitiveData', label: '发送前脱敏敏感数据', kind: 'switch' },
       { name: 'maxContextMessages', label: '最大上下文消息数', kind: 'number', min: 1, max: 50 },
     ],
@@ -255,6 +236,7 @@ export function Settings() {
     () => configs.find((item) => item.category_code === activeCategory.code),
     [activeCategory.code, configs],
   );
+  const watchedProviders = Form.useWatch('providers', form) as Array<{ id?: string; name?: string; model?: string }> | undefined;
 
   const fetchConfigs = async () => {
     setLoading(true);
@@ -286,11 +268,12 @@ export function Settings() {
 
   const handleSave = async () => {
     const values = await form.validateFields();
+    const configJson = activeCategory.code === 'ai' ? normalizeAISettings(values) : values;
     const payload = {
       category_code: activeCategory.code,
       category_name: activeCategory.name,
       description: activeCategory.description,
-      config_json: values,
+      config_json: configJson,
       status: '1',
       sort_order: settingCategories.findIndex((item) => item.code === activeCategory.code) + 1,
       is_deleted: 'n',
@@ -310,7 +293,7 @@ export function Settings() {
         { category_code: activeCategory.code },
       );
       message.success('设置已保存');
-      setPreview(values);
+      setPreview(configJson as unknown as ConfigObject);
       fetchConfigs();
     } catch (error) {
       message.error('保存系统设置失败');
@@ -319,6 +302,95 @@ export function Settings() {
     }
   };
 
+  const renderAIProviderSettings = () => {
+    if (activeCategory.code !== 'ai') {
+      return null;
+    }
+
+    const providerOptions = (watchedProviders || []).map((provider, index) => ({
+      label: `${provider?.name || `模型${index + 1}`}${provider?.model ? ` / ${provider.model}` : ''}`,
+      value: provider?.id || '',
+    })).filter((option) => option.value);
+
+    return (
+      <>
+        <Divider>大模型列表</Divider>
+        <Form.Item name="activeProviderId" label="默认使用模型" rules={[{ required: true, message: '请选择默认模型' }]}>
+          <Select options={providerOptions} placeholder="请选择默认使用的大模型" />
+        </Form.Item>
+        <Form.List name="providers">
+          {(fields, { add, remove }) => (
+            <Space direction="vertical" style={{ width: '100%' }} size={12}>              
+                <Space direction="vertical" style={{ width: '100%' }} size={12}>
+                  {fields.map((field) => (
+                    <Card
+                      key={field.key}
+                      size="small"
+                      title={`模型 ${field.name + 1}`}
+                      extra={
+                        <Button
+                          danger
+                          type="text"
+                          icon={<DeleteOutlined />}
+                          onClick={() => remove(field.name)}
+                          disabled={fields.length <= 1}
+                        />
+                      }
+                    >
+                      <Form.Item name={[field.name, 'id']} hidden>
+                        <Input />
+                      </Form.Item>
+                      <Row gutter={16}>
+                        <Col xs={24} md={12}>
+                          <Form.Item name={[field.name, 'name']} label="显示名称" rules={[{ required: true }]}>
+                            <Input placeholder="如 Ollama 本地" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name={[field.name, 'apiType']} label="接口类型" rules={[{ required: true }]}>
+                            <Select options={providerTypeOptions} />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24}>
+                          <Form.Item name={[field.name, 'endpoint']} label="接口地址">
+                            <Input placeholder="如 http://localhost:11434/api/chat" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name={[field.name, 'model']} label="模型 ID" rules={[{ required: true }]}>
+                            <Input placeholder="如 qwen2.5、deepseek-r1" />
+                          </Form.Item>
+                        </Col>
+                        <Col xs={24} md={12}>
+                          <Form.Item name={[field.name, 'apiKey']} label="API Key">
+                            <Input.Password placeholder="可选，Ollama 本地通常不用填" />
+                          </Form.Item>
+                        </Col>
+                      </Row>
+                    </Card>
+                  ))}
+                </Space>
+              <Button
+                block
+                type="dashed"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  const provider = createProvider();
+                  add(provider);
+                  const currentProviders = form.getFieldValue('providers') || [];
+                  if (!form.getFieldValue('activeProviderId') && currentProviders.length === 0) {
+                    form.setFieldValue('activeProviderId', provider.id);
+                  }
+                }}
+              >
+                新增大模型
+              </Button>
+            </Space>
+          )}
+        </Form.List>
+      </>
+    );
+  };
   const items = settingCategories.map((category) => ({
     key: category.code,
     label: category.name,
@@ -330,10 +402,19 @@ export function Settings() {
       title="系统设置"
       extra={
         <Space>
-          <Button icon={<ReloadOutlined />} onClick={fetchConfigs} loading={loading}>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={fetchConfigs}
+            loading={loading}
+          >
             刷新
           </Button>
-          <Button type="primary" icon={<SaveOutlined />} onClick={handleSave} loading={saving}>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={handleSave}
+            loading={saving}
+          >
             保存设置
           </Button>
         </Space>
@@ -343,46 +424,65 @@ export function Settings() {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="系统设置按分类保存到 sys_config.config_json。涉及密钥、令牌、数据库连接串等敏感内容时，建议只保存引用名，真实密钥放在服务端环境变量或密钥管理服务。"
+        closable
+        message="系统设置按分类保存到 sys_config.config_json。AI API Key 会随系统设置保存，请只给可信管理员开放 sys_config 的读取和维护权限。"
       />
 
       <Tabs activeKey={activeKey} items={items} onChange={setActiveKey} />
+      <div
+        style={{
+          maxHeight: "calc(100vh - 420px)",
+          overflowY: "auto",
+          overflowX: "hidden",
+        }}
+      >
+        <Spin spinning={loading}>
+          <Row gutter={24}>
+            <Col xs={24} lg={14}>
+              <Typography.Title level={5} style={{ marginTop: 0 }}>
+                {activeCategory.name}
+                <Tag color="blue" style={{ marginLeft: 8 }}>
+                  {activeCategory.code}
+                </Tag>
+              </Typography.Title>
+              <Typography.Paragraph type="secondary">
+                {activeCategory.description}
+              </Typography.Paragraph>
+              <Divider />
+              <Form
+                form={form}
+                layout="vertical"
+                onValuesChange={(_, values) =>
+                  setPreview(values as ConfigObject)
+                }
+              >
+                <Row gutter={16}>
+                  {activeCategory.fields.map((field) => (
+                    <Col xs={24} md={12} key={field.name}>
+                      {renderField(field)}
+                    </Col>
+                  ))}
+                </Row>
+                {renderAIProviderSettings()}
+              </Form>
+            </Col>
 
-      <Spin spinning={loading}>
-        <Row gutter={24}>
-          <Col xs={24} lg={14}>
-            <Typography.Title level={5} style={{ marginTop: 0 }}>
-              {activeCategory.name}
-              <Tag color="blue" style={{ marginLeft: 8 }}>
-                {activeCategory.code}
-              </Tag>
-            </Typography.Title>
-            <Typography.Paragraph type="secondary">{activeCategory.description}</Typography.Paragraph>
-            <Divider />
-            <Form
-              form={form}
-              layout="vertical"
-              onValuesChange={(_, values) => setPreview(values as ConfigObject)}
-            >
-              <Row gutter={16}>
-                {activeCategory.fields.map((field) => (
-                  <Col xs={24} md={12} key={field.name}>
-                    {renderField(field)}
-                  </Col>
-                ))}
-              </Row>
-            </Form>
-          </Col>
-
-          <Col xs={24} lg={10}>
-            <Card size="small" title="JSON 预览">
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {JSON.stringify(preview, null, 2)}
-              </pre>
-            </Card>
-          </Col>
-        </Row>
-      </Spin>
+            <Col xs={24} lg={10}>
+              <Card size="small" title="JSON 预览">
+                <pre
+                  style={{
+                    margin: 0,
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {JSON.stringify(preview, null, 2)}
+                </pre>
+              </Card>
+            </Col>
+          </Row>
+        </Spin>
+      </div>
     </Card>
   );
 }
