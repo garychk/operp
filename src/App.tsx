@@ -31,6 +31,8 @@ import { Roles } from './pages/system/Roles';
 import { Menus } from './pages/system/Menus';
 import { Logs } from './pages/system/Logs';
 import { Settings } from './pages/system/Settings';
+import { PageDesigner } from './features/page-builder/PageDesigner';
+import { CustomPageRenderer } from './features/page-builder/PageRenderer';
 
 function AppContent() {
   const { user } = useAuth();
@@ -90,7 +92,9 @@ function AppContent() {
           <Route path="menus" element={<Menus />} />
           <Route path="settings" element={<Settings />} />
           <Route path="logs" element={<Logs />} />
+          <Route path="page-designer" element={<PageDesigner />} />
         </Route>
+        <Route path="custom/:slug" element={<CustomPageRenderer />} />
       </Route>
       
       <Route path="*" element={<Navigate to={user ? "/" : "/login"} />} />

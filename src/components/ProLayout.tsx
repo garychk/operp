@@ -39,6 +39,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { AIChatDrawer } from './AIChatDrawer';
 import heroLogo from '../assets/opelix.svg';
 import defaultAvatar from '../assets/avatar.png';
+import { supabase } from '../utils/supabase';
 
 interface TabItem {
   key: string;
@@ -156,6 +157,7 @@ const menuData: MenuRoute[] = [
       { path: '/system/menus', name: '菜单管理', icon: <MenuOutlined /> },
       { path: '/system/settings', name: '系统设置', icon: <SettingOutlined /> },
       { path: '/system/logs', name: '系统日志', icon: <FileTextOutlined /> },
+      { path: '/system/page-designer', name: '页面设计器', icon: <AppstoreOutlined /> },
     ],
   },
 ];
@@ -189,6 +191,7 @@ const pathToNameMap: Record<string, string> = {
   '/system/menus': '菜单管理',
   '/system/settings': '系统设置',
   '/system/logs': '系统日志',
+  '/system/page-designer': '页面设计器',
 };
 
 export function ProLayout() {
@@ -212,7 +215,34 @@ export function ProLayout() {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [customMenus, setCustomMenus] = useState<MenuRoute[]>([]);
 
+  useEffect(() => {
+    const loadCustomMenus = async () => {
+      const { data, error } = await supabase
+        .from('sys_menus')
+        .select('menu_name, path, component')
+        .eq('status', '1')
+        .eq('is_deleted', 'n')
+        .order('sort_order');
+
+      if (error) {
+        console.error('Failed to load custom page menus:', error);
+        return;
+      }
+
+      setCustomMenus((data || [])
+        .filter(item => item.component === 'CustomPageRenderer' || item.path?.startsWith('/custom/'))
+        .filter((item): item is { menu_name: string; path: string; component: string | null } => Boolean(item.menu_name && item.path))
+        .map(item => ({ path: item.path, name: item.menu_name, icon: <DashboardOutlined /> })));
+    };
+    void loadCustomMenus();
+    const refreshCustomMenus = () => { void loadCustomMenus(); };
+    window.addEventListener('custom-pages-changed', refreshCustomMenus);
+    return () => {
+      window.removeEventListener('custom-pages-changed', refreshCustomMenus);
+    };
+  }, []);
   useEffect(() => {
     localStorage.setItem('erp-dark-mode', JSON.stringify(dark));
   }, [dark]);
@@ -231,46 +261,40 @@ export function ProLayout() {
   }, [ismix]);
 
   const visibleMenuData = useMemo(() => {
-    if (!user || user.isSuperAdmin) {
-      return menuData;
-    }
+    const customPageGroup: MenuRoute | null = customMenus.length > 0 ? {
+      path: '/custom',
+      name: '自定义页面',
+      icon: <DashboardOutlined />,
+      routes: customMenus,
+    } : null;
+    const appendCustomPages = (routes: MenuRoute[]) => customPageGroup ? [...routes, customPageGroup] : routes;
 
-    if (user.menuPaths.length === 0) {
-      return menuData;
+    if (!user || user.isSuperAdmin || user.menuPaths.length === 0) {
+      return appendCustomPages(menuData);
     }
 
     const allowedPaths = new Set(user.menuPaths);
-
     const filterRoutes = (routes: MenuRoute[]): MenuRoute[] => {
       const result: MenuRoute[] = [];
-
       routes.forEach((route) => {
         const children = route.routes ? filterRoutes(route.routes) : undefined;
         const visibleByPath = route.path === '/' || allowedPaths.has(route.path);
         const visibleByChildren = Boolean(children?.length);
-
-        if (!visibleByPath && !visibleByChildren) {
-          return;
-        }
-
-        result.push({
-          ...route,
-          routes: children,
-        });
+        if (!visibleByPath && !visibleByChildren) return;
+        result.push({ ...route, routes: children });
       });
-
       return result;
     };
 
-    return filterRoutes(menuData);
-  }, [user]);
-
+    // Published custom pages are globally visible; drafts never enter customMenus.
+    return appendCustomPages(filterRoutes(menuData));
+  }, [user, customMenus]);
   const handleLogout = async () => {
     await logout();
   };
 
   const addTab = useCallback((path: string) => {
-    const label = pathToNameMap[path] || '未命名';
+    const label = pathToNameMap[path] || customMenus.find(item => item.path === path)?.name || '未命名';
     setTabs((prev) => {
       const existingTab = prev.find((tab) => tab.key === path);
       if (!existingTab) {
@@ -279,7 +303,7 @@ export function ProLayout() {
       return prev;
     });
     setActiveTabKey(path);
-  }, []);
+  }, [customMenus]);
 
   const removeTab = useCallback((targetKey: string) => {
     let newActiveKey = activeTabKey;
@@ -309,10 +333,10 @@ export function ProLayout() {
 
   useEffect(() => {
     const path = location.pathname;
-    if (pathToNameMap[path]) {
+    if (pathToNameMap[path] || customMenus.some(item => item.path === path)) {
       addTab(path);
     }
-  }, [location.pathname, addTab]);
+  }, [location.pathname, addTab, customMenus]);
 
   const tabItems = tabs.map((tab) => ({
     key: tab.key,
@@ -354,6 +378,7 @@ export function ProLayout() {
         title="OPERP"
         logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
         route={{ routes: visibleMenuData }}
+        menuDataRender={(items) => visibleMenuData as unknown as typeof items}
         location={{ pathname: location.pathname }}
         menuItemRender={(item, dom) => (
           <div onClick={() => navigate(item.path || '/')}>{dom}</div>

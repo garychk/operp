@@ -56,33 +56,18 @@ import type {
 const supabaseUrl = 'http://localhost:8008';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE';
 
-export let supabase = createClient(supabaseUrl, supabaseKey);
-(window as any).supabase = supabase;
+const authLock = async <R,>(
+  _name: string,
+  _acquireTimeout: number,
+  fn: () => Promise<R>,
+): Promise<R> => fn();
 
-const recreateSupabaseClient = () => {
-  supabase = createClient(supabaseUrl, supabaseKey);
-  (window as any).supabase = supabase;
-};
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { lock: authLock },
+});
 
 if (typeof window !== 'undefined') {
-  let lastVisibilityChange = 0;
-  
-  const handleVisibilityChange = async () => {
-    if (document.visibilityState === 'visible') {
-      const now = Date.now();
-      const timeSinceLastChange = now - lastVisibilityChange;
-      lastVisibilityChange = now;
-      
-      if (timeSinceLastChange > 3000) {
-        recreateSupabaseClient();
-      } else {
-        await supabase.auth.getSession();
-      }
-    }
-  };
-
-  document.addEventListener('visibilitychange', handleVisibilityChange);
-  window.addEventListener('focus', handleVisibilityChange);
+  (window as any).supabase = supabase;
 }
 
 export type Tables = {
