@@ -55,6 +55,56 @@ interface MenuRoute {
   routes?: MenuRoute[];
 }
 
+interface DatabaseMenu {
+  id: number;
+  parent_id: number | null;
+  menu_name: string;
+  menu_type: string | null;
+  path: string | null;
+}
+
+function buildDatabaseMenuTree(records: DatabaseMenu[]): MenuRoute[] {
+  const nodes = new Map<number, MenuRoute>();
+  const roots: MenuRoute[] = [];
+  records.forEach(record => {
+    nodes.set(record.id, {
+      path: record.path || `/menu-group/${record.id}`,
+      name: record.menu_name,
+      icon: record.menu_type === 'M' ? <AppstoreOutlined /> : <DashboardOutlined />,
+      routes: [],
+    });
+  });
+  records.forEach(record => {
+    const node = nodes.get(record.id)!;
+    const parent = record.parent_id ? nodes.get(record.parent_id) : undefined;
+    if (parent && parent !== node) parent.routes!.push(node);
+    else roots.push(node);
+  });
+  return roots;
+}
+
+function mergeMenuTrees(base: MenuRoute[], database: MenuRoute[]): MenuRoute[] {
+  const result: MenuRoute[] = base.map(route => ({ ...route, routes: route.routes ? mergeMenuTrees(route.routes, []) : undefined }));
+  database.forEach(route => {
+    const existing = result.find(item => item.path === route.path);
+    if (!existing) {
+      result.push(route);
+      return;
+    }
+    existing.name = route.name;
+    existing.routes = mergeMenuTrees(existing.routes || [], route.routes || []);
+  });
+  return result;
+}
+
+function findMenuName(routes: MenuRoute[], path: string): string | undefined {
+  for (const route of routes) {
+    if (route.path === path) return route.name;
+    const childName = route.routes ? findMenuName(route.routes, path) : undefined;
+    if (childName) return childName;
+  }
+  return undefined;
+}
 type ThemeColorKey = 'default' | 'blue' | 'green' | 'orange' | 'purple' | 'warmPaper';
 
 interface ThemeColor {
@@ -215,32 +265,30 @@ export function ProLayout() {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [aiChatOpen, setAiChatOpen] = useState(false);
-  const [customMenus, setCustomMenus] = useState<MenuRoute[]>([]);
+  const [databaseMenus, setDatabaseMenus] = useState<MenuRoute[]>([]);
 
   useEffect(() => {
-    const loadCustomMenus = async () => {
+    const loadDatabaseMenus = async () => {
       const { data, error } = await supabase
         .from('sys_menus')
-        .select('menu_name, path, component')
+        .select('id, parent_id, menu_name, menu_type, path')
         .eq('status', '1')
         .eq('is_deleted', 'n')
         .order('sort_order');
 
       if (error) {
-        console.error('Failed to load custom page menus:', error);
+        console.error('Failed to load database menus:', error);
         return;
       }
-
-      setCustomMenus((data || [])
-        .filter(item => item.component === 'CustomPageRenderer' || item.path?.startsWith('/custom/'))
-        .filter((item): item is { menu_name: string; path: string; component: string | null } => Boolean(item.menu_name && item.path))
-        .map(item => ({ path: item.path, name: item.menu_name, icon: <DashboardOutlined /> })));
+      setDatabaseMenus(buildDatabaseMenuTree((data || []) as DatabaseMenu[]));
     };
-    void loadCustomMenus();
-    const refreshCustomMenus = () => { void loadCustomMenus(); };
-    window.addEventListener('custom-pages-changed', refreshCustomMenus);
+    void loadDatabaseMenus();
+    const refreshDatabaseMenus = () => { void loadDatabaseMenus(); };
+    window.addEventListener('custom-pages-changed', refreshDatabaseMenus);
+    window.addEventListener('menus-changed', refreshDatabaseMenus);
     return () => {
-      window.removeEventListener('custom-pages-changed', refreshCustomMenus);
+      window.removeEventListener('custom-pages-changed', refreshDatabaseMenus);
+      window.removeEventListener('menus-changed', refreshDatabaseMenus);
     };
   }, []);
   useEffect(() => {
@@ -260,41 +308,35 @@ export function ProLayout() {
 
   }, [ismix]);
 
-  const visibleMenuData = useMemo(() => {
-    const customPageGroup: MenuRoute | null = customMenus.length > 0 ? {
-      path: '/custom',
-      name: '自定义页面',
-      icon: <DashboardOutlined />,
-      routes: customMenus,
-    } : null;
-    const appendCustomPages = (routes: MenuRoute[]) => customPageGroup ? [...routes, customPageGroup] : routes;
+  const mergedMenuData = useMemo(
+    () => mergeMenuTrees(menuData, databaseMenus),
+    [databaseMenus],
+  );
 
+  const visibleMenuData = useMemo(() => {
     if (!user || user.isSuperAdmin || user.menuPaths.length === 0) {
-      return appendCustomPages(menuData);
+      return mergedMenuData;
     }
 
     const allowedPaths = new Set(user.menuPaths);
     const filterRoutes = (routes: MenuRoute[]): MenuRoute[] => {
       const result: MenuRoute[] = [];
-      routes.forEach((route) => {
+      routes.forEach(route => {
         const children = route.routes ? filterRoutes(route.routes) : undefined;
         const visibleByPath = route.path === '/' || allowedPaths.has(route.path);
-        const visibleByChildren = Boolean(children?.length);
-        if (!visibleByPath && !visibleByChildren) return;
+        if (!visibleByPath && !children?.length) return;
         result.push({ ...route, routes: children });
       });
       return result;
     };
-
-    // Published custom pages are globally visible; drafts never enter customMenus.
-    return appendCustomPages(filterRoutes(menuData));
-  }, [user, customMenus]);
+    return filterRoutes(mergedMenuData);
+  }, [user, mergedMenuData]);
   const handleLogout = async () => {
     await logout();
   };
 
   const addTab = useCallback((path: string) => {
-    const label = pathToNameMap[path] || customMenus.find(item => item.path === path)?.name || '未命名';
+    const label = pathToNameMap[path] || findMenuName(mergedMenuData, path) || '未命名';
     setTabs((prev) => {
       const existingTab = prev.find((tab) => tab.key === path);
       if (!existingTab) {
@@ -303,7 +345,7 @@ export function ProLayout() {
       return prev;
     });
     setActiveTabKey(path);
-  }, [customMenus]);
+  }, [mergedMenuData]);
 
   const removeTab = useCallback((targetKey: string) => {
     let newActiveKey = activeTabKey;
@@ -333,10 +375,10 @@ export function ProLayout() {
 
   useEffect(() => {
     const path = location.pathname;
-    if (pathToNameMap[path] || customMenus.some(item => item.path === path)) {
+    if (pathToNameMap[path] || findMenuName(mergedMenuData, path)) {
       addTab(path);
     }
-  }, [location.pathname, addTab, customMenus]);
+  }, [location.pathname, addTab, mergedMenuData]);
 
   const tabItems = tabs.map((tab) => ({
     key: tab.key,

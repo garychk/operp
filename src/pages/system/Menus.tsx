@@ -47,6 +47,7 @@ export function Menus() {
 
       if (error) throw error;
       setMenus(data || []);
+      window.dispatchEvent(new Event('menus-changed'));
     } catch (error) {
       message.error('获取菜单列表失败');
     } finally {
