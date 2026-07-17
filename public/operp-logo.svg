@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="200" viewBox="0 0 720 200" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">OPERP logo</title>
+  <desc id="desc">A minimal geometric O P E R P wordmark with connected AI data nodes.</desc>
+
+  <!-- Custom geometry: no external font dependency. -->
+  <g stroke="#111820" stroke-width="18" stroke-linecap="square" stroke-linejoin="round">
+    <!-- O: an open data loop -->
+    <path d="M103 44H64C42 44 28 58 28 80V120C28 142 42 156 64 156H103C125 156 139 142 139 120V91"/>
+
+    <!-- P -->
+    <path d="M181 156V44H233C255 44 268 57 268 78V86C268 107 255 120 233 120H181"/>
+
+    <!-- E -->
+    <path d="M311 44V156M311 44H391M311 100H379M311 156H391"/>
+
+    <!-- R -->
+    <path d="M434 156V44H486C508 44 521 57 521 78V84C521 105 508 118 486 118H434M482 118L527 156"/>
+
+    <!-- P -->
+    <path d="M570 156V44H622C644 44 657 57 657 78V86C657 107 644 120 622 120H570"/>
+  </g>
+
+  <!-- Neural connection: the accent completes the O and links the system forward. -->
+  <path d="M139 91V67C139 54 149 44 162 44H181" stroke="#00CFA6" stroke-width="8" stroke-linecap="square"/>
+  <circle cx="139" cy="91" r="8" fill="#00CFA6"/>
+  <circle cx="162" cy="44" r="8" fill="#00CFA6"/>
+  <circle cx="181" cy="44" r="8" fill="#00CFA6"/>
+
+  <!-- AI pulse: a restrained signal embedded in the final P. -->
+  <path d="M603 100H617L626 84L638 108H657" stroke="#00CFA6" stroke-width="6" stroke-linecap="square" stroke-linejoin="miter"/>
+</svg>

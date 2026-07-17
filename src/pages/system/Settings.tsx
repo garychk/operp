@@ -63,7 +63,7 @@ const settingCategories: SettingCategory[] = [
     name: '基础设置',
     description: '企业资料、默认语言、时区和单据号规则等全局基础参数。',
     defaults: {
-      companyName: 'opelix',
+      companyName: 'OPERP',
       companyCode: 'ERP',
       timezone: 'Asia/Shanghai',
       language: 'zh-CN',

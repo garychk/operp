@@ -351,7 +351,7 @@ export function ProLayout() {
         fixSiderbar
         fixedHeader
         splitMenus={false}
-        title="opelix"
+        title="OPERP"
         logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
         route={{ routes: visibleMenuData }}
         location={{ pathname: location.pathname }}
@@ -454,7 +454,7 @@ export function ProLayout() {
         ]}
         footerRender={() => (
           <div style={{ textAlign: 'center', padding: 12, color: '#999' }}>
-            © 2026 opelix
+            © 2026 OPERP
           </div>
         )}
       >

@@ -1,4 +1,4 @@
-# opelix 管理系统
+# OPERP 管理系统
 
 一个功能完整的企业资源计划（ERP）系统，采用现代前端技术栈构建，并集成 AI 智能对话能力。
 ![alt text](image.png)
@@ -29,7 +29,7 @@
 - **@ant-design/x** - AI 对话 UI 组件
 - **Ollama** - 支持本地大模型对话，例如 Qwen、Llama、DeepSeek 等
 - **LocalStorage 模型配置** - 支持在浏览器中维护多个模型服务配置
-- **opelix 数据增强** - 对话前自动查询真实 ERP 数据并注入 prompt
+- **OPERP 数据增强** - 对话前自动查询真实 ERP 数据并注入 prompt
 
 ### 工具库
 - **dayjs 1.11** - 轻量级日期处理库
@@ -363,4 +363,4 @@ ollama pull qwen2.5
 
 ---
 
-© 2026 opelix System
+© 2026 OPERP System

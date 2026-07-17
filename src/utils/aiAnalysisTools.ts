@@ -252,7 +252,7 @@ export const buildERPAnalysisContext = async (prompt: string): Promise<AnalysisC
 
   const contextText = sections.map((section) => `## ${section.title}\n${section.content}`).join('\n\n');
   const injectedPrompt = [
-    '你是 opelix 系统内的业务分析助手。请优先基于下面的真实 ERP 数据摘要回答用户问题。',
+    '你是 OPERP 系统内的业务分析助手。请优先基于下面的真实 ERP 数据摘要回答用户问题。',
     '回答时请使用中文，给出关键指标、异常风险、可能原因和可执行建议。不要编造摘要中没有的数据；如果数据不足，请明确说明。',
     '',
     '# ERP 数据摘要',
