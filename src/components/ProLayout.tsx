@@ -27,6 +27,8 @@ import {
   TruckOutlined,
   SunFilled,
   MoonOutlined,
+  BgColorsOutlined,
+  CheckOutlined,
   InfoCircleFilled,
   GithubFilled,
   PicLeftOutlined,
@@ -51,6 +53,49 @@ interface MenuRoute {
   icon: React.ReactNode;
   routes?: MenuRoute[];
 }
+
+type ThemeColorKey = 'default' | 'blue' | 'green' | 'orange' | 'purple' | 'warmPaper';
+
+interface ThemeColor {
+  label: string;
+  color: string;
+  rgb: string;
+  secondaryRgb?: string;
+  surfaceColor?: string;
+  surfaceRgb?: string;
+}
+
+const themeColors: Record<ThemeColorKey, ThemeColor> = {
+  default: { label: '默认', color: '#1677ff', rgb: '22, 119, 255' },
+  blue: { label: '星际蓝', color: '#0ea5e9', rgb: '14, 165, 233', secondaryRgb: '99, 102, 241', surfaceRgb: '47, 134, 237' },
+  green: { label: '极光绿', color: '#10b981', rgb: '16, 185, 129', secondaryRgb: '6, 182, 212', surfaceRgb: '11, 184, 171' },
+  orange: { label: '脉冲橙', color: '#f97316', rgb: '249, 115, 22', secondaryRgb: '225, 29, 72', surfaceRgb: '237, 72, 47' },
+  purple: { label: '星云紫', color: '#8b5cf6', rgb: '139, 92, 246', secondaryRgb: '6, 182, 212', surfaceRgb: '73, 137, 229' },
+  warmPaper: {
+    label: '暖纸色', color: '#9c5f36', rgb: '156, 95, 54',
+    surfaceColor: '#f0eee6', surfaceRgb: '240, 238, 230',
+  },
+};
+
+const themeSurface = (themeColor: ThemeColorKey, dark: boolean, opacity: number, base = false) => {
+  const selected = themeColors[themeColor];
+  if (base && selected.surfaceColor && !dark) return selected.surfaceColor;
+  const rgb = base ? selected.surfaceRgb ?? selected.rgb : selected.rgb;
+  return `rgba(${rgb}, ${dark ? opacity * 1.8 : opacity})`;
+};
+
+const themeHeaderBackground = (themeColor: ThemeColorKey, dark: boolean) => {
+  const selected = themeColors[themeColor];
+  if (selected.surfaceColor && !dark) {
+    return 'linear-gradient(115deg, #f0eee6 0%, #f5f2eb 55%, #efebe2 100%)';
+  }
+
+  const primaryOpacity = dark ? 0.11 : 0.055;
+  const secondaryOpacity = dark ? 0.07 : 0.028;
+  const secondaryRgb = selected.secondaryRgb ?? selected.rgb;
+  return `linear-gradient(115deg, rgba(${selected.rgb}, ${primaryOpacity}) 0%, rgba(${secondaryRgb}, ${secondaryOpacity}) 55%, rgba(${selected.rgb}, ${primaryOpacity * 0.65}) 100%)`;
+};
+
 
 const menuData: MenuRoute[] = [
   {
@@ -158,6 +203,10 @@ export function ProLayout() {
     const saved = localStorage.getItem('erp-dark-mode');
     return saved !== null ? JSON.parse(saved) : false;
   });
+  const [themeColor, setThemeColor] = useState<ThemeColorKey>(() => {
+    const saved = localStorage.getItem('erp-theme-color');
+    return saved && saved in themeColors ? saved as ThemeColorKey : 'default';
+  });
   const [ismix, setMix] = useState(() => {
     const saved = localStorage.getItem('erp-layout-mix');
     return saved !== null ? JSON.parse(saved) : true;
@@ -169,7 +218,16 @@ export function ProLayout() {
   }, [dark]);
 
   useEffect(() => {
+    const selected = themeColors[themeColor];
+    localStorage.setItem('erp-theme-color', themeColor);
+    document.documentElement.style.setProperty('--accent', selected.color);
+    document.documentElement.style.setProperty('--accent-bg', `rgba(${selected.rgb}, 0.1)`);
+    document.documentElement.style.setProperty('--accent-border', `rgba(${selected.rgb}, 0.5)`);
+  }, [themeColor]);
+
+  useEffect(() => {
     localStorage.setItem('erp-layout-mix', JSON.stringify(ismix));
+
   }, [ismix]);
 
   const visibleMenuData = useMemo(() => {
@@ -262,9 +320,34 @@ export function ProLayout() {
     closable: tab.closable,
   }));
   return (
-    <ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
+    <ConfigProvider
+      theme={{
+        algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: { colorPrimary: themeColors[themeColor].color },
+      }}
+    >
       <AntProLayout
         layout={ismix ? 'mix' : 'side'}
+        className={themeColor === 'default' ? undefined : 'themed-pro-layout'}
+        style={themeColor === 'default' ? undefined : {
+          '--theme-header-background': themeHeaderBackground(themeColor, dark),
+        } as React.CSSProperties}
+        token={themeColor === 'default' ? undefined : {
+          header: {
+            colorBgHeader: themeSurface(themeColor, dark, 0.06, true),
+            colorBgScrollHeader: themeSurface(themeColor, dark, 0.075, true),
+            colorBgMenuItemHover: themeSurface(themeColor, dark, 0.06),
+            colorBgMenuItemSelected: themeSurface(themeColor, dark, 0.1),
+            colorBgRightActionsItemHover: themeSurface(themeColor, dark, 0.06),
+          },
+          sider: {
+            colorMenuBackground: themeSurface(themeColor, dark, 0.015),
+            colorBgMenuItemHover: themeSurface(themeColor, dark, 0.045),
+            colorBgMenuItemActive: themeSurface(themeColor, dark, 0.065),
+            colorBgMenuItemSelected: themeSurface(themeColor, dark, 0.09),
+            colorBgCollapsedButton: themeSurface(themeColor, dark, 0.055),
+          },
+        }}
         fixSiderbar
         fixedHeader
         splitMenus={false}
@@ -325,6 +408,42 @@ export function ProLayout() {
           ismix ? (
             <PicLeftOutlined key="mix" onClick={() => setMix(false)} />
           ):(<PicCenterOutlined key="mix" onClick={() => setMix(true)} />),
+          <Dropdown
+            key="theme-color"
+            trigger={['click']}
+            menu={{
+              selectable: true,
+              selectedKeys: [themeColor],
+              onClick: ({ key }) => setThemeColor(key as ThemeColorKey),
+              items: Object.entries(themeColors).map(([key, item]) => ({
+                key,
+                label: (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 72 }}>
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: 3,
+                        background: item.secondaryRgb
+                          ? `linear-gradient(135deg, ${item.color}, rgb(${item.secondaryRgb}))`
+                          : item.surfaceColor ?? item.color,
+                        border: item.surfaceColor ? '1px solid rgba(0, 0, 0, 0.12)' : undefined,
+                      }}
+                    />
+                    <span style={{ flex: 1 }}>{item.label}</span>
+                    {themeColor === key ? <CheckOutlined /> : null}
+                  </span>
+                ),
+              })),
+            }}
+          >
+            <BgColorsOutlined
+              title="切换主题色"
+              aria-label="切换主题色"
+              style={{ color: themeColors[themeColor].color }}
+            />
+          </Dropdown>,
          <InfoCircleFilled key="info" hidden={!ismix} />,
           <OpenAIOutlined
             key="openai"

@@ -19,6 +19,10 @@ body {
 #root {
   min-height: 100vh;
 }
+
+.themed-pro-layout .ant-pro-layout-header {
+  background: var(--theme-header-background) !important;
+}
 .ant-pro-layout-content {
   padding: 0px !important;
 }
