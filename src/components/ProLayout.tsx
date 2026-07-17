@@ -35,7 +35,7 @@ import {
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { AIChatDrawer } from './AIChatDrawer';
-import heroLogo from '../assets/favicon.svg';
+import heroLogo from '../assets/opelix.svg';
 import defaultAvatar from '../assets/avatar.png';
 
 interface TabItem {
@@ -268,7 +268,7 @@ export function ProLayout() {
         fixSiderbar
         fixedHeader
         splitMenus={false}
-        title="Supabase ERP"
+        title="opelix"
         logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
         route={{ routes: visibleMenuData }}
         location={{ pathname: location.pathname }}
@@ -335,7 +335,7 @@ export function ProLayout() {
         ]}
         footerRender={() => (
           <div style={{ textAlign: 'center', padding: 12, color: '#999' }}>
-            © 2026 Supabase ERP
+            © 2026 opelix
           </div>
         )}
       >

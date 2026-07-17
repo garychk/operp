@@ -263,7 +263,7 @@ export const Login: React.FC = () => {
       >
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Title level={2} style={{ marginBottom: 8 }}>
-            Supabase ERP
+            opelix
           </Title>
           <p style={{ color: '#666' }}>
             {activeTab === 'login' ? '请登录您的账户' : '创建新账户'}

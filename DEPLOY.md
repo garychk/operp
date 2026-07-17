@@ -82,7 +82,7 @@ npm run preview
 ├── tsconfig.json           # TypeScript 配置
 ├── vite.config.ts          # Vite 配置
 ├── public/                 # 静态资源
-│   ├── favicon.svg
+│   ├── opelix.svg
 │   └── icons.svg
 ├── src/
 │   ├── main.tsx           # 应用入口
