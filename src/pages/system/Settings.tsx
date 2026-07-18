@@ -398,6 +398,7 @@ export function Settings() {
 
   return (
     <Card
+      style={{ borderRadius: 0 }}
       variant="borderless"
       title="系统设置"
       extra={
@@ -431,7 +432,7 @@ export function Settings() {
       <Tabs activeKey={activeKey} items={items} onChange={setActiveKey} />
       <div
         style={{
-          maxHeight: "calc(100vh - 420px)",
+          maxHeight: "calc(100vh - 320px)",
           overflowY: "auto",
           overflowX: "hidden",
         }}

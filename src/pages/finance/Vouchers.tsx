@@ -475,7 +475,7 @@ export function Vouchers() {
   }), { debit: 0, credit: 0 });
 
   return (
-    <Card variant="borderless" title="凭证管理" extra={
+    <Card style={{ borderRadius: 0 }} variant="borderless" title="凭证管理" extra={
       <Space>
         <Input
           placeholder="搜索凭证号或摘要..."

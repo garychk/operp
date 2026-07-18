@@ -393,91 +393,116 @@ export function ProLayout() {
       }}
     >
       <AntProLayout
-        layout={ismix ? 'mix' : 'side'}
-        className={themeColor === 'default' ? undefined : 'themed-pro-layout'}
-        style={themeColor === 'default' ? undefined : {
-          '--theme-header-background': themeHeaderBackground(themeColor, dark),
-        } as React.CSSProperties}
-        token={themeColor === 'default' ? undefined : {
-          header: {
-            colorBgHeader: themeSurface(themeColor, dark, 0.06, true),
-            colorBgScrollHeader: themeSurface(themeColor, dark, 0.075, true),
-            colorBgMenuItemHover: themeSurface(themeColor, dark, 0.06),
-            colorBgMenuItemSelected: themeSurface(themeColor, dark, 0.1),
-            colorBgRightActionsItemHover: themeSurface(themeColor, dark, 0.06),
-          },
-          sider: {
-            colorMenuBackground: themeSurface(themeColor, dark, 0.015),
-            colorBgMenuItemHover: themeSurface(themeColor, dark, 0.045),
-            colorBgMenuItemActive: themeSurface(themeColor, dark, 0.065),
-            colorBgMenuItemSelected: themeSurface(themeColor, dark, 0.09),
-            colorBgCollapsedButton: themeSurface(themeColor, dark, 0.055),
-          },
-        }}
+        layout={ismix ? "mix" : "side"}
+        className={themeColor === "default" ? undefined : "themed-pro-layout"}
+        style={
+          themeColor === "default"
+            ? undefined
+            : ({
+                "--theme-header-background": themeHeaderBackground(
+                  themeColor,
+                  dark,
+                ),
+              } as React.CSSProperties)
+        }
+        token={
+          themeColor === "default"
+            ? undefined
+            : {
+                header: {
+                  colorBgHeader: themeSurface(themeColor, dark, 0.06, true),
+                  colorBgScrollHeader: themeSurface(
+                    themeColor,
+                    dark,
+                    0.075,
+                    true,
+                  ),
+                  colorBgMenuItemHover: themeSurface(themeColor, dark, 0.06),
+                  colorBgMenuItemSelected: themeSurface(themeColor, dark, 0.1),
+                  colorBgRightActionsItemHover: themeSurface(
+                    themeColor,
+                    dark,
+                    0.06,
+                  ),
+                },
+                sider: {
+                  colorMenuBackground: themeSurface(themeColor, dark, 0.015),
+                  colorBgMenuItemHover: themeSurface(themeColor, dark, 0.045),
+                  colorBgMenuItemActive: themeSurface(themeColor, dark, 0.065),
+                  colorBgMenuItemSelected: themeSurface(themeColor, dark, 0.09),
+                  colorBgCollapsedButton: themeSurface(themeColor, dark, 0.055),
+                },
+              }
+        }
+        // menuExtraRender={() => <Input.Search placeholder="搜索菜单" />}
+        breadcrumbRender={false}
         fixSiderbar
         fixedHeader
         splitMenus={false}
         title="OPERP"
-        logo={<img src={heroLogo} alt="Logo" style={{ height: '24px' }} />}
+        logo={<img src={heroLogo} alt="Logo" style={{ height: "24px" }} />}
         route={{ routes: visibleMenuData }}
         menuDataRender={(items) => visibleMenuData as unknown as typeof items}
         location={{ pathname: location.pathname }}
         menuItemRender={(item, dom) => (
-          <div onClick={() => navigate(item.path || '/')}>{dom}</div>
+          <div onClick={() => navigate(item.path || "/")}>{dom}</div>
         )}
-        headerContentRender={() => (
-          <Tag color="gold">V1.0</Tag>
-        )}
+        headerContentRender={() => <Tag color="gold">V1.0</Tag>}
         avatarProps={{
           src: user?.profile.avatar_url || defaultAvatar,
-          size: 'small',
-          title: user?.profile.real_name || user?.profile.username || user?.auth.email || '',
+          size: "small",
+          title:
+            user?.profile.real_name ||
+            user?.profile.username ||
+            user?.auth.email ||
+            "",
           render: (_props, dom) => {
-            return (
-              user ?
-                (<Dropdown
-                  menu={{
-                    items: [
-                      {
-                        key: 'logout',
-                        icon: <LogoutOutlined />,
-                        label: '退出登录',
-                        onClick: handleLogout,
-                      },
-                    ],
-                  }}
-                >
-                  {dom}
-                </Dropdown>) : (
-                  <Button
-                    size='small'
-                    type="primary"
-                    onClick={() => {
-                      if (typeof (window as any).AIApp !== 'undefined') {
-                        (window as any).AIApp.Auth?.login();
-                      } else {
-                        window.location.href = '/login';
-                      }
-                    }}
-                  >
-                    登录
-                  </Button>
-                )
+            return user ? (
+              <Dropdown
+                menu={{
+                  items: [
+                    {
+                      key: "logout",
+                      icon: <LogoutOutlined />,
+                      label: "退出登录",
+                      onClick: handleLogout,
+                    },
+                  ],
+                }}
+              >
+                {dom}
+              </Dropdown>
+            ) : (
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => {
+                  if (typeof (window as any).AIApp !== "undefined") {
+                    (window as any).AIApp.Auth?.login();
+                  } else {
+                    window.location.href = "/login";
+                  }
+                }}
+              >
+                登录
+              </Button>
             );
-          }
+          },
         }}
         actionsRender={() => [
-          dark ? (            
+          dark ? (
             <MoonOutlined key="theme" onClick={() => setDark(false)} />
           ) : (
             <SunFilled key="theme" onClick={() => setDark(true)} />
           ),
           ismix ? (
             <PicLeftOutlined key="mix" onClick={() => setMix(false)} />
-          ):(<PicCenterOutlined key="mix" onClick={() => setMix(true)} />),
+          ) : (
+            <PicCenterOutlined key="mix" onClick={() => setMix(true)} />
+          ),
           <Dropdown
             key="theme-color"
-            trigger={['click']}
+            trigger={["click"]}
             menu={{
               selectable: true,
               selectedKeys: [themeColor],
@@ -485,7 +510,14 @@ export function ProLayout() {
               items: Object.entries(themeColors).map(([key, item]) => ({
                 key,
                 label: (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 72 }}>
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      minWidth: 72,
+                    }}
+                  >
                     <span
                       aria-hidden="true"
                       style={{
@@ -494,8 +526,10 @@ export function ProLayout() {
                         borderRadius: 3,
                         background: item.secondaryRgb
                           ? `linear-gradient(135deg, ${item.color}, rgb(${item.secondaryRgb}))`
-                          : item.surfaceColor ?? item.color,
-                        border: item.surfaceColor ? '1px solid rgba(0, 0, 0, 0.12)' : undefined,
+                          : (item.surfaceColor ?? item.color),
+                        border: item.surfaceColor
+                          ? "1px solid rgba(0, 0, 0, 0.12)"
+                          : undefined,
                       }}
                     />
                     <span style={{ flex: 1 }}>{item.label}</span>
@@ -511,22 +545,28 @@ export function ProLayout() {
               style={{ color: themeColors[themeColor].color }}
             />
           </Dropdown>,
-         <InfoCircleFilled key="info" hidden={!ismix} />,
+          <InfoCircleFilled key="info" hidden={!ismix} />,
           <OpenAIOutlined
             key="openai"
-            className={`ai-chat-action${aiChatOpen ? ' ai-chat-action-active' : ''}`}
+            className={`ai-chat-action${aiChatOpen ? " ai-chat-action-active" : ""}`}
             onClick={() => setAiChatOpen(true)}
           />,
-          <GithubFilled key="github" onClick={() => window.open('https://gitee.com/garychk/supabase-erp', '_blank')}  hidden={!ismix}/>
+          <GithubFilled
+            key="github"
+            onClick={() =>
+              window.open("https://gitee.com/garychk/supabase-erp", "_blank")
+            }
+            hidden={!ismix}
+          />,
         ]}
         footerRender={() => (
-          <div style={{ textAlign: 'center', padding: 12, color: '#999' }}>
+          <div style={{ textAlign: "center", padding: 12, color: "#999" }}>
             © 2026 OPERP
           </div>
         )}
       >
-        <PageContainer title={false} >
-          <ProCard>
+        <PageContainer title={false} pageHeaderRender={false}>
+          <ProCard style={{ borderRadius: 0 }} styles={{ body: { padding: '2px 2px 0px 2px' } }}>
             <Tabs
               activeKey={activeTabKey}
               onChange={handleTabChange}
@@ -534,7 +574,7 @@ export function ProLayout() {
               hideAdd
               items={tabItems}
               onEdit={(targetKey, action) => {
-                if (action === 'remove') {
+                if (action === "remove") {
                   removeTab(targetKey as string);
                 }
               }}
