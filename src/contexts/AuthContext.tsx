@@ -184,21 +184,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     fetchSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session?.user) {
         setUser(null);
         setLoading(false);
         return;
       }
 
-      try {
-        setUser(await loadAppUser(session.user));
-      } catch (error) {
-        console.error('Failed to load app user:', error);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
+      // Auth callbacks run while Supabase holds its auth lock. Defer queries that
+      // need the session until the callback has returned and the lock is released.
+      window.setTimeout(() => {
+        void loadAppUser(session.user)
+          .then(setUser)
+          .catch((error) => {
+            console.error('Failed to load app user:', error);
+            setUser(null);
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      }, 0);
     });
 
     return () => {

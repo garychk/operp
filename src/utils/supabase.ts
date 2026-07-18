@@ -56,18 +56,73 @@ import type {
 const supabaseUrl = 'http://localhost:8008';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE';
 
-const authLock = async <R,>(
-  _name: string,
-  _acquireTimeout: number,
-  fn: () => Promise<R>,
-): Promise<R> => fn();
+const REQUEST_TIMEOUT_MS = 15_000;
+const WAKE_CHECK_DEBOUNCE_MS = 3_000;
+const SESSION_REFRESH_THRESHOLD_MS = 60_000;
+
+const fetchWithTimeout: typeof fetch = async (input, init) => {
+  const controller = new AbortController();
+  const sourceSignal = init?.signal ?? (input instanceof Request ? input.signal : undefined);
+  const abortFromSource = () => controller.abort(sourceSignal?.reason);
+
+  if (sourceSignal?.aborted) {
+    abortFromSource();
+  } else {
+    sourceSignal?.addEventListener('abort', abortFromSource, { once: true });
+  }
+
+  const timeoutId = window.setTimeout(() => {
+    controller.abort(new DOMException(
+      `Supabase request timed out after ${REQUEST_TIMEOUT_MS}ms`,
+      'TimeoutError',
+    ));
+  }, REQUEST_TIMEOUT_MS);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeoutId);
+    sourceSignal?.removeEventListener('abort', abortFromSource);
+  }
+};
 
 export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: { lock: authLock },
+  global: { fetch: fetchWithTimeout },
 });
 
 if (typeof window !== 'undefined') {
   (window as any).supabase = supabase;
+
+  let lastWakeCheck = 0;
+  let wakeCheckPromise: Promise<void> | null = null;
+
+  const checkSessionAfterWake = () => {
+    if (document.visibilityState !== 'visible') return;
+
+    const now = Date.now();
+    if (wakeCheckPromise || now - lastWakeCheck < WAKE_CHECK_DEBOUNCE_MS) return;
+    lastWakeCheck = now;
+
+    wakeCheckPromise = (async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) throw error;
+
+      const expiresAt = session?.expires_at ? session.expires_at * 1_000 : 0;
+      if (session && expiresAt - Date.now() <= SESSION_REFRESH_THRESHOLD_MS) {
+        const { error: refreshError } = await supabase.auth.refreshSession();
+        if (refreshError) throw refreshError;
+      }
+    })()
+      .catch((error) => {
+        console.error('Failed to restore Supabase session after page wake:', error);
+      })
+      .finally(() => {
+        wakeCheckPromise = null;
+      });
+  };
+
+  document.addEventListener('visibilitychange', checkSessionAfterWake);
+  window.addEventListener('focus', checkSessionAfterWake);
 }
 
 export type Tables = {

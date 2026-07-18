@@ -418,7 +418,7 @@ export function ProLayout() {
         fixedHeader
         splitMenus={false}
         title="OPERP"
-        logo={<img src={heroLogo} alt="Logo" style={{ height: '20px' }} />}
+        logo={<img src={heroLogo} alt="Logo" style={{ height: '24px' }} />}
         route={{ routes: visibleMenuData }}
         menuDataRender={(items) => visibleMenuData as unknown as typeof items}
         location={{ pathname: location.pathname }}
