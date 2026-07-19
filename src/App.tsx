@@ -26,6 +26,7 @@ import { WorkCenters } from './pages/mrp/WorkCenters';
 import { Operations } from './pages/mrp/Operations';
 import { ProductionOrders } from './pages/mrp/ProductionOrders';
 import { MrpPlans } from './pages/mrp/MrpPlans';
+import { QualityInspections } from './pages/mrp/QualityInspections';
 import { Users } from './pages/system/Users';
 import { Roles } from './pages/system/Roles';
 import { Menus } from './pages/system/Menus';
@@ -84,6 +85,7 @@ function AppContent() {
           <Route path="operations" element={<Operations />} />
           <Route path="production" element={<ProductionOrders />} />
           <Route path="plans" element={<MrpPlans />} />
+          <Route path="quality" element={<QualityInspections />} />
         </Route>
         
         <Route path="system">

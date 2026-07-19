@@ -7,6 +7,7 @@ import {
   BuildOutlined,
   ProfileOutlined,
   CalendarOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -17,6 +18,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'operations', label: '工序管理', icon: <ToolOutlined /> },
   { key: 'production', label: '生产订单', icon: <ProfileOutlined /> },
   { key: 'plans', label: 'MRP计划', icon: <CalendarOutlined /> },
+  { key: 'quality', label: '检验管理', icon: <ExperimentOutlined /> },
 ];
 
 export function MrpModule() {

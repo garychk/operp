@@ -15,3 +15,4 @@
 \i supabase/tables/deploy_08_custom_pages.sql
 
 \i supabase/tables/deploy_09_data_dictionary.sql
+\i supabase/tables/deploy_10_quality_inspection.sql

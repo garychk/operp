@@ -34,6 +34,7 @@ import {
   PicLeftOutlined,
   PicCenterOutlined,
   OpenAIOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { AIChatDrawer } from './AIChatDrawer';
@@ -195,6 +196,7 @@ const menuData: MenuRoute[] = [
       { path: '/mrp/operations', name: '工序管理', icon: <SettingOutlined /> },
       { path: '/mrp/production', name: '生产订单', icon: <ProfileOutlined /> },
       { path: '/mrp/plans', name: 'MRP计划', icon: <CalendarOutlined /> },
+      { path: '/mrp/quality', name: '检验管理', icon: <ExperimentOutlined /> },
     ],
   },
   {
@@ -237,6 +239,7 @@ const pathToNameMap: Record<string, string> = {
   '/mrp/operations': '工序管理',
   '/mrp/production': '生产订单',
   '/mrp/plans': 'MRP计划',
+  '/mrp/quality': '检验管理',
   '/system/users': '用户管理',
   '/system/roles': '角色管理',
   '/system/menus': '菜单管理',
@@ -609,4 +612,3 @@ export function ProLayout() {
     </ConfigProvider>
   );
 }
-
