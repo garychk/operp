@@ -486,14 +486,13 @@ export function Boms() {
     <Card
       variant="borderless"
       title="BOM管理"
+      style={{ borderRadius: 0 }}
       extra={
         <Space>
-          <Input
-            placeholder="搜索BOM编号或产品..."
-            prefix={<SearchOutlined />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <Input.Search placeholder="搜索BOM编号或产品..." allowClear onSearch={(value) => {
+            setSearchTerm(value);
+            fetchBoms();
+          }} />
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             新增BOM
           </Button>

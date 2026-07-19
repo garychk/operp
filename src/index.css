@@ -29,6 +29,10 @@ body {
 .ant-pro-page-container-children-container {
   padding: 0px !important;
 }
+.main-container {
+  border-radius: 0;
+  padding: 2px 2px 0px 2px;
+}
 
 /* 统一修改 Input 为只有底部边框 */
 /* .ant-input {

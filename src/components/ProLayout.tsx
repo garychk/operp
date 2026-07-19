@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { ProLayout as AntProLayout, PageContainer, ProCard } from '@ant-design/pro-components';
-import { Tabs, Button, Dropdown, Tag, ConfigProvider, theme } from 'antd';
+import { Tabs, Button, Dropdown, Tag, ConfigProvider, theme, Modal, Typography } from 'antd';
 import {
   DashboardOutlined,
   BookOutlined,
@@ -265,6 +265,7 @@ export function ProLayout() {
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [databaseMenus, setDatabaseMenus] = useState<MenuRoute[]>([]);
 
   useEffect(() => {
@@ -545,7 +546,11 @@ export function ProLayout() {
               style={{ color: themeColors[themeColor].color }}
             />
           </Dropdown>,
-          <InfoCircleFilled key="info" hidden={!ismix} />,
+          <InfoCircleFilled
+            key="info"
+            hidden={!ismix}
+            onClick={() => setIsInfoModalOpen(true)}
+          />,
           <OpenAIOutlined
             key="openai"
             className={`ai-chat-action${aiChatOpen ? " ai-chat-action-active" : ""}`}
@@ -566,7 +571,10 @@ export function ProLayout() {
         )}
       >
         <PageContainer title={false} pageHeaderRender={false}>
-          <ProCard style={{ borderRadius: 0 }} styles={{ body: { padding: '2px 2px 0px 2px' } }}>
+          <ProCard
+            styles={{ body: { padding: "2px 2px 0px 2px" } }}
+            className="main-container"
+          >
             <Tabs
               activeKey={activeTabKey}
               onChange={handleTabChange}
@@ -583,6 +591,18 @@ export function ProLayout() {
           </ProCard>
         </PageContainer>
         <AIChatDrawer open={aiChatOpen} onClose={() => setAiChatOpen(false)} />
+        <Modal open={isInfoModalOpen} title="关于软件" footer={null} onCancel={() => setIsInfoModalOpen(false)}>
+          <Typography.Paragraph>
+            这是一个功能完整、架构清晰的现代化 ERP
+            前端系统，适合作为制造企业的信息化管理平台。系统不仅提供传统 ERP
+            的财务、库存、采购、销售和生产制造功能，还集成了 AI
+            智能对话能力，可基于真实 opelix
+            数据进行分析，并通过自然语言创建常用业务数据。
+          </Typography.Paragraph>
+          <Typography.Paragraph type="secondary">当前版本：1.0.0</Typography.Paragraph>
+          <Typography.Paragraph type="secondary">开发作者：garychk</Typography.Paragraph>
+          <Typography.Paragraph type="secondary">联系邮箱：garychk@163.com</Typography.Paragraph>
+        </Modal>
       </AntProLayout>
     </ConfigProvider>
   );

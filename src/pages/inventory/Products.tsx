@@ -265,12 +265,10 @@ export function Products() {
       title="物料管理"
       extra={
         <Space>
-          <Input
-            placeholder="搜索物料名称或编码..."
-            prefix={<SearchOutlined />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <Input.Search placeholder="搜索物料名称或编码..." allowClear onSearch={(value) => {
+            setSearchTerm(value);
+            fetchProducts();
+          }} />
           <Button
             icon={<SettingOutlined />}
             onClick={() => setIsCategoryModalOpen(true)}

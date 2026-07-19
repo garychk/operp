@@ -34,7 +34,8 @@ import { SupaModal } from "../../components/SupaModal";
 import { RoutingMap } from "../../components/RoutingMap";
 
 type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
-type RoutingDetail = Tables["erp_routing_operation_details_s_539dcf81_b"]["Row"];
+type RoutingDetail =
+  Tables["erp_routing_operation_details_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
 
@@ -53,7 +54,9 @@ export function RoutingOperations() {
   const [editingRouting, setEditingRouting] = useState<Routing | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<Routing | null>(null);
   const [details, setDetails] = useState<RoutingDetail[]>([]);
-  const [editingDetail, setEditingDetail] = useState<RoutingDetail | null>(null);
+  const [editingDetail, setEditingDetail] = useState<RoutingDetail | null>(
+    null,
+  );
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
 
@@ -134,28 +137,38 @@ export function RoutingOperations() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingRouting) {
-        await logWithTiming("更新工艺路线", "UPDATE", async () => {
-          const { error } = await supabase
-            .from(routingTable)
-            .update(values)
-            .eq("id", editingRouting.id);
-          if (error) throw error;
-        }, { table: routingTable, recordId: editingRouting.id });
+        await logWithTiming(
+          "更新工艺路线",
+          "UPDATE",
+          async () => {
+            const { error } = await supabase
+              .from(routingTable)
+              .update(values)
+              .eq("id", editingRouting.id);
+            if (error) throw error;
+          },
+          { table: routingTable, recordId: editingRouting.id },
+        );
         message.success("更新成功");
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: routingTable,
         };
-        const data = await logWithTiming("新增工艺路线", "INSERT", async () => {
-          const { data, error } = await supabase
-            .from(routingTable)
-            .insert([values])
-            .select()
-            .single();
-          if (error) throw error;
-          logParams.recordId = data.id;
-          return data;
-        }, logParams);
+        const data = await logWithTiming(
+          "新增工艺路线",
+          "INSERT",
+          async () => {
+            const { data, error } = await supabase
+              .from(routingTable)
+              .insert([values])
+              .select()
+              .single();
+            if (error) throw error;
+            logParams.recordId = data.id;
+            return data;
+          },
+          logParams,
+        );
         setSelectedRouting(data);
         message.success("新增成功");
       }
@@ -212,7 +225,8 @@ export function RoutingOperations() {
         .eq("routing_id", routingId);
       if (error) throw error;
 
-      const totalHours = data?.reduce((sum, d) => sum + (d.standard_hours || 0), 0) || 0;
+      const totalHours =
+        data?.reduce((sum, d) => sum + (d.standard_hours || 0), 0) || 0;
 
       await supabase
         .from("erp_routing_operations_s_539dcf81_b")
@@ -246,18 +260,23 @@ export function RoutingOperations() {
       content: "确定要删除该工艺路线吗？",
       onOk: async () => {
         try {
-          await logWithTiming("删除工艺路线", "DELETE", async () => {
-            const { error } = await supabase
-              .from(routingTable)
-              .update({ is_deleted: "y" })
-              .eq("id", id);
-            if (error) throw error;
-            const { error: detailError } = await supabase
-              .from(routingDetailTable)
-              .update({ is_deleted: "y" })
-              .eq("routing_id", id);
-            if (detailError) throw detailError;
-          }, { table: routingTable, recordId: id });
+          await logWithTiming(
+            "删除工艺路线",
+            "DELETE",
+            async () => {
+              const { error } = await supabase
+                .from(routingTable)
+                .update({ is_deleted: "y" })
+                .eq("id", id);
+              if (error) throw error;
+              const { error: detailError } = await supabase
+                .from(routingDetailTable)
+                .update({ is_deleted: "y" })
+                .eq("routing_id", id);
+              if (detailError) throw detailError;
+            },
+            { table: routingTable, recordId: id },
+          );
           message.success("删除成功");
           fetchRoutings();
         } catch (error) {
@@ -466,10 +485,19 @@ export function RoutingOperations() {
       key: "action",
       render: (_: any, record: RoutingDetail) => (
         <Space size="middle">
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
+          <Button
+            type="text"
+            icon={<EditOutlined />}
+            onClick={() => handleEditDetail(record)}
+          >
             编辑
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)}>
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDeleteDetail(record.id)}
+          >
             删除
           </Button>
         </Space>
@@ -477,23 +505,25 @@ export function RoutingOperations() {
     },
   ];
 
-  const detailTotal = details.reduce((acc, d) => acc + (d.standard_hours || 0), 0);
+  const detailTotal = details.reduce(
+    (acc, d) => acc + (d.standard_hours || 0),
+    0,
+  );
 
   return (
     <Card
       variant="borderless"
       title="工艺路线管理"
+      style={{ borderRadius: 0 }}
       extra={
         <Space>
-          <Input
-          placeholder="搜索工艺路线编号或产品..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增工艺路线
-        </Button>
+          <Input.Search placeholder="搜索工艺路线编号或产品..." allowClear onSearch={(value) => {
+            setSearchTerm(value);
+            fetchRoutings();
+          }} />
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            新增工艺路线
+          </Button>
         </Space>
       }
     >
@@ -527,8 +557,22 @@ export function RoutingOperations() {
         }
         headerExtra={
           <Space>
-            <Button type="dashed" color="purple" size="small" icon={<CheckOutlined />}>审核</Button>
-            <Button type="dashed" color="purple" size="small" icon={<PrinterOutlined />}>打印</Button>
+            <Button
+              type="dashed"
+              color="purple"
+              size="small"
+              icon={<CheckOutlined />}
+            >
+              审核
+            </Button>
+            <Button
+              type="dashed"
+              color="purple"
+              size="small"
+              icon={<PrinterOutlined />}
+            >
+              打印
+            </Button>
           </Space>
         }
         headerPanelTitle="工艺路线头"
@@ -536,11 +580,23 @@ export function RoutingOperations() {
         historyTable={routingTable}
         historyRecordId={editingRouting?.id || selectedRouting?.id}
         detailExtra={
-          <Button type="link" size="small" icon={<PlusOutlined />} onClick={handleAddDetail}>新增工序</Button>
+          <Button
+            type="link"
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={handleAddDetail}
+          >
+            新增工序
+          </Button>
         }
         form={form}
         formEle={
-          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: "0 16px 0 0" }}>
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+            style={{ padding: "0 16px 0 0" }}
+          >
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
@@ -548,7 +604,10 @@ export function RoutingOperations() {
                   name="routing_no"
                   rules={[{ required: true, message: "请输入工艺路线编号" }]}
                 >
-                  <Input placeholder="请输入工艺路线编号" disabled={!!editingRouting} />
+                  <Input
+                    placeholder="请输入工艺路线编号"
+                    disabled={!!editingRouting}
+                  />
                 </Form.Item>
                 <Form.Item
                   label="产品"
@@ -629,7 +688,9 @@ export function RoutingOperations() {
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => form.submit()}>保存</Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              保存
+            </Button>
           </Space>
         }
         height={680}
@@ -646,107 +707,114 @@ export function RoutingOperations() {
         footer={
           <Space>
             <Button onClick={() => setIsDetailModalOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => detailForm.submit()}>保存</Button>
+            <Button type="primary" onClick={() => detailForm.submit()}>
+              保存
+            </Button>
           </Space>
         }
         width={600}
         height={400}
       >
-        <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ marginRight: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  label="序号"
-                  name="sequence_no"
-                  rules={[{ required: true, message: "请输入序号" }]}
-                >
-                  <InputNumber min={1} style={{ width: "100%" }} placeholder="请输入序号" />
-                </Form.Item>
-                <Form.Item
-                  label="工序名称"
-                  name="operation_id"
-                  rules={[{ required: true, message: "请选择工序" }]}
-                >
-                  <Select placeholder="请选择工序">
-                    {operations.map((op) => (
-                      <Option key={op.id} value={op.id}>
-                        {op.name}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-                <Form.Item label="下一道工序" name="next_operation_id">
-                  <Select placeholder="请选择下一道工序" allowClear>
-                    {operations.map((op) => (
-                      <Option key={op.id} value={op.id}>
-                        {op.name}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-                <Form.Item
-                  label="标准工时(小时)"
-                  name="standard_hours"
-                  initialValue={0}
-                >
-                  <InputNumber
-                    min={0}
-                    step={0.1}
-                    style={{ width: "100%" }}
-                    placeholder="请输入标准工时"
-                  />
-                </Form.Item>
-                <Form.Item
-                  label="准备工时(小时)"
-                  name="setup_hours"
-                  initialValue={0}
-                >
-                  <InputNumber
-                    min={0}
-                    step={0.1}
-                    style={{ width: "100%" }}
-                    placeholder="请输入准备工时"
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  label="人工费率"
-                  name="labor_rate"
-                  initialValue={0}
-                >
-                  <InputNumber
-                    min={0}
-                    step={0.0001}
-                    precision={4}
-                    style={{ width: "100%" }}
-                    placeholder="请输入人工费率"
-                  />
-                </Form.Item>
-                <Form.Item
-                  label="制造费用率"
-                  name="overhead_rate"
-                  initialValue={0}
-                >
-                  <InputNumber
-                    min={0}
-                    step={0.0001}
-                    precision={4}
-                    style={{ width: "100%" }}
-                    placeholder="请输入制造费用率"
-                  />
-                </Form.Item>
-                <Form.Item
-                  label="是否需要检验"
-                  name="is_inspection_required"
-                  valuePropName="checked"
-                  initialValue={false}
-                >
-                  <Checkbox />
-                </Form.Item>
-              </Col>
-            </Row>
-          </Form>
+        <Form
+          form={detailForm}
+          layout="vertical"
+          onFinish={handleDetailSubmit}
+          style={{ marginRight: 16 }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label="序号"
+                name="sequence_no"
+                rules={[{ required: true, message: "请输入序号" }]}
+              >
+                <InputNumber
+                  min={1}
+                  style={{ width: "100%" }}
+                  placeholder="请输入序号"
+                />
+              </Form.Item>
+              <Form.Item
+                label="工序名称"
+                name="operation_id"
+                rules={[{ required: true, message: "请选择工序" }]}
+              >
+                <Select placeholder="请选择工序">
+                  {operations.map((op) => (
+                    <Option key={op.id} value={op.id}>
+                      {op.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item label="下一道工序" name="next_operation_id">
+                <Select placeholder="请选择下一道工序" allowClear>
+                  {operations.map((op) => (
+                    <Option key={op.id} value={op.id}>
+                      {op.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item
+                label="标准工时(小时)"
+                name="standard_hours"
+                initialValue={0}
+              >
+                <InputNumber
+                  min={0}
+                  step={0.1}
+                  style={{ width: "100%" }}
+                  placeholder="请输入标准工时"
+                />
+              </Form.Item>
+              <Form.Item
+                label="准备工时(小时)"
+                name="setup_hours"
+                initialValue={0}
+              >
+                <InputNumber
+                  min={0}
+                  step={0.1}
+                  style={{ width: "100%" }}
+                  placeholder="请输入准备工时"
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="人工费率" name="labor_rate" initialValue={0}>
+                <InputNumber
+                  min={0}
+                  step={0.0001}
+                  precision={4}
+                  style={{ width: "100%" }}
+                  placeholder="请输入人工费率"
+                />
+              </Form.Item>
+              <Form.Item
+                label="制造费用率"
+                name="overhead_rate"
+                initialValue={0}
+              >
+                <InputNumber
+                  min={0}
+                  step={0.0001}
+                  precision={4}
+                  style={{ width: "100%" }}
+                  placeholder="请输入制造费用率"
+                />
+              </Form.Item>
+              <Form.Item
+                label="是否需要检验"
+                name="is_inspection_required"
+                valuePropName="checked"
+                initialValue={false}
+              >
+                <Checkbox />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
       </Modal>
     </Card>
   );

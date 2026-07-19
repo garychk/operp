@@ -14,6 +14,7 @@ import {
 import {
   Alert,
   Button,
+  Card,
   Divider,
   Drawer,
   Empty,
@@ -34,6 +35,8 @@ import { PageCanvas } from "./PageRenderer";
 import type { CustomPage, PageWidget, WidgetType } from "./types";
 import { widgetDefaults } from "./types";
 import "./page-builder.css";
+import { Content, Header } from "antd/es/layout/layout";
+import Sider from "antd/es/layout/Sider";
 
 const palette: Array<{
   type: WidgetType;
@@ -145,107 +148,116 @@ export function PageDesigner() {
 
   return (
     <div className="page-designer">
-      <div className="designer-toolbar">
-        <Space>
-          <Typography.Title level={4}>页面设计器</Typography.Title>
-          <Select
-            value={page.id || "new"}
-            style={{ width: 220 }}
-            onChange={(value) => {
-              if (value === "new") setPage(emptyPage());
-              else
-                setPage(pages.find((item) => item.id === value) || emptyPage());
-              setSelectedId(undefined);
-            }}
-            options={[
-              { value: "new", label: "新建页面" },
-              ...pages.map((item) => ({
-                value: item.id!,
-                label: `${item.name}${item.status === "published" ? " · 已发布" : ""}`,
-              })),
-            ]}
-          />
-        </Space>
-        <Space>
-          <Button icon={<EyeOutlined />} onClick={() => setPreview(true)}>
-            预览
-          </Button>
-          <Button icon={<SaveOutlined />} loading={saving} onClick={save}>
-            保存
-          </Button>
-          <Button
-            type="primary"
-            icon={<SendOutlined />}
-            onClick={() => setPublishOpen(true)}
-          >
-            发布
-          </Button>
-        </Space>
-      </div>
-      <div className="designer-workspace">
-        <aside className="component-palette">
-          <Typography.Text strong>组件</Typography.Text>
-          <div className="palette-grid">
-            {palette.map((item) => (
-              <Button
-                key={item.type}
-                icon={item.icon}
-                onClick={() => addWidget(item.type)}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </div>
-          <Divider />
-          <Typography.Text strong>页面</Typography.Text>
-          <Input
-            value={page.name}
-            onChange={(event) => setPage({ ...page, name: event.target.value })}
-            placeholder="页面名称"
-          />
-          <Input
-            value={page.description || ""}
-            onChange={(event) =>
-              setPage({ ...page, description: event.target.value })
-            }
-            placeholder="页面描述"
-          />
-        </aside>
-        <main className="designer-canvas">
-          {page.config.widgets.length ? (
-            <PageCanvas
-              page={page}
-              editable
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              onLayoutChange={updateLayout}
+      <Card
+        title={<Typography.Title level={4}>页面设计器</Typography.Title>}
+        variant="borderless"
+        styles={{ body: { padding: "1px 0px 0px 0px" } }}
+        extra={
+          <Space>
+            <Select
+              value={page.id || "new"}
+              style={{ width: 220 }}
+              onChange={(value) => {
+                if (value === "new") setPage(emptyPage());
+                else
+                  setPage(
+                    pages.find((item) => item.id === value) || emptyPage(),
+                  );
+                setSelectedId(undefined);
+              }}
+              options={[
+                { value: "new", label: "新建页面" },
+                ...pages.map((item) => ({
+                  value: item.id!,
+                  label: `${item.name}${item.status === "published" ? " · 已发布" : ""}`,
+                })),
+              ]}
             />
-          ) : (
-            <Empty description="从左侧添加组件" />
-          )}
-        </main>
-        <aside className="property-panel">
-          {selected ? (
-            <>
-              <div className="property-title">
-                <Typography.Text strong>组件属性</Typography.Text>
-                <Popconfirm
-                  title="删除此组件？"
-                  onConfirm={() => {
-                    setPage((current) => ({
-                      ...current,
-                      config: {
-                        widgets: current.config.widgets.filter(
-                          (item) => item.id !== selected.id,
-                        ),
-                      },
-                    }));
-                    setSelectedId(undefined);
-                  }}
+            <Button icon={<EyeOutlined />} onClick={() => setPreview(true)}>
+              预览
+            </Button>
+            <Button icon={<SaveOutlined />} loading={saving} onClick={save}>
+              保存
+            </Button>
+            <Button
+              type="primary"
+              icon={<SendOutlined />}
+              onClick={() => setPublishOpen(true)}
+            >
+              发布
+            </Button>
+          </Space>
+        }
+      >
+        <div className="designer-workspace">
+          <Card title="组件" variant="borderless" size="small">
+            <div className="palette-grid">
+              {palette.map((item) => (
+                <Button
+                  key={item.type}
+                  icon={item.icon}
+                  onClick={() => addWidget(item.type)}
                 >
-                  <Button danger type="text" icon={<DeleteOutlined />} />
-                </Popconfirm>
-              </div>
+                  {item.label}
+                </Button>
+              ))}
+            </div>
+            <Divider />
+            <Space orientation="vertical">
+              <Typography.Text strong>页面</Typography.Text>
+              <Input
+                value={page.name}
+                onChange={(event) =>
+                  setPage({ ...page, name: event.target.value })
+                }
+                placeholder="页面名称"
+              />
+              <Input
+                value={page.description || ""}
+                onChange={(event) =>
+                  setPage({ ...page, description: event.target.value })
+                }
+                placeholder="页面描述"
+              />
+            </Space>
+          </Card>
+          <main className="designer-canvas">
+            {page.config.widgets.length ? (
+              <PageCanvas
+                page={page}
+                editable
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                onLayoutChange={updateLayout}
+              />
+            ) : (
+              <Empty description="从左侧添加组件" />
+            )}
+          </main>
+          <Card
+            title="组件属性"
+            variant="borderless"
+            size="small"
+            extra={
+              <Popconfirm
+                title="删除此组件？"
+                onConfirm={() => {
+                  setPage((current) => ({
+                    ...current,
+                    config: {
+                      widgets: current.config.widgets.filter(
+                        (item) => item.id !== selected?.id,
+                      ),
+                    },
+                  }));
+                  setSelectedId(undefined);
+                }}
+              >
+                <Button danger type="text" icon={<DeleteOutlined />} disabled={!selected}  />
+              </Popconfirm>
+            }
+          >
+            {selected ? (
               <Form layout="vertical" size="small">
                 <Form.Item label="标题">
                   <Input
@@ -424,12 +436,12 @@ export function PageDesigner() {
                   </>
                 )}
               </Form>
-            </>
-          ) : (
-            <Empty description="选择一个组件编辑属性" />
-          )}
-        </aside>
-      </div>
+            ) : (
+              <Empty description="选择一个组件编辑属性" />
+            )}
+          </Card>
+        </div>
+      </Card>
       <Drawer
         open={preview}
         onClose={() => setPreview(false)}

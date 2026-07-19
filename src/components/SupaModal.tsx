@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider, Empty, Spin, message } from 'antd';
+import { Modal, Space, Button, Collapse, Splitter, Timeline, Tag, Divider, Empty, Spin, message,Typography } from 'antd';
 import { CompressOutlined, FullscreenOutlined, LeftOutlined, RightOutlined, CaretRightOutlined, HistoryOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import  PrintDesigner  from 'operp-print-designer';
@@ -235,93 +235,118 @@ export function SupaModal({
 
   return (
     <>
-    <Modal
-      title={
-        <Space>
-          {title}
-          <Button
-            type="default"
-            size="small"
-            icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />}
-            onClick={() => setIsExpand(!isExpand)}
-          />
-          <Button type="default" size="small" icon={<LeftOutlined />} />
-          <Button type="default" size="small" icon={<RightOutlined />} />
-          <Button type='default' size="small" icon={<CheckOutlined />} color="purple" />
-          <Button type='default' size="small" icon={<PrinterOutlined />} onClick={handleOpenDesigner} />
-          <Tag color="magenta">按ESC键可关闭</Tag>
-        </Space>
-      }
-      open={open}
-      onCancel={combinedOnCancel}
-      footer={footer}
-      width={isExpand ? '100%' : width}
-      styles={{
-        body: isExpand ? { height: 'calc(90vh - 50px)', overflow: 'auto' } : { height: height, overflow: 'auto' },
-      }}
-      style={{ top: isExpand ? 16 : 100 }}
-      keyboard
-    >
-      <div>
-        {children || (
-          <Collapse defaultActiveKey={['1']} expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}>
-            <Collapse.Panel header={headerPanelTitle} key="1" extra={headerExtra}>
-              <Splitter>
-                <Splitter.Panel defaultSize="80%" min="20%" max="80%">
-                  {formEle}
-                </Splitter.Panel>
-                <Splitter.Panel>
-                  <div style={{ padding: '0 0 0 16px' }}>
-                    <Space>
-                      <HistoryOutlined />
-                      <span style={{ textDecoration: 'underline' }}>单据历史</span>
-                    </Space>
+      <Modal
+        title={
+          <Space>
+            {title}
+            <Button
+              type="default"
+              size="small"
+              icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />}
+              onClick={() => setIsExpand(!isExpand)}
+            />
+            <Button type="default" size="small" icon={<LeftOutlined />} />
+            <Button type="default" size="small" icon={<RightOutlined />} />
+            <Button
+              type="default"
+              size="small"
+              icon={<CheckOutlined />}
+              color="purple"
+            />
+            <Button
+              type="default"
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={handleOpenDesigner}
+            />
+            <Tag color="magenta">按ESC键可关闭</Tag>
+          </Space>
+        }
+        open={open}
+        onCancel={combinedOnCancel}
+        footer={footer}
+        width={isExpand ? "100%" : width}
+        styles={{
+          body: isExpand
+            ? { height: "calc(90vh - 50px)", overflow: "auto" }
+            : { height: height, overflow: "auto" },
+        }}
+        style={{ top: isExpand ? 16 : 100 }}
+        keyboard
+      >
+        <div>
+          {children || (
+            <Collapse
+              defaultActiveKey={["1"]}
+              expandIcon={({ isActive }) => (
+                <CaretRightOutlined rotate={isActive ? 90 : 0} />
+              )}
+            >
+              <Collapse.Panel
+                header={headerPanelTitle}
+                key="1"
+                extra={headerExtra}
+              >
+                <Splitter>
+                  <Splitter.Panel defaultSize="70%" min="20%" max="70%">
+                    {formEle}
+                  </Splitter.Panel>
+                  <Splitter.Panel>
+                    <Button type="link" icon={<HistoryOutlined />}>
+                      单据历史
+                    </Button>
                     <Divider />
                     <Spin spinning={historyLoading}>
                       {historyItems.length > 0 ? (
                         <Timeline items={historyItems} />
                       ) : (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史记录" />
+                        <Empty
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          description="暂无历史记录"
+                        />
                       )}
                     </Spin>
-                  </div>
-                </Splitter.Panel>
-              </Splitter>
-            </Collapse.Panel>
-            {tableEle && (
-              <Collapse.Panel header={detailPanelTitle} key="2" extra={detailExtra}>
-                {tableEle}
+                  </Splitter.Panel>
+                </Splitter>
               </Collapse.Panel>
-            )}
-          </Collapse>
-        )}
-      </div>
-    </Modal>
-    <Modal
-      title="打印设计"
-      open={openDesigner}
-      onCancel={handleCloseDesigner}
-      width={'80%'}
-      destroyOnHidden
-      styles={{
-        body: { height: 'calc(90vh - 50px)', overflow: 'auto' },
-      }}
-      style={{ top: 16 }}
-      keyboard
-      footer={null}
-    >
-    <Spin spinning={templateLoading}>
-      {!templateLoading && (
-        <PrintDesigner
-          key={`${currentFormName || 'unknown'}-${designerInstanceKey}`}
-          isPreview={false}
-          initialTemplateData={templateData}
-          dataSource={printDataSource}
-          onSave={handleSaveTemplate}
-        />
-      )}
-    </Spin>
-    </Modal>
+              {tableEle && (
+                <Collapse.Panel
+                  header={detailPanelTitle}
+                  key="2"
+                  extra={detailExtra}
+                >
+                  {tableEle}
+                </Collapse.Panel>
+              )}
+            </Collapse>
+          )}
+        </div>
+      </Modal>
+      <Modal
+        title="打印设计"
+        open={openDesigner}
+        onCancel={handleCloseDesigner}
+        width={"80%"}
+        destroyOnHidden
+        styles={{
+          body: { height: "calc(90vh - 50px)", overflow: "auto" },
+        }}
+        style={{ top: 16 }}
+        keyboard
+        footer={null}
+      >
+        <Spin spinning={templateLoading}>
+          {!templateLoading && (
+            <PrintDesigner
+              key={`${currentFormName || "unknown"}-${designerInstanceKey}`}
+              isPreview={false}
+              initialTemplateData={templateData}
+              dataSource={printDataSource}
+              onSave={handleSaveTemplate}
+            />
+          )}
+        </Spin>
+      </Modal>
     </>
   );
 }
