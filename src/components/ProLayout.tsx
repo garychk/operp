@@ -206,6 +206,7 @@ const menuData: MenuRoute[] = [
       { path: '/system/roles', name: '角色管理', icon: <SafetyOutlined /> },
       { path: '/system/menus', name: '菜单管理', icon: <MenuOutlined /> },
       { path: '/system/settings', name: '系统设置', icon: <SettingOutlined /> },
+      { path: '/system/dictionaries', name: '数据字典', icon: <BookOutlined /> },
       { path: '/system/logs', name: '系统日志', icon: <FileTextOutlined /> },
       { path: '/system/page-designer', name: '页面设计器', icon: <AppstoreOutlined /> },
     ],
@@ -240,6 +241,7 @@ const pathToNameMap: Record<string, string> = {
   '/system/roles': '角色管理',
   '/system/menus': '菜单管理',
   '/system/settings': '系统设置',
+  '/system/dictionaries': '数据字典',
   '/system/logs': '系统日志',
   '/system/page-designer': '页面设计器',
 };
@@ -572,7 +574,7 @@ export function ProLayout() {
       >
         <PageContainer title={false} pageHeaderRender={false}>
           <ProCard
-            styles={{ body: { padding: "2px 2px 0px 2px" } }}
+            styles={{ body: { padding: "2px 2px 4px 2px" } }}
             className="main-container"
           >
             <Tabs
@@ -607,3 +609,4 @@ export function ProLayout() {
     </ConfigProvider>
   );
 }
+

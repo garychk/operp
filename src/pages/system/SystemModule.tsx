@@ -6,6 +6,7 @@ import {
   MenuOutlined,
   FileTextOutlined,
   SettingOutlined,
+  BookOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
@@ -14,6 +15,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'roles', label: '角色管理', icon: <SafetyOutlined /> },
   { key: 'menus', label: '菜单管理', icon: <MenuOutlined /> },
   { key: 'settings', label: '系统设置', icon: <SettingOutlined /> },
+  { key: 'dictionaries', label: '数据字典', icon: <BookOutlined /> },
   { key: 'logs', label: '系统日志', icon: <FileTextOutlined /> },
 ];
 
@@ -56,3 +58,5 @@ export function SystemModule() {
     </div>
   );
 }
+
+

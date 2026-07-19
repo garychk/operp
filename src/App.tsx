@@ -31,6 +31,7 @@ import { Roles } from './pages/system/Roles';
 import { Menus } from './pages/system/Menus';
 import { Logs } from './pages/system/Logs';
 import { Settings } from './pages/system/Settings';
+import { Dictionaries } from './pages/system/Dictionaries';
 import { PageDesigner } from './features/page-builder/PageDesigner';
 import { CustomPageRenderer } from './features/page-builder/PageRenderer';
 
@@ -91,6 +92,7 @@ function AppContent() {
           <Route path="roles" element={<Roles />} />
           <Route path="menus" element={<Menus />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="dictionaries" element={<Dictionaries />} />
           <Route path="logs" element={<Logs />} />
           <Route path="page-designer" element={<PageDesigner />} />
         </Route>
@@ -113,4 +115,8 @@ function App() {
 }
 
 export default App;
+
+
+
+
 

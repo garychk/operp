@@ -13,3 +13,5 @@
 \i supabase/tables/deploy_06_payables_source_fields.sql
 \i supabase/tables/deploy_07_system_config.sql
 \i supabase/tables/deploy_08_custom_pages.sql
+
+\i supabase/tables/deploy_09_data_dictionary.sql

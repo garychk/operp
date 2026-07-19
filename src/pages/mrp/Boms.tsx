@@ -27,6 +27,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import dayjs from 'dayjs';
 import SupaModal from "../../components/SupaModal";
+import DictSelect from "../../components/DictSelect";
 
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
@@ -265,7 +266,7 @@ export function Boms() {
       product_id: undefined,
       version: "1.0",
       quantity: 1,
-      unit: "件",
+      unit: "PCS",
       is_default: true,
       is_active: true,
       effective_date: dayjs(new Date()),
@@ -489,10 +490,14 @@ export function Boms() {
       style={{ borderRadius: 0 }}
       extra={
         <Space>
-          <Input.Search placeholder="搜索BOM编号或产品..." allowClear onSearch={(value) => {
-            setSearchTerm(value);
-            fetchBoms();
-          }} />
+          <Input.Search
+            placeholder="搜索BOM编号或产品..."
+            allowClear
+            onSearch={(value) => {
+              setSearchTerm(value);
+              fetchBoms();
+            }}
+          />
           <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
             新增BOM
           </Button>
@@ -524,7 +529,7 @@ export function Boms() {
             </Button>
           </Space>
         }
-        width={'60%'}
+        width={"60%"}
         height={680}
         headerPanelTitle="BOM主档"
         detailPanelTitle="子项明细"
@@ -552,13 +557,16 @@ export function Boms() {
                   name="product_id"
                   rules={[{ required: true, message: "请选择产品" }]}
                 >
-                  <Select 
-                    placeholder="请选择产品" 
+                  <Select
+                    placeholder="请选择产品"
                     disabled={!!editingBom}
                     onChange={(value) => {
                       const product = products.find((p) => p.id === value);
                       if (product) {
-                        form.setFieldValue('bom_no', product.code || `BOM-${value}`);
+                        form.setFieldValue(
+                          "bom_no",
+                          product.code || `BOM-${value}`,
+                        );
                       }
                     }}
                   >
@@ -578,9 +586,13 @@ export function Boms() {
                     placeholder="请输入数量"
                   />
                 </Form.Item>
-                <Form.Item label="单位" name="unit" initialValue="件">
-                  <Input placeholder="请输入单位" />
-                </Form.Item>                
+                <Form.Item label="单位" name="unit" initialValue="PCS">
+                  <DictSelect
+                    dictType="uom"
+                    placeholder="请输入单位"
+                    allowClear
+                  />
+                </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item label="生效日期" name="effective_date">
@@ -613,7 +625,12 @@ export function Boms() {
           </Form>
         }
         detailExtra={
-          <Button type="link" size="small" onClick={handleAddDetail} icon={<PlusOutlined />}>
+          <Button
+            type="link"
+            size="small"
+            onClick={handleAddDetail}
+            icon={<PlusOutlined />}
+          >
             新增子项
           </Button>
         }
@@ -625,8 +642,7 @@ export function Boms() {
             pagination={false}
           />
         }
-      >
-      </SupaModal>
+      ></SupaModal>
 
       <Modal
         title={editingDetail ? "编辑BOM子项" : "新增BOM子项"}
@@ -654,18 +670,25 @@ export function Boms() {
                 name="line_no"
                 rules={[{ required: true, message: "请输入行号" }]}
               >
-                <InputNumber min={1} style={{ width: "100%" }} placeholder="请输入行号" />
+                <InputNumber
+                  min={1}
+                  style={{ width: "100%" }}
+                  placeholder="请输入行号"
+                />
               </Form.Item>
               <Form.Item
                 label="物料"
                 name="material_id"
                 rules={[{ required: true, message: "请选择物料" }]}
               >
-                <Select placeholder="请选择物料" onChange={handleMaterialChange}>
+                <Select
+                  placeholder="请选择物料"
+                  onChange={handleMaterialChange}
+                >
                   {allProducts.map((p) => (
-                    <Option 
-                      key={p.id} 
-                      value={p.id} 
+                    <Option
+                      key={p.id}
+                      value={p.id}
                       disabled={selectedBom && p.id === selectedBom.product_id}
                     >
                       {p.name}
@@ -673,11 +696,7 @@ export function Boms() {
                   ))}
                 </Select>
               </Form.Item>
-              <Form.Item
-                label="数量"
-                name="quantity"
-                initialValue={0}
-              >
+              <Form.Item label="数量" name="quantity" initialValue={0}>
                 <InputNumber
                   min={0}
                   step={0.000001}
@@ -687,15 +706,15 @@ export function Boms() {
                 />
               </Form.Item>
               <Form.Item label="单位" name="unit">
-                <Input placeholder="请输入单位" />
+                <DictSelect
+                  dictType="uom"
+                  placeholder="请选择单位"
+                  allowClear
+                />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                label="损耗率"
-                name="loss_rate"
-                initialValue={0}
-              >
+              <Form.Item label="损耗率" name="loss_rate" initialValue={0}>
                 <InputNumber
                   min={0}
                   max={1}

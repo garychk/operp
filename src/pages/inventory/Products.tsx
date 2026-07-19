@@ -17,7 +17,6 @@ import {
 } from "antd";
 import {
   PlusOutlined,
-  SearchOutlined,
   DeleteOutlined,
   EditOutlined,
   SettingOutlined,
@@ -27,6 +26,7 @@ import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import { Categories } from "./Categories";
 import SupaModal from "../../components/SupaModal";
+import DictSelect from "../../components/DictSelect";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
@@ -265,10 +265,14 @@ export function Products() {
       title="物料管理"
       extra={
         <Space>
-          <Input.Search placeholder="搜索物料名称或编码..." allowClear onSearch={(value) => {
-            setSearchTerm(value);
-            fetchProducts();
-          }} />
+          <Input.Search
+            placeholder="搜索物料名称或编码..."
+            allowClear
+            onSearch={(value) => {
+              setSearchTerm(value);
+              fetchProducts();
+            }}
+          />
           <Button
             icon={<SettingOutlined />}
             onClick={() => setIsCategoryModalOpen(true)}
@@ -305,131 +309,145 @@ export function Products() {
             </Button>
           </Space>
         }
-        width={'70%'}
+        width={"70%"}
         height={650}
         headerPanelTitle="物料主档"
         historyTable={productTable}
         historyRecordId={editingProduct?.id}
         form={form}
-        formEle={<Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSubmit}
-          style={{ marginRight: 16 }}
-        >
-          <Row gutter={16}>
-            <Col span={8}>
-              <Form.Item
-                label="物料编码"
-                name="code"
-                rules={[{ required: true, message: "请输入物料编码" }]}
-              >
-                <Input
-                  placeholder="请输入物料编码"
-                  disabled={!!editingProduct}
-                />
-              </Form.Item>
-              <Form.Item
-                label="物料名称"
-                name="name"
-                rules={[{ required: true, message: "请输入物料名称" }]}
-              >
-                <Input placeholder="请输入物料名称" />
-              </Form.Item>
-              <Form.Item label="简称" name="short_name">
-                <Input placeholder="请输入简称" />
-              </Form.Item>
-              <Form.Item label="类别" name="category_id">
-                <Select placeholder="请选择类别">
-                  {categories.map((c) => (
-                    <Option key={c.id} value={c.id}>
-                      {c.name}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-              <Form.Item label="规格" name="specification">
-                <Input placeholder="请输入规格" />
-              </Form.Item>
-              <Form.Item label="单位" name="unit" initialValue="件">
-                <Input placeholder="请输入单位" />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="条码" name="barcode">
-                <Input placeholder="请输入条码" />
-              </Form.Item>
-              <Form.Item label="采购价" name="purchase_price" initialValue={0}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="请输入采购价"
-                />
-              </Form.Item>
-              <Form.Item label="销售价" name="sale_price" initialValue={0}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="请输入销售价"
-                />
-              </Form.Item>
-              <Form.Item label="成本价" name="cost_price" initialValue={0}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="请输入成本价"
-                />
-              </Form.Item>
-              <Form.Item label="安全库存" name="safety_stock" initialValue={0}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="请输入安全库存"
-                />
-              </Form.Item>
-            </Col>
-            <Col span={8}>
-              <Form.Item label="最大库存" name="max_stock" initialValue={0}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="请输入最大库存"
-                />
-              </Form.Item>
-              <Form.Item label="最小库存" name="min_stock" initialValue={0}>
-                <InputNumber
-                  style={{ width: "100%" }}
-                  placeholder="请输入最小库存"
-                />
-              </Form.Item>
-              <Form.Item
-                label="可采购"
-                name="is_purchased"
-                valuePropName="checked"
-                initialValue={true}
-              >
-                <Checkbox />
-              </Form.Item>
-              <Form.Item
-                label="可销售"
-                name="is_sold"
-                valuePropName="checked"
-                initialValue={true}
-              >
-                <Checkbox />
-              </Form.Item>
-              <Form.Item
-                label="可生产"
-                name="is_manufactured"
-                valuePropName="checked"
-                initialValue={false}
-              >
-                <Checkbox />
-              </Form.Item>
-              <Form.Item label="状态" name="status" initialValue="active">
-                <Select>
-                  <Option value="active">启用</Option>
-                  <Option value="inactive">停用</Option>
-                </Select>
-              </Form.Item>
-            </Col>
-          </Row>
-        </Form>}
+        formEle={
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handleSubmit}
+            style={{ marginRight: 16 }}
+          >
+            <Row gutter={16}>
+              <Col span={8}>
+                <Form.Item
+                  label="物料编码"
+                  name="code"
+                  rules={[{ required: true, message: "请输入物料编码" }]}
+                >
+                  <Input
+                    placeholder="请输入物料编码"
+                    disabled={!!editingProduct}
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="物料名称"
+                  name="name"
+                  rules={[{ required: true, message: "请输入物料名称" }]}
+                >
+                  <Input placeholder="请输入物料名称" />
+                </Form.Item>
+                <Form.Item label="简称" name="short_name">
+                  <Input placeholder="请输入简称" />
+                </Form.Item>
+                <Form.Item label="类别" name="category_id">
+                  <Select placeholder="请选择类别">
+                    {categories.map((c) => (
+                      <Option key={c.id} value={c.id}>
+                        {c.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item label="规格" name="specification">
+                  <Input placeholder="请输入规格" />
+                </Form.Item>
+                <Form.Item label="单位" name="unit" initialValue="件">
+                  <DictSelect
+                    dictType="uom"
+                    placeholder="请输入单位"
+                    allowClear
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item label="条码" name="barcode">
+                  <Input placeholder="请输入条码" />
+                </Form.Item>
+                <Form.Item
+                  label="采购价"
+                  name="purchase_price"
+                  initialValue={0}
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入采购价"
+                  />
+                </Form.Item>
+                <Form.Item label="销售价" name="sale_price" initialValue={0}>
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入销售价"
+                  />
+                </Form.Item>
+                <Form.Item label="成本价" name="cost_price" initialValue={0}>
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入成本价"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="安全库存"
+                  name="safety_stock"
+                  initialValue={0}
+                >
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入安全库存"
+                  />
+                </Form.Item>
+              </Col>
+              <Col span={8}>
+                <Form.Item label="最大库存" name="max_stock" initialValue={0}>
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入最大库存"
+                  />
+                </Form.Item>
+                <Form.Item label="最小库存" name="min_stock" initialValue={0}>
+                  <InputNumber
+                    style={{ width: "100%" }}
+                    placeholder="请输入最小库存"
+                  />
+                </Form.Item>
+                <Form.Item
+                  label="可采购"
+                  name="is_purchased"
+                  valuePropName="checked"
+                  initialValue={true}
+                >
+                  <Checkbox />
+                </Form.Item>
+                <Form.Item
+                  label="可销售"
+                  name="is_sold"
+                  valuePropName="checked"
+                  initialValue={true}
+                >
+                  <Checkbox />
+                </Form.Item>
+                <Form.Item
+                  label="可生产"
+                  name="is_manufactured"
+                  valuePropName="checked"
+                  initialValue={false}
+                >
+                  <Checkbox />
+                </Form.Item>
+                <Form.Item label="状态" name="status" initialValue="active">
+                  <Select>
+                    <Option value="active">启用</Option>
+                    <Option value="inactive">停用</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+          </Form>
+        }
       ></SupaModal>
       <Modal
         title="物料类别管理"
