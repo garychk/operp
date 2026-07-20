@@ -42,6 +42,20 @@ SELECT public.install_role_table_rls('sys_config');
 -- End: apply sys_config role RLS
 -- ============================================================
 -- ============================================================
+-- Begin: apply sys_forms role RLS
+-- ============================================================
+-- Form and print-template settings are saved directly by authenticated clients.
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_forms TO authenticated;
+GRANT USAGE, SELECT ON SEQUENCE public.sys_forms_id_seq TO authenticated;
+
+SELECT public.refresh_sys_tables();
+SELECT public.install_role_table_rls('sys_forms');
+
+-- ============================================================
+-- End: apply sys_forms role RLS
+-- ============================================================
+-- ============================================================
 -- Begin: supabase\tables\009_sys_users_self_profile_rls.sql
 -- ============================================================
 -- RLS policies required by AuthContext when sys_users has RLS enabled.
