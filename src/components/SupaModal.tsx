@@ -13,6 +13,7 @@ import {
   message,
   Typography,
   Card,
+  Switch,
 } from "antd";
 import {
   CompressOutlined,
@@ -86,6 +87,7 @@ export function SupaModal({
 }: SupaModalProps) {
   const [isExpand, setIsExpand] = useState(false);
   const [openDesigner, setOpenDesigner] = useState(false);
+  const [isPreview, setIsPreview] = useState(true);
   const [templateData, setTemplateData] = useState<any>();
   const [printDataSource, setPrintDataSource] =
     useState<PrintDesignerDataSource>();
@@ -283,6 +285,13 @@ export function SupaModal({
               icon={<CheckOutlined />}
               color="purple"
             />
+            <Switch
+              checked={isPreview}
+              onChange={setIsPreview}
+              checkedChildren="D"
+              unCheckedChildren="P"
+              size="middle"
+            />
             <Button
               type="default"
               size="small"
@@ -372,7 +381,7 @@ export function SupaModal({
           {!templateLoading && (
             <PrintDesigner
               key={`${currentFormName || "unknown"}-${designerInstanceKey}`}
-              isPreview={false}
+              isPreview={isPreview}
               initialTemplateData={templateData}
               dataSource={printDataSource}
               onSave={handleSaveTemplate}
