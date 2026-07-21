@@ -70,6 +70,23 @@ BEGIN
 END $$;
 GRANT EXECUTE ON FUNCTION public.baq_catalog() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.execute_baq(TEXT,INTEGER,INTEGER) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.update_table_label(target_table_id INTEGER, new_label TEXT)
+RETURNS BOOLEAN LANGUAGE plpgsql SECURITY DEFINER SET search_path=public AS $$
+BEGIN
+ IF NOT COALESCE(public.current_user_is_super_admin(),FALSE) THEN
+  RAISE EXCEPTION 'Only super administrators can maintain table labels';
+ END IF;
+ IF NULLIF(BTRIM(new_label),'') IS NULL THEN
+  RAISE EXCEPTION 'Table label cannot be empty';
+ END IF;
+ UPDATE public.sys_tables SET table_label=BTRIM(new_label),updated_at=NOW()
+ WHERE id=target_table_id AND is_deleted='n';
+ IF NOT FOUND THEN RAISE EXCEPTION 'Table metadata % does not exist',target_table_id; END IF;
+ RETURN TRUE;
+END $$;
+GRANT EXECUTE ON FUNCTION public.update_table_label(INTEGER,TEXT) TO authenticated;
+
 SELECT public.refresh_sys_tables();
 INSERT INTO public.sys_menus(parent_id,menu_name,menu_code,menu_type,icon,path,component,sort_order,status)
 SELECT p.id,'BAQ设计管理','baq_designer','C','DatabaseOutlined','/system/baq','./features/baq/BaqDesigner',7,'1' FROM public.sys_menus p WHERE p.menu_code='system'

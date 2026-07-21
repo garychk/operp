@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
+  DatabaseOutlined,
   DeleteOutlined,
   EyeOutlined,
   PlusOutlined,
@@ -16,6 +17,7 @@ import {
   Form,
   Input,
   message,
+  Modal,
   Popconfirm,
   Select,
   Space,
@@ -26,7 +28,8 @@ import {
   Typography,
   Tooltip,
 } from "antd";
-import { executeBaq, listBaqs, loadCatalog, removeBaq, saveBaq } from "./api";
+import { executeBaq, listBaqs, listTableLabels, loadCatalog, removeBaq, saveBaq, updateTableLabels } from "./api";
+import type { TableLabelRow } from "./api";
 import { emptyBaq } from "./types";
 import type {
   Aggregate,
@@ -63,6 +66,10 @@ export function BaqDesigner() {
   const [baq, setBaq] = useState<BaqQuery>(emptyBaq);
   const [result, setResult] = useState<BaqResult>();
   const [busy, setBusy] = useState(false);
+  const [tableLabelOpen, setTableLabelOpen] = useState(false);
+  const [tableLabels, setTableLabels] = useState<TableLabelRow[]>([]);
+  const [originalLabels, setOriginalLabels] = useState<Record<number, string>>({});
+  const [tableLabelSearch, setTableLabelSearch] = useState("");
   const refresh = () =>
     listBaqs()
       .then(setItems)
@@ -144,6 +151,34 @@ export function BaqDesigner() {
     [fields[index], fields[target]] = [fields[target], fields[index]];
     patchDef({ fields });
   };
+  const openTableLabels = async () => {
+    setBusy(true);
+    try {
+      const rows = await listTableLabels();
+      setTableLabels(rows);
+      setOriginalLabels(Object.fromEntries(rows.map(row => [row.id, row.table_label])));
+      setTableLabelOpen(true);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "表名称加载失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const saveTableLabels = async () => {
+    const changed = tableLabels.filter(row => row.table_label.trim() && row.table_label !== originalLabels[row.id]);
+    if (!changed.length) { setTableLabelOpen(false); return; }
+    setBusy(true);
+    try {
+      await updateTableLabels(changed.map(({ id, table_label }) => ({ id, table_label: table_label.trim() })));
+      setCatalog(await loadCatalog());
+      setTableLabelOpen(false);
+      message.success(`已更新 ${changed.length} 个表名称`);
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "表名称保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="baq-page">
       <Card
@@ -157,6 +192,9 @@ export function BaqDesigner() {
         }
         extra={
           <Space>
+            <Button icon={<DatabaseOutlined />} loading={busy} onClick={() => void openTableLabels()}>
+              表名称维护
+            </Button>
             <Select
               className="baq-picker"
               value={baq.id || "new"}
@@ -786,6 +824,59 @@ export function BaqDesigner() {
           <Empty description="保存并预览 BAQ 查看结果" />
         )}
       </Card>
+      <Modal
+        title="表名称维护"
+        open={tableLabelOpen}
+        width={860}
+        confirmLoading={busy}
+        okText="保存修改"
+        cancelText="取消"
+        onOk={() => void saveTableLabels()}
+        onCancel={() => setTableLabelOpen(false)}
+      >
+        <Input.Search
+          allowClear
+          placeholder="搜索真实表名或显示名称"
+          value={tableLabelSearch}
+          onChange={(event) => setTableLabelSearch(event.target.value)}
+          style={{ marginBottom: 12 }}
+        />
+        <Table
+          size="small"
+          rowKey="id"
+          pagination={false}
+          scroll={{ y: 480 }}
+          dataSource={tableLabels.filter((row) => {
+            const keyword = tableLabelSearch.trim().toLowerCase();
+            return !keyword || row.table_name.toLowerCase().includes(keyword) || row.table_label.toLowerCase().includes(keyword);
+          })}
+          columns={[
+            {
+              title: "模块",
+              dataIndex: "module_name",
+              width: 100,
+              render: (value) => <Tag>{value}</Tag>,
+            },
+            {
+              title: "数据库表名",
+              dataIndex: "table_name",
+              width: 330,
+              ellipsis: true,
+            },
+            {
+              title: "显示名称",
+              dataIndex: "table_label",
+              render: (_, row) => (
+                <Input
+                  value={row.table_label}
+                  status={row.table_label.trim() ? undefined : "error"}
+                  onChange={(event) => setTableLabels(current => current.map(item => item.id === row.id ? { ...item, table_label: event.target.value } : item))}
+                />
+              ),
+            },
+          ]}
+        />
+      </Modal>
     </div>
   );
 }
