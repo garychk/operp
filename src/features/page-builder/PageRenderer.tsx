@@ -20,29 +20,63 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
 
   useEffect(() => {
-    if (widget.dataSource.mode === 'static') {
-      setData((widget.dataSource.staticData || []) as Record<string, unknown>[]);
-      setColumnOrder([]);
-      setLoading(false);
-      return;
-    }
     let active = true;
+    const source = widget.dataSource;
+
+    if (source.mode === 'static') {
+      setData((source.staticData || []).slice(0, source.limit || 100) as Record<string, unknown>[]);
+      setColumnOrder([]);
+      setError('');
+      setLoading(false);
+      return () => { active = false; };
+    }
+
+    if (source.mode === 'supabase' && !source.table?.trim()) {
+      setData([]);
+      setColumnOrder([]);
+      setError('请先配置 Supabase 表名');
+      setLoading(false);
+      return () => { active = false; };
+    }
+
     setLoading(true);
     setError('');
-    const request = widget.dataSource.mode === 'baq'
-      ? (widget.dataSource.baqCode ? executeBaq(widget.dataSource.baqCode, 1, widget.dataSource.limit || 100).then(result => ({ data: result.rows, error: null, columns: result.columns || [] })) : Promise.resolve({ data: [], error: new Error('未选择 BAQ'), columns: [] as string[] }))
-      : supabase.from(widget.dataSource.table || '').select(widget.dataSource.select || '*').limit(widget.dataSource.limit || 100).then(result => ({ ...result, columns: [] as string[] }));
-    request.then(({ data: rows, error: queryError, columns: orderedColumns }) => {
+    const request: Promise<{ data: unknown[]; error: { message: string; code?: string } | null; columns: string[] }> = (async () => {
+      if (source.mode === 'baq') {
+        if (!source.baqCode) return { data: [], error: { message: '未选择 BAQ' }, columns: [] };
+        const result = await executeBaq(source.baqCode, 1, source.limit || 100);
+        return { data: result.rows, error: null, columns: result.columns || [] };
+      }
+      const result = await supabase
+        .from(source.table!.trim())
+        .select(source.select?.trim() || '*')
+        .limit(source.limit || 100);
+      return { data: (result.data || []) as unknown[], error: result.error, columns: [] };
+    })();
+    request
+      .then(({ data: rows, error: queryError, columns: orderedColumns }) => {
         if (!active) return;
-        if (queryError) setError(queryError.message); else {
+        if (queryError) {
+          setData([]);
+          setColumnOrder([]);
+          const queryCode = 'code' in queryError ? queryError.code : undefined;
+          setError(`${queryError.message}${queryCode ? ` (${queryCode})` : ''}`);
+        } else {
           setData((rows || []) as unknown as Record<string, unknown>[]);
           setColumnOrder(orderedColumns);
         }
         setLoading(false);
+      })
+      .catch((queryError: unknown) => {
+        if (!active) return;
+        setData([]);
+        setColumnOrder([]);
+        setError(queryError instanceof Error ? queryError.message : '数据查询失败');
+        setLoading(false);
       });
+
     return () => { active = false; };
   }, [widget.dataSource]);
-
   const columns = useMemo(() => {
     const keys = columnOrder.length ? columnOrder : Object.keys(data[0] || {}).slice(0, 8);
     return keys.map(key => ({ title: key, dataIndex: key, key, ellipsis: true }));
@@ -53,7 +87,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
   if (widget.type === 'button') return <Button type="primary">{widget.content || widget.title}</Button>;
   if (widget.type === 'statistic') return <Statistic title={String(data[0]?.[widget.xField || 'label'] || widget.title)} value={Number(data[0]?.[widget.yField || 'value'] || 0)} />;
   if (!data.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-  if (widget.type === 'table') return <Table size="small" rowKey={(_, index) => String(index)} columns={columns} dataSource={data} pagination={{ pageSize: 5, hideOnSinglePage: true }} scroll={{ x: true }} />;
+  if (widget.type === 'table') return <Table size="small" rowKey={(_, index) => String(index)} columns={columns} dataSource={data} pagination={{ pageSize: widget.pageSize || 10, hideOnSinglePage: true, showSizeChanger: false }} scroll={{ x: true }} />;
   if (widget.type === 'line') return <Line data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit />;
   if (widget.type === 'column') return <Column data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit />;
   return <Pie data={data} angleField={widget.yField || 'value'} colorField={widget.colorField || widget.xField || 'name'} innerRadius={0.55} autoFit />;

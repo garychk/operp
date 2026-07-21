@@ -410,7 +410,28 @@ export function PageDesigner() {
                       onChange={(baqCode) => patchWidget({ dataSource: { ...selected.dataSource, baqCode } })} />
                   </Form.Item>
                 )}
-                {["statistic", "line", "column", "pie"].includes(
+                {selected.type === "table" && (
+                  <Space>
+                    <Form.Item label="分页大小">
+                      <InputNumber
+                        min={1}
+                        max={100}
+                        value={selected.pageSize || 10}
+                        onChange={(value) => patchWidget({ pageSize: value || 10 })}
+                      />
+                    </Form.Item>
+                    <Form.Item label="最大记录数">
+                      <InputNumber
+                        min={1}
+                        max={10000}
+                        value={selected.dataSource.limit || 100}
+                        onChange={(value) => patchWidget({
+                          dataSource: { ...selected.dataSource, limit: value || 100 },
+                        })}
+                      />
+                    </Form.Item>
+                  </Space>
+                )}                {["statistic", "line", "column", "pie"].includes(
                   selected.type,
                 ) && (
                   <>
