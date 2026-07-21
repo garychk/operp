@@ -36,6 +36,25 @@ import { Dictionaries } from './pages/system/Dictionaries';
 import { PageDesigner } from './features/page-builder/PageDesigner';
 import { CustomPageRenderer } from './features/page-builder/PageRenderer';
 import { BaqDesigner } from './features/baq/BaqDesigner';
+import { ConfigProvider } from 'antd';
+import enUS from 'antd/locale/en_US';
+import zhCN from 'antd/locale/zh_CN';
+import dayjs from 'dayjs';
+import 'dayjs/locale/en';
+import 'dayjs/locale/zh-cn';
+import { useEffect, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+
+function LocaleProvider({ children }: { children: ReactNode }) {
+  const { i18n } = useTranslation();
+  const isEnglish = i18n.resolvedLanguage === 'en-US';
+
+  useEffect(() => {
+    dayjs.locale(isEnglish ? 'en' : 'zh-cn');
+  }, [isEnglish]);
+
+  return <ConfigProvider locale={isEnglish ? enUS : zhCN}>{children}</ConfigProvider>;
+}
 
 function AppContent() {
   const { user } = useAuth();
@@ -110,11 +129,13 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppContent />
-      </BrowserRouter>
-    </AuthProvider>
+    <LocaleProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
+      </AuthProvider>
+    </LocaleProvider>
   );
 }
 

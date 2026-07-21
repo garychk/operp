@@ -1,7 +1,20 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { ProLayout as AntProLayout, PageContainer, ProCard } from '@ant-design/pro-components';
-import { Tabs, Button, Dropdown, Tag, ConfigProvider, theme, Modal, Typography } from 'antd';
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useLocation, useNavigate, Outlet } from "react-router-dom";
+import {
+  ProLayout as AntProLayout,
+  PageContainer,
+  ProCard,
+} from "@ant-design/pro-components";
+import {
+  Tabs,
+  Button,
+  Dropdown,
+  Tag,
+  ConfigProvider,
+  theme,
+  Modal,
+  Typography,
+} from "antd";
 import {
   DashboardOutlined,
   BookOutlined,
@@ -35,12 +48,15 @@ import {
   PicCenterOutlined,
   OpenAIOutlined,
   ExperimentOutlined,
-} from '@ant-design/icons';
-import { useAuth } from '../contexts/AuthContext';
-import { AIChatDrawer } from './AIChatDrawer';
-import heroLogo from '../assets/opelix.svg';
-import defaultAvatar from '../assets/avatar.png';
-import { supabase } from '../utils/supabase';
+  TranslationOutlined,
+} from "@ant-design/icons";
+import { useAuth } from "../contexts/AuthContext";
+import { AIChatDrawer } from "./AIChatDrawer";
+import heroLogo from "../assets/opelix.svg";
+import defaultAvatar from "../assets/avatar.png";
+import { supabase } from "../utils/supabase";
+import { useTranslation } from "react-i18next";
+import type { SupportedLanguage } from "../i18n";
 
 interface TabItem {
   key: string;
@@ -67,15 +83,16 @@ interface DatabaseMenu {
 function buildDatabaseMenuTree(records: DatabaseMenu[]): MenuRoute[] {
   const nodes = new Map<number, MenuRoute>();
   const roots: MenuRoute[] = [];
-  records.forEach(record => {
+  records.forEach((record) => {
     nodes.set(record.id, {
       path: record.path || `/menu-group/${record.id}`,
       name: record.menu_name,
-      icon: record.menu_type === 'M' ? <AppstoreOutlined /> : <DashboardOutlined />,
+      icon:
+        record.menu_type === "M" ? <AppstoreOutlined /> : <DashboardOutlined />,
       routes: [],
     });
   });
-  records.forEach(record => {
+  records.forEach((record) => {
     const node = nodes.get(record.id)!;
     const parent = record.parent_id ? nodes.get(record.parent_id) : undefined;
     if (parent && parent !== node) parent.routes!.push(node);
@@ -85,9 +102,12 @@ function buildDatabaseMenuTree(records: DatabaseMenu[]): MenuRoute[] {
 }
 
 function mergeMenuTrees(base: MenuRoute[], database: MenuRoute[]): MenuRoute[] {
-  const result: MenuRoute[] = base.map(route => ({ ...route, routes: route.routes ? mergeMenuTrees(route.routes, []) : undefined }));
-  database.forEach(route => {
-    const existing = result.find(item => item.path === route.path);
+  const result: MenuRoute[] = base.map((route) => ({
+    ...route,
+    routes: route.routes ? mergeMenuTrees(route.routes, []) : undefined,
+  }));
+  database.forEach((route) => {
+    const existing = result.find((item) => item.path === route.path);
     if (!existing) {
       result.push(route);
       return;
@@ -101,12 +121,20 @@ function mergeMenuTrees(base: MenuRoute[], database: MenuRoute[]): MenuRoute[] {
 function findMenuName(routes: MenuRoute[], path: string): string | undefined {
   for (const route of routes) {
     if (route.path === path) return route.name;
-    const childName = route.routes ? findMenuName(route.routes, path) : undefined;
+    const childName = route.routes
+      ? findMenuName(route.routes, path)
+      : undefined;
     if (childName) return childName;
   }
   return undefined;
 }
-type ThemeColorKey = 'default' | 'blue' | 'green' | 'orange' | 'purple' | 'warmPaper';
+type ThemeColorKey =
+  | "default"
+  | "blue"
+  | "green"
+  | "orange"
+  | "purple"
+  | "warmPaper";
 
 interface ThemeColor {
   label: string;
@@ -118,28 +146,60 @@ interface ThemeColor {
 }
 
 const themeColors: Record<ThemeColorKey, ThemeColor> = {
-  default: { label: '默认', color: '#1677ff', rgb: '22, 119, 255' },
-  blue: { label: '星际蓝', color: '#0ea5e9', rgb: '14, 165, 233', secondaryRgb: '99, 102, 241', surfaceRgb: '47, 134, 237' },
-  green: { label: '极光绿', color: '#10b981', rgb: '16, 185, 129', secondaryRgb: '6, 182, 212', surfaceRgb: '11, 184, 171' },
-  orange: { label: '脉冲橙', color: '#f97316', rgb: '249, 115, 22', secondaryRgb: '225, 29, 72', surfaceRgb: '237, 72, 47' },
-  purple: { label: '星云紫', color: '#8b5cf6', rgb: '139, 92, 246', secondaryRgb: '6, 182, 212', surfaceRgb: '73, 137, 229' },
+  default: { label: "默认", color: "#1677ff", rgb: "22, 119, 255" },
+  blue: {
+    label: "星际蓝",
+    color: "#0ea5e9",
+    rgb: "14, 165, 233",
+    secondaryRgb: "99, 102, 241",
+    surfaceRgb: "47, 134, 237",
+  },
+  green: {
+    label: "极光绿",
+    color: "#10b981",
+    rgb: "16, 185, 129",
+    secondaryRgb: "6, 182, 212",
+    surfaceRgb: "11, 184, 171",
+  },
+  orange: {
+    label: "脉冲橙",
+    color: "#f97316",
+    rgb: "249, 115, 22",
+    secondaryRgb: "225, 29, 72",
+    surfaceRgb: "237, 72, 47",
+  },
+  purple: {
+    label: "星云紫",
+    color: "#8b5cf6",
+    rgb: "139, 92, 246",
+    secondaryRgb: "6, 182, 212",
+    surfaceRgb: "73, 137, 229",
+  },
   warmPaper: {
-    label: '暖纸色', color: '#9c5f36', rgb: '156, 95, 54',
-    surfaceColor: '#f0eee6', surfaceRgb: '240, 238, 230',
+    label: "暖纸色",
+    color: "#9c5f36",
+    rgb: "156, 95, 54",
+    surfaceColor: "#f0eee6",
+    surfaceRgb: "240, 238, 230",
   },
 };
 
-const themeSurface = (themeColor: ThemeColorKey, dark: boolean, opacity: number, base = false) => {
+const themeSurface = (
+  themeColor: ThemeColorKey,
+  dark: boolean,
+  opacity: number,
+  base = false,
+) => {
   const selected = themeColors[themeColor];
   if (base && selected.surfaceColor && !dark) return selected.surfaceColor;
-  const rgb = base ? selected.surfaceRgb ?? selected.rgb : selected.rgb;
+  const rgb = base ? (selected.surfaceRgb ?? selected.rgb) : selected.rgb;
   return `rgba(${rgb}, ${dark ? opacity * 1.8 : opacity})`;
 };
 
 const themeHeaderBackground = (themeColor: ThemeColorKey, dark: boolean) => {
   const selected = themeColors[themeColor];
   if (selected.surfaceColor && !dark) {
-    return 'linear-gradient(115deg, #f0eee6 0%, #f5f2eb 55%, #efebe2 100%)';
+    return "linear-gradient(115deg, #f0eee6 0%, #f5f2eb 55%, #efebe2 100%)";
   }
 
   const primaryOpacity = dark ? 0.11 : 0.055;
@@ -148,127 +208,224 @@ const themeHeaderBackground = (themeColor: ThemeColorKey, dark: boolean) => {
   return `linear-gradient(115deg, rgba(${selected.rgb}, ${primaryOpacity}) 0%, rgba(${secondaryRgb}, ${secondaryOpacity}) 55%, rgba(${selected.rgb}, ${primaryOpacity * 0.65}) 100%)`;
 };
 
-
 const menuData: MenuRoute[] = [
   {
-    path: '/',
-    name: '首页',
+    path: "/",
+    name: "首页",
     icon: <DashboardOutlined />,
   },
   {
-    path: '/finance',
-    name: '财务管理',
+    path: "/finance",
+    name: "财务管理",
     icon: <BookOutlined />,
     routes: [
-      { path: '/finance/subjects', name: '会计科目', icon: <ContainerOutlined /> },
-      { path: '/finance/vouchers', name: '凭证管理', icon: <ProfileOutlined /> },
-      { path: '/finance/receivables', name: '应收账款', icon: <RiseOutlined /> },
-      { path: '/finance/payables', name: '应付账款', icon: <FallOutlined /> },
-      { path: '/finance/assets', name: '固定资产', icon: <BuildOutlined /> },
-      { path: '/finance/asset-categories', name: '资产类别', icon: <ContainerOutlined /> },
+      {
+        path: "/finance/subjects",
+        name: "会计科目",
+        icon: <ContainerOutlined />,
+      },
+      {
+        path: "/finance/vouchers",
+        name: "凭证管理",
+        icon: <ProfileOutlined />,
+      },
+      {
+        path: "/finance/receivables",
+        name: "应收账款",
+        icon: <RiseOutlined />,
+      },
+      { path: "/finance/payables", name: "应付账款", icon: <FallOutlined /> },
+      { path: "/finance/assets", name: "固定资产", icon: <BuildOutlined /> },
+      {
+        path: "/finance/asset-categories",
+        name: "资产类别",
+        icon: <ContainerOutlined />,
+      },
     ],
   },
   {
-    path: '/inventory',
-    name: '进销存管理',
+    path: "/inventory",
+    name: "进销存管理",
     icon: <ShoppingOutlined />,
     routes: [
-      { path: '/inventory/customers', name: '客户管理', icon: <TeamOutlined /> },
-      { path: '/inventory/suppliers', name: '供应商管理', icon: <ShopOutlined /> },
-      { path: '/inventory/products', name: '物料管理', icon: <InboxOutlined /> },
-      { path: '/inventory/warehouses', name: '仓库管理', icon: <AppstoreOutlined /> },
-      { path: '/inventory/stock', name: '库存查询', icon: <ShoppingOutlined /> },
-      { path: '/inventory/purchase', name: '采购订单', icon: <ShoppingCartOutlined /> },
-      { path: '/inventory/purchase-receipts', name: '采购入库', icon: <InboxOutlined /> },
-      { path: '/inventory/sales', name: '销售订单', icon: <RiseOutlined /> },
-      { path: '/inventory/sales-deliveries', name: '销售出货', icon: <TruckOutlined /> },
+      {
+        path: "/inventory/customers",
+        name: "客户管理",
+        icon: <TeamOutlined />,
+      },
+      {
+        path: "/inventory/suppliers",
+        name: "供应商管理",
+        icon: <ShopOutlined />,
+      },
+      {
+        path: "/inventory/products",
+        name: "物料管理",
+        icon: <InboxOutlined />,
+      },
+      {
+        path: "/inventory/warehouses",
+        name: "仓库管理",
+        icon: <AppstoreOutlined />,
+      },
+      {
+        path: "/inventory/stock",
+        name: "库存查询",
+        icon: <ShoppingOutlined />,
+      },
+      {
+        path: "/inventory/purchase",
+        name: "采购订单",
+        icon: <ShoppingCartOutlined />,
+      },
+      {
+        path: "/inventory/purchase-receipts",
+        name: "采购入库",
+        icon: <InboxOutlined />,
+      },
+      { path: "/inventory/sales", name: "销售订单", icon: <RiseOutlined /> },
+      {
+        path: "/inventory/sales-deliveries",
+        name: "销售出货",
+        icon: <TruckOutlined />,
+      },
     ],
   },
   {
-    path: '/mrp',
-    name: '生产制造',
+    path: "/mrp",
+    name: "生产制造",
     icon: <ToolOutlined />,
     routes: [
-      { path: '/mrp/departments', name: '部门管理', icon: <TeamOutlined /> },
-      { path: '/mrp/boms', name: 'BOM管理', icon: <BranchesOutlined /> },
-      { path: '/mrp/routings', name: '工艺路线', icon: <SettingOutlined /> },
-      { path: '/mrp/workcenters', name: '工作中心', icon: <ToolOutlined /> },
-      { path: '/mrp/operations', name: '工序管理', icon: <SettingOutlined /> },
-      { path: '/mrp/production', name: '生产订单', icon: <ProfileOutlined /> },
-      { path: '/mrp/plans', name: 'MRP计划', icon: <CalendarOutlined /> },
-      { path: '/mrp/quality', name: '检验管理', icon: <ExperimentOutlined /> },
+      { path: "/mrp/departments", name: "部门管理", icon: <TeamOutlined /> },
+      { path: "/mrp/boms", name: "BOM管理", icon: <BranchesOutlined /> },
+      { path: "/mrp/routings", name: "工艺路线", icon: <SettingOutlined /> },
+      { path: "/mrp/workcenters", name: "工作中心", icon: <ToolOutlined /> },
+      { path: "/mrp/operations", name: "工序管理", icon: <SettingOutlined /> },
+      { path: "/mrp/production", name: "生产订单", icon: <ProfileOutlined /> },
+      { path: "/mrp/plans", name: "MRP计划", icon: <CalendarOutlined /> },
+      { path: "/mrp/quality", name: "检验管理", icon: <ExperimentOutlined /> },
     ],
   },
   {
-    path: '/system',
-    name: '系统管理',
+    path: "/system",
+    name: "系统管理",
     icon: <SettingOutlined />,
     routes: [
-      { path: '/system/users', name: '用户管理', icon: <TeamOutlined /> },
-      { path: '/system/roles', name: '角色管理', icon: <SafetyOutlined /> },
-      { path: '/system/menus', name: '菜单管理', icon: <MenuOutlined /> },
-      { path: '/system/settings', name: '系统设置', icon: <SettingOutlined /> },
-      { path: '/system/dictionaries', name: '数据字典', icon: <BookOutlined /> },
-      { path: '/system/logs', name: '系统日志', icon: <FileTextOutlined /> },
-      { path: '/system/page-designer', name: '页面设计器', icon: <AppstoreOutlined /> },
-      { path: '/system/baq', name: 'BAQ设计管理', icon: <ProfileOutlined /> },
+      { path: "/system/users", name: "用户管理", icon: <TeamOutlined /> },
+      { path: "/system/roles", name: "角色管理", icon: <SafetyOutlined /> },
+      { path: "/system/menus", name: "菜单管理", icon: <MenuOutlined /> },
+      { path: "/system/settings", name: "系统设置", icon: <SettingOutlined /> },
+      {
+        path: "/system/dictionaries",
+        name: "数据字典",
+        icon: <BookOutlined />,
+      },
+      { path: "/system/logs", name: "系统日志", icon: <FileTextOutlined /> },
+      {
+        path: "/system/page-designer",
+        name: "页面设计器",
+        icon: <AppstoreOutlined />,
+      },
+      { path: "/system/baq", name: "BAQ设计管理", icon: <ProfileOutlined /> },
     ],
   },
 ];
 
 const pathToNameMap: Record<string, string> = {
-  '/': '首页',
-  '/finance/subjects': '会计科目',
-  '/finance/vouchers': '凭证管理',
-  '/finance/receivables': '应收账款',
-  '/finance/payables': '应付账款',
-  '/finance/assets': '固定资产',
-  '/finance/asset-categories': '资产类别',
-  '/inventory/customers': '客户管理',
-  '/inventory/suppliers': '供应商管理',
-  '/inventory/products': '物料管理',
-  '/inventory/warehouses': '仓库管理',
-  '/inventory/stock': '库存查询',
-  '/inventory/purchase': '采购订单',
-  '/inventory/purchase-receipts': '采购入库',
-  '/inventory/sales': '销售订单',
-  '/inventory/sales-deliveries': '销售出货',
-  '/mrp/departments': '部门管理',
-  '/mrp/boms': 'BOM管理',
-  '/mrp/routings': '工艺路线',
-  '/mrp/workcenters': '工作中心',
-  '/mrp/operations': '工序管理',
-  '/mrp/production': '生产订单',
-  '/mrp/plans': 'MRP计划',
-  '/mrp/quality': '检验管理',
-  '/system/users': '用户管理',
-  '/system/roles': '角色管理',
-  '/system/menus': '菜单管理',
-  '/system/settings': '系统设置',
-  '/system/dictionaries': '数据字典',
-  '/system/logs': '系统日志',
-  '/system/page-designer': '页面设计器',
-  '/system/baq': 'BAQ设计管理',
+  "/": "首页",
+  "/finance/subjects": "会计科目",
+  "/finance/vouchers": "凭证管理",
+  "/finance/receivables": "应收账款",
+  "/finance/payables": "应付账款",
+  "/finance/assets": "固定资产",
+  "/finance/asset-categories": "资产类别",
+  "/inventory/customers": "客户管理",
+  "/inventory/suppliers": "供应商管理",
+  "/inventory/products": "物料管理",
+  "/inventory/warehouses": "仓库管理",
+  "/inventory/stock": "库存查询",
+  "/inventory/purchase": "采购订单",
+  "/inventory/purchase-receipts": "采购入库",
+  "/inventory/sales": "销售订单",
+  "/inventory/sales-deliveries": "销售出货",
+  "/mrp/departments": "部门管理",
+  "/mrp/boms": "BOM管理",
+  "/mrp/routings": "工艺路线",
+  "/mrp/workcenters": "工作中心",
+  "/mrp/operations": "工序管理",
+  "/mrp/production": "生产订单",
+  "/mrp/plans": "MRP计划",
+  "/mrp/quality": "检验管理",
+  "/system/users": "用户管理",
+  "/system/roles": "角色管理",
+  "/system/menus": "菜单管理",
+  "/system/settings": "系统设置",
+  "/system/dictionaries": "数据字典",
+  "/system/logs": "系统日志",
+  "/system/page-designer": "页面设计器",
+  "/system/baq": "BAQ设计管理",
 };
 
+const pathToTranslationKey: Record<string, string> = {
+  "/": "menu.home",
+  "/finance": "menu.finance",
+  "/finance/subjects": "menu.subjects",
+  "/finance/vouchers": "menu.vouchers",
+  "/finance/receivables": "menu.receivables",
+  "/finance/payables": "menu.payables",
+  "/finance/assets": "menu.assets",
+  "/finance/asset-categories": "menu.assetCategories",
+  "/inventory": "menu.inventory",
+  "/inventory/customers": "menu.customers",
+  "/inventory/suppliers": "menu.suppliers",
+  "/inventory/products": "menu.products",
+  "/inventory/warehouses": "menu.warehouses",
+  "/inventory/stock": "menu.stock",
+  "/inventory/purchase": "menu.purchase",
+  "/inventory/purchase-receipts": "menu.purchaseReceipts",
+  "/inventory/sales": "menu.sales",
+  "/inventory/sales-deliveries": "menu.salesDeliveries",
+  "/mrp": "menu.mrp",
+  "/mrp/departments": "menu.departments",
+  "/mrp/boms": "menu.boms",
+  "/mrp/routings": "menu.routings",
+  "/mrp/workcenters": "menu.workcenters",
+  "/mrp/operations": "menu.operations",
+  "/mrp/production": "menu.production",
+  "/mrp/plans": "menu.plans",
+  "/mrp/quality": "menu.quality",
+  "/system": "menu.system",
+  "/system/users": "menu.users",
+  "/system/roles": "menu.roles",
+  "/system/menus": "menu.menus",
+  "/system/settings": "menu.settings",
+  "/system/dictionaries": "menu.dictionaries",
+  "/system/logs": "menu.logs",
+  "/system/page-designer": "menu.pageDesigner",
+  "/system/baq": "menu.baq",
+};
 export function ProLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+  const { t, i18n } = useTranslation();
+  const language = (
+    i18n.resolvedLanguage === "en-US" ? "en-US" : "zh-CN"
+  ) as SupportedLanguage;
   const [tabs, setTabs] = useState<TabItem[]>([
-    { key: '/', label: '首页', closable: false, path: '/' },
+    { key: "/", label: t("menu.home"), closable: false, path: "/" },
   ]);
-  const [activeTabKey, setActiveTabKey] = useState('/');
+  const [activeTabKey, setActiveTabKey] = useState("/");
   const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('erp-dark-mode');
+    const saved = localStorage.getItem("erp-dark-mode");
     return saved !== null ? JSON.parse(saved) : false;
   });
   const [themeColor, setThemeColor] = useState<ThemeColorKey>(() => {
-    const saved = localStorage.getItem('erp-theme-color');
-    return saved && saved in themeColors ? saved as ThemeColorKey : 'default';
+    const saved = localStorage.getItem("erp-theme-color");
+    return saved && saved in themeColors ? (saved as ThemeColorKey) : "default";
   });
   const [ismix, setMix] = useState(() => {
-    const saved = localStorage.getItem('erp-layout-mix');
+    const saved = localStorage.getItem("erp-layout-mix");
     return saved !== null ? JSON.parse(saved) : true;
   });
   const [aiChatOpen, setAiChatOpen] = useState(false);
@@ -278,42 +435,49 @@ export function ProLayout() {
   useEffect(() => {
     const loadDatabaseMenus = async () => {
       const { data, error } = await supabase
-        .from('sys_menus')
-        .select('id, parent_id, menu_name, menu_type, path')
-        .eq('status', '1')
-        .eq('is_deleted', 'n')
-        .order('sort_order');
+        .from("sys_menus")
+        .select("id, parent_id, menu_name, menu_type, path")
+        .eq("status", "1")
+        .eq("is_deleted", "n")
+        .order("sort_order");
 
       if (error) {
-        console.error('Failed to load database menus:', error);
+        console.error("Failed to load database menus:", error);
         return;
       }
       setDatabaseMenus(buildDatabaseMenuTree((data || []) as DatabaseMenu[]));
     };
     void loadDatabaseMenus();
-    const refreshDatabaseMenus = () => { void loadDatabaseMenus(); };
-    window.addEventListener('custom-pages-changed', refreshDatabaseMenus);
-    window.addEventListener('menus-changed', refreshDatabaseMenus);
+    const refreshDatabaseMenus = () => {
+      void loadDatabaseMenus();
+    };
+    window.addEventListener("custom-pages-changed", refreshDatabaseMenus);
+    window.addEventListener("menus-changed", refreshDatabaseMenus);
     return () => {
-      window.removeEventListener('custom-pages-changed', refreshDatabaseMenus);
-      window.removeEventListener('menus-changed', refreshDatabaseMenus);
+      window.removeEventListener("custom-pages-changed", refreshDatabaseMenus);
+      window.removeEventListener("menus-changed", refreshDatabaseMenus);
     };
   }, []);
   useEffect(() => {
-    localStorage.setItem('erp-dark-mode', JSON.stringify(dark));
+    localStorage.setItem("erp-dark-mode", JSON.stringify(dark));
   }, [dark]);
 
   useEffect(() => {
     const selected = themeColors[themeColor];
-    localStorage.setItem('erp-theme-color', themeColor);
-    document.documentElement.style.setProperty('--accent', selected.color);
-    document.documentElement.style.setProperty('--accent-bg', `rgba(${selected.rgb}, 0.1)`);
-    document.documentElement.style.setProperty('--accent-border', `rgba(${selected.rgb}, 0.5)`);
+    localStorage.setItem("erp-theme-color", themeColor);
+    document.documentElement.style.setProperty("--accent", selected.color);
+    document.documentElement.style.setProperty(
+      "--accent-bg",
+      `rgba(${selected.rgb}, 0.1)`,
+    );
+    document.documentElement.style.setProperty(
+      "--accent-border",
+      `rgba(${selected.rgb}, 0.5)`,
+    );
   }, [themeColor]);
 
   useEffect(() => {
-    localStorage.setItem('erp-layout-mix', JSON.stringify(ismix));
-
+    localStorage.setItem("erp-layout-mix", JSON.stringify(ismix));
   }, [ismix]);
 
   const mergedMenuData = useMemo(
@@ -321,65 +485,99 @@ export function ProLayout() {
     [databaseMenus],
   );
 
+  const localizedMenuData = useMemo(() => {
+    const localizeRoutes = (routes: MenuRoute[]): MenuRoute[] =>
+      routes.map((route) => ({
+        ...route,
+        name: pathToTranslationKey[route.path]
+          ? t(pathToTranslationKey[route.path])
+          : route.name,
+        routes: route.routes ? localizeRoutes(route.routes) : undefined,
+      }));
+    return localizeRoutes(mergedMenuData);
+  }, [mergedMenuData, t, i18n.resolvedLanguage]);
   const visibleMenuData = useMemo(() => {
     if (!user || user.isSuperAdmin || user.menuPaths.length === 0) {
-      return mergedMenuData;
+      return localizedMenuData;
     }
 
     const allowedPaths = new Set(user.menuPaths);
     const filterRoutes = (routes: MenuRoute[]): MenuRoute[] => {
       const result: MenuRoute[] = [];
-      routes.forEach(route => {
+      routes.forEach((route) => {
         const children = route.routes ? filterRoutes(route.routes) : undefined;
-        const visibleByPath = route.path === '/' || allowedPaths.has(route.path);
+        const visibleByPath =
+          route.path === "/" || allowedPaths.has(route.path);
         if (!visibleByPath && !children?.length) return;
         result.push({ ...route, routes: children });
       });
       return result;
     };
-    return filterRoutes(mergedMenuData);
-  }, [user, mergedMenuData]);
+    return filterRoutes(localizedMenuData);
+  }, [user, localizedMenuData]);
   const handleLogout = async () => {
     await logout();
   };
 
-  const addTab = useCallback((path: string) => {
-    const label = pathToNameMap[path] || findMenuName(mergedMenuData, path) || '未命名';
-    setTabs((prev) => {
-      const existingTab = prev.find((tab) => tab.key === path);
-      if (!existingTab) {
-        return [...prev, { key: path, label, closable: true, path }];
-      }
-      return prev;
-    });
-    setActiveTabKey(path);
-  }, [mergedMenuData]);
+  const addTab = useCallback(
+    (path: string) => {
+      const translationKey = pathToTranslationKey[path];
+      const label = translationKey
+        ? t(translationKey)
+        : findMenuName(localizedMenuData, path) || t("common.unnamed");
+      setTabs((prev) => {
+        const existingTab = prev.find((tab) => tab.key === path);
+        if (!existingTab) {
+          return [...prev, { key: path, label, closable: true, path }];
+        }
+        return prev;
+      });
+      setActiveTabKey(path);
+    },
+    [localizedMenuData, t],
+  );
 
-  const removeTab = useCallback((targetKey: string) => {
-    let newActiveKey = activeTabKey;
-    let lastIndex = -1;
-    tabs.forEach((tab, i) => {
-      if (tab.key === targetKey) {
-        lastIndex = i - 1;
+  useEffect(() => {
+    setTabs((currentTabs) =>
+      currentTabs.map((tab) => ({
+        ...tab,
+        label: pathToTranslationKey[tab.path]
+          ? t(pathToTranslationKey[tab.path])
+          : tab.label,
+      })),
+    );
+  }, [t, i18n.resolvedLanguage]);
+  const removeTab = useCallback(
+    (targetKey: string) => {
+      let newActiveKey = activeTabKey;
+      let lastIndex = -1;
+      tabs.forEach((tab, i) => {
+        if (tab.key === targetKey) {
+          lastIndex = i - 1;
+        }
+      });
+      const newTabs = tabs.filter((tab) => tab.key !== targetKey);
+      if (newTabs.length && newActiveKey === targetKey) {
+        if (lastIndex >= 0) {
+          newActiveKey = newTabs[lastIndex].key;
+        } else {
+          newActiveKey = newTabs[0].key;
+        }
       }
-    });
-    const newTabs = tabs.filter((tab) => tab.key !== targetKey);
-    if (newTabs.length && newActiveKey === targetKey) {
-      if (lastIndex >= 0) {
-        newActiveKey = newTabs[lastIndex].key;
-      } else {
-        newActiveKey = newTabs[0].key;
-      }
-    }
-    setTabs(newTabs);
-    setActiveTabKey(newActiveKey);
-    navigate(newActiveKey);
-  }, [tabs, activeTabKey, navigate]);
+      setTabs(newTabs);
+      setActiveTabKey(newActiveKey);
+      navigate(newActiveKey);
+    },
+    [tabs, activeTabKey, navigate],
+  );
 
-  const handleTabChange = useCallback((key: string) => {
-    setActiveTabKey(key);
-    navigate(key);
-  }, [navigate]);
+  const handleTabChange = useCallback(
+    (key: string) => {
+      setActiveTabKey(key);
+      navigate(key);
+    },
+    [navigate],
+  );
 
   useEffect(() => {
     const path = location.pathname;
@@ -472,7 +670,7 @@ export function ProLayout() {
                     {
                       key: "logout",
                       icon: <LogoutOutlined />,
-                      label: "退出登录",
+                      label: t("common.logout"),
                       onClick: handleLogout,
                     },
                   ],
@@ -492,7 +690,7 @@ export function ProLayout() {
                   }
                 }}
               >
-                登录
+                {t("common.login")}
               </Button>
             );
           },
@@ -508,6 +706,35 @@ export function ProLayout() {
           ) : (
             <PicCenterOutlined key="mix" onClick={() => setMix(true)} />
           ),
+          <Dropdown
+            key="language"
+            trigger={["click"]}
+            menu={{
+              selectable: true,
+              selectedKeys: [language],
+              onClick: ({ key }) => {
+                void i18n.changeLanguage(key as SupportedLanguage);
+              },
+              items: [
+                { key: "zh-CN", label: t("language.zhCN") },
+                { key: "en-US", label: t("language.enUS") },
+              ],
+            }}
+          >
+            <TranslationOutlined
+              title={t("language.switch")}
+              aria-label={t("language.switch")}
+            />
+          </Dropdown>,
+          ...(ismix
+            ? [
+                <OpenAIOutlined
+                  key="openai"
+                  className={`ai-chat-action${aiChatOpen ? " ai-chat-action-active" : ""}`}
+                  onClick={() => setAiChatOpen(true)}
+                />,
+              ]
+            : []),
           <Dropdown
             key="theme-color"
             trigger={["click"]}
@@ -548,28 +775,33 @@ export function ProLayout() {
             }}
           >
             <BgColorsOutlined
-              title="切换主题色"
-              aria-label="切换主题色"
+              title={t("layout.switchThemeColor")}
+              aria-label={t("layout.switchThemeColor")}
               style={{ color: themeColors[themeColor].color }}
             />
           </Dropdown>,
-          <InfoCircleFilled
-            key="info"
-            hidden={!ismix}
-            onClick={() => setIsInfoModalOpen(true)}
-          />,
-          <OpenAIOutlined
-            key="openai"
-            className={`ai-chat-action${aiChatOpen ? " ai-chat-action-active" : ""}`}
-            onClick={() => setAiChatOpen(true)}
-          />,
-          <GithubFilled
-            key="github"
-            onClick={() =>
-              window.open("https://gitee.com/garychk/supabase-erp", "_blank")
-            }
-            hidden={!ismix}
-          />,
+          ...(ismix
+            ? [
+                <InfoCircleFilled
+                  key="info"
+                  onClick={() => setIsInfoModalOpen(true)}
+                />,
+              ]
+            : []),
+
+          ...(ismix
+            ? [
+                <GithubFilled
+                  key="github"
+                  onClick={() =>
+                    window.open(
+                      "https://gitee.com/garychk/supabase-erp",
+                      "_blank",
+                    )
+                  }
+                />,
+              ]
+            : []),
         ]}
         footerRender={() => (
           <div style={{ textAlign: "center", padding: 12, color: "#999" }}>
@@ -598,17 +830,24 @@ export function ProLayout() {
           </ProCard>
         </PageContainer>
         <AIChatDrawer open={aiChatOpen} onClose={() => setAiChatOpen(false)} />
-        <Modal open={isInfoModalOpen} title="关于软件" footer={null} onCancel={() => setIsInfoModalOpen(false)}>
+        <Modal
+          open={isInfoModalOpen}
+          title={t("layout.aboutTitle")}
+          footer={null}
+          onCancel={() => setIsInfoModalOpen(false)}
+        >
           <Typography.Paragraph>
-            这是一个功能完整、架构清晰的现代化 ERP
-            前端系统，适合作为制造企业的信息化管理平台。系统不仅提供传统 ERP
-            的财务、库存、采购、销售和生产制造功能，还集成了 AI
-            智能对话能力，可基于真实 opelix
-            数据进行分析，并通过自然语言创建常用业务数据。
+            {t("layout.aboutDescription")}
           </Typography.Paragraph>
-          <Typography.Paragraph type="secondary">当前版本：1.0.0</Typography.Paragraph>
-          <Typography.Paragraph type="secondary">开发作者：garychk</Typography.Paragraph>
-          <Typography.Paragraph type="secondary">联系邮箱：garychk@163.com</Typography.Paragraph>
+          <Typography.Paragraph type="secondary">
+            {t("layout.version")}
+          </Typography.Paragraph>
+          <Typography.Paragraph type="secondary">
+            {t("layout.author")}
+          </Typography.Paragraph>
+          <Typography.Paragraph type="secondary">
+            {t("layout.email")}
+          </Typography.Paragraph>
         </Modal>
       </AntProLayout>
     </ConfigProvider>
