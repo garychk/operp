@@ -35,8 +35,8 @@ import { PageCanvas } from "./PageRenderer";
 import type { CustomPage, PageWidget, WidgetType } from "./types";
 import { widgetDefaults } from "./types";
 import "./page-builder.css";
-import { Content, Header } from "antd/es/layout/layout";
-import Sider from "antd/es/layout/Sider";
+import { listBaqs } from "../baq/api";
+import type { BaqQuery } from "../baq/types";
 
 const palette: Array<{
   type: WidgetType;
@@ -67,6 +67,7 @@ export function PageDesigner() {
   const [preview, setPreview] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [baqs, setBaqs] = useState<BaqQuery[]>([]);
   const selected = useMemo(
     () => page.config.widgets.find((item) => item.id === selectedId),
     [page, selectedId],
@@ -78,6 +79,7 @@ export function PageDesigner() {
       .catch(() => message.error("页面列表加载失败"));
   useEffect(() => {
     void refresh();
+    listBaqs(true).then(setBaqs).catch(() => undefined);
   }, []);
 
   const patchWidget = (patch: Partial<PageWidget>) =>
@@ -323,12 +325,13 @@ export function PageDesigner() {
                     options={[
                       { label: "静态 JSON", value: "static" },
                       { label: "Supabase", value: "supabase" },
+                      { label: "BAQ", value: "baq" },
                     ]}
                     onChange={(mode) =>
                       patchWidget({
                         dataSource: {
                           ...selected.dataSource,
-                          mode: mode as "static" | "supabase",
+                          mode: mode as "static" | "supabase" | "baq",
                         },
                       })
                     }
@@ -371,7 +374,7 @@ export function PageDesigner() {
                       }}
                     />
                   </Form.Item>
-                ) : (
+                ) : selected.dataSource.mode === "supabase" ? (
                   <>
                     <Form.Item label="表名">
                       <Input
@@ -400,6 +403,12 @@ export function PageDesigner() {
                       />
                     </Form.Item>
                   </>
+                ) : (
+                  <Form.Item label="已发布 BAQ">
+                    <Select showSearch optionFilterProp="label" value={selected.dataSource.baqCode} placeholder="选择业务活动查询"
+                      options={baqs.map((item) => ({ value: item.code, label: `${item.name} (${item.code})` }))}
+                      onChange={(baqCode) => patchWidget({ dataSource: { ...selected.dataSource, baqCode } })} />
+                  </Form.Item>
                 )}
                 {["statistic", "line", "column", "pie"].includes(
                   selected.type,

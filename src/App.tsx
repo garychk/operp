@@ -35,6 +35,7 @@ import { Settings } from './pages/system/Settings';
 import { Dictionaries } from './pages/system/Dictionaries';
 import { PageDesigner } from './features/page-builder/PageDesigner';
 import { CustomPageRenderer } from './features/page-builder/PageRenderer';
+import { BaqDesigner } from './features/baq/BaqDesigner';
 
 function AppContent() {
   const { user } = useAuth();
@@ -97,6 +98,7 @@ function AppContent() {
           <Route path="dictionaries" element={<Dictionaries />} />
           <Route path="logs" element={<Logs />} />
           <Route path="page-designer" element={<PageDesigner />} />
+          <Route path="baq" element={<BaqDesigner />} />
         </Route>
         <Route path="custom/:slug" element={<CustomPageRenderer />} />
       </Route>

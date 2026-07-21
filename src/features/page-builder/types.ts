@@ -1,9 +1,10 @@
 export type WidgetType = 'text' | 'statistic' | 'button' | 'table' | 'line' | 'column' | 'pie';
 
 export interface DataSourceConfig {
-  mode: 'static' | 'supabase';
+  mode: 'static' | 'supabase' | 'baq';
   table?: string;
   select?: string;
+  baqCode?: string;
   limit?: number;
   staticData?: unknown[];
 }

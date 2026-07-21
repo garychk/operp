@@ -17,3 +17,4 @@
 \i supabase/tables/deploy_09_data_dictionary.sql
 \i supabase/tables/deploy_10_quality_inspection.sql
 \i supabase/tables/deploy_11_sys_forms_rls.sql
+\i supabase/tables/deploy_12_baq.sql

@@ -7,11 +7,9 @@ import {
   Splitter,
   Timeline,
   Tag,
-  Divider,
   Empty,
   Spin,
   message,
-  Typography,
   Card,
   Switch,
 } from "antd";
@@ -21,7 +19,6 @@ import {
   LeftOutlined,
   RightOutlined,
   CaretRightOutlined,
-  HistoryOutlined,
   CheckOutlined,
   PrinterOutlined,
 } from "@ant-design/icons";

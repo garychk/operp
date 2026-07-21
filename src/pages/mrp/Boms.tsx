@@ -18,7 +18,6 @@ import {
 } from "antd";
 import {
   PlusOutlined,
-  SearchOutlined,
   DeleteOutlined,
   EditOutlined,
 } from "@ant-design/icons";

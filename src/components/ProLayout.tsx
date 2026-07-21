@@ -211,6 +211,7 @@ const menuData: MenuRoute[] = [
       { path: '/system/dictionaries', name: '数据字典', icon: <BookOutlined /> },
       { path: '/system/logs', name: '系统日志', icon: <FileTextOutlined /> },
       { path: '/system/page-designer', name: '页面设计器', icon: <AppstoreOutlined /> },
+      { path: '/system/baq', name: 'BAQ设计管理', icon: <ProfileOutlined /> },
     ],
   },
 ];
@@ -247,6 +248,7 @@ const pathToNameMap: Record<string, string> = {
   '/system/dictionaries': '数据字典',
   '/system/logs': '系统日志',
   '/system/page-designer': '页面设计器',
+  '/system/baq': 'BAQ设计管理',
 };
 
 export function ProLayout() {

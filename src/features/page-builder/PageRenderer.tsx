@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../../utils/supabase';
 import { getCustomPage } from './api';
 import type { CustomPage, PageWidget } from './types';
+import { executeBaq } from '../baq/api';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import './page-builder.css';
@@ -14,27 +15,38 @@ const ResponsiveGrid = WidthProvider(GridLayout);
 
 function WidgetBody({ widget }: { widget: PageWidget }) {
   const [data, setData] = useState<Record<string, unknown>[]>(() => (widget.dataSource.staticData || []) as Record<string, unknown>[]);
-  const [loading, setLoading] = useState(widget.dataSource.mode === 'supabase');
+  const [loading, setLoading] = useState(widget.dataSource.mode !== 'static');
   const [error, setError] = useState('');
+  const [columnOrder, setColumnOrder] = useState<string[]>([]);
 
   useEffect(() => {
-    if (widget.dataSource.mode !== 'supabase' || !widget.dataSource.table) {
+    if (widget.dataSource.mode === 'static') {
       setData((widget.dataSource.staticData || []) as Record<string, unknown>[]);
+      setColumnOrder([]);
       setLoading(false);
       return;
     }
     let active = true;
     setLoading(true);
-    supabase.from(widget.dataSource.table).select(widget.dataSource.select || '*').limit(widget.dataSource.limit || 100)
-      .then(({ data: rows, error: queryError }) => {
+    setError('');
+    const request = widget.dataSource.mode === 'baq'
+      ? (widget.dataSource.baqCode ? executeBaq(widget.dataSource.baqCode, 1, widget.dataSource.limit || 100).then(result => ({ data: result.rows, error: null, columns: result.columns || [] })) : Promise.resolve({ data: [], error: new Error('未选择 BAQ'), columns: [] as string[] }))
+      : supabase.from(widget.dataSource.table || '').select(widget.dataSource.select || '*').limit(widget.dataSource.limit || 100).then(result => ({ ...result, columns: [] as string[] }));
+    request.then(({ data: rows, error: queryError, columns: orderedColumns }) => {
         if (!active) return;
-        if (queryError) setError(queryError.message); else setData((rows || []) as unknown as Record<string, unknown>[]);
+        if (queryError) setError(queryError.message); else {
+          setData((rows || []) as unknown as Record<string, unknown>[]);
+          setColumnOrder(orderedColumns);
+        }
         setLoading(false);
       });
     return () => { active = false; };
   }, [widget.dataSource]);
 
-  const columns = useMemo(() => Object.keys(data[0] || {}).slice(0, 8).map(key => ({ title: key, dataIndex: key, key, ellipsis: true })), [data]);
+  const columns = useMemo(() => {
+    const keys = columnOrder.length ? columnOrder : Object.keys(data[0] || {}).slice(0, 8);
+    return keys.map(key => ({ title: key, dataIndex: key, key, ellipsis: true }));
+  }, [data, columnOrder]);
   if (loading) return <Skeleton active paragraph={{ rows: 3 }} />;
   if (error) return <Alert type="error" showIcon message="数据加载失败" description={error} />;
   if (widget.type === 'text') return <Typography.Paragraph>{widget.content}</Typography.Paragraph>;
