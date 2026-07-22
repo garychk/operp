@@ -5,6 +5,7 @@ import {
   Table,
   Tag,
   Modal,
+  Drawer,
   Form,
   Select,
   Space,
@@ -27,6 +28,7 @@ import type { Tables } from "../../utils/supabase";
 import dayjs from 'dayjs';
 import SupaModal from "../../components/SupaModal";
 import DictSelect from "../../components/DictSelect";
+import { BomTreeGraph } from "../../components/BomTreeGraph";
 
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
@@ -50,6 +52,8 @@ export function Boms() {
   const [selectedBom, setSelectedBom] = useState<Bom | null>(null);
   const [details, setDetails] = useState<BomDetail[]>([]);
   const [editingDetail, setEditingDetail] = useState<BomDetail | null>(null);
+  const [treeDrawerOpen, setTreeDrawerOpen] = useState(false);
+  const [treeMaterialCode, setTreeMaterialCode] = useState<string | null>(null);
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
 
@@ -226,6 +230,17 @@ export function Boms() {
     });
     await fetchDetails(record.id);
     setIsModalOpen(true);
+  };
+
+  const handleViewTree = (record: Bom) => {
+    const product = products.find((p) => p.id === record.product_id);
+    if (!product?.code) {
+      message.warning('当前BOM没有可用的物料编码');
+      return;
+    }
+
+    setTreeMaterialCode(product.code);
+    setTreeDrawerOpen(true);
   };
 
   const handleDelete = async (id: number) => {
@@ -412,6 +427,12 @@ export function Boms() {
             onClick={() => handleEdit(record)}
           >
             编辑
+          </Button>
+          <Button
+            type="text"
+            onClick={() => handleViewTree(record)}
+          >
+            结构图
           </Button>
           <Button
             type="text"
@@ -739,6 +760,20 @@ export function Boms() {
           </Row>
         </Form>
       </Modal>
+
+      <Drawer
+        title="BOM结构图"
+        open={treeDrawerOpen}
+        onClose={() => {
+          setTreeDrawerOpen(false);
+          setTreeMaterialCode(null);
+        }}
+        width="90vw"
+        destroyOnClose
+      >
+        <BomTreeGraph materialCode={treeMaterialCode} />
+      </Drawer>
     </Card>
   );
 }
+
