@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BulbOutlined,
   DatabaseOutlined,
@@ -6,14 +6,28 @@ import {
   PlusOutlined,
   SendOutlined,
   SettingOutlined,
-} from '@ant-design/icons';
-import { Bubble, Prompts, Sender, Welcome, XProvider } from '@ant-design/x';
-import { Button, Drawer, Flex, Input, Modal, Select, Space, Typography, message } from 'antd';
-import type { BubbleListRef } from '@ant-design/x/es/bubble';
-import { buildERPAnalysisContext } from '../utils/aiAnalysisTools';
-import { handleCreateSkill, type CreateFlowState } from '../utils/aiCreateTools';
-import { handleBusinessActionSkill } from '../utils/aiBusinessActionTools';
-import { useAuth } from '../contexts/AuthContext';
+} from "@ant-design/icons";
+import { Bubble, Prompts, Sender, Welcome, XProvider } from "@ant-design/x";
+import {
+  Button,
+  Card,
+  Drawer,
+  Flex,
+  Input,
+  Modal,
+  Select,
+  Space,
+  Typography,
+  message,
+} from "antd";
+import type { BubbleListRef } from "@ant-design/x/es/bubble";
+import { buildERPAnalysisContext } from "../utils/aiAnalysisTools";
+import {
+  handleCreateSkill,
+  type CreateFlowState,
+} from "../utils/aiCreateTools";
+import { handleBusinessActionSkill } from "../utils/aiBusinessActionTools";
+import { useAuth } from "../contexts/AuthContext";
 import {
   createId,
   createProvider,
@@ -24,8 +38,8 @@ import {
   saveAISettings,
   type AIProviderConfig,
   type AISettingsConfig,
-} from '../utils/aiConfig';
-import './AIChatDrawer.css';
+} from "../utils/aiConfig";
+import "./AIChatDrawer.css";
 
 interface AIChatDrawerProps {
   open: boolean;
@@ -34,60 +48,59 @@ interface AIChatDrawerProps {
 
 interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
-  status?: 'loading' | 'success' | 'error';
+  status?: "loading" | "success" | "error";
 }
 const quickPrompts = [
   {
-    key: 'erp',
+    key: "erp",
     icon: <DatabaseOutlined />,
-    label: 'ERP 数据助手',
-    description: '帮我分析当前 ERP 业务数据应该从哪里入手',
+    label: "ERP 数据助手",
+    description: "帮我分析当前 ERP 业务数据应该从哪里入手",
   },
   {
-    key: 'finance',
+    key: "finance",
     icon: <BulbOutlined />,
-    label: '财务建议',
-    description: '帮我整理一份本月应收应付检查清单',
+    label: "财务建议",
+    description: "帮我整理一份本月应收应付检查清单",
   },
   {
-    key: 'inventory',
+    key: "inventory",
     icon: <SendOutlined />,
-    label: '库存排查',
-    description: '如何排查库存数量和采购入库不一致',
+    label: "库存排查",
+    description: "如何排查库存数量和采购入库不一致",
   },
   {
-    key: 'business',
+    key: "business",
     icon: <SendOutlined />,
-    label: '新增业务',
-    description: '帮我新增一个销售订单、采购订单、客户、供应商、物料等',
+    label: "新增业务",
+    description: "帮我新增一个销售订单、采购订单、客户、供应商、物料等",
   },
 ];
-
 
 const createRequestBody = (prompt: string, provider: AIProviderConfig) => {
   return {
     model: provider.model,
-    messages: [{ role: 'user', content: prompt }],
+    messages: [{ role: "user", content: prompt }],
     stream: false,
   };
 };
 
 const stringifyReply = (value: unknown): string => {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return value;
   }
 
   if (value == null) {
-    return '';
+    return "";
   }
 
   if (Array.isArray(value)) {
-    return value.map(stringifyReply).filter(Boolean).join('\n');
+    return value.map(stringifyReply).filter(Boolean).join("\n");
   }
 
-  if (typeof value === 'object') {
+  if (typeof value === "object") {
     const record = value as Record<string, unknown>;
     const nestedContent = stringifyReply(record.content);
     if (nestedContent) {
@@ -107,7 +120,9 @@ const stringifyReply = (value: unknown): string => {
 
 const getReplyContent = (data: unknown) => {
   const record = data as Record<string, unknown>;
-  const choices = Array.isArray(record.choices) ? (record.choices as Record<string, unknown>[]) : [];
+  const choices = Array.isArray(record.choices)
+    ? (record.choices as Record<string, unknown>[])
+    : [];
   const firstChoice = choices[0];
 
   return (
@@ -126,38 +141,45 @@ async function requestAIReply(prompt: string, provider: AIProviderConfig) {
   if (!provider.endpoint) {
     return [
       `${provider.name} 当前还没有配置接口地址。`,
-      '',
+      "",
       `你刚才问的是：“${prompt}”`,
-      '',
-      '点击底部齿轮可以新增或编辑多个大模型配置。Ollama 可直接使用 http://localhost:11434/api/chat。',
-    ].join('\n');
+      "",
+      "点击底部齿轮可以新增或编辑多个大模型配置。Ollama 可直接使用 http://localhost:11434/api/chat。",
+    ].join("\n");
   }
 
   const response = await fetch(provider.endpoint, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      ...(provider.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
+      "Content-Type": "application/json",
+      ...(provider.apiKey
+        ? { Authorization: `Bearer ${provider.apiKey}` }
+        : {}),
     },
     body: JSON.stringify(createRequestBody(prompt, provider)),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`AI 服务请求失败：${response.status}${errorText ? `，${errorText}` : ''}`);
+    throw new Error(
+      `AI 服务请求失败：${response.status}${errorText ? `，${errorText}` : ""}`,
+    );
   }
 
   const data = (await response.json()) as unknown;
-  return getReplyContent(data) || 'AI 服务未返回文本内容。';
+  return getReplyContent(data) || "AI 服务未返回文本内容。";
 }
 
 export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
-  const [inputValue, setInputValue] = useState('');
+  const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [pendingCreate, setPendingCreate] = useState<CreateFlowState | null>(null);
+  const [pendingCreate, setPendingCreate] = useState<CreateFlowState | null>(
+    null,
+  );
   const [configOpen, setConfigOpen] = useState(false);
-  const [aiSettings, setAISettings] = useState<AISettingsConfig>(defaultAISettings);
+  const [aiSettings, setAISettings] =
+    useState<AISettingsConfig>(defaultAISettings);
   const [configLoaded, setConfigLoaded] = useState(false);
   const listRef = useRef<BubbleListRef>(null);
   const saveTimerRef = useRef<number | null>(null);
@@ -166,7 +188,10 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const activeProviderId = aiSettings.activeProviderId;
 
   const activeProvider = useMemo(
-    () => providers.find((item) => item.id === activeProviderId) || providers[0] || defaultAISettings.providers[0],
+    () =>
+      providers.find((item) => item.id === activeProviderId) ||
+      providers[0] ||
+      defaultAISettings.providers[0],
     [activeProviderId, providers],
   );
 
@@ -176,7 +201,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         key: item.id,
         role: item.role,
         content: item.content,
-        loading: item.status === 'loading',
+        loading: item.status === "loading",
       })),
     [messages],
   );
@@ -193,7 +218,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       })
       .catch(() => {
         setConfigLoaded(true);
-        message.error('读取AI设置失败，将使用默认配置');
+        message.error("读取AI设置失败，将使用默认配置");
       });
   }, [configLoaded, open]);
 
@@ -208,7 +233,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
 
     saveTimerRef.current = window.setTimeout(() => {
       saveAISettings(normalizeAISettings(aiSettings)).catch(() => {
-        message.error('保存AI设置失败');
+        message.error("保存AI设置失败");
       });
     }, 600);
 
@@ -222,7 +247,9 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const updateProvider = (id: string, patch: Partial<AIProviderConfig>) => {
     setAISettings((prev) => ({
       ...prev,
-      providers: prev.providers.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+      providers: prev.providers.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
     }));
   };
 
@@ -242,7 +269,8 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       return {
         ...prev,
         providers: safeNext,
-        activeProviderId: id === prev.activeProviderId ? safeNext[0].id : prev.activeProviderId,
+        activeProviderId:
+          id === prev.activeProviderId ? safeNext[0].id : prev.activeProviderId,
       };
     });
   };
@@ -254,38 +282,44 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     }
 
     if (!aiSettings.enabled) {
-      message.warning('AI助手已在系统设置中停用');
+      message.warning("AI助手已在系统设置中停用");
       return;
     }
 
     const userMessage: ChatMessage = {
       id: createId(),
-      role: 'user',
+      role: "user",
       content: prompt,
-      status: 'success',
+      status: "success",
     };
     const assistantMessage: ChatMessage = {
       id: createId(),
-      role: 'assistant',
-      content: '',
-      status: 'loading',
+      role: "assistant",
+      content: "",
+      status: "loading",
     };
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
-    setInputValue('');
+    setInputValue("");
     setLoading(true);
-    window.setTimeout(() => listRef.current?.scrollTo({ top: 'bottom' }), 0);
+    window.setTimeout(() => listRef.current?.scrollTo({ top: "bottom" }), 0);
 
     try {
-      const businessActionResult = await handleBusinessActionSkill(prompt, { id: user?.profile.id, username: user?.profile.username });
-      if (businessActionResult.status !== 'ignored') {
+      const businessActionResult = await handleBusinessActionSkill(prompt, {
+        id: user?.profile.id,
+        username: user?.profile.username,
+      });
+      if (businessActionResult.status !== "ignored") {
         setMessages((prev) =>
           prev.map((item) =>
             item.id === assistantMessage.id
               ? {
                   ...item,
-                  content: businessActionResult.reply || '已处理业务动作。',
-                  status: businessActionResult.status === 'error' ? 'error' : 'success',
+                  content: businessActionResult.reply || "已处理业务动作。",
+                  status:
+                    businessActionResult.status === "error"
+                      ? "error"
+                      : "success",
                 }
               : item,
           ),
@@ -294,15 +328,15 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       }
 
       const createResult = await handleCreateSkill(prompt, pendingCreate);
-      if (createResult.status !== 'ignored') {
+      if (createResult.status !== "ignored") {
         setPendingCreate(createResult.pending || null);
         setMessages((prev) =>
           prev.map((item) =>
             item.id === assistantMessage.id
               ? {
                   ...item,
-                  content: createResult.reply || '已处理创建指令。',
-                  status: createResult.status === 'error' ? 'error' : 'success',
+                  content: createResult.reply || "已处理创建指令。",
+                  status: createResult.status === "error" ? "error" : "success",
                 }
               : item,
           ),
@@ -312,29 +346,35 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
 
       const analysisContext = await buildERPAnalysisContext(prompt);
       if (analysisContext.domains.length) {
-        message.info('已读取 ERP ' + analysisContext.domains.join(' / ') + ' 数据摘要');
+        message.info(
+          "已读取 ERP " + analysisContext.domains.join(" / ") + " 数据摘要",
+        );
       }
-      const reply = await requestAIReply(analysisContext.prompt, activeProvider);
+      const reply = await requestAIReply(
+        analysisContext.prompt,
+        activeProvider,
+      );
       setMessages((prev) =>
         prev.map((item) =>
           item.id === assistantMessage.id
-            ? { ...item, content: stringifyReply(reply), status: 'success' }
+            ? { ...item, content: stringifyReply(reply), status: "success" }
             : item,
         ),
       );
     } catch (error) {
-      const errorText = error instanceof Error ? error.message : 'AI 服务暂时不可用。';
+      const errorText =
+        error instanceof Error ? error.message : "AI 服务暂时不可用。";
       setMessages((prev) =>
         prev.map((item) =>
           item.id === assistantMessage.id
-            ? { ...item, content: errorText, status: 'error' }
+            ? { ...item, content: errorText, status: "error" }
             : item,
         ),
       );
       message.error(errorText);
     } finally {
       setLoading(false);
-      window.setTimeout(() => listRef.current?.scrollTo({ top: 'bottom' }), 0);
+      window.setTimeout(() => listRef.current?.scrollTo({ top: "bottom" }), 0);
     }
   };
 
@@ -349,18 +389,18 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     >
       <XProvider>
         <Flex vertical className="ai-chat-panel">
-          <div className="ai-chat-messages">
+          <Card className="ai-chat-messages" variant="borderless">
             {messages.length > 0 ? (
               <Bubble.List
                 ref={listRef}
                 items={bubbleItems}
                 role={{
                   assistant: {
-                    placement: 'start',
+                    placement: "start",
                     typing: true,
                   },
                   user: {
-                    placement: 'end',
+                    placement: "end",
                   },
                 }}
               />
@@ -376,55 +416,64 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                   items={quickPrompts}
                   vertical={true}
                   onItemClick={(info: { data: { description?: unknown } }) =>
-                    submitMessage(String(info.data.description || ''))
+                    submitMessage(String(info.data.description || ""))
                   }
                 />
               </Flex>
             )}
-          </div>
+          </Card>
 
-          <div className="ai-chat-footer">
-            <Space className="ai-chat-footer-tools">
-              <Select
-                size="small"
-                value={activeProvider.id}
-                className="ai-chat-provider-select"
-                options={providers.map((item) => ({
-                  label: `${item.name}${item.model ? ` / ${item.model}` : ''}`,
-                  value: item.id,
-                }))}
-                onChange={(activeProviderId) => setAISettings((prev) => ({ ...prev, activeProviderId }))}
-              />
-              <Space size={4}>
-                {messages.length > 0 && (
+          <Card
+            title={false}
+            className="ai-chat-footer"
+            variant="borderless"
+            size="small"
+            extra={
+              <Space className="ai-chat-footer-tools">
+                <Select
+                  size="small"
+                  value={activeProvider.id}
+                  className="ai-chat-provider-select"
+                  options={providers.map((item) => ({
+                    label: `${item.name}${item.model ? ` / ${item.model}` : ""}`,
+                    value: item.id,
+                  }))}
+                  onChange={(activeProviderId) =>
+                    setAISettings((prev) => ({ ...prev, activeProviderId }))
+                  }
+                />
+                <Space size={4}>
+                  {messages.length > 0 && (
+                    <Button
+                      type="text"
+                      size="small"
+                      onClick={() => {
+                        setMessages([]);
+                        setPendingCreate(null);
+                      }}
+                    >
+                      清空
+                    </Button>
+                  )}
                   <Button
                     type="text"
                     size="small"
-                    onClick={() => {
-                      setMessages([]);
-                      setPendingCreate(null);
-                    }}
-                  >
-                    清空
-                  </Button>
-                )}
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<SettingOutlined />}
-                  onClick={() => setConfigOpen(true)}
-                />
+                    icon={<SettingOutlined />}
+                    onClick={() => setConfigOpen(true)}
+                  />
+                </Space>
               </Space>
-            </Space>
+            }
+          >
             <Sender
               value={inputValue}
               loading={loading}
-              className='ai-chat-sender'
+              className="ai-chat-sender"
               onChange={setInputValue}
               onSubmit={() => submitMessage(inputValue)}
               placeholder={`使用 ${activeProvider.name} 提问`}
             />
-          </div>
+          </Card>
         </Flex>
       </XProvider>
 
@@ -437,44 +486,60 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       >
         <Flex vertical gap={12}>
           <Typography.Text type="secondary">
-            DeepSeek/OpenAI 兼容接口请选择通用代理，接口地址填写 chat completions 地址；Ollama 选择 Ollama，接口地址填写 http://localhost:11434/api/chat。
+            DeepSeek/OpenAI 兼容接口请选择通用代理，接口地址填写 chat
+            completions 地址；Ollama 选择 Ollama，接口地址填写
+            http://localhost:11434/api/chat。
           </Typography.Text>
           {providers.map((provider) => (
-            <div className="ai-provider-card" key={provider.id}>
-              <Space className="ai-provider-card-header">
-                <Input
-                  value={provider.name}
-                  onChange={(event) => updateProvider(provider.id, { name: event.target.value })}
-                  placeholder="显示名称，如 Ollama 本地"
+            <Card className="ai-provider-card" key={provider.id} size="small">
+              <Space vertical style={{ width: '100%' }}>
+                <Space className="ai-provider-card-header">
+                  <Input
+                    value={provider.name}
+                    onChange={(event) =>
+                      updateProvider(provider.id, { name: event.target.value })
+                    }
+                    placeholder="显示名称，如 Ollama 本地"
+                  />
+                  <Button
+                    danger
+                    type="text"
+                    icon={<DeleteOutlined />}
+                    onClick={() => deleteProvider(provider.id)}
+                  />
+                </Space>
+                <Select
+                  value={provider.apiType}
+                  options={providerTypeOptions}
+                  onChange={(apiType) =>
+                    updateProvider(provider.id, { apiType })
+                  }
                 />
-                <Button
-                  danger
-                  type="text"
-                  icon={<DeleteOutlined />}
-                  onClick={() => deleteProvider(provider.id)}
+                <Input
+                  value={provider.endpoint}
+                  onChange={(event) =>
+                    updateProvider(provider.id, {
+                      endpoint: event.target.value,
+                    })
+                  }
+                  placeholder="接口地址，如 http://localhost:11434/api/chat"
+                />
+                <Input
+                  value={provider.model}
+                  onChange={(event) =>
+                    updateProvider(provider.id, { model: event.target.value })
+                  }
+                  placeholder="模型 ID，如 qwen2.5、llama3.1、deepseek-r1"
+                />
+                <Input.Password
+                  value={provider.apiKey}
+                  onChange={(event) =>
+                    updateProvider(provider.id, { apiKey: event.target.value })
+                  }                  
+                  placeholder="可选 API Key，Ollama 本地通常不用填"
                 />
               </Space>
-              <Select
-                value={provider.apiType}
-                options={providerTypeOptions}
-                onChange={(apiType) => updateProvider(provider.id, { apiType })}
-              />
-              <Input
-                value={provider.endpoint}
-                onChange={(event) => updateProvider(provider.id, { endpoint: event.target.value })}
-                placeholder="接口地址，如 http://localhost:11434/api/chat"
-              />
-              <Input
-                value={provider.model}
-                onChange={(event) => updateProvider(provider.id, { model: event.target.value })}
-                placeholder="模型 ID，如 qwen2.5、llama3.1、deepseek-r1"
-              />
-              <Input.Password
-                value={provider.apiKey}
-                onChange={(event) => updateProvider(provider.id, { apiKey: event.target.value })}
-                placeholder="可选 API Key，Ollama 本地通常不用填"
-              />
-            </div>
+            </Card>
           ))}
           <Button icon={<PlusOutlined />} onClick={addProvider} type="primary">
             新增大模型
@@ -484,4 +549,3 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     </Drawer>
   );
 }
-
