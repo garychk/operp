@@ -189,6 +189,26 @@ const zhCN = {
       activeProductionOrders: "进行中生产订单",
       monthlyCompleted: "本月完工数量",
     },
+    bomTree: {
+      title: "BOM结构树",
+      titleWithCode: "BOM结构树 - {{code}}",
+      hint: "双击节点折叠/展开，滚轮缩放，拖拽浏览。",
+      loading: "正在加载BOM树...",
+      empty: {
+        selectMaterial: "请选择一个物料编码",
+        notFound: "未找到该物料对应的BOM",
+      },
+      node: {
+        rootTag: "主件",
+        levelTag: "L{{level}}",
+        quantity: "数量 {{quantity}}",
+        lossRate: "损耗 {{rate}}%",
+      },
+      fallback: {
+        materialCode: "物料#{{id}}",
+        unnamedMaterial: "未命名物料",
+      },
+    },
     layout: {
       switchThemeColor: "切换主题色",
       aboutTitle: "关于软件",

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge, Card, Empty, Spin, Space, Tag, Typography } from "antd";
 import { ExtensionCategory, Graph, register, treeToGraphData } from "@antv/g6";
 import { ReactNode } from "@antv/g6-extension-react";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../utils/supabase";
 import type { Tables } from "../utils/supabase";
 
@@ -24,6 +25,11 @@ interface BomTreeNode {
   children?: BomTreeNode[];
 }
 
+interface BomNodeCardProps {
+  data: BomTreeNode;
+  t: (key: string, options?: Record<string, unknown>) => string;
+}
+
 const BOM_TABLE = "erp_boms_s_539dcf81_b";
 const BOM_DETAIL_TABLE = "erp_bom_details_s_539dcf81_b";
 const PRODUCT_TABLE = "erp_products_s_539dcf81_b";
@@ -34,7 +40,7 @@ if (!reactNodeRegistered) {
   reactNodeRegistered = true;
 }
 
-function BomNodeCard({ data }: { data: BomTreeNode }) {
+function BomNodeCard({ data, t }: BomNodeCardProps) {
   const isRoot = data.level === 0;
   const accent = isRoot ? "#1677ff" : data.level === 1 ? "#13c2c2" : "#722ed1";
 
@@ -48,9 +54,7 @@ function BomNodeCard({ data }: { data: BomTreeNode }) {
         borderRadius: 14,
         borderColor: accent,
         boxShadow: "0 8px 20px rgba(15, 23, 42, 0.08)",
-        background: isRoot
-          ? "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)"
-          : "#fff",
+        background: isRoot ? "linear-gradient(180deg, #f8fbff 0%, #ffffff 100%)" : "#fff",
       }}
     >
       <Space direction="vertical" size={4} style={{ width: "100%" }}>
@@ -58,7 +62,7 @@ function BomNodeCard({ data }: { data: BomTreeNode }) {
           <Typography.Text strong ellipsis style={{ fontSize: 13, color: "#1f2937", flex: 1 }}>
             {data.code}
           </Typography.Text>
-          <Badge color={accent} text={isRoot ? "主件" : `L${data.level}`} />
+          <Badge color={accent} text={isRoot ? t("bomTree.node.rootTag") : t("bomTree.node.levelTag", { level: data.level })} />
         </Space>
 
         <Typography.Text ellipsis style={{ color: "#6b7280", fontSize: 12 }}>
@@ -67,7 +71,7 @@ function BomNodeCard({ data }: { data: BomTreeNode }) {
 
         <Space size={6} wrap>
           <Tag color="blue" style={{ marginInlineEnd: 0 }}>
-            数量 {data.quantity}
+            {t("bomTree.node.quantity", { quantity: data.quantity })}
           </Tag>
           {data.unit ? (
             <Tag color="cyan" style={{ marginInlineEnd: 0 }}>
@@ -76,7 +80,7 @@ function BomNodeCard({ data }: { data: BomTreeNode }) {
           ) : null}
           {data.lossRate != null ? (
             <Tag color="purple" style={{ marginInlineEnd: 0 }}>
-              损耗 {(data.lossRate * 100).toFixed(2)}%
+              {t("bomTree.node.lossRate", { rate: (data.lossRate * 100).toFixed(2) })}
             </Tag>
           ) : null}
         </Space>
@@ -121,7 +125,7 @@ async function fetchBomDetails(bomId: number) {
   return data || [];
 }
 
-async function buildBomTreeByProductCode(materialCode: string) {
+async function buildBomTreeByProductCode(materialCode: string, t: (key: string, options?: Record<string, unknown>) => string) {
   const { data: productRows, error: productError } = await supabase
     .from(PRODUCT_TABLE)
     .select("*")
@@ -164,9 +168,9 @@ async function buildBomTreeByProductCode(materialCode: string) {
       const childProduct = productMap.get(detail.material_id);
       const childNode: BomTreeNode = {
         id: `detail-${detail.id}`,
-        label: childProduct ? `${childProduct.code} ${childProduct.name}` : `物料#${detail.material_id}`,
+        label: childProduct ? `${childProduct.code} ${childProduct.name}` : t("bomTree.fallback.materialCode", { id: detail.material_id }),
         code: childProduct?.code || `M-${detail.material_id}`,
-        name: childProduct?.name || "未命名物料",
+        name: childProduct?.name || t("bomTree.fallback.unnamedMaterial"),
         quantity: detail.quantity || 0,
         unit: detail.unit || childProduct?.unit,
         lossRate: detail.loss_rate,
@@ -194,8 +198,11 @@ export function BomTreeGraph({ materialCode }: BomTreeGraphProps) {
   const graphRef = useRef<Graph | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasData, setHasData] = useState(true);
-
-  const title = useMemo(() => (materialCode ? `BOM结构树 - ${materialCode}` : "BOM结构树"), [materialCode]);
+  const { t } = useTranslation();
+  const title = useMemo(
+    () => (materialCode ? t("bomTree.titleWithCode", { code: materialCode }) : t("bomTree.title")),
+    [materialCode, t],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -206,7 +213,7 @@ export function BomTreeGraph({ materialCode }: BomTreeGraphProps) {
       setHasData(true);
 
       try {
-        const treeData = materialCode ? await buildBomTreeByProductCode(materialCode) : null;
+        const treeData = materialCode ? await buildBomTreeByProductCode(materialCode, t) : null;
         if (cancelled || !containerRef.current) return;
 
         if (graphRef.current) {
@@ -223,14 +230,14 @@ export function BomTreeGraph({ materialCode }: BomTreeGraphProps) {
           layout: {
             type: "dendrogram",
             direction: "TB",
-            nodeSep: 160,
-            rankSep: 240,
+            nodeSep: 96,
+            rankSep: 160,
           },
           node: {
             type: "react",
             style: {
-              size: [240, 104],
-              component: (datum: any) => <BomNodeCard data={datum} />,
+              size: [250, 104],
+              component: (datum: any) => <BomNodeCard data={datum} t={t} />,
             },
           },
           edge: {
@@ -250,7 +257,7 @@ export function BomTreeGraph({ materialCode }: BomTreeGraphProps) {
 
         graphRef.current = graph;
         await graph.render();
-        await graph.fitView({ when: "always", direction: "both" });
+        // await graph.fitView({ when: "always", direction: "both" });
 
         if (!treeData) {
           setHasData(false);
@@ -272,10 +279,10 @@ export function BomTreeGraph({ materialCode }: BomTreeGraphProps) {
         graphRef.current = null;
       }
     };
-  }, [materialCode]);
+  }, [materialCode, t]);
 
   if (!materialCode) {
-    return <Empty description="请选择一个物料编码" />;
+    return <Empty description={t("bomTree.empty.selectMaterial")} />;
   }
 
   return (
@@ -284,12 +291,10 @@ export function BomTreeGraph({ materialCode }: BomTreeGraphProps) {
         <Typography.Title level={5} style={{ margin: 0 }}>
           {title}
         </Typography.Title>
-        <Typography.Text type="secondary">
-          双击节点折叠/展开，滚轮缩放，拖拽浏览。
-        </Typography.Text>
+        <Typography.Text type="secondary">{t("bomTree.hint")}</Typography.Text>
       </Space>
 
-      <Spin spinning={loading} tip="正在加载BOM树...">
+      <Spin spinning={loading} tip={t("bomTree.loading")}>
         <Card
           styles={{ body: { padding: 0 } }}
           style={{
@@ -310,13 +315,11 @@ export function BomTreeGraph({ materialCode }: BomTreeGraphProps) {
         </Card>
       </Spin>
 
-      {!loading && !hasData ? <div style={{ marginTop: 12 }}><Empty description="未找到该物料对应的BOM" /></div> : null}
+      {!loading && !hasData ? (
+        <div style={{ marginTop: 12 }}>
+          <Empty description={t("bomTree.empty.notFound")} />
+        </div>
+      ) : null}
     </div>
   );
 }
-
-
-
-
-
-

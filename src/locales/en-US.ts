@@ -193,6 +193,26 @@ const enUS = {
       activeProductionOrders: "Active Production Orders",
       monthlyCompleted: "Monthly Completed",
     },
+    bomTree: {
+      title: "BOM Tree",
+      titleWithCode: "BOM Tree - {{code}}",
+      hint: "Double-click a node to collapse or expand. Use the mouse wheel to zoom and drag to pan.",
+      loading: "Loading BOM tree...",
+      empty: {
+        selectMaterial: "Please select a material code",
+        notFound: "No BOM was found for this material",
+      },
+      node: {
+        rootTag: "Root",
+        levelTag: "L{{level}}",
+        quantity: "Qty {{quantity}}",
+        lossRate: "Loss {{rate}}%",
+      },
+      fallback: {
+        materialCode: "Material #{{id}}",
+        unnamedMaterial: "Unnamed material",
+      },
+    },
     layout: {
       switchThemeColor: "Switch theme color",
       aboutTitle: "About",
