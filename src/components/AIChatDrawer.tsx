@@ -40,6 +40,7 @@ import {
   type AISettingsConfig,
 } from "../utils/aiConfig";
 import "./AIChatDrawer.css";
+import chatIcon from "../assets/fmt.webp";
 
 interface AIChatDrawerProps {
   open: boolean;
@@ -407,6 +408,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             ) : (
               <Flex vertical gap={18}>
                 <Welcome
+                  icon={<img src={chatIcon} alt="Chat Icon" />}
                   variant="borderless"
                   title="你好，我是 OPERP 助手"
                   description="可以帮你梳理业务流程、生成检查清单，也可以在配置大模型接口后回答更具体的经营和系统问题。"
