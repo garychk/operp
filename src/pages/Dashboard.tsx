@@ -13,6 +13,7 @@ import {
   GiftOutlined,
 } from '@ant-design/icons';
 import { supabase } from '../utils/supabase';
+import { useTranslation } from 'react-i18next';
 
 interface DashboardStats {
   totalCustomers: number;
@@ -24,6 +25,7 @@ interface DashboardStats {
 }
 
 export function Dashboard() {
+  const { t } = useTranslation();
   const [stats, setStats] = useState<DashboardStats>({
     totalCustomers: 0,
     totalSuppliers: 0,
@@ -85,14 +87,14 @@ export function Dashboard() {
 
   return (
     <Card variant="borderless">
-      <h2 style={{ marginBottom: 24 }}>系统概览</h2>
-      <p style={{ color: '#666', marginBottom: 24 }}>欢迎使用 ERP 管理系统</p>
+      <h2 style={{ marginBottom: 24 }}>{t('dashboard.title')}</h2>
+      <p style={{ color: '#666', marginBottom: 24 }}>{t('dashboard.welcome')}</p>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={8}>
           <Card>
             <Statistic
-              title="客户数量"
+              title={t('dashboard.customersCount')}
               value={stats.totalCustomers}
               prefix={<TeamOutlined style={{ color: '#1677ff', marginRight: 8 }} />}
             />
@@ -101,7 +103,7 @@ export function Dashboard() {
         <Col xs={24} sm={12} lg={8}>
           <Card>
             <Statistic
-              title="供应商数量"
+              title={t('dashboard.suppliersCount')}
               value={stats.totalSuppliers}
               prefix={<ShopOutlined style={{ color: '#52c41a', marginRight: 8 }} />}
             />
@@ -110,7 +112,7 @@ export function Dashboard() {
         <Col xs={24} sm={12} lg={8}>
           <Card>
             <Statistic
-              title="物料数量"
+              title={t('dashboard.productsCount')}
               value={stats.totalProducts}
               prefix={<InboxOutlined style={{ color: '#722ed1', marginRight: 8 }} />}
             />
@@ -119,7 +121,7 @@ export function Dashboard() {
         <Col xs={24} sm={12} lg={8}>
           <Card>
             <Statistic
-              title="库存总值"
+              title={t('dashboard.inventoryValue')}
               value={stats.totalInventoryValue}
               prefix={<DollarOutlined style={{ color: '#faad14', marginRight: 8 }} />}
               formatter={(value) => `¥${value.toLocaleString()}`}
@@ -129,7 +131,7 @@ export function Dashboard() {
         <Col xs={24} sm={12} lg={8}>
           <Card>
             <Statistic
-              title="待审采购单"
+              title={t('dashboard.pendingPurchaseOrders')}
               value={stats.pendingPurchaseOrders}
               prefix={<ShoppingCartOutlined style={{ color: '#fa8c16', marginRight: 8 }} />}
             />
@@ -138,7 +140,7 @@ export function Dashboard() {
         <Col xs={24} sm={12} lg={8}>
           <Card>
             <Statistic
-              title="待审销售单"
+              title={t('dashboard.pendingSalesOrders')}
               value={stats.pendingSalesOrders}
               prefix={<ProfileOutlined style={{ color: '#eb2f96', marginRight: 8 }} />}
             />
@@ -148,15 +150,15 @@ export function Dashboard() {
 
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={12}>
-          <Card title="财务概览">
+          <Card title={t('dashboard.financeOverview')}>
             <Row gutter={16}>
               <Col span={12}>
                 <Card bordered={false} style={{ background: '#f6ffed' }}>
                   <Statistic
-                    title="本月收入"
+                    title={t('dashboard.monthlyIncome')}
                     value={0}
                     prefix={<ArrowUpOutlined style={{ color: '#52c41a' }} />}
-                    suffix="元"
+                    suffix={t('dashboard.yuan')}
                     valueStyle={{ color: '#52c41a' }}
                   />
                 </Card>
@@ -164,10 +166,10 @@ export function Dashboard() {
               <Col span={12}>
                 <Card bordered={false} style={{ background: '#fff2f0' }}>
                   <Statistic
-                    title="本月支出"
+                    title={t('dashboard.monthlyExpense')}
                     value={0}
                     prefix={<ArrowDownOutlined style={{ color: '#ff4d4f' }} />}
-                    suffix="元"
+                    suffix={t('dashboard.yuan')}
                     valueStyle={{ color: '#ff4d4f' }}
                   />
                 </Card>
@@ -176,12 +178,12 @@ export function Dashboard() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="生产概览">
+          <Card title={t('dashboard.productionOverview')}>
             <Row gutter={16}>
               <Col span={12}>
                 <Card bordered={false} style={{ background: '#e6f4ff' }}>
                   <Statistic
-                    title="进行中生产订单"
+                    title={t('dashboard.activeProductionOrders')}
                     value={0}
                     prefix={<ForkOutlined style={{ color: '#1677ff' }} />}
                     valueStyle={{ color: '#1677ff' }}
@@ -191,7 +193,7 @@ export function Dashboard() {
               <Col span={12}>
                 <Card bordered={false} style={{ background: '#f9f0ff' }}>
                   <Statistic
-                    title="本月完工数量"
+                    title={t('dashboard.monthlyCompleted')}
                     value={0}
                     prefix={<GiftOutlined style={{ color: '#722ed1' }} />}
                     valueStyle={{ color: '#722ed1' }}

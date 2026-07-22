@@ -22,6 +22,7 @@ import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { createProvider, defaultAISettings, normalizeAISettings, providerTypeOptions } from '../../utils/aiConfig';
+import { useTranslation } from 'react-i18next';
 
 type ConfigValue = string | number | boolean | null | ConfigObject | ConfigValue[];
 type ConfigObject = { [key: string]: ConfigValue };
@@ -60,8 +61,8 @@ interface SettingCategory {
 const settingCategories: SettingCategory[] = [
   {
     code: 'basic',
-    name: '基础设置',
-    description: '企业资料、默认语言、时区和单据号规则等全局基础参数。',
+    name: 'settings.categories.basic.name',
+    description: 'settings.categories.basic.description',
     defaults: {
       companyName: 'OPERP',
       companyCode: 'ERP',
@@ -72,11 +73,11 @@ const settingCategories: SettingCategory[] = [
       enableOperationLog: true,
     },
     fields: [
-      { name: 'companyName', label: '企业名称', kind: 'text' },
-      { name: 'companyCode', label: '企业编码', kind: 'text' },
+      { name: 'companyName', label: 'settings.fields.companyName', kind: 'text' },
+      { name: 'companyCode', label: 'settings.fields.companyCode', kind: 'text' },
       {
         name: 'timezone',
-        label: '默认时区',
+        label: 'settings.fields.timezone',
         kind: 'select',
         options: [
           { label: 'Asia/Shanghai', value: 'Asia/Shanghai' },
@@ -85,22 +86,22 @@ const settingCategories: SettingCategory[] = [
       },
       {
         name: 'language',
-        label: '默认语言',
+        label: 'settings.fields.language',
         kind: 'select',
         options: [
-          { label: '简体中文', value: 'zh-CN' },
+          { label: 'language.zhCN', value: 'zh-CN' },
           { label: 'English', value: 'en-US' },
         ],
       },
-      { name: 'dateFormat', label: '日期格式', kind: 'text' },
-      { name: 'documentNoPrefix', label: '单据号前缀', kind: 'text' },
-      { name: 'enableOperationLog', label: '启用操作日志', kind: 'switch' },
+      { name: 'dateFormat', label: 'settings.fields.dateFormat', kind: 'text' },
+      { name: 'documentNoPrefix', label: 'settings.fields.documentNoPrefix', kind: 'text' },
+      { name: 'enableOperationLog', label: 'settings.fields.enableOperationLog', kind: 'switch' },
     ],
   },
   {
     code: 'finance',
-    name: '财务设置',
-    description: '本位币、税率、会计期间和凭证过账控制。',
+    name: 'settings.categories.finance.name',
+    description: 'settings.categories.finance.description',
     defaults: {
       baseCurrency: 'CNY',
       defaultTaxRate: 13,
@@ -110,18 +111,18 @@ const settingCategories: SettingCategory[] = [
       amountPrecision: 2,
     },
     fields: [
-      { name: 'baseCurrency', label: '本位币', kind: 'text' },
-      { name: 'defaultTaxRate', label: '默认税率(%)', kind: 'number', min: 0, max: 100, step: 0.01 },
-      { name: 'accountingYearStartMonth', label: '会计年度起始月', kind: 'number', min: 1, max: 12 },
-      { name: 'voucherAutoPost', label: '凭证自动过账', kind: 'switch' },
-      { name: 'allowBackdatedVoucher', label: '允许补录历史凭证', kind: 'switch' },
-      { name: 'amountPrecision', label: '金额小数位', kind: 'number', min: 0, max: 6 },
+      { name: 'baseCurrency', label: 'settings.fields.baseCurrency', kind: 'text' },
+      { name: 'defaultTaxRate', label: 'settings.fields.defaultTaxRate', kind: 'number', min: 0, max: 100, step: 0.01 },
+      { name: 'accountingYearStartMonth', label: 'settings.fields.accountingYearStartMonth', kind: 'number', min: 1, max: 12 },
+      { name: 'voucherAutoPost', label: 'settings.fields.voucherAutoPost', kind: 'switch' },
+      { name: 'allowBackdatedVoucher', label: 'settings.fields.allowBackdatedVoucher', kind: 'switch' },
+      { name: 'amountPrecision', label: 'settings.fields.amountPrecision', kind: 'number', min: 0, max: 6 },
     ],
   },
   {
     code: 'manufacturing',
-    name: '制造设置',
-    description: 'MRP、BOM、工艺路线和生产订单的默认行为。',
+    name: 'settings.categories.manufacturing.name',
+    description: 'settings.categories.manufacturing.description',
     defaults: {
       mrpPlanningHorizonDays: 30,
       defaultLeadTimeDays: 7,
@@ -131,18 +132,18 @@ const settingCategories: SettingCategory[] = [
       scrapRatePrecision: 4,
     },
     fields: [
-      { name: 'mrpPlanningHorizonDays', label: 'MRP计划展望期(天)', kind: 'number', min: 1 },
-      { name: 'defaultLeadTimeDays', label: '默认提前期(天)', kind: 'number', min: 0 },
-      { name: 'allowBomVersionOverlap', label: '允许BOM版本重叠', kind: 'switch' },
-      { name: 'requireRoutingForProduction', label: '生产订单必须选择工艺路线', kind: 'switch' },
-      { name: 'autoReserveMaterials', label: '自动预留物料', kind: 'switch' },
-      { name: 'scrapRatePrecision', label: '损耗率小数位', kind: 'number', min: 0, max: 6 },
+      { name: 'mrpPlanningHorizonDays', label: 'settings.fields.mrpPlanningHorizonDays', kind: 'number', min: 1 },
+      { name: 'defaultLeadTimeDays', label: 'settings.fields.defaultLeadTimeDays', kind: 'number', min: 0 },
+      { name: 'allowBomVersionOverlap', label: 'settings.fields.allowBomVersionOverlap', kind: 'switch' },
+      { name: 'requireRoutingForProduction', label: 'settings.fields.requireRoutingForProduction', kind: 'switch' },
+      { name: 'autoReserveMaterials', label: 'settings.fields.autoReserveMaterials', kind: 'switch' },
+      { name: 'scrapRatePrecision', label: 'settings.fields.scrapRatePrecision', kind: 'number', min: 0, max: 6 },
     ],
   },
   {
     code: 'quality',
-    name: '检验设置',
-    description: '来料、生产和出货检验策略。',
+    name: 'settings.categories.quality.name',
+    description: 'settings.categories.quality.description',
     defaults: {
       incomingInspectionEnabled: true,
       productionInspectionEnabled: true,
@@ -152,29 +153,27 @@ const settingCategories: SettingCategory[] = [
       autoCreateInspectionTask: true,
     },
     fields: [
-      { name: 'incomingInspectionEnabled', label: '启用来料检验', kind: 'switch' },
-      { name: 'productionInspectionEnabled', label: '启用生产检验', kind: 'switch' },
-      { name: 'outgoingInspectionEnabled', label: '启用出货检验', kind: 'switch' },
-      { name: 'defaultSamplingRate', label: '默认抽检比例(%)', kind: 'number', min: 0, max: 100 },
-      { name: 'blockUnqualifiedStock', label: '不合格品禁止出库', kind: 'switch' },
-      { name: 'autoCreateInspectionTask', label: '自动生成检验任务', kind: 'switch' },
+      { name: 'incomingInspectionEnabled', label: 'settings.fields.incomingInspectionEnabled', kind: 'switch' },
+      { name: 'productionInspectionEnabled', label: 'settings.fields.productionInspectionEnabled', kind: 'switch' },
+      { name: 'outgoingInspectionEnabled', label: 'settings.fields.outgoingInspectionEnabled', kind: 'switch' },
+      { name: 'defaultSamplingRate', label: 'settings.fields.defaultSamplingRate', kind: 'number', min: 0, max: 100 },
+      { name: 'blockUnqualifiedStock', label: 'settings.fields.blockUnqualifiedStock', kind: 'switch' },
+      { name: 'autoCreateInspectionTask', label: 'settings.fields.autoCreateInspectionTask', kind: 'switch' },
     ],
   },
   {
     code: 'ai',
-    name: 'AI设置',
-    description: 'AI 助手、大模型列表和生成参数。API Key 会随系统设置保存，请仅给可信管理员开放该表权限。',
+    name: 'settings.categories.ai.name',
+    description: 'settings.categories.ai.description',
     defaults: defaultAISettings as unknown as ConfigObject,
     fields: [
-      { name: 'enabled', label: '启用AI助手', kind: 'switch' },
-      { name: 'temperature', label: '温度', kind: 'number', min: 0, max: 2, step: 0.1 },
-      { name: 'redactSensitiveData', label: '发送前脱敏敏感数据', kind: 'switch' },
-      { name: 'maxContextMessages', label: '最大上下文消息数', kind: 'number', min: 1, max: 50 },
+      { name: 'enabled', label: 'settings.fields.aiEnabled', kind: 'switch' },
+      { name: 'temperature', label: 'settings.fields.temperature', kind: 'number', min: 0, max: 2, step: 0.1 },
+      { name: 'redactSensitiveData', label: 'settings.fields.redactSensitiveData', kind: 'switch' },
+      { name: 'maxContextMessages', label: 'settings.fields.maxContextMessages', kind: 'number', min: 1, max: 50 },
     ],
   },
 ];
-
-const categoryMap = new Map(settingCategories.map((category) => [category.code, category]));
 
 function mergeDefaults(category: SettingCategory, config?: ConfigObject | null) {
   return {
@@ -224,6 +223,24 @@ function renderField(field: SettingField) {
 }
 
 export function Settings() {
+  const { t, i18n } = useTranslation();
+  const localizedCategories = useMemo(() => settingCategories.map((category) => ({
+    ...category,
+    name: t(category.name),
+    description: t(category.description),
+    fields: category.fields.map((field) => ({
+      ...field,
+      label: t(field.label),
+      options: field.options?.map((option) => ({
+        ...option,
+        label: typeof option.label === 'string' && option.label.includes('.') ? t(option.label) : option.label,
+      })),
+    })),
+  })), [t, i18n.resolvedLanguage]);
+  const categoryMap = useMemo(
+    () => new Map(localizedCategories.map((category) => [category.code, category])),
+    [localizedCategories],
+  );
   const [form] = Form.useForm<ConfigObject>();
   const [configs, setConfigs] = useState<SysConfig[]>([]);
   const [activeKey, setActiveKey] = useState(settingCategories[0].code);
@@ -231,7 +248,7 @@ export function Settings() {
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState<ConfigObject>(settingCategories[0].defaults);
 
-  const activeCategory = categoryMap.get(activeKey) || settingCategories[0];
+  const activeCategory = categoryMap.get(activeKey) || localizedCategories[0];
   const activeConfig = useMemo(
     () => configs.find((item) => item.category_code === activeCategory.code),
     [activeCategory.code, configs],
@@ -250,7 +267,7 @@ export function Settings() {
       if (error) throw error;
       setConfigs((data || []) as SysConfig[]);
     } catch (error) {
-      message.error('获取系统设置失败');
+      message.error(t('settings.messages.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -269,10 +286,12 @@ export function Settings() {
   const handleSave = async () => {
     const values = await form.validateFields();
     const configJson = activeCategory.code === 'ai' ? normalizeAISettings(values) : values;
+    const canonicalCategory = settingCategories.find((category) => category.code === activeCategory.code) || settingCategories[0];
+    const zh = i18n.getFixedT('zh-CN');
     const payload = {
       category_code: activeCategory.code,
-      category_name: activeCategory.name,
-      description: activeCategory.description,
+      category_name: zh(canonicalCategory.name),
+      description: zh(canonicalCategory.description),
       config_json: configJson,
       status: '1',
       sort_order: settingCategories.findIndex((item) => item.code === activeCategory.code) + 1,
@@ -282,7 +301,7 @@ export function Settings() {
     setSaving(true);
     try {
       await logWithTiming(
-        '保存系统设置',
+        t('settings.messages.saveAction'),
         'UPSERT sys_config',
         async () => {
           const { error } = await supabase
@@ -292,11 +311,11 @@ export function Settings() {
         },
         { category_code: activeCategory.code },
       );
-      message.success('设置已保存');
+      message.success(t('settings.messages.saved'));
       setPreview(configJson as unknown as ConfigObject);
       fetchConfigs();
     } catch (error) {
-      message.error('保存系统设置失败');
+      message.error(t('settings.messages.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -308,15 +327,15 @@ export function Settings() {
     }
 
     const providerOptions = (watchedProviders || []).map((provider, index) => ({
-      label: `${provider?.name || `模型${index + 1}`}${provider?.model ? ` / ${provider.model}` : ''}`,
+      label: `${provider?.name || t('settings.providers.modelFallback', { number: index + 1 })}${provider?.model ? ` / ${provider.model}` : ''}`,
       value: provider?.id || '',
     })).filter((option) => option.value);
 
     return (
       <>
-        <Divider>大模型列表</Divider>
-        <Form.Item name="activeProviderId" label="默认使用模型" rules={[{ required: true, message: '请选择默认模型' }]}>
-          <Select options={providerOptions} placeholder="请选择默认使用的大模型" />
+        <Divider>{t('settings.providers.list')}</Divider>
+        <Form.Item name="activeProviderId" label={t('settings.providers.defaultModel')} rules={[{ required: true, message: t('settings.providers.selectDefault') }]}>
+          <Select options={providerOptions} placeholder={t('settings.providers.selectPlaceholder')} />
         </Form.Item>
         <Form.List name="providers">
           {(fields, { add, remove }) => (
@@ -326,7 +345,7 @@ export function Settings() {
                     <Card
                       key={field.key}
                       size="small"
-                      title={`模型 ${field.name + 1}`}
+                      title={t('settings.providers.modelTitle', { number: field.name + 1 })}
                       extra={
                         <Button
                           danger
@@ -342,28 +361,28 @@ export function Settings() {
                       </Form.Item>
                       <Row gutter={16}>
                         <Col xs={24} md={12}>
-                          <Form.Item name={[field.name, 'name']} label="显示名称" rules={[{ required: true }]}>
-                            <Input placeholder="如 Ollama 本地" />
+                          <Form.Item name={[field.name, 'name']} label={t('settings.providers.displayName')} rules={[{ required: true }]}>
+                            <Input placeholder={t('settings.providers.displayNamePlaceholder')} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
-                          <Form.Item name={[field.name, 'apiType']} label="接口类型" rules={[{ required: true }]}>
-                            <Select options={providerTypeOptions} />
+                          <Form.Item name={[field.name, 'apiType']} label={t('settings.providers.apiType')} rules={[{ required: true }]}>
+                            <Select options={providerTypeOptions.map((option) => ({ ...option, label: t(`settings.providers.${option.value}`) }))} />
                           </Form.Item>
                         </Col>
                         <Col xs={24}>
-                          <Form.Item name={[field.name, 'endpoint']} label="接口地址">
-                            <Input placeholder="如 http://localhost:11434/api/chat" />
+                          <Form.Item name={[field.name, 'endpoint']} label={t('settings.providers.endpoint')}>
+                            <Input placeholder={t('settings.providers.endpointPlaceholder')} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
-                          <Form.Item name={[field.name, 'model']} label="模型 ID" rules={[{ required: true }]}>
-                            <Input placeholder="如 qwen2.5、deepseek-r1" />
+                          <Form.Item name={[field.name, 'model']} label={t('settings.providers.modelId')} rules={[{ required: true }]}>
+                            <Input placeholder={t('settings.providers.modelIdPlaceholder')} />
                           </Form.Item>
                         </Col>
                         <Col xs={24} md={12}>
                           <Form.Item name={[field.name, 'apiKey']} label="API Key">
-                            <Input.Password placeholder="可选，Ollama 本地通常不用填" />
+                            <Input.Password placeholder={t('settings.providers.apiKeyOptional')} />
                           </Form.Item>
                         </Col>
                       </Row>
@@ -383,7 +402,7 @@ export function Settings() {
                   }
                 }}
               >
-                新增大模型
+                {t('settings.providers.add')}
               </Button>
             </Space>
           )}
@@ -391,7 +410,7 @@ export function Settings() {
       </>
     );
   };
-  const items = settingCategories.map((category) => ({
+  const items = localizedCategories.map((category) => ({
     key: category.code,
     label: category.name,
   }));
@@ -400,7 +419,7 @@ export function Settings() {
     <Card
       style={{ borderRadius: 0 }}
       variant="borderless"
-      title="系统设置"
+      title={t('settings.title')}
       extra={
         <Space>
           <Button
@@ -408,7 +427,7 @@ export function Settings() {
             onClick={fetchConfigs}
             loading={loading}
           >
-            刷新
+            {t('settings.refresh')}
           </Button>
           <Button
             type="primary"
@@ -416,7 +435,7 @@ export function Settings() {
             onClick={handleSave}
             loading={saving}
           >
-            保存设置
+            {t('settings.save')}
           </Button>
         </Space>
       }
@@ -426,7 +445,7 @@ export function Settings() {
         showIcon
         style={{ marginBottom: 16 }}
         closable
-        message="系统设置按分类保存到 sys_config.config_json。AI API Key 会随系统设置保存，请只给可信管理员开放 sys_config 的读取和维护权限。"
+        message={t('settings.alert')}
       />
 
       <Tabs activeKey={activeKey} items={items} onChange={setActiveKey} />
@@ -469,7 +488,7 @@ export function Settings() {
             </Col>
 
             <Col xs={24} lg={10}>
-              <Card size="small" title="JSON 预览">
+              <Card size="small" title={t('settings.jsonPreview')}>
                 <pre
                   style={{
                     margin: 0,

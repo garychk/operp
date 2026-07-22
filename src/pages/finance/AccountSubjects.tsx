@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message } from 'antd';
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
+import { useTranslation } from 'react-i18next';
 import type { Tables } from '../../utils/supabase';
 
 type AccountSubject = Tables['erp_account_subjects_s_539dcf81_b']['Row'];
@@ -9,6 +10,7 @@ type AccountSubject = Tables['erp_account_subjects_s_539dcf81_b']['Row'];
 const { Option } = Select;
 
 export function AccountSubjects() {
+  const { t } = useTranslation();
   const [subjects, setSubjects] = useState<AccountSubject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,7 +35,7 @@ export function AccountSubjects() {
       setSubjects(data || []);
     } catch (error) {
       console.error('Error fetching subjects:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -47,13 +49,13 @@ export function AccountSubjects() {
           .update(values)
           .eq('id', editingSubject.id);
         if (error) throw error;
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         const { error } = await supabase
           .from('erp_account_subjects_s_539dcf81_b')
           .insert([values]);
         if (error) throw error;
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       setEditingSubject(null);
@@ -61,14 +63,14 @@ export function AccountSubjects() {
       fetchSubjects();
     } catch (error) {
       console.error('Error saving subject:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该科目吗？',
+      title: t('common.confirmDelete'),
+      content: t('accountSubjects.deleteConfirm'),
       onOk: async () => {
         try {
           const { error } = await supabase
@@ -76,11 +78,11 @@ export function AccountSubjects() {
             .update({ is_deleted: 'y' })
             .eq('id', id);
           if (error) throw error;
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchSubjects();
         } catch (error) {
           console.error('Error deleting subject:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -110,57 +112,57 @@ export function AccountSubjects() {
       s.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const categoryLabels: Record<string, string> = {
-    asset: '资产类',
-    liability: '负债类',
-    equity: '权益类',
-    revenue: '收入类',
-    expense: '费用类',
+  const categoryKeys: Record<string, string> = {
+    asset: 'accountSubjects.assetCategory',
+    liability: 'accountSubjects.liabilityCategory',
+    equity: 'accountSubjects.equityCategory',
+    revenue: 'accountSubjects.revenueCategory',
+    expense: 'accountSubjects.expenseCategory',
   };
 
   const columns = [
     {
-      title: '科目代码',
+      title: t('accountSubjects.code'),
       dataIndex: 'code',
       key: 'code',
     },
     {
-      title: '科目名称',
+      title: t('accountSubjects.name'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '类别',
+      title: t('accountSubjects.category'),
       dataIndex: 'category',
       key: 'category',
-      render: (category: string) => categoryLabels[category] || category,
+      render: (category: string) => t(categoryKeys[category] || category),
     },
     {
-      title: '余额方向',
+      title: t('accountSubjects.direction'),
       dataIndex: 'direction',
       key: 'direction',
-      render: (direction: string) => (direction === 'debit' ? '借方' : '贷方'),
+      render: (direction: string) => (direction === 'debit' ? t('accountSubjects.debit') : t('accountSubjects.credit')),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
         <Tag color={status === 'active' ? 'success' : 'default'}>
-          {status === 'active' ? '启用' : '禁用'}
+          {status === 'active' ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: AccountSubject) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -168,15 +170,15 @@ export function AccountSubjects() {
   ];
 
   return (
-    <Card variant="borderless" title="会计科目管理" extra={
+    <Card variant="borderless" title={t('accountSubjects.title')} extra={
       <Space>
         <Input
-          placeholder="搜索科目代码或名称..."
+          placeholder={t('accountSubjects.searchPlaceholder')}
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增科目</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('accountSubjects.addSubject')}</Button>
         </Space>
       }
     > 
@@ -189,7 +191,7 @@ export function AccountSubjects() {
       />
 
       <Modal
-        title={editingSubject ? '编辑科目' : '新增科目'}
+        title={editingSubject ? t('accountSubjects.editSubject') : t('accountSubjects.addSubject')}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -197,44 +199,44 @@ export function AccountSubjects() {
           form.resetFields();
         }}
         footer={<Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+              <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
               <Button type="primary" onClick={() => form.submit()}>
-                保存
+                {t('common.save')}
               </Button>
             </Space>}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item
-            label="科目代码"
+            label={t('accountSubjects.code')}
             name="code"
-            rules={[{ required: true, message: '请输入科目代码' }]}
+            rules={[{ required: true, message: t('accountSubjects.codeRequired') }]}
           >
-            <Input placeholder="请输入科目代码" />
+            <Input placeholder={t('accountSubjects.codePlaceholder')} />
           </Form.Item>
           <Form.Item
-            label="科目名称"
+            label={t('accountSubjects.name')}
             name="name"
-            rules={[{ required: true, message: '请输入科目名称' }]}
+            rules={[{ required: true, message: t('accountSubjects.nameRequired') }]}
           >
-            <Input placeholder="请输入科目名称" />
+            <Input placeholder={t('accountSubjects.namePlaceholder')} />
           </Form.Item>
           <Form.Item
-            label="科目类别"
+            label={t('accountSubjects.subjectCategory')}
             name="category"
-            rules={[{ required: true, message: '请选择科目类别' }]}
+            rules={[{ required: true, message: t('accountSubjects.categoryRequired') }]}
           >
-            <Select placeholder="请选择">
-              <Option value="asset">资产类</Option>
-              <Option value="liability">负债类</Option>
-              <Option value="equity">权益类</Option>
-              <Option value="revenue">收入类</Option>
-              <Option value="expense">费用类</Option>
+            <Select placeholder={t('accountSubjects.selectPlaceholder')}>
+              <Option value="asset">{t('accountSubjects.assetCategory')}</Option>
+              <Option value="liability">{t('accountSubjects.liabilityCategory')}</Option>
+              <Option value="equity">{t('accountSubjects.equityCategory')}</Option>
+              <Option value="revenue">{t('accountSubjects.revenueCategory')}</Option>
+              <Option value="expense">{t('accountSubjects.expenseCategory')}</Option>
             </Select>
           </Form.Item>
-          <Form.Item label="余额方向" name="direction">
+          <Form.Item label={t('accountSubjects.direction')} name="direction">
             <Select>
-              <Option value="debit">借方</Option>
-              <Option value="credit">贷方</Option>
+              <Option value="debit">{t('accountSubjects.debit')}</Option>
+              <Option value="credit">{t('accountSubjects.credit')}</Option>
             </Select>
           </Form.Item>
         </Form>
