@@ -47,14 +47,14 @@ import type {
   SysConfigRow,
 } from '../types/database';
 
-// const supabaseUrl = 'https://spb-8vb5nhr43wo8yt73.supabase.opentrust.net';
-// const supabaseKey = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoiYW5vbiIsInJlZiI6InNwYi04dmI1bmhyNDN3bzh5dDczIiwiaXNzIjoic3VwYWJhc2UiLCJpYXQiOjE3NzM3NzE4ODgsImV4cCI6MjA4OTM0Nzg4OH0.6P3g6CWOqwg0nZead9La_20uOe_3rXKLj78y7L0p5bU';
-// remote
-// const supabaseUrl = 'http://115.29.231.18:54321';
-// const supabaseKey = 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
-// local
-const supabaseUrl = 'http://localhost:8008';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE';
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error(
+    'Missing Supabase env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set.',
+  );
+}
 
 const REQUEST_TIMEOUT_MS = 15_000;
 const WAKE_CHECK_DEBOUNCE_MS = 3_000;
