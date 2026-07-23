@@ -3,6 +3,7 @@ import { Form, Input, Button, Card, Typography, Alert, Tabs } from 'antd';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
+import { useTranslation } from 'react-i18next';
 
 const { Title } = Typography;
 
@@ -15,6 +16,7 @@ export const Login: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('login');
   const { login } = useAuth();
   const navigate = useNavigate();
+  const { t } = useTranslation();
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -26,7 +28,7 @@ export const Login: React.FC = () => {
     if (successLogin) {
       navigate('/');
     } else {
-      setError('登录失败，请检查用户名和密码');
+      setError(t('login.loginFailed'));
     }
 
     setLoading(false);
@@ -38,13 +40,13 @@ export const Login: React.FC = () => {
     setSuccess('');
 
     if (values.password !== values.confirmPassword) {
-      setError('两次输入的密码不一致');
+      setError(t('login.passwordMismatch'));
       setLoading(false);
       return;
     }
 
     if (values.password.length < 6) {
-      setError('密码长度至少6位');
+      setError(t('login.passwordTooShort'));
       setLoading(false);
       return;
     }
@@ -55,13 +57,13 @@ export const Login: React.FC = () => {
     });
 
     if (signUpError) {
-      setError('注册失败: ' + signUpError.message);
+      setError(t('login.registerFailed', { message: signUpError.message }));
       setLoading(false);
       return;
     }
 
     if (data.user) {
-      setSuccess('注册成功！请使用邮箱和密码登录');
+      setSuccess(t('login.registerSuccess'));
       setActiveTab('login');
       registerForm.resetFields();
       form.setFieldsValue({ username: values.email });
@@ -73,7 +75,7 @@ export const Login: React.FC = () => {
   const items = [
     {
       key: 'login',
-      label: '登录',
+      label: t('login.login'),
       children: (
         <>
           {error && (
@@ -102,27 +104,27 @@ export const Login: React.FC = () => {
           >
             <Form.Item
               name="username"
-              label="邮箱"
+              label={t('login.email')}
               rules={[
-                { required: true, message: '请输入邮箱' },
-                { type: 'email', message: '请输入有效的邮箱地址' },
+                { required: true, message: t('login.emailRequired') },
+                { type: 'email', message: t('login.invalidEmail') },
               ]}
             >
               <Input
-                placeholder="请输入邮箱"
+                placeholder={t('login.emailPlaceholder')}
                 size="large"
               />
             </Form.Item>
 
             <Form.Item
               name="password"
-              label="密码"
+              label={t('login.password')}
               rules={[
-                { required: true, message: '请输入密码' },
+                { required: true, message: t('login.passwordRequired') },
               ]}
             >
               <Input.Password
-                placeholder="请输入密码"
+                placeholder={t('login.passwordPlaceholder')}
                 size="large"
               />
             </Form.Item>
@@ -135,7 +137,7 @@ export const Login: React.FC = () => {
                 block
                 loading={loading}
               >
-                登录
+                {t('login.login')}
               </Button>
             </Form.Item>
           </Form>
@@ -144,7 +146,7 @@ export const Login: React.FC = () => {
     },
     {
       key: 'register',
-      label: '注册',
+      label: t('login.register'),
       children: (
         <>
           {error && (
@@ -173,50 +175,50 @@ export const Login: React.FC = () => {
           >
             <Form.Item
               name="email"
-              label="邮箱"
+              label={t('login.email')}
               rules={[
-                { required: true, message: '请输入邮箱' },
-                { type: 'email', message: '请输入有效的邮箱地址' },
+                { required: true, message: t('login.emailRequired') },
+                { type: 'email', message: t('login.invalidEmail') },
               ]}
             >
               <Input
-                placeholder="请输入邮箱（将作为登录账号）"
+                placeholder={t('login.emailPlaceholderRegister')}
                 size="large"
               />
             </Form.Item>
 
             <Form.Item
               name="password"
-              label="密码"
+              label={t('login.password')}
               rules={[
-                { required: true, message: '请输入密码' },
-                { min: 6, message: '密码长度至少6位' },
+                { required: true, message: t('login.passwordRequired') },
+                { min: 6, message: t('login.passwordTooShort') },
               ]}
             >
               <Input.Password
-                placeholder="请输入密码（至少6位）"
+                placeholder={t('login.passwordPlaceholderRegister')}
                 size="large"
               />
             </Form.Item>
 
             <Form.Item
               name="confirmPassword"
-              label="确认密码"
+              label={t('login.confirmPassword')}
               dependencies={['password']}
               rules={[
-                { required: true, message: '请确认密码' },
+                { required: true, message: t('login.confirmPasswordRequired') },
                 ({ getFieldValue }) => ({
                   validator(_, value) {
                     if (!value || getFieldValue('password') === value) {
                       return Promise.resolve();
                     }
-                    return Promise.reject(new Error('两次输入的密码不一致'));
+                    return Promise.reject(new Error(t('login.passwordMismatch')));
                   },
                 }),
               ]}
             >
               <Input.Password
-                placeholder="请再次输入密码"
+                placeholder={t('login.confirmPasswordPlaceholder')}
                 size="large"
               />
             </Form.Item>
@@ -229,7 +231,7 @@ export const Login: React.FC = () => {
                 block
                 loading={loading}
               >
-                注册
+                {t('login.register')}
               </Button>
             </Form.Item>
           </Form>
@@ -263,10 +265,10 @@ export const Login: React.FC = () => {
       >
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <Title level={2} style={{ marginBottom: 8 }}>
-            OPERP
+            {t('login.title')}
           </Title>
           <p style={{ color: '#666' }}>
-            {activeTab === 'login' ? '请登录您的账户' : '创建新账户'}
+            {activeTab === 'login' ? t('login.loginPrompt') : t('login.registerPrompt')}
           </p>
         </div>
 

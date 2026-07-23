@@ -768,8 +768,8 @@ export function Boms() {
           setTreeDrawerOpen(false);
           setTreeMaterialCode(null);
         }}
-        width="90vw"
-        destroyOnClose
+        size="large"
+        destroyOnHidden
       >
         <BomTreeGraph materialCode={treeMaterialCode} />
       </Drawer>
