@@ -317,6 +317,7 @@ export function SupaModal({
               expandIcon={({ isActive }) => (
                 <CaretRightOutlined rotate={isActive ? 90 : 0} />
               )}
+              size="small"
             >
               <Collapse.Panel
                 header={headerPanelTitle}

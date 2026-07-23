@@ -7,6 +7,7 @@ import { SupaModal } from '../../components/SupaModal';
 import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 
 type Voucher = Tables['erp_vouchers_s_539dcf81_b']['Row'];
@@ -19,6 +20,7 @@ const voucherTable = 'erp_vouchers_s_539dcf81_b';
 const voucherDetailTable = 'erp_voucher_details_s_539dcf81_b';
 
 export function Vouchers() {
+  const { t } = useTranslation();
   const [vouchers, setVouchers] = useState<Voucher[]>([]);
   const [accountSubjects, setAccountSubjects] = useState<AccountSubject[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +54,7 @@ export function Vouchers() {
       setVouchers(data || []);
     } catch (error) {
       console.error('Error fetching vouchers:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -84,26 +86,26 @@ export function Vouchers() {
       setDetails(data || []);
     } catch (error) {
       console.error('Error fetching details:', error);
-      message.error('获取明细失败');
+      message.error(t('vouchers.messages.fetchDetailsFailed'));
     }
   };
 
   const handleSubmit = async (values: any) => {
     try {
       if (editingVoucher) {
-        await logWithTiming('更新凭证', 'UPDATE', async () => {
+        await logWithTiming(t('vouchers.log.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
             .from(voucherTable)
             .update(values)
             .eq('id', editingVoucher.id);
           if (error) throw error;
         }, { table: voucherTable, recordId: editingVoucher.id });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: voucherTable,
         };
-        const data = await logWithTiming('新增凭证', 'INSERT', async () => {
+        const data = await logWithTiming(t('vouchers.log.createAction'), 'INSERT', async () => {
           const { data, error } = await supabase
             .from(voucherTable)
             .insert([values])
@@ -113,7 +115,7 @@ export function Vouchers() {
           logParams.recordId = data.id;
           return data;
         }, logParams);
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
         setSelectedVoucher(data);
       }
       setIsModalOpen(false);
@@ -122,20 +124,20 @@ export function Vouchers() {
       fetchVouchers();
     } catch (error) {
       console.error('Error saving voucher:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
   const handleDetailSubmit = async (values: any) => {
     try {
       if (!selectedVoucher && !editingVoucher) {
-        message.error('请先选择凭证');
+        message.error(t('vouchers.messages.pleaseSelectVoucher'));
         return;
       }
 
       const voucherId = selectedVoucher?.id || editingVoucher?.id;
       if (!voucherId) {
-        message.error('请先保存凭证');
+        message.error(t('vouchers.messages.pleaseSaveVoucherFirst'));
         return;
       }
 
@@ -144,7 +146,7 @@ export function Vouchers() {
           .from(voucherDetailTable)
           .update(values)
           .eq('id', editingDetail.id);
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         const maxLineNo = details.length > 0 ? Math.max(...details.map(d => d.line_no)) : 0;
         values.line_no = maxLineNo + 1;
@@ -157,7 +159,7 @@ export function Vouchers() {
           .from(voucherDetailTable)
           .insert([values]);
         if (error) throw error;
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsDetailModalOpen(false);
       detailForm.resetFields();
@@ -166,7 +168,7 @@ export function Vouchers() {
       updateVoucherTotal(voucherId);
     } catch (error) {
       console.error('Error saving detail:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -210,16 +212,16 @@ export function Vouchers() {
 
   const handlePost = (record: Voucher) => {
     Modal.confirm({
-      title: '确认过账',
-      content: '过账前会校验凭证明细借贷是否平衡，确定继续吗？',
+      title: t('vouchers.confirm.postTitle'),
+      content: t('vouchers.confirm.postContent'),
       onOk: async () => {
         try {
           await runBusinessAction({ action: 'post', documentType: 'voucher', documentId: record.id, user: businessUser });
-          message.success('过账成功');
+          message.success(t('vouchers.messages.postSuccess'));
           fetchVouchers();
         } catch (error: any) {
           console.error('Error posting voucher:', error);
-          message.error(error?.message || '过账失败');
+          message.error(error?.message || t('vouchers.messages.postFailed'));
         }
       },
     });
@@ -227,27 +229,27 @@ export function Vouchers() {
 
   const handleReversePost = (record: Voucher) => {
     Modal.confirm({
-      title: '确认反过账',
-      content: '反过账后凭证将恢复为草稿，确定继续吗？',
+      title: t('vouchers.confirm.reversePostTitle'),
+      content: t('vouchers.confirm.reversePostContent'),
       onOk: async () => {
         try {
           await runBusinessAction({ action: 'reverse_post', documentType: 'voucher', documentId: record.id, user: businessUser });
-          message.success('反过账成功');
+          message.success(t('vouchers.messages.reversePostSuccess'));
           fetchVouchers();
         } catch (error: any) {
           console.error('Error reversing voucher:', error);
-          message.error(error?.message || '反过账失败');
+          message.error(error?.message || t('vouchers.messages.reversePostFailed'));
         }
       },
     });
   };
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该凭证吗？',
+      title: t('common.confirmDelete'),
+      content: t('vouchers.confirm.deleteContent'),
       onOk: async () => {
         try {
-          await logWithTiming('删除凭证', 'DELETE', async () => {
+          await logWithTiming(t('vouchers.log.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
               .from(voucherTable)
               .update({ is_deleted: 'y' })
@@ -259,11 +261,11 @@ export function Vouchers() {
               .eq('voucher_id', id);
             if (detailError) throw detailError;
           }, { table: voucherTable, recordId: id });
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchVouchers();
         } catch (error) {
           console.error('Error deleting voucher:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -308,15 +310,15 @@ export function Vouchers() {
 
   const handleDeleteDetail = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该明细吗？',
+      title: t('common.confirmDelete'),
+      content: t('vouchers.confirm.deleteDetailContent'),
       onOk: async () => {
         try {
           await supabase
             .from(voucherDetailTable)
             .update({ is_deleted: 'y' })
             .eq('id', id);
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           const voucherId = selectedVoucher?.id || editingVoucher?.id;
           if (voucherId) {
             fetchDetails(voucherId);
@@ -324,7 +326,7 @@ export function Vouchers() {
           }
         } catch (error) {
           console.error('Error deleting detail:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -341,77 +343,77 @@ export function Vouchers() {
       (v.remark && v.remark.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
-  const typeLabels: Record<string, string> = {
-    general: '记账凭证',
-    receipt: '收款凭证',
-    payment: '付款凭证',
-    transfer: '转账凭证',
+  const typeKeys: Record<string, string> = {
+    general: 'vouchers.typeOptions.general',
+    receipt: 'vouchers.typeOptions.receipt',
+    payment: 'vouchers.typeOptions.payment',
+    transfer: 'vouchers.typeOptions.transfer',
   };
 
-  const statusLabels: Record<string, { text: string; color: string }> = {
-    draft: { text: '草稿', color: 'default' },
-    posted: { text: '已过账', color: 'success' },
-    cancelled: { text: '已作废', color: 'error' },
+  const statusKeys: Record<string, { textKey: string; color: string }> = {
+    draft: { textKey: 'vouchers.statusOptions.draft', color: 'default' },
+    posted: { textKey: 'vouchers.statusOptions.posted', color: 'success' },
+    cancelled: { textKey: 'vouchers.statusOptions.cancelled', color: 'error' },
   };
 
   const columns = [
     {
-      title: '凭证号',
+      title: t('vouchers.voucherNo'),
       dataIndex: 'voucher_no',
       key: 'voucher_no',
     },
     {
-      title: '日期',
+      title: t('vouchers.date'),
       dataIndex: 'voucher_date',
       key: 'voucher_date',
     },
     {
-      title: '类型',
+      title: t('vouchers.type'),
       dataIndex: 'type',
       key: 'type',
-      render: (type: string) => typeLabels[type] || type,
+      render: (type: string) => (typeKeys[type] ? t(typeKeys[type]) : type),
     },
     {
-      title: '金额',
+      title: t('vouchers.amount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
-      title: '摘要',
+      title: t('vouchers.remark'),
       dataIndex: 'remark',
       key: 'remark',
       render: (text: string) => text || '-',
       ellipsis: true,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
-        const config = statusLabels[status] || { text: status, color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        const config = statusKeys[status] || { textKey: status, color: 'default' };
+        return <Tag color={config.color}>{t(config.textKey)}</Tag>;
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: Voucher) => (
         <Space size="middle">
           {record.status === 'posted' ? (
             <Button type="text" onClick={() => handleReversePost(record)}>
-              反过账
+              {t('vouchers.actions.reversePost')}
             </Button>
           ) : (
             <Button type="text" onClick={() => handlePost(record)}>
-              过账
+              {t('vouchers.actions.post')}
             </Button>
           )}
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.status === 'posted'}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} disabled={record.status === 'posted'}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -420,49 +422,49 @@ export function Vouchers() {
 
   const detailColumns = [
     {
-      title: '行号',
+      title: t('vouchers.lineNo'),
       dataIndex: 'line_no',
       key: 'line_no',
     },
     {
-      title: '会计科目',
+      title: t('vouchers.accountSubject'),
       dataIndex: 'subject_id',
       key: 'subject_id',
       render: (subjectId: number) => getSubjectName(subjectId),
     },
     {
-      title: '摘要',
+      title: t('vouchers.summary'),
       dataIndex: 'summary',
       key: 'summary',
     },
     {
-      title: '借方金额',
+      title: t('vouchers.debitAmount'),
       dataIndex: 'debit_amount',
       key: 'debit_amount',
       render: (amount: number) => amount > 0 ? `¥${amount.toFixed(2)}` : '-',
     },
     {
-      title: '贷方金额',
+      title: t('vouchers.creditAmount'),
       dataIndex: 'credit_amount',
       key: 'credit_amount',
       render: (amount: number) => amount > 0 ? `¥${amount.toFixed(2)}` : '-',
     },
     {
-      title: '辅助核算类型',
+      title: t('vouchers.auxiliaryType'),
       dataIndex: 'auxiliary_type',
       key: 'auxiliary_type',
       render: (text: string) => text || '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: VoucherDetail) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -475,15 +477,15 @@ export function Vouchers() {
   }), { debit: 0, credit: 0 });
 
   return (
-    <Card style={{ borderRadius: 0 }} variant="borderless" title="凭证管理" extra={
+    <Card style={{ borderRadius: 0 }} variant="borderless" title={t('vouchers.title')} extra={
       <Space>
         <Input
-          placeholder="搜索凭证号或摘要..."
+          placeholder={t('vouchers.searchPlaceholder')}
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增凭证</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('vouchers.addVoucher')}</Button>
       </Space>
     }>
       <Table
@@ -505,15 +507,15 @@ export function Vouchers() {
         title={
           <>
             <AccountBookOutlined />
-            <span>{editingVoucher ? '编辑凭证' : '新增凭证'}</span>
+            <span>{editingVoucher ? t('vouchers.editVoucher') : t('vouchers.addVoucher')}</span>
           </>
         }
-        headerPanelTitle="会计凭证"
-        detailPanelTitle="分录明细"
+        headerPanelTitle={t('vouchers.headerPanelTitle')}
+        detailPanelTitle={t('vouchers.detailPanelTitle')}
         historyTable={voucherTable}
         historyRecordId={editingVoucher?.id || selectedVoucher?.id}
         detailExtra={
-          <Button type="link" size="small" icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
+          <Button type="link" size="small" icon={<PlusOutlined />} onClick={handleAddDetail}>{t('vouchers.addDetail')}</Button>
         }
         form={form}
         formEle={
@@ -521,40 +523,40 @@ export function Vouchers() {
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  label="凭证号"
+                  label={t('vouchers.voucherNo')}
                   name="voucher_no"
-                  rules={[{ required: true, message: '请输入凭证号' }]}
+                  rules={[{ required: true, message: t('vouchers.voucherNoRequired') }]}
                 >
-                  <Input placeholder="请输入凭证号" disabled={!!editingVoucher} />
+                  <Input placeholder={t('vouchers.voucherNoPlaceholder')} disabled={!!editingVoucher} />
                 </Form.Item>
                 <Form.Item
-                  label="日期"
+                  label={t('vouchers.date')}
                   name="voucher_date"
-                  rules={[{ required: true, message: '请选择日期' }]}
+                  rules={[{ required: true, message: t('vouchers.dateRequired') }]}
                 >
                   <DatePicker style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item label="类型" name="type" initialValue="general">
+                <Form.Item label={t('vouchers.type')} name="type" initialValue="general">
                   <Select>
-                    <Option value="general">记账凭证</Option>
-                    <Option value="receipt">收款凭证</Option>
-                    <Option value="payment">付款凭证</Option>
-                    <Option value="transfer">转账凭证</Option>
+                    <Option value="general">{t('vouchers.typeOptions.general')}</Option>
+                    <Option value="receipt">{t('vouchers.typeOptions.receipt')}</Option>
+                    <Option value="payment">{t('vouchers.typeOptions.payment')}</Option>
+                    <Option value="transfer">{t('vouchers.typeOptions.transfer')}</Option>
                   </Select>
                 </Form.Item>
-                <Form.Item label="总金额" name="total_amount" initialValue={0}>
-                  <InputNumber style={{ width: '100%' }} placeholder="请输入总金额" />
+                <Form.Item label={t('vouchers.totalAmount')} name="total_amount" initialValue={0}>
+                  <InputNumber style={{ width: '100%' }} placeholder={t('vouchers.totalAmountPlaceholder')} />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="备注" name="remark">
-                  <TextArea rows={5} placeholder="请输入备注" />
+                <Form.Item label={t('vouchers.remark')} name="remark">
+                  <TextArea rows={5} placeholder={t('vouchers.remarkPlaceholder')} />
                 </Form.Item>
-                <Form.Item label="状态" name="status" initialValue="draft">
+                <Form.Item label={t('common.status')} name="status" initialValue="draft">
                   <Select>
-                    <Option value="draft">草稿</Option>
-                    <Option value="posted">已过账</Option>
-                    <Option value="cancelled">已作废</Option>
+                    <Option value="draft">{t('vouchers.statusOptions.draft')}</Option>
+                    <Option value="posted">{t('vouchers.statusOptions.posted')}</Option>
+                    <Option value="cancelled">{t('vouchers.statusOptions.cancelled')}</Option>
                   </Select>
                 </Form.Item>
               </Col>
@@ -570,7 +572,7 @@ export function Vouchers() {
             pagination={false}
             summary={() => (
               <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={3} align="right"><strong>合计</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={0} colSpan={3} align="right"><strong>{t('vouchers.total')}</strong></Table.Summary.Cell>
                 <Table.Summary.Cell index={1} align="left"><strong>¥{detailTotal.debit.toFixed(2)}</strong></Table.Summary.Cell>
                 <Table.Summary.Cell index={2} align="left"><strong>¥{detailTotal.credit.toFixed(2)}</strong></Table.Summary.Cell>
                 <Table.Summary.Cell index={3} colSpan={2}></Table.Summary.Cell>
@@ -580,15 +582,15 @@ export function Vouchers() {
         }
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => form.submit()}>保存</Button>
+            <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
+            <Button type="primary" onClick={() => form.submit()}>{t('common.save')}</Button>
           </Space>
         }
         height={680}
       />
 
       <SupaModal
-        title={editingDetail ? '编辑凭证明细' : '新增凭证明细'}
+        title={editingDetail ? t('vouchers.editVoucherDetail') : t('vouchers.addVoucherDetail')}
         open={isDetailModalOpen}
         onCancel={() => {
           setIsDetailModalOpen(false);
@@ -596,9 +598,9 @@ export function Vouchers() {
           setEditingDetail(null);
         }}
         footer={<Space>
-          <Button onClick={() => setIsDetailModalOpen(false)}>取消</Button>
+          <Button onClick={() => setIsDetailModalOpen(false)}>{t('common.cancel')}</Button>
           <Button type="primary" onClick={() => detailForm.submit()}>
-            保存
+            {t('common.save')}
           </Button>
         </Space>}
         width={600}
@@ -608,11 +610,11 @@ export function Vouchers() {
         <Card>
           <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ marginRight: 16 }}>
             <Form.Item
-              label="会计科目"
+              label={t('vouchers.accountSubject')}
               name="subject_id"
-              rules={[{ required: true, message: '请选择会计科目' }]}
+              rules={[{ required: true, message: t('vouchers.accountSubjectRequired') }]}
             >
-              <Select placeholder="请选择会计科目">
+              <Select placeholder={t('vouchers.accountSubjectPlaceholder')}>
                 {accountSubjects.map((s) => (
                   <Option key={s.id} value={s.id}>{s.code} - {s.name}</Option>
                 ))}
@@ -621,27 +623,27 @@ export function Vouchers() {
             
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item label="借贷方向">
-                  <Switch checkedChildren="借方" unCheckedChildren="贷方" checked={isDebit} onChange={setIsDebit} />
+                <Form.Item label={t('vouchers.debitCreditDirection')}>
+                  <Switch checkedChildren={t('vouchers.debit')} unCheckedChildren={t('vouchers.credit')} checked={isDebit} onChange={setIsDebit} />
                 </Form.Item>
               </Col>
               <Col span={12}>
                 {isDebit ? (
-                  <Form.Item label="借方金额" name="debit_amount" initialValue={0}>
-                  <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入借方金额" />
+                  <Form.Item label={t('vouchers.debitAmount')} name="debit_amount" initialValue={0}>
+                  <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.debitAmountPlaceholder')} />
                 </Form.Item>
                 ) : (
-                  <Form.Item label="贷方金额" name="credit_amount" initialValue={0}>
-                    <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入贷方金额" />
+                  <Form.Item label={t('vouchers.creditAmount')} name="credit_amount" initialValue={0}>
+                    <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.creditAmountPlaceholder')} />
                   </Form.Item>
                 )}
               </Col>
             </Row>
-            <Form.Item label="辅助核算类型" name="auxiliary_type">
-              <Input placeholder="请输入辅助核算类型" />
+            <Form.Item label={t('vouchers.auxiliaryType')} name="auxiliary_type">
+              <Input placeholder={t('vouchers.auxiliaryTypePlaceholder')} />
             </Form.Item>
-            <Form.Item label="摘要" name="summary">
-              <TextArea rows={3} placeholder="请输入摘要" />
+            <Form.Item label={t('vouchers.summary')} name="summary">
+              <TextArea rows={3} placeholder={t('vouchers.summaryPlaceholder')} />
             </Form.Item>
           </Form>
         </Card>
@@ -650,7 +652,6 @@ export function Vouchers() {
     </Card>
   );
 }
-
 
 
 

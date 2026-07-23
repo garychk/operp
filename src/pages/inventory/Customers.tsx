@@ -3,6 +3,7 @@ import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, R
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import { useTranslation } from 'react-i18next';
 import type { Tables } from '../../utils/supabase';
 
 type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
@@ -10,6 +11,7 @@ type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
 const { Option } = Select;
 
 export function Customers() {
+  const { t } = useTranslation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -34,7 +36,7 @@ export function Customers() {
       setCustomers(data || []);
     } catch (error) {
       console.error('Error fetching customers:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -43,22 +45,22 @@ export function Customers() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingCustomer) {
-        await logWithTiming('更新客户', 'UPDATE', async () => {
+        await logWithTiming(t('customers.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
             .from('erp_customers_s_539dcf81_b')
             .update(values)
             .eq('id', editingCustomer.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
-        await logWithTiming('新增客户', 'INSERT', async () => {
+        await logWithTiming(t('customers.createAction'), 'INSERT', async () => {
           const { error } = await supabase
             .from('erp_customers_s_539dcf81_b')
             .insert([values]);
           if (error) throw error;
         });
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -66,7 +68,7 @@ export function Customers() {
       fetchCustomers();
     } catch (error) {
       console.error('Error saving customer:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -78,22 +80,22 @@ export function Customers() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该客户吗？',
+      title: t('common.confirmDelete'),
+      content: t('customers.deleteConfirm'),
       onOk: async () => {
         try {
-          await logWithTiming('删除客户', 'DELETE', async () => {
+          await logWithTiming(t('customers.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
               .from('erp_customers_s_539dcf81_b')
               .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchCustomers();
         } catch (error) {
           console.error('Error deleting customer:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -111,75 +113,75 @@ export function Customers() {
       c.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const typeLabels: Record<string, string> = {
-    enterprise: '企业',
-    individual: '个人',
-    government: '政府',
-    other: '其他',
+  const typeKeys: Record<string, string> = {
+    enterprise: 'customers.typeOptions.enterprise',
+    individual: 'customers.typeOptions.individual',
+    government: 'customers.typeOptions.government',
+    other: 'customers.typeOptions.other',
   };
 
-  const levelLabels: Record<string, string> = {
-    vip: 'VIP',
-    important: '重要',
-    normal: '普通',
-    potential: '潜在',
+  const levelKeys: Record<string, string> = {
+    vip: 'customers.levelOptions.vip',
+    important: 'customers.levelOptions.important',
+    normal: 'customers.levelOptions.normal',
+    potential: 'customers.levelOptions.potential',
   };
 
   const columns = [
     {
-      title: '客户编码',
+      title: t('customers.code'),
       dataIndex: 'code',
       key: 'code',
     },
     {
-      title: '客户名称',
+      title: t('customers.name'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '类型',
+      title: t('customers.type'),
       dataIndex: 'type',
       key: 'type',
-      render: (type: string) => typeLabels[type] || type,
+      render: (type: string) => (typeKeys[type] ? t(typeKeys[type]) : type),
     },
     {
-      title: '等级',
+      title: t('customers.level'),
       dataIndex: 'level',
       key: 'level',
-      render: (level: string) => levelLabels[level] || level,
+      render: (level: string) => (levelKeys[level] ? t(levelKeys[level]) : level),
     },
     {
-      title: '联系人',
+      title: t('customers.contactName'),
       dataIndex: 'contact_name',
       key: 'contact_name',
       render: (text: string) => text || '-',
     },
     {
-      title: '联系电话',
+      title: t('customers.contactPhone'),
       dataIndex: 'contact_phone',
       key: 'contact_phone',
       render: (text: string) => text || '-',
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
         <Tag color={status === 'active' ? 'success' : 'default'}>
-          {status === 'active' ? '启用' : '停用'}
+          {status === 'active' ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: Customer) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -187,15 +189,15 @@ export function Customers() {
   ];
 
   return (
-    <Card variant="borderless" title="客户管理" extra={
+    <Card variant="borderless" title={t('customers.title')} extra={
       <Space>
         <Input
-          placeholder="搜索客户名称或编码..."
+          placeholder={t('customers.searchPlaceholder')}
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增客户</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('customers.addCustomer')}</Button>
       </Space>
     }>
       <Table
@@ -207,7 +209,7 @@ export function Customers() {
       />
 
       <Modal
-        title={editingCustomer ? '编辑客户' : '新增客户'}
+        title={editingCustomer ? t('customers.editCustomer') : t('customers.addCustomer')}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -216,9 +218,9 @@ export function Customers() {
         }}
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t('common.save')}
             </Button>
           </Space>
         }
@@ -227,59 +229,59 @@ export function Customers() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="客户编码"
+                label={t('customers.code')}
                 name="code"
-                rules={[{ required: true, message: '请输入客户编码' }]}
+                rules={[{ required: true, message: t('customers.codeRequired') }]}
               >
-                <Input placeholder="请输入客户编码" disabled={!!editingCustomer} />
+                <Input placeholder={t('customers.codePlaceholder')} disabled={!!editingCustomer} />
               </Form.Item>
               <Form.Item
-                label="客户名称"
+                label={t('customers.name')}
                 name="name"
-                rules={[{ required: true, message: '请输入客户名称' }]}
+                rules={[{ required: true, message: t('customers.nameRequired') }]}
               >
-                <Input placeholder="请输入客户名称" />
+                <Input placeholder={t('customers.namePlaceholder')} />
               </Form.Item>
-              <Form.Item label="简称" name="short_name">
-                <Input placeholder="请输入简称" />
+              <Form.Item label={t('customers.shortName')} name="short_name">
+                <Input placeholder={t('customers.shortNamePlaceholder')} />
               </Form.Item>
-              <Form.Item label="类型" name="type" initialValue="enterprise">
+              <Form.Item label={t('customers.type')} name="type" initialValue="enterprise">
                 <Select>
-                  <Option value="enterprise">企业</Option>
-                  <Option value="individual">个人</Option>
-                  <Option value="government">政府</Option>
-                  <Option value="other">其他</Option>
+                  <Option value="enterprise">{t('customers.typeOptions.enterprise')}</Option>
+                  <Option value="individual">{t('customers.typeOptions.individual')}</Option>
+                  <Option value="government">{t('customers.typeOptions.government')}</Option>
+                  <Option value="other">{t('customers.typeOptions.other')}</Option>
                 </Select>
               </Form.Item>
-              <Form.Item label="等级" name="level" initialValue="normal">
+              <Form.Item label={t('customers.level')} name="level" initialValue="normal">
                 <Select>
-                  <Option value="vip">VIP</Option>
-                  <Option value="important">重要</Option>
-                  <Option value="normal">普通</Option>
-                  <Option value="potential">潜在</Option>
+                  <Option value="vip">{t('customers.levelOptions.vip')}</Option>
+                  <Option value="important">{t('customers.levelOptions.important')}</Option>
+                  <Option value="normal">{t('customers.levelOptions.normal')}</Option>
+                  <Option value="potential">{t('customers.levelOptions.potential')}</Option>
                 </Select>
               </Form.Item>
-              <Form.Item label="联系人" name="contact_name">
-                <Input placeholder="请输入联系人" />
+              <Form.Item label={t('customers.contactName')} name="contact_name">
+                <Input placeholder={t('customers.contactNamePlaceholder')} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="联系电话" name="contact_phone">
-                <Input placeholder="请输入联系电话" />
+              <Form.Item label={t('customers.contactPhone')} name="contact_phone">
+                <Input placeholder={t('customers.contactPhonePlaceholder')} />
               </Form.Item>
-              <Form.Item label="地址" name="address">
-                <Input placeholder="请输入地址" />
+              <Form.Item label={t('customers.address')} name="address">
+                <Input placeholder={t('customers.addressPlaceholder')} />
               </Form.Item>
-              <Form.Item label="税号" name="tax_no">
-                <Input placeholder="请输入税号" />
+              <Form.Item label={t('customers.taxNo')} name="tax_no">
+                <Input placeholder={t('customers.taxNoPlaceholder')} />
               </Form.Item>
-              <Form.Item label="信用额度" name="credit_limit" initialValue={0}>
-                <InputNumber placeholder="请输入信用额度" />
+              <Form.Item label={t('customers.creditLimit')} name="credit_limit" initialValue={0}>
+                <InputNumber placeholder={t('customers.creditLimitPlaceholder')} />
               </Form.Item>
-              <Form.Item label="状态" name="status" initialValue="active">
+              <Form.Item label={t('common.status')} name="status" initialValue="active">
                 <Select>
-                  <Option value="active">启用</Option>
-                  <Option value="inactive">停用</Option>
+                  <Option value="active">{t('common.enabled')}</Option>
+                  <Option value="inactive">{t('common.disabled')}</Option>
                 </Select>
               </Form.Item>
             </Col>
