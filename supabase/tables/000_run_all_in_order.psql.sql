@@ -3,7 +3,7 @@
 --   psql "<DATABASE_URL>" -f supabase/tables/000_run_all_in_order.psql.sql
 --
 -- Do not paste this whole file into Supabase SQL Editor. The \i directives are
--- psql meta commands. In SQL Editor, execute the four deploy_*.sql files one by one.
+-- psql meta commands. In SQL Editor, execute the deploy_*.sql files one by one.
 
 \i supabase/tables/deploy_01_schema_and_seed.sql
 \i supabase/tables/deploy_02_permissions_core.sql
@@ -18,3 +18,4 @@
 \i supabase/tables/deploy_10_quality_inspection.sql
 \i supabase/tables/deploy_11_sys_forms_rls.sql
 \i supabase/tables/deploy_12_baq.sql
+\i supabase/tables/deploy_13_stock_posting_rpc.sql

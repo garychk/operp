@@ -4,7 +4,7 @@
 
 ## 推荐执行脚本
 
-实施人员只需要按顺序执行以下 7 个合并脚本：
+实施人员需要按编号顺序执行所有 deploy_*.sql 脚本。核心初始化与本次库存事务升级包括：
 
 1. `deploy_01_schema_and_seed.sql`
 2. `deploy_02_permissions_core.sql`
@@ -13,6 +13,8 @@
 5. `deploy_05_auth_super_admin.sql`
 6. `deploy_06_payables_source_fields.sql`
 7. `deploy_07_system_config.sql`
+8. 继续执行 `deploy_08` 至 `deploy_12`
+9. `deploy_13_stock_posting_rpc.sql`
 
 推荐在 Supabase Dashboard 的 SQL Editor 中逐个打开执行。每个脚本执行成功后，再执行下一个。
 
@@ -78,6 +80,21 @@
 ### 7. `deploy_07_system_config.sql`
 
 创建 `sys_config` 系统设置表、初始化基础/财务/制造/检验/AI 设置，新增“系统设置”菜单并应用表权限 RLS。
+
+### 13. `deploy_13_stock_posting_rpc.sql`
+
+将采购入库和销售出货的过账、反过账迁移为 PostgreSQL 事务 RPC。
+
+包含内容：
+
+- `post_stock_document()`、`reverse_stock_document()`
+- 单据、库存和应付记录行锁
+- 库存键事务级 advisory lock
+- 过账和反过账幂等键
+- 有效库存、库存流水和采购应付唯一约束
+- 采购入库应付生成与反过账校验
+
+已有数据库升级时可以单独执行此脚本。若历史数据存在重复有效库存或重复采购入库应付，脚本会中止并提示先清理数据。
 
 ## 部署后必须配置
 

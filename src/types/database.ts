@@ -298,6 +298,10 @@ export interface ErpInventoryTransactionsS539Dcf81BRow {
   total_cost: number | null;
   reference_type: string | null;
   reference_id: number | null;
+  reference_detail_id: number | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  reversed_at: string | null;
   remark: string | null;
 }
 export type ErpInventoryTransactionsS539Dcf81BInsert = Omit<ErpInventoryTransactionsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
@@ -647,6 +651,10 @@ export interface ErpPurchaseReceiptsS539Dcf81BRow {
   total_amount: number | null;
   remark: string | null;
   status: string | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
 }
 export type ErpPurchaseReceiptsS539Dcf81BInsert = Omit<ErpPurchaseReceiptsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpPurchaseReceiptsS539Dcf81BUpdate = Partial<ErpPurchaseReceiptsS539Dcf81BInsert>;
@@ -729,6 +737,10 @@ export interface ErpSalesDeliveriesS539Dcf81BRow {
   total_amount: number | null;
   remark: string | null;
   status: string | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
 }
 export type ErpSalesDeliveriesS539Dcf81BInsert = Omit<ErpSalesDeliveriesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpSalesDeliveriesS539Dcf81BUpdate = Partial<ErpSalesDeliveriesS539Dcf81BInsert>;
