@@ -51,6 +51,7 @@ import {
   TranslationOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
+import { MenuPermissionGuard } from "./ProtectedRoute";
 import { AIChatDrawer } from "./AIChatDrawer";
 import heroLogo from "../assets/opelix.svg";
 import defaultAvatar from "../assets/avatar.png";
@@ -497,11 +498,11 @@ export function ProLayout() {
     return localizeRoutes(mergedMenuData);
   }, [mergedMenuData, t, i18n.resolvedLanguage]);
   const visibleMenuData = useMemo(() => {
-    if (!user || user.isSuperAdmin || user.menuPaths.length === 0) {
+    if (user?.isSuperAdmin) {
       return localizedMenuData;
     }
 
-    const allowedPaths = new Set(user.menuPaths);
+    const allowedPaths = new Set(user?.menuPaths ?? []);
     const filterRoutes = (routes: MenuRoute[]): MenuRoute[] => {
       const result: MenuRoute[] = [];
       routes.forEach((route) => {
@@ -826,7 +827,9 @@ export function ProLayout() {
                 }
               }}
             />
-            <Outlet />
+            <MenuPermissionGuard>
+              <Outlet />
+            </MenuPermissionGuard>
           </ProCard>
         </PageContainer>
         <AIChatDrawer open={aiChatOpen} onClose={() => setAiChatOpen(false)} />
