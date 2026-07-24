@@ -354,6 +354,11 @@ const zhCN = {
       loginPrompt: "请登录您的账户",
       registerPrompt: "创建新账户",
     },
+    forbidden: {
+      title: "403 无权限",
+      description: "您没有权限访问此页面，请联系管理员分配相应的菜单权限。",
+      backToHome: "返回首页",
+    },
     layout: {
       switchThemeColor: "切换主题色",
       aboutTitle: "关于软件",

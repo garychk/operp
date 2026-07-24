@@ -170,12 +170,12 @@ export function Menus() {
     {
       title: '菜单名称',
       dataIndex: 'menu_name',
-      width: 150,
+      width: 240,
     },
     {
       title: '菜单编码',
       dataIndex: 'menu_code',
-      width: 120,
+      width: 200,
     },
     {
       title: '类型',

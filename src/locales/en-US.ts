@@ -358,6 +358,11 @@ const enUS = {
       loginPrompt: "Sign in to your account",
       registerPrompt: "Create a new account",
     },
+    forbidden: {
+      title: "403 Forbidden",
+      description: "You do not have permission to access this page. Please contact your administrator to request the appropriate menu permissions.",
+      backToHome: "Back to Home",
+    },
     layout: {
       switchThemeColor: "Switch theme color",
       aboutTitle: "About",
