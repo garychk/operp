@@ -192,6 +192,7 @@ export function Dictionaries() {
       }}
     >
       <Card
+        className='mainContent'
         title="字典类型"
         extra={
           <Button

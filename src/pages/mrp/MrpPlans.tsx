@@ -191,7 +191,7 @@ export function MrpPlans() {
   ];
 
   return (
-    <Card variant="borderless" title="MRP计划管理" extra={
+    <Card className='mainContent' variant="borderless" title="MRP计划管理" extra={
       <Space>
         <Input
           placeholder="搜索计划号..."

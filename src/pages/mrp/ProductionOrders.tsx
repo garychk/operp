@@ -349,6 +349,7 @@ export function ProductionOrders() {
 
   return (
     <Card
+      className='mainContent'
       variant="borderless"
       title="生产订单"
       extra={

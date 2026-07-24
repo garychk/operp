@@ -222,7 +222,7 @@ export function FixedAssets() {
   ];
 
   return (
-    <Card variant="borderless" title="固定资产管理" extra={
+    <Card className='mainContent' variant="borderless" title="固定资产管理" extra={
       <Space>
         <Input
           placeholder="搜索资产编号或名称..."

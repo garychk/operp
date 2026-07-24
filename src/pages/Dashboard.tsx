@@ -86,7 +86,7 @@ export function Dashboard() {
   }
 
   return (
-    <Card variant="borderless">
+    <Card className='mainContent' variant="borderless">
       <h2 style={{ marginBottom: 24 }}>{t('dashboard.title')}</h2>
       <p style={{ color: '#666', marginBottom: 24 }}>{t('dashboard.welcome')}</p>
 

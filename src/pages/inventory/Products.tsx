@@ -261,6 +261,7 @@ export function Products() {
 
   return (
     <Card
+     className='mainContent'
       variant="borderless"
       title="物料管理"
       extra={

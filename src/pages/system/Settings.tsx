@@ -417,7 +417,7 @@ export function Settings() {
 
   return (
     <Card
-      style={{ borderRadius: 0 }}
+      className='mainContent'
       variant="borderless"
       title={t('settings.title')}
       extra={

@@ -505,6 +505,7 @@ export function Boms() {
 
   return (
     <Card
+      className='mainContent'
       variant="borderless"
       title="BOM管理"
       style={{ borderRadius: 0 }}

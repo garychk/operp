@@ -221,7 +221,7 @@ export function Payables() {
   ];
 
   return (
-    <Card variant="borderless" title="应付账款管理" extra={
+    <Card className='mainContent' variant="borderless" title="应付账款管理" extra={
       <Space>
         <Input
           placeholder="搜索单据号或供应商..."

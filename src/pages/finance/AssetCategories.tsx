@@ -176,7 +176,7 @@ export function AssetCategories() {
   ];
 
   return (
-    <Card variant="borderless" title="资产类别管理" extra={<Space>
+    <Card className='mainContent' variant="borderless" title="资产类别管理" extra={<Space>
       <Input
         placeholder="搜索类别代码或名称..."
         prefix={<SearchOutlined />}

@@ -477,7 +477,7 @@ export function Vouchers() {
   }), { debit: 0, credit: 0 });
 
   return (
-    <Card style={{ borderRadius: 0 }} variant="borderless" title={t('vouchers.title')} extra={
+    <Card className='mainContent'  variant="borderless" title={t('vouchers.title')} extra={
       <Space>
         <Input
           placeholder={t('vouchers.searchPlaceholder')}

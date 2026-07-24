@@ -424,8 +424,7 @@ export function Roles() {
   ];
 
   return (
-    <Card variant="borderless" title="角色管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增角色</Button>}>      
-      
+    <Card className='mainContent' variant="borderless" title="角色管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增角色</Button>}>      
       <Table
         columns={columns}
         dataSource={roles}

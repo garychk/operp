@@ -215,7 +215,7 @@ export function Warehouses() {
   ];
 
   return (
-    <Card variant="borderless" title="仓库管理" extra={
+    <Card className='mainContent' variant="borderless" title="仓库管理" extra={
       <Space>
           <Input
             placeholder="搜索仓库名称或编码..."

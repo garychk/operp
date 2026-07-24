@@ -243,8 +243,7 @@ export function Menus() {
   ];
 
   return (
-    <Card variant="borderless" title="菜单管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增菜单</Button>}>
-
+    <Card className='mainContent' variant="borderless" title="菜单管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增菜单</Button>}>
       <Table
         columns={columns}
         dataSource={menuTree}

@@ -224,7 +224,7 @@ export function Logs() {
 
   return (
     <>
-      <Card variant="borderless" title="系统日志" extra={
+      <Card className='mainContent' variant="borderless" title="系统日志" extra={
         <Space size="middle">
           {selectedRowKeys.length > 0 && (
             <Popconfirm

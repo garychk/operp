@@ -655,7 +655,7 @@ export function PurchaseReceipts() {
   }), { amount: 0 });
 
   return (
-    <Card variant="borderless" title="采购入库单" extra={
+    <Card className='mainContent' variant="borderless" title="采购入库单" extra={
       <Space>
         <Input
           placeholder="搜索入库单号、供应商或采购订单..."

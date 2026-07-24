@@ -187,7 +187,7 @@ export function Suppliers() {
   ];
 
   return (
-    <Card variant="borderless" title="供应商管理" extra={
+    <Card className='mainContent' variant="borderless" title="供应商管理" extra={
       <Space>
         <Input
           placeholder="搜索供应商名称或编码..."

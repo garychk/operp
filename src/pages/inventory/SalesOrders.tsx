@@ -574,6 +574,7 @@ export function SalesOrders() {
 
   return (
     <Card
+      className='mainContent'
       variant="borderless"
       title="销售订单"
       extra={

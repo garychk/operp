@@ -513,7 +513,7 @@ export function RoutingOperations() {
     <Card
       variant="borderless"
       title="工艺路线管理"
-      style={{ borderRadius: 0 }}
+      className='mainContent'
       extra={
         <Space>
           <Input.Search placeholder="搜索工艺路线编号或产品..." allowClear onSearch={(value) => {

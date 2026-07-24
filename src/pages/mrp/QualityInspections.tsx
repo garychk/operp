@@ -401,7 +401,7 @@ export function QualityInspections() {
     },
   ];
   return (
-    <div style={{ padding: 16 }}>
+    <Card className='mainContent' variant="borderless" size="small">
       <Row gutter={12} style={{ marginBottom: 16 }}>
         <Col span={8}>
           <Card size="small">
@@ -610,6 +610,6 @@ export function QualityInspections() {
           </Form.Item>
         </Form>
       </Modal>
-    </div>
+    </Card>
   );
 }

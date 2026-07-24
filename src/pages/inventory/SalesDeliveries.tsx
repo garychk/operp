@@ -660,7 +660,7 @@ export function SalesDeliveries() {
   }), { amount: 0 });
 
   return (
-    <Card variant="borderless" title="销售出货单" extra={
+    <Card className='mainContent' variant="borderless" title="销售出货单" extra={
       <Space>
         <Input
           placeholder="搜索出货单号、客户或销售订单..."

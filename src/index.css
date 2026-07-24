@@ -106,3 +106,8 @@ body {
   border-color: var(--accent);
   box-shadow: none;
 } */
+
+.mainContent{
+  border-radius: 0;
+  height: 90vh;
+}

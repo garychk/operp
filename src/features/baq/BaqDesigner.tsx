@@ -180,8 +180,9 @@ export function BaqDesigner() {
     }
   };
   return (
-    <div className="baq-page">
+    <div className='mainContent'>
       <Card
+        variant="borderless"
         title={
           <Space>
             <Typography.Title level={4}>BAQ 设计管理</Typography.Title>

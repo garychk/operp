@@ -242,6 +242,7 @@ export function Operations() {
 
   return (
     <Card
+      className='mainContent'
       variant="borderless"
       title="工序管理"
       extra={

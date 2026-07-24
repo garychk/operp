@@ -189,7 +189,7 @@ export function Customers() {
   ];
 
   return (
-    <Card variant="borderless" title={t('customers.title')} extra={
+    <Card className='mainContent' variant="borderless" title={t('customers.title')} extra={
       <Space>
         <Input
           placeholder={t('customers.searchPlaceholder')}

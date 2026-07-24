@@ -168,7 +168,7 @@ export function Departments() {
   ];
 
   return (
-    <Card variant="borderless" title="部门管理" extra={
+    <Card className='mainContent' variant="borderless" title="部门管理" extra={
       <Space>
         <Input
           placeholder="搜索部门名称或编码..."

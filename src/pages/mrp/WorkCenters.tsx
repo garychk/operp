@@ -215,7 +215,7 @@ export function WorkCenters() {
   ];
 
   return (
-    <Card variant="borderless" title="工作中心管理" extra={
+    <Card className='mainContent' variant="borderless" title="工作中心管理" extra={
       <Space>
         <Input
           placeholder="搜索工作中心名称或编码..."

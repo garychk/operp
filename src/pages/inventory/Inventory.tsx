@@ -166,7 +166,7 @@ export function Inventory() {
   ];
 
   return (
-    <Card variant="borderless" title="库存管理" extra={<Button icon={<ReloadOutlined />} onClick={fetchInventory}>刷新</Button>}>      
+    <Card className='mainContent' variant="borderless" title="库存管理" extra={<Button icon={<ReloadOutlined />} onClick={fetchInventory}>刷新</Button>}>      
       
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={8}>

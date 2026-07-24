@@ -519,7 +519,7 @@ export function PurchaseOrders() {
   }), { amount: 0, taxAmount: 0 });
 
   return (
-    <Card variant="borderless" title="采购订单" extra={
+    <Card className='mainContent' variant="borderless" title="采购订单" extra={
       <Space>
         <Input
           placeholder="搜索订单号或供应商..."

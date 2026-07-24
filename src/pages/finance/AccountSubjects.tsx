@@ -170,7 +170,7 @@ export function AccountSubjects() {
   ];
 
   return (
-    <Card variant="borderless" title={t('accountSubjects.title')} extra={
+    <Card className='mainContent' variant="borderless" title={t('accountSubjects.title')} extra={
       <Space>
         <Input
           placeholder={t('accountSubjects.searchPlaceholder')}

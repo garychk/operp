@@ -394,7 +394,7 @@ export function Users() {
   ];
 
   return (
-    <Card variant="borderless" title="用户管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增用户</Button>}>      
+    <Card className='mainContent' variant="borderless" title="用户管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增用户</Button>}>      
       
       <Table
         columns={columns}
