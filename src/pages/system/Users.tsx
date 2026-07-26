@@ -226,6 +226,9 @@ export function Users() {
         });
         message.success('更新成功');
       } else {
+        const { data: currentSessionData } = await supabase.auth.getSession();
+        const currentSession = currentSessionData.session;
+
         const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
           email: values.email,
           password: 'admin123',
@@ -249,6 +252,18 @@ export function Users() {
           if (error) throw error;
           savedUserId = insertedUser.id;
         });
+
+        if (currentSession) {
+          const { error: restoreSessionError } = await supabase.auth.setSession({
+            access_token: currentSession.access_token,
+            refresh_token: currentSession.refresh_token,
+          });
+
+          if (restoreSessionError) {
+            message.warning('用户已创建，但恢复当前登录会话失败，请刷新页面重新登录');
+          }
+        }
+
         message.success('创建成功！默认密码: admin123');
       }
 
@@ -312,8 +327,7 @@ export function Users() {
       message.error('保存失败');
     }
   };
-
-  const columns: ColumnsType<User> = [
+const columns: ColumnsType<User> = [
     {
       title: '头像',
       dataIndex: 'avatar_url',
@@ -392,7 +406,6 @@ export function Users() {
       ),
     },
   ];
-
   return (
     <Card className='mainContent' variant="borderless" title="用户管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增用户</Button>}>      
       

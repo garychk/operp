@@ -71,7 +71,11 @@
 
 ### 5. `deploy_05_auth_super_admin.sql`
 
-补充 Auth 超级管理员识别函数。
+为新 Supabase 项目提供首次 Auth 绑定用户的超级管理员 bootstrap 逻辑。
+
+- 通过 `sys_users.auth_id` 的首次绑定触发
+- 当当前库里只有 1 个已绑定 Auth 的用户时，自动给该用户分配 `super_admin`
+- 逻辑为通用初始化，不依赖固定邮箱
 
 ### 6. `deploy_06_payables_source_fields.sql`
 
