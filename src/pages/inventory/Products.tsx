@@ -357,7 +357,7 @@ export function Products() {
                 <Form.Item label="规格" name="specification">
                   <Input placeholder="请输入规格" />
                 </Form.Item>
-                <Form.Item label="单位" name="unit" initialValue="件">
+                <Form.Item label="单位" name="unit" initialValue="件" tooltip="维护类型为uom的字典">
                   <DictSelect
                     dictType="uom"
                     placeholder="请输入单位"
