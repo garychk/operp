@@ -454,7 +454,7 @@ export function SalesOrders() {
       render: (_: any, record: SalesOrder) => (
         <Space size="middle">
           {record.status === 'draft' && (
-            <Button type="text" onClick={() => handleSubmitApproval(record)}>
+            <Button type="text" onClick={() => handleSubmitApproval(record)} disabled={record.status !== 'draft'}>
               提交
             </Button>
           )}

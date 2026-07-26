@@ -566,7 +566,7 @@ export function SalesDeliveries() {
             明细
           </Button>
           {record.status === 'draft' && (
-            <Button type="text" onClick={() => runDeliveryAction('submit', record)}>提交</Button>
+            <Button type="text" onClick={() => runDeliveryAction('submit', record)} disabled={record.status !== 'draft'}>提交</Button>
           )}
           {record.status === 'pending' && (
             <Button type="text" onClick={() => runDeliveryAction('approve', record)}>审核</Button>

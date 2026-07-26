@@ -328,6 +328,9 @@ BEGIN
   END IF;
 
   IF p_action = 'submit' THEN
+    IF v_instance.status <> 'draft' THEN
+      RAISE EXCEPTION 'Only draft workflow instances can be submitted';
+    END IF;
     SELECT *
     INTO v_node
     FROM public.wf_process_nodes n

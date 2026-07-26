@@ -554,7 +554,7 @@ export function PurchaseReceipts() {
       render: (_: any, record: PurchaseReceipt) => (
         <Space>
           {record.status === 'draft' && (
-            <Button type="text" onClick={() => runReceiptAction('submit', record)}>提交</Button>
+            <Button type="text" onClick={() => runReceiptAction('submit', record)} disabled={record.status !== 'draft'}>提交</Button>
           )}
           {record.status === 'pending' && (
             <Button type="text" onClick={() => runReceiptAction('approve', record)}>审核</Button>
