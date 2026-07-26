@@ -89,7 +89,7 @@ GRANT EXECUTE ON FUNCTION public.update_table_label(INTEGER,TEXT) TO authenticat
 
 SELECT public.refresh_sys_tables();
 INSERT INTO public.sys_menus(parent_id,menu_name,menu_code,menu_type,icon,path,component,sort_order,status)
-SELECT p.id,'BAQ设计管理','baq_designer','C','DatabaseOutlined','/system/baq','./features/baq/BaqDesigner',7,'1' FROM public.sys_menus p WHERE p.menu_code='system'
+SELECT p.id,'BAQ管理','baq_designer','C','DatabaseOutlined','/system/baq','./features/baq/BaqDesigner',7,'1' FROM public.sys_menus p WHERE p.menu_code='system'
 AND NOT EXISTS(SELECT 1 FROM public.sys_menus WHERE menu_code='baq_designer' AND is_deleted='n');
 INSERT INTO public.sys_role_menus(role_id,menu_id) SELECT r.id,m.id FROM public.sys_roles r JOIN public.sys_menus m ON m.menu_code='baq_designer'
 WHERE r.role_code='super_admin' AND NOT EXISTS(SELECT 1 FROM public.sys_role_menus x WHERE x.role_id=r.id AND x.menu_id=m.id);

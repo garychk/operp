@@ -58,7 +58,7 @@ const zhCN = {
       dictionaries: "数据字典",
       logs: "系统日志",
       pageDesigner: "页面设计器",
-      baq: "BAQ设计管理",
+      baq: "BAQ管理",
       workflow: "流程配置",
     },
     settings: {

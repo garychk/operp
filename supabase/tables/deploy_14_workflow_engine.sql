@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS public.wf_process_definitions (
   corp_id VARCHAR(128),
   emp_id VARCHAR(128),
   is_deleted CHAR(1) DEFAULT 'n',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   process_code VARCHAR(100) NOT NULL UNIQUE,
   process_name VARCHAR(200) NOT NULL,
   document_type VARCHAR(100) NOT NULL,
@@ -22,8 +22,8 @@ CREATE TABLE IF NOT EXISTS public.wf_process_nodes (
   corp_id VARCHAR(128),
   emp_id VARCHAR(128),
   is_deleted CHAR(1) DEFAULT 'n',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   process_id INTEGER NOT NULL REFERENCES public.wf_process_definitions(id) ON DELETE CASCADE,
   node_key VARCHAR(100) NOT NULL,
   node_name VARCHAR(200) NOT NULL,
@@ -45,8 +45,8 @@ CREATE TABLE IF NOT EXISTS public.wf_process_instances (
   corp_id VARCHAR(128),
   emp_id VARCHAR(128),
   is_deleted CHAR(1) DEFAULT 'n',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   process_id INTEGER NOT NULL REFERENCES public.wf_process_definitions(id) ON DELETE CASCADE,
   document_type VARCHAR(100) NOT NULL,
   document_id INTEGER NOT NULL,
@@ -68,8 +68,8 @@ CREATE TABLE IF NOT EXISTS public.wf_process_actions (
   corp_id VARCHAR(128),
   emp_id VARCHAR(128),
   is_deleted CHAR(1) DEFAULT 'n',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   instance_id INTEGER NOT NULL REFERENCES public.wf_process_instances(id) ON DELETE CASCADE,
   node_id INTEGER REFERENCES public.wf_process_nodes(id),
   action VARCHAR(30) NOT NULL,
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS public.wf_process_actions (
   to_status VARCHAR(30),
   from_node_key VARCHAR(100),
   to_node_key VARCHAR(100),
-  acted_at TIMESTAMP DEFAULT NOW()
+  acted_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.wf_process_definitions TO authenticated;
