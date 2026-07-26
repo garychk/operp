@@ -316,6 +316,7 @@ const menuData: MenuRoute[] = [
       { path: "/system/roles", name: "角色管理", icon: <SafetyOutlined /> },
       { path: "/system/menus", name: "菜单管理", icon: <MenuOutlined /> },
       { path: "/system/settings", name: "系统设置", icon: <SettingOutlined /> },
+      { path: "/system/workflow", name: "流程配置", icon: <BranchesOutlined /> },
       {
         path: "/system/dictionaries",
         name: "数据字典",
@@ -361,6 +362,7 @@ const pathToNameMap: Record<string, string> = {
   "/system/roles": "角色管理",
   "/system/menus": "菜单管理",
   "/system/settings": "系统设置",
+  "/system/workflow": "流程配置",
   "/system/dictionaries": "数据字典",
   "/system/logs": "系统日志",
   "/system/page-designer": "页面设计器",
@@ -400,6 +402,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/system/roles": "menu.roles",
   "/system/menus": "menu.menus",
   "/system/settings": "menu.settings",
+  "/system/workflow": "menu.workflow",
   "/system/dictionaries": "menu.dictionaries",
   "/system/logs": "menu.logs",
   "/system/page-designer": "menu.pageDesigner",

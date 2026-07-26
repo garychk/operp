@@ -1,13 +1,6 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, Card } from 'antd';
-import {
-  TeamOutlined,
-  SafetyOutlined,
-  MenuOutlined,
-  FileTextOutlined,
-  SettingOutlined,
-  BookOutlined,
-} from '@ant-design/icons';
+import { TeamOutlined, SafetyOutlined, MenuOutlined, FileTextOutlined, SettingOutlined, BookOutlined, BranchesOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
 const menuItems: MenuProps['items'] = [
@@ -16,6 +9,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'menus', label: '菜单管理', icon: <MenuOutlined /> },
   { key: 'settings', label: '系统设置', icon: <SettingOutlined /> },
   { key: 'dictionaries', label: '数据字典', icon: <BookOutlined /> },
+  { key: 'workflow', label: '流程配置', icon: <BranchesOutlined /> },
   { key: 'logs', label: '系统日志', icon: <FileTextOutlined /> },
 ];
 
@@ -58,5 +52,6 @@ export function SystemModule() {
     </div>
   );
 }
+
 
 
