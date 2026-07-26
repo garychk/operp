@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Modal,
   Space,
@@ -19,17 +21,16 @@ import {
   LeftOutlined,
   RightOutlined,
   CaretRightOutlined,
-  CheckOutlined,
   PrinterOutlined,
 } from '@ant-design/icons';
 import type { FormInstance } from 'antd/es/form';
 import PrintDesigner from 'operp-print-designer';
 import 'operp-print-designer/dist/operp-print-designer.css';
 import { supabase } from '../utils/supabase';
-import { runBusinessAction } from '../utils/businessEngine';
 import type { SysFormsInsert } from '../types/database';
 import type { PrintDesignerDataSource } from 'operp-print-designer';
 import { WorkflowHistoryCard } from './WorkflowHistoryCard';
+import { WorkflowActionBar } from './WorkflowActionBar';
 
 interface HistoryLog {
   id: number;
@@ -43,16 +44,16 @@ interface HistoryLog {
 
 interface SupaModalProps {
   open: boolean;
-  footer?: React.ReactNode;
+  footer?: ReactNode;
   onCancel: () => void;
-  title?: React.ReactNode;
+  title?: ReactNode;
   form?: FormInstance;
-  formEle?: React.ReactNode;
-  headerExtra?: React.ReactNode;
+  formEle?: ReactNode;
+  headerExtra?: ReactNode;
   headerPanelTitle?: string;
   detailPanelTitle?: string;
-  detailExtra?: React.ReactNode;
-  tableEle?: React.ReactNode;
+  detailExtra?: ReactNode;
+  tableEle?: ReactNode;
   detailData?: any[];
   historyTable?: string;
   historyRecordId?: string | number | null;
@@ -61,7 +62,7 @@ interface SupaModalProps {
   formDescription?: string;
   width?: string | number;
   height?: string | number;
-  children?: React.ReactNode;
+  children?: ReactNode;
 }
 
 export function SupaModal({
@@ -72,8 +73,8 @@ export function SupaModal({
   form,
   formEle,
   headerExtra,
-  headerPanelTitle = '单据头',
-  detailPanelTitle = '单据明细',
+  headerPanelTitle,
+  detailPanelTitle,
   detailExtra,
   tableEle,
   detailData,
@@ -86,6 +87,7 @@ export function SupaModal({
   height = 800,
   children,
 }: SupaModalProps) {
+  const { t } = useTranslation();
   const [isExpand, setIsExpand] = useState(false);
   const [openDesigner, setOpenDesigner] = useState(false);
   const [isPreview, setIsPreview] = useState(true);
@@ -146,7 +148,7 @@ export function SupaModal({
 
     if (error) {
       console.error('Failed to fetch print template:', error);
-      message.error(`获取打印模板失败: ${error.message}`);
+      message.error(t('modal.messages.fetchTemplateFailed', { message: error.message }));
       return undefined;
     }
 
@@ -156,14 +158,14 @@ export function SupaModal({
       return JSON.parse(data.print_template_json);
     } catch (parseError) {
       console.error('Failed to parse print template:', parseError);
-      message.error('打印模板数据格式不正确');
+      message.error(t('modal.messages.templateInvalid'));
       return undefined;
     }
   };
 
   const handleOpenDesigner = async () => {
     if (!currentFormName) {
-      message.error('缺少当前表单表名，无法打开打印设计');
+      message.error(t('modal.messages.missingFormName'));
       return;
     }
 
@@ -191,7 +193,7 @@ export function SupaModal({
   const handleSaveTemplate = async (data: any) => {
     const formName = currentFormName;
     if (!formName) {
-      message.error('缺少当前表单表名，无法保存打印模板');
+      message.error(t('modal.messages.missingFormNameSave'));
       return;
     }
 
@@ -202,8 +204,8 @@ export function SupaModal({
       description: formDescription || formName,
       print_template_json: templateJson,
       form_config: {
-        headerPanelTitle,
-        detailPanelTitle,
+        headerPanelTitle: headerPanelTitle || t('modal.headerPanelTitle'),
+        detailPanelTitle: detailPanelTitle || t('modal.detailPanelTitle'),
         hasDetail: Boolean(tableEle),
       },
       status: '1',
@@ -215,11 +217,11 @@ export function SupaModal({
     const { error } = await supabase.from('sys_forms').upsert(formSettings, { onConflict: 'form_name' });
     if (error) {
       console.error('Failed to save print template:', error);
-      message.error(`保存模板失败: ${error.message}`);
+      message.error(t('modal.messages.saveTemplateFailed', { message: error.message }));
       return;
     }
 
-    message.success('打印模板保存成功');
+    message.success(t('modal.messages.saveTemplateSuccess'));
     handleCloseDesigner();
   };
 
@@ -245,24 +247,6 @@ export function SupaModal({
     ),
   }));
 
-const handleApprove = async () => {
-  if (!workflowDocumentType || historyRecordId === null || historyRecordId === undefined) {
-    message.error('缺少流程绑定的单据类型或单据ID');
-    return;
-  }
-
-  try {
-    await runBusinessAction({
-      action: 'submit',
-      documentType: workflowDocumentType as any,
-      documentId: Number(historyRecordId),
-    });
-    message.success('提交审批成功');
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : '提交审批失败';
-    message.error(msg);
-  }
-}
 
   return (
     <>
@@ -273,10 +257,10 @@ const handleApprove = async () => {
             <Button type="default" size="small" icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />} onClick={() => setIsExpand(!isExpand)} />
             <Button type="default" size="small" icon={<LeftOutlined />} />
             <Button type="default" size="small" icon={<RightOutlined />} />
-            <Button type="default" size="small" icon={<CheckOutlined />} color="purple" onClick={() => void handleApprove()} />
+            <WorkflowActionBar documentType={workflowDocumentType} documentId={historyRecordId} currentStatus={form?.getFieldValue('status')} onActionDone={combinedOnCancel} />
             <Switch checked={isPreview} onChange={setIsPreview} checkedChildren="D" unCheckedChildren="P" size="middle" />
             <Button type="default" size="small" icon={<PrinterOutlined />} onClick={handleOpenDesigner} />
-            <Tag color="magenta">按ESC键可关闭</Tag>
+            <Tag color="magenta">{t('modal.pressEscToClose')}</Tag>
           </Space>
         }
         open={open}
@@ -296,18 +280,18 @@ const handleApprove = async () => {
               expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}
               size="small"
             >
-              <Collapse.Panel header={headerPanelTitle} key="1" extra={headerExtra}>
+              <Collapse.Panel header={headerPanelTitle || t('modal.headerPanelTitle')} key="1" extra={headerExtra}>
                 <Splitter>
                   <Splitter.Panel defaultSize="70%" min="20%" max="70%">
                     {formEle}
                   </Splitter.Panel>
                   <Splitter.Panel>
-                    <Card title="单据历史" size="small" variant="borderless" style={{ borderRadius: 0 }}>
+                    <Card title={t('modal.documentHistory')} size="small" variant="borderless" style={{ borderRadius: 0 }}>
                       <Spin spinning={historyLoading}>
                         {historyItems.length > 0 ? (
                           <Timeline items={historyItems} />
                         ) : (
-                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无历史记录" />
+                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('modal.noHistoryRecords')} />
                         )}
                       </Spin>
                     </Card>
@@ -316,7 +300,7 @@ const handleApprove = async () => {
                 </Splitter>
               </Collapse.Panel>
               {tableEle && (
-                <Collapse.Panel header={detailPanelTitle} key="2" extra={detailExtra}>
+                <Collapse.Panel header={detailPanelTitle || t('modal.detailPanelTitle')} key="2" extra={detailExtra}>
                   {tableEle}
                 </Collapse.Panel>
               )}
@@ -325,7 +309,7 @@ const handleApprove = async () => {
         </div>
       </Modal>
       <Modal
-        title="打印设计"
+        title={t('modal.printDesigner')}
         open={openDesigner}
         onCancel={handleCloseDesigner}
         width="80%"
@@ -354,3 +338,4 @@ const handleApprove = async () => {
 }
 
 export default SupaModal;
+

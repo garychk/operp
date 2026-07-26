@@ -21,10 +21,11 @@ import {
   CalendarDays
 } from 'lucide-react';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 
 interface MenuItem {
   title: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   path?: string;
   children?: MenuItem[];
 }
@@ -198,3 +199,4 @@ export function Layout() {
     </div>
   );
 }
+

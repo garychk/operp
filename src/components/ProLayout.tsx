@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { useLocation, useNavigate, Outlet } from "react-router-dom";
 import {
   ProLayout as AntProLayout,
@@ -69,7 +70,7 @@ interface TabItem {
 interface MenuRoute {
   path: string;
   name: string;
-  icon: React.ReactNode;
+  icon: ReactNode;
   routes?: MenuRoute[];
 }
 
@@ -77,16 +78,28 @@ interface DatabaseMenu {
   id: number;
   parent_id: number | null;
   menu_name: string;
+  menu_code: string | null;
   menu_type: string | null;
   path: string | null;
 }
+
+const fixedMenuPathByCode: Record<string, string> = {
+  finance: "/finance",
+  inventory: "/inventory",
+  mrp: "/mrp",
+  system: "/system",
+};
 
 function buildDatabaseMenuTree(records: DatabaseMenu[]): MenuRoute[] {
   const nodes = new Map<number, MenuRoute>();
   const roots: MenuRoute[] = [];
   records.forEach((record) => {
+    const normalizedPath =
+      record.path?.trim() ||
+      (record.menu_code ? fixedMenuPathByCode[record.menu_code] : undefined) ||
+      `/menu-group/${record.id}`;
     nodes.set(record.id, {
-      path: record.path || `/menu-group/${record.id}`,
+      path: normalizedPath,
       name: record.menu_name,
       icon:
         record.menu_type === "M" ? <AppstoreOutlined /> : <DashboardOutlined />,
@@ -440,7 +453,7 @@ export function ProLayout() {
     const loadDatabaseMenus = async () => {
       const { data, error } = await supabase
         .from("sys_menus")
-        .select("id, parent_id, menu_name, menu_type, path")
+        .select("id, parent_id, menu_name, menu_code, menu_type, path")
         .eq("status", "1")
         .eq("is_deleted", "n")
         .order("sort_order");
@@ -613,7 +626,7 @@ export function ProLayout() {
                   themeColor,
                   dark,
                 ),
-              } as React.CSSProperties)
+              } as CSSProperties)
         }
         token={
           themeColor === "default"
@@ -859,3 +872,5 @@ export function ProLayout() {
     </ConfigProvider>
   );
 }
+
+

@@ -1,11 +1,12 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Spin } from 'antd';
 import { Forbidden } from '../pages/Forbidden';
 
 interface RouteGuardProps {
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 const normalizePath = (path: string) => {
@@ -13,7 +14,7 @@ const normalizePath = (path: string) => {
   return normalized || '/';
 };
 
-export const ProtectedRoute: React.FC<RouteGuardProps> = ({ children }) => {
+export function ProtectedRoute({ children }: RouteGuardProps) {
   const { user, loading } = useAuth();
   const location = useLocation();
 
@@ -37,7 +38,7 @@ export const ProtectedRoute: React.FC<RouteGuardProps> = ({ children }) => {
   return <>{children}</>;
 };
 
-export const MenuPermissionGuard: React.FC<RouteGuardProps> = ({ children }) => {
+export function MenuPermissionGuard({ children }: RouteGuardProps) {
   const { user } = useAuth();
   const location = useLocation();
 
@@ -56,3 +57,4 @@ export const MenuPermissionGuard: React.FC<RouteGuardProps> = ({ children }) => 
 
   return <>{children}</>;
 };
+

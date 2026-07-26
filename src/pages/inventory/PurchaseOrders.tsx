@@ -565,6 +565,7 @@ export function PurchaseOrders() {
           <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
         }
         form={form}
+        workflowDocumentType="purchase_order"
         formEle={
           <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: '0 16px 0 0' }}>
             <Row gutter={16}>
