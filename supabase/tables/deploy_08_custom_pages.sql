@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS public.sys_custom_pages (
   status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
   menu_id INTEGER REFERENCES public.sys_menus(id) ON DELETE SET NULL,
   config JSONB NOT NULL DEFAULT '{"widgets":[]}'::jsonb, is_deleted CHAR(1) DEFAULT 'n',
-  created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sys_custom_pages_status ON public.sys_custom_pages(status, is_deleted);
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_custom_pages TO authenticated;

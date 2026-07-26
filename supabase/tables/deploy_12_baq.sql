@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS public.sys_baq_queries (
   code VARCHAR(100) NOT NULL UNIQUE, name VARCHAR(150) NOT NULL, description TEXT,
   status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
   definition JSONB NOT NULL DEFAULT '{"source":{"table":"","alias":"t0"},"joins":[],"fields":[],"filters":[],"sorts":[]}'::jsonb,
-  is_deleted CHAR(1) NOT NULL DEFAULT 'n', created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
+  is_deleted CHAR(1) NOT NULL DEFAULT 'n', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.sys_baq_queries TO authenticated;
 GRANT USAGE, SELECT ON SEQUENCE public.sys_baq_queries_id_seq TO authenticated;

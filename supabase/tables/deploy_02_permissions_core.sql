@@ -93,8 +93,8 @@ CREATE TABLE IF NOT EXISTS public.sys_tables (
     module_name VARCHAR(64) DEFAULT 'system',
     status CHAR(1) DEFAULT '1',
     is_deleted CHAR(1) DEFAULT 'n',
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.sys_role_table_permissions (
@@ -108,8 +108,8 @@ CREATE TABLE IF NOT EXISTS public.sys_role_table_permissions (
     can_update BOOLEAN DEFAULT FALSE,
     can_delete BOOLEAN DEFAULT FALSE,
     is_deleted CHAR(1) DEFAULT 'n',
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(role_id, table_id)
 );
 

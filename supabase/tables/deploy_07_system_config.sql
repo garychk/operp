@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS public.sys_config (
     status CHAR(1) DEFAULT '1',
     sort_order INTEGER DEFAULT 0,
     is_deleted CHAR(1) DEFAULT 'n',
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_sys_config_category_code

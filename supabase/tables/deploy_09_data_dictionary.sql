@@ -6,8 +6,8 @@ CREATE TABLE IF NOT EXISTS public.sys_dict_types (
   sort_order INTEGER DEFAULT 0,
   status CHAR(1) DEFAULT '1',
   is_deleted CHAR(1) DEFAULT 'n',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS public.sys_dict_items (
@@ -19,8 +19,8 @@ CREATE TABLE IF NOT EXISTS public.sys_dict_items (
   sort_order INTEGER DEFAULT 0,
   status CHAR(1) DEFAULT '1',
   is_deleted CHAR(1) DEFAULT 'n',
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(type_id, code)
 );
 
