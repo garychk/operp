@@ -376,6 +376,14 @@ const zhCN = {
         title: "流程历史",
         empty: "暂无流程记录",
       },
+      flow: {
+        preview: "流程预览",
+        empty: "暂无节点，添加节点后会在这里显示流程图",
+        startPrefix: "开始：",
+        endPrefix: "结束：",
+        rolePrefix: "角色：",
+        roleUnassigned: "角色：未配置",
+      },
     },
     bomTree: {
       title: "BOM结构树",

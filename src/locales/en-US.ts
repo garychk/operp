@@ -380,6 +380,14 @@ const enUS = {
         title: "Workflow History",
         empty: "No workflow history yet",
       },
+      flow: {
+        preview: "Flow Preview",
+        empty: "No nodes yet. Add nodes to preview the flow chart here.",
+        startPrefix: "Start: ",
+        endPrefix: "End: ",
+        rolePrefix: "Role: ",
+        roleUnassigned: "Role: Unassigned",
+      },
     },
     bomTree: {
       title: "BOM Tree",

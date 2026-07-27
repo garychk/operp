@@ -4,6 +4,7 @@ import { PlusOutlined, EditOutlined, ReloadOutlined, DeleteOutlined } from '@ant
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
+import { WorkflowDiagram } from '../../components/workflow/WorkflowDiagram';
 
 type WorkflowDefinition = {
   id: number;
@@ -209,7 +210,9 @@ export function WorkflowConfig() {
           </Space>
         }
       >
-        <Form form={form} layout="vertical">
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form form={form} layout="vertical">
           <Row gutter={16}>
             <Col span={12}><Form.Item name="process_code" label={t('workflow.processCode')} rules={[{ required: true }]}><Input placeholder="purchase_order_default" disabled={!!editing} /></Form.Item></Col>
             <Col span={12}><Form.Item name="process_name" label={t('workflow.processName')} rules={[{ required: true }]}><Input placeholder={t('workflow.processName')} /></Form.Item></Col>
@@ -219,6 +222,16 @@ export function WorkflowConfig() {
             <Col span={24}><Form.Item name="description" label={t('workflow.description')}><Input.TextArea rows={2} /></Form.Item></Col>
           </Row>
         </Form>
+          </Col>
+          <Col span={12}>
+            <Card size="small" title={t('workflow.flow.preview')} style={{ marginBottom: 16 }}>
+              <WorkflowDiagram nodes={nodes} />
+            </Card>
+          </Col>
+        </Row>
+        
+
+        
 
         <Space style={{ marginBottom: 12 }}><Button icon={<PlusOutlined />} onClick={addNode}>{t('workflow.addNode')}</Button></Space>
         <Table
@@ -241,4 +254,8 @@ export function WorkflowConfig() {
     </Card>
   );
 }
+
+
+
+
 
