@@ -6,6 +6,7 @@ import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
 import SupaModal from '../../components/SupaModal';
+import { useTranslation } from 'react-i18next';
 
 type Payable = Tables['erp_payables_s_539dcf81_b']['Row'];
 type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
@@ -13,6 +14,7 @@ type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
 const { Option } = Select;
 
 export function Payables() {
+  const { t } = useTranslation();
   const [payables, setPayables] = useState<Payable[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +41,7 @@ export function Payables() {
       setPayables(data || []);
     } catch (error) {
       console.error('Error fetching payables:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -62,16 +64,16 @@ export function Payables() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingPayable) {
-        await logWithTiming('更新应付账款', 'UPDATE', async () => {
+        await logWithTiming(t('payables.log.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
             .from('erp_payables_s_539dcf81_b')
             .update(values)
             .eq('id', editingPayable.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
-        await logWithTiming('新增应付账款', 'INSERT', async () => {
+        await logWithTiming(t('payables.log.createAction'), 'INSERT', async () => {
           const { error } = await supabase
             .from('erp_payables_s_539dcf81_b')
             .insert([{
@@ -80,7 +82,7 @@ export function Payables() {
             }]);
           if (error) throw error;
         });
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -88,7 +90,7 @@ export function Payables() {
       fetchPayables();
     } catch (error) {
       console.error('Error saving payable:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -107,22 +109,22 @@ export function Payables() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该记录吗？',
+      title: t('common.confirmDelete'),
+      content: t('payables.confirm.deleteContent'),
       onOk: async () => {
         try {
-          await logWithTiming('删除应付账款', 'DELETE', async () => {
+          await logWithTiming(t('payables.log.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
               .from('erp_payables_s_539dcf81_b')
               .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchPayables();
         } catch (error) {
           console.error('Error deleting payable:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -153,67 +155,67 @@ export function Payables() {
       getSupplierName(p.supplier_id).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const statusLabels: Record<string, { text: string; color: string }> = {
-    open: { text: '未结清', color: 'warning' },
-    partially_paid: { text: '部分付款', color: 'processing' },
-    closed: { text: '已结清', color: 'success' },
-    overdue: { text: '逾期', color: 'error' },
+  const statusLabels: Record<string, { textKey: string; color: string }> = {
+    open: { textKey: 'payables.statusOptions.open', color: 'warning' },
+    partially_paid: { textKey: 'payables.statusOptions.partially_paid', color: 'processing' },
+    closed: { textKey: 'payables.statusOptions.closed', color: 'success' },
+    overdue: { textKey: 'payables.statusOptions.overdue', color: 'error' },
   };
 
   const columns = [
     {
-      title: '单据号',
+      title: t('payables.docNo'),
       dataIndex: 'doc_no',
       key: 'doc_no',
     },
     {
-      title: '供应商',
+      title: t('payables.supplier'),
       dataIndex: 'supplier_id',
       key: 'supplier_id',
       render: (supplierId: number) => getSupplierName(supplierId),
     },
     {
-      title: '单据日期',
+      title: t('payables.docDate'),
       dataIndex: 'doc_date',
       key: 'doc_date',
     },
     {
-      title: '到期日',
+      title: t('payables.dueDate'),
       dataIndex: 'due_date',
       key: 'due_date',
       render: (text: string) => text || '-',
     },
     {
-      title: '金额',
+      title: t('payables.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
-      title: '余额',
+      title: t('payables.balance'),
       dataIndex: 'balance',
       key: 'balance',
       render: (balance: number) => `¥${(balance ?? 0).toLocaleString()}`,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
-        const config = statusLabels[status] || { text: status, color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        const config = statusLabels[status] || { textKey: status, color: 'default' };
+        return <Tag color={config.color}>{t(config.textKey)}</Tag>;
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: Payable) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -221,15 +223,15 @@ export function Payables() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title="应付账款管理" extra={
+    <Card className='mainContent' variant="borderless" title={t('payables.title')} extra={
       <Space>
         <Input
-          placeholder="搜索单据号或供应商..."
+          placeholder={t('payables.searchPlaceholder')}
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增应付</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('payables.addPayable')}</Button>
       </Space>
     }>
       <Table
@@ -241,9 +243,9 @@ export function Payables() {
       />
 
       <SupaModal
-        title={editingPayable ? '编辑应付账款' : '新增应付账款'}
+        title={editingPayable ? t('payables.editPayable') : t('payables.addPayable')}
         open={isModalOpen}
-        width={600}
+        width={800}
         height={440}
         onCancel={() => {
           setIsModalOpen(false);
@@ -251,9 +253,9 @@ export function Payables() {
           setEditingPayable(null);
         }}
         footer={<Space>
-          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
           <Button type="primary" onClick={() => form.submit()}>
-            保存
+            {t('common.save')}
           </Button>
         </Space>}
       >
@@ -262,54 +264,54 @@ export function Payables() {
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  label="供应商"
+                  label={t('payables.supplier')}
                   name="supplier_id"
-                  rules={[{ required: true, message: '请选择供应商' }]}
+                  rules={[{ required: true, message: t('payables.supplierRequired') }]}
                 >
-                  <Select placeholder="请选择供应商">
+                  <Select placeholder={t('payables.supplierPlaceholder')}>
                     {suppliers.map((s) => (
                       <Option key={s.id} value={s.id}>{s.name}</Option>
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label="单据类型" name="doc_type" initialValue="invoice">
+                <Form.Item label={t('payables.docType')} name="doc_type" initialValue="invoice">
                   <Select>
-                    <Option value="invoice">发票</Option>
-                    <Option value="order">订单</Option>
-                    <Option value="other">其他</Option>
+                    <Option value="invoice">{t('payables.typeOptions.invoice')}</Option>
+                    <Option value="order">{t('payables.typeOptions.order')}</Option>
+                    <Option value="other">{t('payables.typeOptions.other')}</Option>
                   </Select>
                 </Form.Item>
                 <Form.Item
-                  label="单据号"
+                  label={t('payables.docNo')}
                   name="doc_no"
-                  rules={[{ required: true, message: '请输入单据号' }]}
+                  rules={[{ required: true, message: t('payables.docNoRequired') }]}
                 >
-                  <Input placeholder="请输入单据号" disabled={!!editingPayable} />
+                  <Input placeholder={t('payables.docNoPlaceholder')} disabled={!!editingPayable} />
                 </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item
-                  label="单据日期"
+                  label={t('payables.docDate')}
                   name="doc_date"
-                  rules={[{ required: true, message: '请选择单据日期' }]}
+                  rules={[{ required: true, message: t('payables.docDateRequired') }]}
                 >
                   <DatePicker style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item label="到期日" name="due_date">
+                <Form.Item label={t('payables.dueDate')} name="due_date">
                   <DatePicker style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item
-                  label="金额"
+                  label={t('payables.amount')}
                   name="amount"
-                  rules={[{ required: true, message: '请输入金额' }]}
+                  rules={[{ required: true, message: t('payables.amountRequired') }]}
                   initialValue={0}
                 >
-                  <InputNumber style={{ width: '100%' }} placeholder="请输入金额" />
+                  <InputNumber style={{ width: '100%' }} placeholder={t('payables.amountPlaceholder')} />
                 </Form.Item>
               </Col>
             </Row>
-            <Form.Item label="备注" name="remark">
-              <Input.TextArea rows={3} placeholder="请输入备注" />
+            <Form.Item label={t('payables.remark')} name="remark">
+              <Input.TextArea rows={3} placeholder={t('payables.remarkPlaceholder')} />
             </Form.Item>
           </Form>
         </Card>

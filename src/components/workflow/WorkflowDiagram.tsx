@@ -157,9 +157,13 @@ export function WorkflowDiagram({ nodes }: WorkflowDiagramProps) {
         args: { color: '#eef2f6', thickness: 1 },
       },
       background: { color: '#fafafa' },
-      interacting: false,
-      panning: false,
-      mousewheel: false,
+      interacting: {
+        nodeMovable: true,
+        edgeMovable: false,
+        vertexMovable: false,
+      },
+      panning: { enabled: true, eventTypes: ['rightMouseDown', 'mouseWheel'] },
+      mousewheel: { enabled: true, modifiers: 'ctrl', factor: 1.1, minScale: 0.5, maxScale: 1.5 },
     });
 
     graphRef.current = graph;
@@ -223,3 +227,4 @@ export function WorkflowDiagram({ nodes }: WorkflowDiagramProps) {
     </>
   );
 }
+

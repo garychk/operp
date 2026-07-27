@@ -3,12 +3,14 @@ import { Button, Input, Table, Modal, Form, Select, Space, Card, message, InputN
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
+import { useTranslation } from 'react-i18next';
 
 type AssetCategory = Tables['erp_asset_categories_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 
 export function AssetCategories() {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<AssetCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -33,7 +35,7 @@ export function AssetCategories() {
       setCategories(data || []);
     } catch (error) {
       console.error('Error fetching categories:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -47,13 +49,13 @@ export function AssetCategories() {
           .update(values)
           .eq('id', editingCategory.id);
         if (error) throw error;
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         const { error } = await supabase
           .from('erp_asset_categories_s_539dcf81_b')
           .insert([values]);
         if (error) throw error;
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       setEditingCategory(null);
@@ -61,14 +63,14 @@ export function AssetCategories() {
       fetchCategories();
     } catch (error) {
       console.error('Error saving category:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该类别吗？',
+      title: t('common.confirmDelete'),
+      content: t('assetCategories.confirm.deleteContent'),
       onOk: async () => {
         try {
           const { error } = await supabase
@@ -76,11 +78,11 @@ export function AssetCategories() {
             .update({ is_deleted: 'y' })
             .eq('id', id);
           if (error) throw error;
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchCategories();
         } catch (error) {
           console.error('Error deleting category:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -119,56 +121,56 @@ export function AssetCategories() {
   };
 
   const depreciationMethodLabels: Record<string, string> = {
-    straight_line: '直线法',
-    double_declining: '双倍余额递减法',
-    sum_of_years: '年数总和法',
+    straight_line: 'assetCategories.depreciationMethods.straight_line',
+    double_declining: 'assetCategories.depreciationMethods.double_declining',
+    sum_of_years: 'assetCategories.depreciationMethods.sum_of_years',
   };
 
   const columns = [
     {
-      title: '类别代码',
+      title: t('assetCategories.code'),
       dataIndex: 'code',
       key: 'code',
     },
     {
-      title: '类别名称',
+      title: t('assetCategories.name'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '上级类别',
+      title: t('assetCategories.parentCategory'),
       dataIndex: 'parent_id',
       key: 'parent_id',
       render: (parentId: number | null) => getParentName(parentId),
     },
     {
-      title: '折旧方法',
+      title: t('assetCategories.depreciationMethod'),
       dataIndex: 'depreciation_method',
       key: 'depreciation_method',
-      render: (method: string | null) => depreciationMethodLabels[method || ''] || '-',
+      render: (method: string | null) => depreciationMethodLabels[method || ''] ? t(depreciationMethodLabels[method || '']) : '-',
     },
     {
-      title: '使用年限(月)',
+      title: t('assetCategories.usefulLifeMonths'),
       dataIndex: 'useful_life_months',
       key: 'useful_life_months',
       render: (months: number | null) => months || '-',
     },
     {
-      title: '残值率(%)',
+      title: t('assetCategories.residualRate'),
       dataIndex: 'residual_rate',
       key: 'residual_rate',
       render: (rate: number | null) => rate || '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: AssetCategory) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -176,14 +178,14 @@ export function AssetCategories() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title="资产类别管理" extra={<Space>
+    <Card className='mainContent' variant="borderless" title={t('assetCategories.title')} extra={<Space>
       <Input
-        placeholder="搜索类别代码或名称..."
+        placeholder={t('assetCategories.searchPlaceholder')}
         prefix={<SearchOutlined />}
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
       />
-      <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增类别</Button>
+      <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('assetCategories.addCategory')}</Button>
     </Space>}>
 
       <Table
@@ -195,7 +197,7 @@ export function AssetCategories() {
       />
 
       <Modal
-        title={editingCategory ? '编辑类别' : '新增类别'}
+        title={editingCategory ? t('assetCategories.editCategory') : t('assetCategories.addCategory')}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -203,47 +205,47 @@ export function AssetCategories() {
           form.resetFields();
         }}
         footer={<Space>
-          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
           <Button type="primary" onClick={() => form.submit()}>
-            保存
+            {t('common.save')}
           </Button>
         </Space>}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item
-            label="类别代码"
+            label={t('assetCategories.code')}
             name="code"
-            rules={[{ required: true, message: '请输入类别代码' }]}
+            rules={[{ required: true, message: t('assetCategories.codeRequired') }]}
           >
-            <Input placeholder="请输入类别代码" />
+            <Input placeholder={t('assetCategories.codePlaceholder')} />
           </Form.Item>
           <Form.Item
-            label="类别名称"
+            label={t('assetCategories.name')}
             name="name"
-            rules={[{ required: true, message: '请输入类别名称' }]}
+            rules={[{ required: true, message: t('assetCategories.nameRequired') }]}
           >
-            <Input placeholder="请输入类别名称" />
+            <Input placeholder={t('assetCategories.namePlaceholder')} />
           </Form.Item>
-          <Form.Item label="上级类别" name="parent_id">
-            <Select placeholder="请选择上级类别">
-              <Option value={null}>无</Option>
+          <Form.Item label={t('assetCategories.parentCategory')} name="parent_id">
+            <Select placeholder={t('assetCategories.parentCategoryPlaceholder')}>
+              <Option value={null}>{t('assetCategories.none')}</Option>
               {categories.filter((c) => c.id !== editingCategory?.id).map((c) => (
                 <Option key={c.id} value={c.id}>{c.name}</Option>
               ))}
             </Select>
           </Form.Item>
-          <Form.Item label="折旧方法" name="depreciation_method" initialValue="straight_line">
+          <Form.Item label={t('assetCategories.depreciationMethod')} name="depreciation_method" initialValue="straight_line">
             <Select>
-              <Option value="straight_line">直线法</Option>
-              <Option value="double_declining">双倍余额递减法</Option>
-              <Option value="sum_of_years">年数总和法</Option>
+              <Option value="straight_line">{t('assetCategories.depreciationMethods.straight_line')}</Option>
+              <Option value="double_declining">{t('assetCategories.depreciationMethods.double_declining')}</Option>
+              <Option value="sum_of_years">{t('assetCategories.depreciationMethods.sum_of_years')}</Option>
             </Select>
           </Form.Item>
-          <Form.Item label="使用年限(月)" name="useful_life_months" initialValue={60}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入使用年限" />
+          <Form.Item label={t('assetCategories.usefulLifeMonths')} name="useful_life_months" initialValue={60}>
+            <InputNumber style={{ width: '100%' }} placeholder={t('assetCategories.usefulLifeMonthsPlaceholder')} />
           </Form.Item>
-          <Form.Item label="残值率(%)" name="residual_rate" initialValue={5}>
-            <InputNumber style={{ width: '100%' }} placeholder="请输入残值率" />
+          <Form.Item label={t('assetCategories.residualRate')} name="residual_rate" initialValue={5}>
+            <InputNumber style={{ width: '100%' }} placeholder={t('assetCategories.residualRatePlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>

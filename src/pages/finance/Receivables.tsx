@@ -6,6 +6,7 @@ import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import SupaModal from '../../components/SupaModal';
+import { useTranslation } from 'react-i18next';
 
 type Receivable = Tables['erp_receivables_s_539dcf81_b']['Row'];
 type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
@@ -14,6 +15,7 @@ const { Option } = Select;
 const tableName = 'erp_receivables_s_539dcf81_b';
 
 export function Receivables() {
+  const { t } = useTranslation();
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export function Receivables() {
       setReceivables(data || []);
     } catch (error) {
       console.error('Error fetching receivables:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -63,16 +65,16 @@ export function Receivables() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingReceivable) {
-        await logWithTiming('更新应收账款', 'UPDATE', async () => {
+        await logWithTiming(t('receivables.log.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
             .from('erp_receivables_s_539dcf81_b')
             .update(values)
             .eq('id', editingReceivable.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
-        await logWithTiming('新增应收账款', 'INSERT', async () => {
+        await logWithTiming(t('receivables.log.createAction'), 'INSERT', async () => {
           const { error } = await supabase
             .from('erp_receivables_s_539dcf81_b')
             .insert([{
@@ -81,7 +83,7 @@ export function Receivables() {
             }]);
           if (error) throw error;
         });
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -89,7 +91,7 @@ export function Receivables() {
       fetchReceivables();
     } catch (error) {
       console.error('Error saving receivable:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -105,22 +107,22 @@ export function Receivables() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该记录吗？',
+      title: t('common.confirmDelete'),
+      content: t('receivables.confirm.deleteContent'),
       onOk: async () => {
         try {
-          await logWithTiming('删除应收账款', 'DELETE', async () => {
+          await logWithTiming(t('receivables.log.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
               .from('erp_receivables_s_539dcf81_b')
               .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchReceivables();
         } catch (error) {
           console.error('Error deleting receivable:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -151,67 +153,67 @@ export function Receivables() {
       getCustomerName(r.customer_id).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const statusLabels: Record<string, { text: string; color: string }> = {
-    open: { text: '未结清', color: 'warning' },
-    partially_paid: { text: '部分收款', color: 'processing' },
-    closed: { text: '已结清', color: 'success' },
-    overdue: { text: '逾期', color: 'error' },
+  const statusLabels: Record<string, { textKey: string; color: string }> = {
+    open: { textKey: 'receivables.statusOptions.open', color: 'warning' },
+    partially_paid: { textKey: 'receivables.statusOptions.partially_paid', color: 'processing' },
+    closed: { textKey: 'receivables.statusOptions.closed', color: 'success' },
+    overdue: { textKey: 'receivables.statusOptions.overdue', color: 'error' },
   };
 
   const columns = [
     {
-      title: '单据号',
+      title: t('receivables.docNo'),
       dataIndex: 'doc_no',
       key: 'doc_no',
     },
     {
-      title: '客户',
+      title: t('receivables.customer'),
       dataIndex: 'customer_id',
       key: 'customer_id',
       render: (customerId: number) => getCustomerName(customerId),
     },
     {
-      title: '单据日期',
+      title: t('receivables.docDate'),
       dataIndex: 'doc_date',
       key: 'doc_date',
     },
     {
-      title: '到期日',
+      title: t('receivables.dueDate'),
       dataIndex: 'due_date',
       key: 'due_date',
       render: (text: string) => text || '-',
     },
     {
-      title: '金额',
+      title: t('receivables.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
-      title: '余额',
+      title: t('receivables.balance'),
       dataIndex: 'balance',
       key: 'balance',
       render: (balance: number) => `¥${(balance ?? 0).toLocaleString()}`,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
-        const config = statusLabels[status] || { text: status, color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        const config = statusLabels[status] || { textKey: status, color: 'default' };
+        return <Tag color={config.color}>{t(config.textKey)}</Tag>;
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: Receivable) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -219,15 +221,15 @@ export function Receivables() {
   ];
 
   return (
-    <Card variant="borderless" title="应收账款管理" extra={
+    <Card variant="borderless" title={t('receivables.title')} extra={
       <Space>
         <Input
-          placeholder="搜索单据号或客户..."
+          placeholder={t('receivables.searchPlaceholder')}
           prefix={<SearchOutlined />}
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
         />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增应收</Button>
+        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('receivables.addReceivable')}</Button>
       </Space>
     }>
       <Table
@@ -239,9 +241,9 @@ export function Receivables() {
       />
 
       <SupaModal
-        title={editingReceivable ? '编辑应收账款' : '新增应收账款'}
+        title={editingReceivable ? t('receivables.editReceivable') : t('receivables.addReceivable')}
         open={isModalOpen}
-        width={600}
+        width={800}
         height={440}
         onCancel={() => {
           setIsModalOpen(false);
@@ -249,9 +251,9 @@ export function Receivables() {
           setEditingReceivable(null);
         }}
         footer={<Space>
-          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+          <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
           <Button type="primary" onClick={() => form.submit()}>
-            保存
+            {t('common.save')}
           </Button>
         </Space>}
         historyTable={tableName}
@@ -261,54 +263,54 @@ export function Receivables() {
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  label="客户"
+                  label={t('receivables.customer')}
                   name="customer_id"
-                  rules={[{ required: true, message: '请选择客户' }]}
+                  rules={[{ required: true, message: t('receivables.customerRequired') }]}
                 >
-                  <Select placeholder="请选择客户">
+                  <Select placeholder={t('receivables.customerPlaceholder')}>
                     {customers.map((c) => (
                       <Option key={c.id} value={c.id}>{c.name}</Option>
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label="单据类型" name="doc_type" initialValue="invoice">
+                <Form.Item label={t('receivables.docType')} name="doc_type" initialValue="invoice">
                   <Select>
-                    <Option value="invoice">发票</Option>
-                    <Option value="order">订单</Option>
-                    <Option value="other">其他</Option>
+                    <Option value="invoice">{t('receivables.typeOptions.invoice')}</Option>
+                    <Option value="order">{t('receivables.typeOptions.order')}</Option>
+                    <Option value="other">{t('receivables.typeOptions.other')}</Option>
                   </Select>
                 </Form.Item>
                 <Form.Item
-                  label="单据号"
+                  label={t('receivables.docNo')}
                   name="doc_no"
-                  rules={[{ required: true, message: '请输入单据号' }]}
+                  rules={[{ required: true, message: t('receivables.docNoRequired') }]}
                 >
-                  <Input placeholder="请输入单据号" disabled={!!editingReceivable} />
+                  <Input placeholder={t('receivables.docNoPlaceholder')} disabled={!!editingReceivable} />
                 </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item
-                  label="单据日期"
+                  label={t('receivables.docDate')}
                   name="doc_date"
-                  rules={[{ required: true, message: '请选择单据日期' }]}
+                  rules={[{ required: true, message: t('receivables.docDateRequired') }]}
                 >
                   <DatePicker style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item label="到期日" name="due_date">
+                <Form.Item label={t('receivables.dueDate')} name="due_date">
                   <DatePicker style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item
-                  label="金额"
+                  label={t('receivables.amount')}
                   name="amount"
-                  rules={[{ required: true, message: '请输入金额' }]}
+                  rules={[{ required: true, message: t('receivables.amountRequired') }]}
                   initialValue={0}
                 >
-                  <InputNumber style={{ width: '100%' }} placeholder="请输入金额" />
+                  <InputNumber style={{ width: '100%' }} placeholder={t('receivables.amountPlaceholder')} />
                 </Form.Item>
               </Col>
             </Row>
-            <Form.Item label="备注" name="remark">
-              <Input.TextArea rows={3} placeholder="请输入备注" />
+            <Form.Item label={t('receivables.remark')} name="remark">
+              <Input.TextArea rows={3} placeholder={t('receivables.remarkPlaceholder')} />
             </Form.Item>
           </Form>
         </Card>
