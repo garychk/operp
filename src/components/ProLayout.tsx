@@ -222,7 +222,7 @@ const themeHeaderBackground = (themeColor: ThemeColorKey, dark: boolean) => {
   return `linear-gradient(115deg, rgba(${selected.rgb}, ${primaryOpacity}) 0%, rgba(${secondaryRgb}, ${secondaryOpacity}) 55%, rgba(${selected.rgb}, ${primaryOpacity * 0.65}) 100%)`;
 };
 
-const menuData: MenuRoute[] = [
+export const menuData: MenuRoute[] = [
   {
     path: "/",
     name: "首页",
@@ -872,5 +872,6 @@ export function ProLayout() {
     </ConfigProvider>
   );
 }
+
 
 

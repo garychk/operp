@@ -234,7 +234,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
 
     saveTimerRef.current = window.setTimeout(() => {
       saveAISettings(normalizeAISettings(aiSettings)).catch(() => {
-        message.error("保存AI设置失败");
+        console.log("保存AI设置失败");
       });
     }, 600);
 

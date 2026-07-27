@@ -5,6 +5,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import { menuData } from '../../components/ProLayout';
 
 interface Menu {
   id: number;
@@ -27,6 +28,10 @@ const iconOptions = [
   'SettingOutlined', 'BuildOutlined', 'ProfileOutlined', 'CalendarOutlined',
   'ContainerOutlined', 'FileTextOutlined', 'MenuOutlined', 'SafetyOutlined',
 ];
+
+const excludedStaticMenuPaths = new Set(['/', '/system']);
+
+const getIconName = (icon: any) => icon?.type?.displayName || icon?.type?.name || 'MenuOutlined';
 
 export function Menus() {
   const [menus, setMenus] = useState<Menu[]>([]);
@@ -84,6 +89,69 @@ export function Menus() {
       fetchMenus();
     } catch (error) {
       message.error('删除失败');
+    }
+  };
+
+  const handleImportStaticMenus = async () => {
+    try {
+      const { data: existingMenus, error: existingError } = await supabase
+        .from('sys_menus')
+        .select('id, path')
+        .eq('is_deleted', 'n');
+
+      if (existingError) throw existingError;
+
+      const existingPaths = new Map();
+      (existingMenus || []).forEach((item) => {
+        if (item.path) existingPaths.set(item.path, item.id);
+      });
+
+      let insertedCount = 0;
+
+      const importRoute = async (route: any, parentId: number) => {
+        if (excludedStaticMenuPaths.has(route.path)) return;
+        const children = route.routes || [];
+        const payload = {
+          parent_id: parentId,
+          menu_name: route.name,
+          menu_code: route.path.replace(/^\//, '').replace(/\//g, '_') || 'home',
+          menu_type: children.length > 0 ? 'M' : 'C',
+          icon: getIconName(route.icon),
+          path: route.path,
+          component: children.length > 0 ? '' : '.' + route.path,
+          sort_order: 0,
+          status: '1',
+        };
+
+        let currentId = parentId;
+        const existingId = existingPaths.get(route.path);
+        if (existingId) {
+          currentId = existingId;
+        } else {
+          const { data, error } = await supabase
+            .from('sys_menus')
+            .insert([payload])
+            .select('id')
+            .single();
+          if (error) throw error;
+          currentId = data.id;
+          existingPaths.set(route.path, currentId);
+          insertedCount += 1;
+        }
+
+        for (const child of children) {
+          await importRoute(child, currentId);
+        }
+      };
+
+      for (const route of menuData) {
+        await importRoute(route, 0);
+      }
+
+      message.success(insertedCount > 0 ? '导入完成，新增 ' + insertedCount + ' 条菜单' : '没有需要导入的菜单');
+      fetchMenus();
+    } catch (error) {
+      message.error('导入静态菜单失败');
     }
   };
 
@@ -243,7 +311,7 @@ export function Menus() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title="菜单管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增菜单</Button>}>
+    <Card className='mainContent' variant="borderless" title="菜单管理" extra={<Space><Button onClick={handleImportStaticMenus}>导入静态菜单</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增菜单</Button></Space>}>
       <Table
         columns={columns}
         dataSource={menuTree}
@@ -253,7 +321,8 @@ export function Menus() {
           expandedRowKeys,
           onExpandedRowsChange: keys => setExpandedRowKeys([...keys]),
         }}
-        scroll={{ x: 1200 }}
+        scroll={{ x: 1200, y: 600 }}
+        pagination={false}
       />
       <Modal
         title={editingMenu ? '编辑菜单' : '新增菜单'}
@@ -319,3 +388,5 @@ export function Menus() {
     </Card>
   );
 }
+
+

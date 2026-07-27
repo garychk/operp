@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Tag, TreeSelect, Card, Tabs, Checkbox, Empty, Switch } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Tag, Tree, Card, Tabs, Checkbox, Empty, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SafetyOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
@@ -18,6 +18,7 @@ interface Role {
 interface Menu {
   id: number;
   menu_name: string;
+  menu_code: string;
   parent_id: number;
 }
 
@@ -254,7 +255,7 @@ export function Roles() {
   const buildMenuTree = (menus: Menu[]): any[] => {
     const menuMap = new Map<number, any>();
     menus.forEach(menu => {
-      menuMap.set(menu.id, { ...menu, key: menu.id, value: menu.id, title: menu.menu_name, children: [] });
+      menuMap.set(menu.id, { ...menu, key: menu.id, value: menu.id, title: menu.menu_name +' - '+ menu.menu_code, children: [] });
     });
     const tree: any[] = [];
     menus.forEach(menu => {
@@ -495,14 +496,18 @@ export function Roles() {
               key: 'menus',
               label: '菜单权限',
               children: (
-                <TreeSelect
+                <Tree
                   treeData={buildMenuTree(menus)}
-                  value={selectedMenus}
-                  onChange={setSelectedMenus}
-                  treeCheckable
-                  treeDefaultExpandAll
+                  checkedKeys={selectedMenus}
+                  onCheck={(checkedKeys) => {
+                    if (Array.isArray(checkedKeys)) {
+                      setSelectedMenus(checkedKeys as number[]);
+                    }
+                  }}
+                  checkable
+                  defaultExpandAll
                   style={{ width: '100%' }}
-                  placeholder="请选择菜单权限"
+                  height={480}
                 />
               ),
             },
@@ -513,12 +518,12 @@ export function Roles() {
                 <Space direction="vertical" size={12} style={{ width: '100%' }}>
                   <Space wrap>
                     <Input.Search
-                    allowClear
-                    placeholder="根据表名、别名搜索"
-                    value={tablePermissionSearch}
-                    onChange={(event) => setTablePermissionSearch(event.target.value)}
-                    style={{ width: 280 }}
-                  />
+                      allowClear
+                      placeholder="根据表名、别名搜索"
+                      value={tablePermissionSearch}
+                      onChange={(event) => setTablePermissionSearch(event.target.value)}
+                      style={{ width: 280 }}
+                    />
                     <Space>
                       <Switch checked={isVisibleTablePermissionChecked('can_select')} onChange={(checked) => updateVisibleTablePermissions('can_select', checked)} />
                       <span>全部查询</span>
@@ -561,6 +566,8 @@ export function Roles() {
     </Card>
   );
 }
+
+
 
 
 
