@@ -201,7 +201,7 @@ export function WorkflowConfig() {
         title={editing ? t('workflow.editProcess') : t('workflow.createProcess')}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        width={1100}
+        width="90%"
         destroyOnHidden
         extra={
           <Space>
@@ -211,45 +211,46 @@ export function WorkflowConfig() {
         }
       >
         <Row gutter={16}>
-          <Col span={12}>
-            <Form form={form} layout="vertical">
-          <Row gutter={16}>
-            <Col span={12}><Form.Item name="process_code" label={t('workflow.processCode')} rules={[{ required: true }]}><Input placeholder="purchase_order_default" disabled={!!editing} /></Form.Item></Col>
-            <Col span={12}><Form.Item name="process_name" label={t('workflow.processName')} rules={[{ required: true }]}><Input placeholder={t('workflow.processName')} /></Form.Item></Col>
-            <Col span={12}><Form.Item name="document_type" label={t('workflow.documentType')} rules={[{ required: true }]}><Select options={[{ label: t('workflow.documentTypes.purchaseOrder'), value: 'purchase_order' }, { label: t('workflow.documentTypes.salesOrder'), value: 'sales_order' }, { label: t('workflow.documentTypes.purchaseReceipt'), value: 'purchase_receipt' }, { label: t('workflow.documentTypes.salesDelivery'), value: 'sales_delivery' }, { label: t('workflow.documentTypes.voucher'), value: 'voucher' }]} /></Form.Item></Col>
-            <Col span={12}><Form.Item name="version" label={t('workflow.version')} rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
-            <Col span={12}><Form.Item name="is_active" label={t('workflow.active')} valuePropName="checked"><Switch /></Form.Item></Col>
-            <Col span={24}><Form.Item name="description" label={t('workflow.description')}><Input.TextArea rows={2} /></Form.Item></Col>
-          </Row>
-        </Form>
-          </Col>
-          <Col span={12}>
+          <Col span={8}>
             <Card size="small" title={t('workflow.flow.preview')} style={{ marginBottom: 16 }}>
               <WorkflowDiagram nodes={nodes} />
             </Card>
+          </Col>
+          <Col span={16}>
+            <Form form={form} layout="vertical">
+              <Row gutter={16}>
+                <Col span={8}><Form.Item name="process_code" label={t('workflow.processCode')} rules={[{ required: true }]}><Input placeholder="purchase_order_default" disabled={!!editing} /></Form.Item></Col>
+                <Col span={8}><Form.Item name="process_name" label={t('workflow.processName')} rules={[{ required: true }]}><Input placeholder={t('workflow.processName')} /></Form.Item></Col>
+                <Col span={8}><Form.Item name="document_type" label={t('workflow.documentType')} rules={[{ required: true }]}><Select options={[{ label: t('workflow.documentTypes.purchaseOrder'), value: 'purchase_order' }, { label: t('workflow.documentTypes.salesOrder'), value: 'sales_order' }, { label: t('workflow.documentTypes.purchaseReceipt'), value: 'purchase_receipt' }, { label: t('workflow.documentTypes.salesDelivery'), value: 'sales_delivery' }, { label: t('workflow.documentTypes.voucher'), value: 'voucher' }]} /></Form.Item></Col>
+                <Col span={8}><Form.Item name="version" label={t('workflow.version')} rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
+                <Col span={8}><Form.Item name="is_active" label={t('workflow.active')} valuePropName="checked"><Switch /></Form.Item></Col>
+                <Col span={8}><Form.Item name="description" label={t('workflow.description')}><Input  /></Form.Item></Col>
+              </Row>
+            </Form>
+              <Table
+                rowKey={(record, index) => `${record.node_key}-${index}`}
+                pagination={false}
+                dataSource={nodes}
+                columns={[
+                  { title: t('workflow.sequenceNo') || t('workflow.version'), dataIndex: 'sequence_no', width: 90, render: (value, _, index) => <InputNumber min={1} value={value} onChange={(next) => updateNode(index, { sequence_no: Number(next || 1) })} /> },
+                  { title: t('workflow.nodeKey'), dataIndex: 'node_key', width: 180, render: (value, _, index) => <Input value={value} onChange={(e) => updateNode(index, { node_key: e.target.value })} /> },
+                  { title: t('workflow.nodeName'), dataIndex: 'node_name', width: 180, render: (value, _, index) => <Input value={value} onChange={(e) => updateNode(index, { node_name: e.target.value })} /> },
+                  { title: t('workflow.approverRole'), dataIndex: 'approver_role_code', width: 240, render: (value, _, index) => <Select value={value || undefined} options={roles} onChange={(next) => updateNode(index, { approver_role_code: next || null })} style={{ width: '100%' }} /> },
+                  { title: t('workflow.allowReject'), dataIndex: 'allow_reject', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { allow_reject: next })} /> },
+                  { title: t('workflow.allowWithdraw'), dataIndex: 'allow_withdraw', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { allow_withdraw: next })} /> },
+                  { title: t('workflow.startNode'), dataIndex: 'is_start_node', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { is_start_node: next })} /> },
+                  { title: t('workflow.endNode'), dataIndex: 'is_end_node', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { is_end_node: next })} /> },
+                  { title: t('workflow.action'), key: 'action', width: 80, render: (_: unknown, __: WorkflowNode, index: number) => <Button danger type="text" icon={<DeleteOutlined />} onClick={() => setNodes((prev) => prev.filter((_, i) => i !== index))} /> },
+                ]}
+              />
+              <Button block type="dashed" icon={<PlusOutlined />} onClick={addNode}>{t('workflow.addNode')}</Button>
           </Col>
         </Row>
         
 
         
 
-        <Space style={{ marginBottom: 12 }}><Button icon={<PlusOutlined />} onClick={addNode}>{t('workflow.addNode')}</Button></Space>
-        <Table
-          rowKey={(record, index) => `${record.node_key}-${index}`}
-          pagination={false}
-          dataSource={nodes}
-          columns={[
-            { title: t('workflow.sequenceNo') || t('workflow.version'), dataIndex: 'sequence_no', width: 90, render: (value, _, index) => <InputNumber min={1} value={value} onChange={(next) => updateNode(index, { sequence_no: Number(next || 1) })} /> },
-            { title: t('workflow.nodeKey'), dataIndex: 'node_key', width: 180, render: (value, _, index) => <Input value={value} onChange={(e) => updateNode(index, { node_key: e.target.value })} /> },
-            { title: t('workflow.nodeName'), dataIndex: 'node_name', width: 180, render: (value, _, index) => <Input value={value} onChange={(e) => updateNode(index, { node_name: e.target.value })} /> },
-            { title: t('workflow.approverRole'), dataIndex: 'approver_role_code', width: 240, render: (value, _, index) => <Select value={value || undefined} options={roles} onChange={(next) => updateNode(index, { approver_role_code: next || null })} style={{ width: '100%' }} /> },
-            { title: t('workflow.allowReject'), dataIndex: 'allow_reject', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { allow_reject: next })} /> },
-            { title: t('workflow.allowWithdraw'), dataIndex: 'allow_withdraw', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { allow_withdraw: next })} /> },
-            { title: t('workflow.startNode'), dataIndex: 'is_start_node', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { is_start_node: next })} /> },
-            { title: t('workflow.endNode'), dataIndex: 'is_end_node', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { is_end_node: next })} /> },
-            { title: t('workflow.action'), key: 'action', width: 80, render: (_: unknown, __: WorkflowNode, index: number) => <Button danger type="text" icon={<DeleteOutlined />} onClick={() => setNodes((prev) => prev.filter((_, i) => i !== index))} /> },
-          ]}
-        />
+        
       </Drawer>
     </Card>
   );
