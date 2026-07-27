@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Tag, TreeSelect, Card, Tabs, Checkbox, Empty } from 'antd';
+import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Tag, TreeSelect, Card, Tabs, Checkbox, Empty, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SafetyOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
@@ -49,6 +49,7 @@ export function Roles() {
   const [currentRoleId, setCurrentRoleId] = useState<number | null>(null);
   const [selectedMenus, setSelectedMenus] = useState<number[]>([]);
   const [tablePermissions, setTablePermissions] = useState<TablePermission[]>([]);
+  const [tablePermissionSearch, setTablePermissionSearch] = useState('');
   const [form] = Form.useForm();
 
   const fetchRoles = async () => {
@@ -166,6 +167,7 @@ export function Roles() {
 
   const handlePermission = async (record: Role) => {
     setCurrentRoleId(record.id);
+    setTablePermissionSearch('');
     await Promise.all([
       fetchRoleMenus(record.id),
       fetchRoleTablePermissions(record.id),
@@ -302,6 +304,26 @@ export function Roles() {
       ];
     });
   };
+
+  const filteredSysTables = sysTables.filter((table) => {
+    const keyword = tablePermissionSearch.trim().toLowerCase();
+    if (!keyword) return true;
+
+    return (
+      table.table_name.toLowerCase().includes(keyword) ||
+      table.table_label.toLowerCase().includes(keyword)
+    );
+  });
+
+  const updateVisibleTablePermissions = (action: PermissionAction, checked: boolean) => {
+    filteredSysTables.forEach((table) => {
+      updateTablePermission(table.id, action, checked);
+    });
+  };
+
+  const isVisibleTablePermissionChecked = (action: PermissionAction) => (
+    filteredSysTables.length > 0 && filteredSysTables.every((table) => getTablePermission(table.id)[action])
+  );
 
   const tablePermissionColumns: ColumnsType<SysTable> = [
     {
@@ -488,21 +510,49 @@ export function Roles() {
               key: 'tables',
               label: '表权限',
               children: (
-                <Table
-                  columns={tablePermissionColumns}
-                  dataSource={sysTables}
-                  rowKey="id"
-                  pagination={{ pageSize: 8 }}
-                  size="small"
-                  scroll={{ y: 360 }}
-                  locale={{
-                    emptyText: (
-                      <Empty
-                        description="暂无可配置表，请先执行 007_create_role_table_permissions.sql 初始化 sys_tables"
-                      />
-                    ),
-                  }}
-                />
+                <Space direction="vertical" size={12} style={{ width: '100%' }}>
+                  <Space wrap>
+                    <Input.Search
+                    allowClear
+                    placeholder="根据表名、别名搜索"
+                    value={tablePermissionSearch}
+                    onChange={(event) => setTablePermissionSearch(event.target.value)}
+                    style={{ width: 280 }}
+                  />
+                    <Space>
+                      <Switch checked={isVisibleTablePermissionChecked('can_select')} onChange={(checked) => updateVisibleTablePermissions('can_select', checked)} />
+                      <span>全部查询</span>
+                    </Space>
+                    <Space>
+                      <Switch checked={isVisibleTablePermissionChecked('can_insert')} onChange={(checked) => updateVisibleTablePermissions('can_insert', checked)} />
+                      <span>全部新增</span>
+                    </Space>
+                    <Space>
+                      <Switch checked={isVisibleTablePermissionChecked('can_update')} onChange={(checked) => updateVisibleTablePermissions('can_update', checked)} />
+                      <span>全部修改</span>
+                    </Space>
+                    <Space>
+                      <Switch checked={isVisibleTablePermissionChecked('can_delete')} onChange={(checked) => updateVisibleTablePermissions('can_delete', checked)} />
+                      <span>全部删除</span>
+                    </Space>
+                  </Space>
+                  
+                  <Table
+                    columns={tablePermissionColumns}
+                    dataSource={filteredSysTables}
+                    rowKey="id"
+                    pagination={false}
+                    size="small"
+                    scroll={{ y: 360 }}
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          description="暂无可配置表，请先执行 007_create_role_table_permissions.sql 初始化 sys_tables"
+                        />
+                      ),
+                    }}
+                  />
+                </Space>
               ),
             },
           ]}
@@ -511,3 +561,6 @@ export function Roles() {
     </Card>
   );
 }
+
+
+
