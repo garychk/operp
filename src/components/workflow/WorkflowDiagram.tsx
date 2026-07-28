@@ -1,11 +1,12 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
+import { Empty } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { Card, Empty } from 'antd';
 import { Graph } from '@antv/x6';
 
-type WorkflowDiagramNode = {
+export type WorkflowNodeItem = {
   node_key: string;
   node_name: string;
+  node_type: 'start' | 'condition' | 'approval' | 'end';
   sequence_no: number;
   approver_mode: string;
   approver_role_code: string | null;
@@ -13,90 +14,67 @@ type WorkflowDiagramNode = {
   allow_withdraw: boolean;
   is_start_node: boolean;
   is_end_node: boolean;
+  rule_json: Record<string, unknown>;
 };
 
 type WorkflowDiagramProps = {
-  nodes: WorkflowDiagramNode[];
+  nodes: WorkflowNodeItem[];
+  selectedKey?: string;
+  onSelectNode?: (key: string) => void;
 };
 
-const NODE_WIDTH = 240;
-const NODE_HEIGHT = 72;
-const NODE_GAP = 54;
+type DiagramNode = {
+  key: string;
+  kind: WorkflowNodeItem['node_type'];
+  x: number;
+  y: number;
+  title: string;
+  subtitle: string;
+  tag: string;
+};
+
+type DiagramEdge = {
+  source: string;
+  sourcePort: string;
+  target: string;
+  targetPort: string;
+  kind: 'default' | 'true' | 'false';
+  label: string;
+};
+
+const NODE_WIDTH = 252;
+const NODE_HEIGHT = 84;
+const COLUMN_GAP = 220;
+const ROW_GAP = 92;
 let shapeRegistered = false;
 
 const ensureShapeRegistered = () => {
   if (shapeRegistered) return;
 
   Graph.registerNode(
-    'workflow-dag-node',
+    'workflow-branch-node',
     {
       inherit: 'rect',
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
       markup: [
         { tagName: 'rect', selector: 'body' },
-        { tagName: 'text', selector: 'label' },
-        { tagName: 'text', selector: 'subLabel' },
-        { tagName: 'circle', selector: 'statusDot' },
+        { tagName: 'text', selector: 'title' },
+        { tagName: 'text', selector: 'subtitle' },
+        { tagName: 'text', selector: 'tag' },
       ],
       attrs: {
-        body: {
-          rx: 10,
-          ry: 10,
-          strokeWidth: 2,
-          fill: '#fff',
-        },
-        label: {
-          refX: 18,
-          refY: 22,
-          fontSize: 14,
-          fontWeight: 600,
-          fill: '#1f1f1f',
-          textAnchor: 'start',
-          textVerticalAnchor: 'middle',
-        },
-        subLabel: {
-          refX: 18,
-          refY: 48,
-          fontSize: 12,
-          fill: '#666',
-          textAnchor: 'start',
-          textVerticalAnchor: 'middle',
-        },
-        statusDot: {
-          refX: NODE_WIDTH - 20,
-          refY: 22,
-          r: 5,
-          fill: '#d9d9d9',
-          stroke: 'none',
-        },
+        body: { rx: 12, ry: 12, strokeWidth: 2, fill: '#fff' },
+        title: { refX: 16, refY: 24, fontSize: 14, fontWeight: 600, fill: '#1f1f1f', textAnchor: 'start', textVerticalAnchor: 'middle' },
+        subtitle: { refX: 16, refY: 50, fontSize: 12, fill: '#667085', textAnchor: 'start', textVerticalAnchor: 'middle' },
+        tag: { refX: NODE_WIDTH - 14, refY: 18, fontSize: 11, fill: '#5b6b7d', textAnchor: 'end', textVerticalAnchor: 'middle' },
       },
       ports: {
         groups: {
-          top: {
-            position: 'top',
-            attrs: {
-              circle: {
-                r: 5,
-                magnet: true,
-                stroke: '#91a4b7',
-                strokeWidth: 1,
-                fill: '#fff',
-              },
-            },
-          },
-          bottom: {
-            position: 'bottom',
-            attrs: {
-              circle: {
-                r: 5,
-                magnet: true,
-                stroke: '#91a4b7',
-                strokeWidth: 1,
-                fill: '#fff',
-              },
-            },
-          },
+          top: { position: 'top', attrs: { circle: { r: 5, magnet: true, stroke: '#91a4b7', strokeWidth: 1, fill: '#fff' } } },
+          bottom: { position: 'bottom', attrs: { circle: { r: 5, magnet: true, stroke: '#91a4b7', strokeWidth: 1, fill: '#fff' } } },
+          left: { position: 'left', attrs: { circle: { r: 5, magnet: true, stroke: '#91a4b7', strokeWidth: 1, fill: '#fff' } } },
+          right: { position: 'right', attrs: { circle: { r: 5, magnet: true, stroke: '#91a4b7', strokeWidth: 1, fill: '#fff' } } },
         },
       },
     },
@@ -104,20 +82,11 @@ const ensureShapeRegistered = () => {
   );
 
   Graph.registerEdge(
-    'workflow-dag-edge',
+    'workflow-branch-edge',
     {
       inherit: 'edge',
-      attrs: {
-        line: {
-          stroke: '#91a4b7',
-          strokeWidth: 2,
-          targetMarker: {
-            name: 'block',
-            width: 10,
-            height: 10,
-          },
-        },
-      },
+      attrs: { line: { stroke: '#91a4b7', strokeWidth: 2, targetMarker: { name: 'block', width: 10, height: 10 } } },
+      router: { name: 'manhattan' },
     },
     true,
   );
@@ -125,106 +94,123 @@ const ensureShapeRegistered = () => {
   shapeRegistered = true;
 };
 
-export function WorkflowDiagram({ nodes }: WorkflowDiagramProps) {
+export function WorkflowDiagram({ nodes, selectedKey, onSelectNode }: WorkflowDiagramProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
+
+  const model = useMemo(() => buildGraphModel(nodes), [nodes]);
 
   useEffect(() => {
     if (!containerRef.current) return;
     ensureShapeRegistered();
 
     const container = containerRef.current;
-    const orderedNodes = [...nodes].sort((a, b) => Number(a.sequence_no) - Number(b.sequence_no));
-
     graphRef.current?.dispose();
     graphRef.current = null;
 
-    if (!orderedNodes.length) return;
-
-    const width = container.clientWidth || 900;
-    const height = Math.max(260, orderedNodes.length * (NODE_HEIGHT + NODE_GAP) + 40);
-    const startX = Math.max(24, Math.floor((width - NODE_WIDTH) / 2));
+    if (!model.nodes.length) return;
 
     const graph = new Graph({
       container,
-      width,
-      height,
-      grid: {
-        size: 10,
-        visible: true,
-        type: 'mesh',
-        args: { color: '#eef2f6', thickness: 1 },
-      },
+      width: container.clientWidth || 900,
+      height: Math.max(320, model.height),
+      grid: { size: 10, visible: true, type: 'mesh', args: { color: '#eef2f6', thickness: 1 } },
       background: { color: '#fafafa' },
-      interacting: {
-        nodeMovable: true,
-        edgeMovable: false,
-        vertexMovable: false,
-      },
+      interacting: { nodeMovable: true, edgeMovable: false, vertexMovable: false },
       panning: { enabled: true, eventTypes: ['rightMouseDown', 'mouseWheel'] },
       mousewheel: { enabled: true, modifiers: 'ctrl', factor: 1.1, minScale: 0.5, maxScale: 1.5 },
     });
 
     graphRef.current = graph;
 
-    orderedNodes.forEach((node, index) => {
-      const status = node.is_start_node ? 'running' : node.is_end_node ? 'success' : 'default';
-      const displayLabel = node.is_start_node
-        ? t('workflow.flow.startPrefix') + node.node_name
-        : node.is_end_node
-          ? t('workflow.flow.endPrefix') + node.node_name
-          : node.node_name;
-      const subLabel = node.approver_role_code ? t('workflow.flow.rolePrefix') + node.approver_role_code : t('workflow.flow.roleUnassigned');
-      const y = 30 + index * (NODE_HEIGHT + NODE_GAP);
-
+    model.nodes.forEach((node) => {
       graph.addNode({
-        id: node.node_key,
-        shape: 'workflow-dag-node',
-        x: startX,
-        y,
+        id: node.key,
+        shape: 'workflow-branch-node',
+        x: node.x,
+        y: node.y,
+        ports: [
+          { id: `${node.key}-top`, group: 'top' },
+          { id: `${node.key}-bottom`, group: 'bottom' },
+          { id: `${node.key}-left`, group: 'left' },
+          { id: `${node.key}-right`, group: 'right' },
+        ],
         attrs: {
           body: {
-            stroke: status === 'running' ? '#1677ff' : status === 'success' ? '#52c41a' : '#d9d9d9',
+            stroke: node.key === selectedKey ? '#1677ff' : node.kind === 'condition' ? '#fa8c16' : node.kind === 'start' ? '#52c41a' : node.kind === 'end' ? '#722ed1' : '#d9d9d9',
+            fill: node.kind === 'condition' ? '#fff7e6' : '#fff',
           },
-          label: {
-            text: displayLabel,
-          },
-          subLabel: {
-            text: subLabel,
-          },
-          statusDot: {
-            fill: status === 'running' ? '#1677ff' : status === 'success' ? '#52c41a' : '#d9d9d9',
-          },
+          title: { text: node.title },
+          subtitle: { text: node.subtitle },
+          tag: { text: node.tag },
         },
-        ports: [
-          { id: `${node.node_key}-top`, group: 'top' },
-          { id: `${node.node_key}-bottom`, group: 'bottom' },
-        ],
       });
+    });
 
-      if (index > 0) {
-        const prev = orderedNodes[index - 1];
-        graph.addEdge({
-          shape: 'workflow-dag-edge',
-          source: { cell: prev.node_key, port: `${prev.node_key}-bottom` },
-          target: { cell: node.node_key, port: `${node.node_key}-top` },
-        });
-      }
+    model.edges.forEach((edge: DiagramEdge) => {
+      graph.addEdge({
+        shape: 'workflow-branch-edge',
+        source: { cell: edge.source, port: edge.sourcePort },
+        target: { cell: edge.target, port: edge.targetPort },
+        attrs: { line: { stroke: edge.kind === 'default' ? '#91a4b7' : edge.kind === 'true' ? '#1677ff' : '#f59e0b', strokeDasharray: edge.kind === 'default' ? '0' : '6 4' } },
+        labels: edge.label ? [{ attrs: { text: { text: edge.label, fill: '#475467', fontSize: 11, fontWeight: 500 }, rect: { fill: '#fff', stroke: 'none' } } }] : [],
+      });
     });
 
     graph.centerContent();
+    graph.on('node:click', ({ node }) => onSelectNode?.(String(node.id)));
 
     return () => {
       graph.dispose();
       graphRef.current = null;
     };
-  }, [nodes]);
+  }, [model, onSelectNode, selectedKey]);
 
-  return (
-    <>
-      {nodes.length ? <div ref={containerRef} style={{ width: '100%', minHeight: 260 }} /> : <Empty description={t('workflow.flow.empty')} />}
-    </>
-  );
+  return nodes.length ? <div ref={containerRef} style={{ width: '100%', minHeight: 320 }} /> : <Empty description={t('workflow.flow.empty')} />;
 }
 
+function buildGraphModel(nodes: WorkflowNodeItem[]) {
+  const ordered = [...nodes].sort((a, b) => Number(a.sequence_no) - Number(b.sequence_no));
+  let maxRow = 0;
+  const graphNodes: DiagramNode[] = ordered.map((node, index) => {
+    const kind = node.node_type;
+    const column = kind === 'condition' ? 1 : kind === 'end' ? 2 : 0;
+    const row = kind === 'condition' ? 0 : index;
+    maxRow = Math.max(maxRow, row);
+    return {
+      key: node.node_key,
+      kind,
+      x: 40 + column * COLUMN_GAP,
+      y: 24 + row * ROW_GAP,
+      title: node.node_name,
+      subtitle: kind === 'condition'
+        ? String(node.rule_json?.expr || '条件分支')
+        : node.approver_role_code
+          ? `角色: ${node.approver_role_code}`
+          : node.is_start_node
+            ? '起始节点'
+            : node.is_end_node
+              ? '结束节点'
+              : '审批节点',
+      tag: node.node_type.toUpperCase(),
+    };
+  });
+
+  const edges: DiagramEdge[] = ordered.flatMap((node, index) => {
+    const next = ordered[index + 1];
+    if (node.node_type === 'condition') {
+      const rule = node.rule_json || {};
+      const trueTargetKey = String(rule.trueTargetKey || '');
+      const falseTargetKey = String(rule.falseTargetKey || '');
+      return [
+        trueTargetKey ? { source: node.node_key, sourcePort: `${node.node_key}-right`, target: trueTargetKey, targetPort: `${trueTargetKey}-left`, kind: 'true', label: '是' } : null,
+        falseTargetKey ? { source: node.node_key, sourcePort: `${node.node_key}-bottom`, target: falseTargetKey, targetPort: `${falseTargetKey}-left`, kind: 'false', label: '否' } : null,
+      ].filter((item): item is DiagramEdge => Boolean(item));
+    }
+    if (!next) return [];
+    return [{ source: node.node_key, sourcePort: `${node.node_key}-bottom`, target: next.node_key, targetPort: `${next.node_key}-top`, kind: 'default', label: '' }];
+  });
+
+  return { nodes: graphNodes, edges, height: 24 + (maxRow + 1) * ROW_GAP + 100 };
+}

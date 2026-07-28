@@ -1,12 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Button, Card, Col, Drawer, Form, Input, InputNumber, Popconfirm, Row, Select, Space, Table, Tag, Switch, message } from 'antd';
-import { PlusOutlined, EditOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useEffect, useMemo, useState } from 'react';
+import { Button, Card, Col, Drawer, Form, Input, InputNumber, Popconfirm, Row, Select, Space, Switch, Table, Tag, message } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Splitter } from 'antd';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
-import { WorkflowDiagram } from '../../components/workflow/WorkflowDiagram';
+import { WorkflowDiagram, WorkflowNodeItem } from '../../components/workflow/WorkflowDiagram';
 
-type WorkflowDefinition = {
+ type WorkflowDefinition = {
   id: number;
   process_code: string;
   process_name: string;
@@ -14,11 +15,16 @@ type WorkflowDefinition = {
   description: string | null;
   is_active: boolean | null;
   version: number | null;
-};
+ };
 
-type WorkflowNode = {
+type WorkflowNode = WorkflowNodeItem;
+
+type RoleOption = { label: string; value: string };
+
+type NodeFormValues = {
   node_key: string;
   node_name: string;
+  node_type: WorkflowNode['node_type'];
   sequence_no: number;
   approver_mode: string;
   approver_role_code: string | null;
@@ -26,9 +32,88 @@ type WorkflowNode = {
   allow_withdraw: boolean;
   is_start_node: boolean;
   is_end_node: boolean;
+  condition_expr: string;
+  condition_label: string;
+  true_target_key: string | null;
+  false_target_key: string | null;
+  is_default_path: boolean;
 };
 
-type RoleOption = { label: string; value: string };
+const DOCUMENT_TYPE_OPTIONS = [
+  { label: '采购订单', value: 'purchase_order' },
+  { label: '销售订单', value: 'sales_order' },
+  { label: '采购入库', value: 'purchase_receipt' },
+  { label: '销售出货', value: 'sales_delivery' },
+  { label: '凭证', value: 'voucher' },
+];
+
+const DEFAULT_NODES: WorkflowNode[] = [
+  {
+    node_key: 'start',
+    node_name: '提交审批',
+    node_type: 'start',
+    sequence_no: 1,
+    approver_mode: 'system',
+    approver_role_code: null,
+    allow_reject: false,
+    allow_withdraw: false,
+    is_start_node: true,
+    is_end_node: false,
+    rule_json: {},
+  },
+  {
+    node_key: 'amount_condition',
+    node_name: '金额判断',
+    node_type: 'condition',
+    sequence_no: 2,
+    approver_mode: 'system',
+    approver_role_code: null,
+    allow_reject: false,
+    allow_withdraw: false,
+    is_start_node: false,
+    is_end_node: false,
+    rule_json: { expr: 'amount >= 50000', trueTargetKey: 'finance_manager', falseTargetKey: 'dept_manager' },
+  },
+  {
+    node_key: 'dept_manager',
+    node_name: '部门审批',
+    node_type: 'approval',
+    sequence_no: 3,
+    approver_mode: 'role',
+    approver_role_code: 'inventory_manager',
+    allow_reject: true,
+    allow_withdraw: false,
+    is_start_node: false,
+    is_end_node: false,
+    rule_json: {},
+  },
+  {
+    node_key: 'finance_manager',
+    node_name: '财务复核',
+    node_type: 'approval',
+    sequence_no: 4,
+    approver_mode: 'role',
+    approver_role_code: 'finance_manager',
+    allow_reject: true,
+    allow_withdraw: false,
+    is_start_node: false,
+    is_end_node: false,
+    rule_json: {},
+  },
+  {
+    node_key: 'final',
+    node_name: '终审完成',
+    node_type: 'end',
+    sequence_no: 5,
+    approver_mode: 'system',
+    approver_role_code: null,
+    allow_reject: false,
+    allow_withdraw: false,
+    is_start_node: false,
+    is_end_node: true,
+    rule_json: {},
+  },
+];
 
 export function WorkflowConfig() {
   const { t } = useTranslation();
@@ -38,7 +123,9 @@ export function WorkflowConfig() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<WorkflowDefinition | null>(null);
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
+  const [selectedKey, setSelectedKey] = useState<string>('');
   const [form] = Form.useForm();
+  const [nodeForm] = Form.useForm<NodeFormValues>();
 
   const fetchDefinitions = async () => {
     setLoading(true);
@@ -77,21 +164,26 @@ export function WorkflowConfig() {
   const loadNodes = async (processId: number) => {
     const { data, error } = await supabase
       .from('wf_process_nodes')
-      .select('node_key, node_name, sequence_no, approver_mode, approver_role_code, allow_reject, allow_withdraw, is_start_node, is_end_node')
+      .select('node_key, node_name, node_type, sequence_no, approver_mode, approver_role_code, allow_reject, allow_withdraw, is_start_node, is_end_node, rule_json')
       .eq('is_deleted', 'n')
       .eq('process_id', processId)
       .order('sequence_no', { ascending: true });
     if (error) throw error;
-    setNodes((data || []) as WorkflowNode[]);
+    const loaded = ((data || []) as WorkflowNode[]).map((node) => ({
+      ...node,
+      rule_json: node.rule_json && typeof node.rule_json === 'object' ? node.rule_json : {},
+    }));
+    setNodes(loaded.length ? loaded : DEFAULT_NODES);
+    setSelectedKey(loaded[0]?.node_key || DEFAULT_NODES[0].node_key);
+    nodeForm.setFieldsValue(toNodeFormValues(loaded[0] || DEFAULT_NODES[0]));
   };
 
   const handleAdd = () => {
     setEditing(null);
     form.setFieldsValue({ process_code: '', process_name: '', document_type: 'purchase_order', description: '', is_active: true, version: 1 });
-    setNodes([
-      { node_key: 'start', node_name: '提交审批', sequence_no: 1, approver_mode: 'role', approver_role_code: 'inventory_manager', allow_reject: true, allow_withdraw: false, is_start_node: true, is_end_node: false },
-      { node_key: 'approve', node_name: '审核通过', sequence_no: 2, approver_mode: 'role', approver_role_code: 'inventory_manager', allow_reject: true, allow_withdraw: false, is_start_node: false, is_end_node: true },
-    ]);
+    setNodes(DEFAULT_NODES);
+    setSelectedKey(DEFAULT_NODES[0].node_key);
+    nodeForm.setFieldsValue(toNodeFormValues(DEFAULT_NODES[0]));
     setModalOpen(true);
   };
 
@@ -100,6 +192,19 @@ export function WorkflowConfig() {
     form.setFieldsValue(record);
     await loadNodes(record.id);
     setModalOpen(true);
+  };
+
+  const selectedNode = useMemo(() => nodes.find((node) => node.node_key === selectedKey) || nodes[0] || null, [nodes, selectedKey]);
+
+  useEffect(() => {
+    if (!selectedNode) return;
+    nodeForm.setFieldsValue(toNodeFormValues(selectedNode));
+  }, [selectedNode, nodeForm]);
+
+  const saveSelectedNode = async () => {
+    const values = await nodeForm.validateFields();
+    setNodes((prev) => prev.map((node) => node.node_key === selectedKey ? mergeNodeForm(node, values) : node));
+    message.success(t('workflow.nodeSaved'));
   };
 
   const handleSave = async () => {
@@ -129,7 +234,7 @@ export function WorkflowConfig() {
         process_id: processId,
         node_key: node.node_key,
         node_name: node.node_name,
-        node_type: 'approval',
+        node_type: node.node_type,
         sequence_no: Number(node.sequence_no),
         approver_mode: node.approver_mode || 'role',
         approver_role_code: node.approver_role_code || null,
@@ -137,7 +242,7 @@ export function WorkflowConfig() {
         allow_withdraw: node.allow_withdraw,
         is_start_node: node.is_start_node,
         is_end_node: node.is_end_node,
-        rule_json: {},
+        rule_json: node.rule_json || {},
         is_deleted: 'n',
       }));
       const { error } = await supabase.from('wf_process_nodes').insert(nodePayload);
@@ -175,18 +280,35 @@ export function WorkflowConfig() {
     await fetchDefinitions();
   };
 
+  const addNode = (nodeType: WorkflowNode['node_type'] = 'approval') => {
+    const nextSeq = nodes.length ? Math.max(...nodes.map((n) => Number(n.sequence_no) || 0)) + 1 : 1;
+    const node_key = `node_${Date.now()}`;
+    const nextNode: WorkflowNode = {
+      node_key,
+      node_name: nodeType === 'condition' ? t('workflow.conditionNode') : t('workflow.nodesTitle'),
+      node_type: nodeType,
+      sequence_no: nextSeq,
+      approver_mode: nodeType === 'condition' || nodeType === 'end' || nodeType === 'start' ? 'system' : 'role',
+      approver_role_code: null,
+      allow_reject: true,
+      allow_withdraw: false,
+      is_start_node: false,
+      is_end_node: false,
+      rule_json: nodeType === 'condition' ? { expr: '', trueTargetKey: '', falseTargetKey: '', isDefaultPath: false } : {},
+    };
+    setNodes((prev) => [...prev, nextNode]);
+    setSelectedKey(node_key);
+    nodeForm.setFieldsValue(toNodeFormValues(nextNode));
+  };
+
   const updateNode = (index: number, patch: Partial<WorkflowNode>) => {
     setNodes((prev) => prev.map((node, i) => (i === index ? { ...node, ...patch } : node)));
   };
 
-  const addNode = () => {
-    const nextSeq = nodes.length ? Math.max(...nodes.map((n) => Number(n.sequence_no) || 0)) + 1 : 1;
-    setNodes((prev) => [...prev, { node_key: `node_${Date.now()}`, node_name: t('workflow.nodesTitle'), sequence_no: nextSeq, approver_mode: 'role', approver_role_code: null, allow_reject: true, allow_withdraw: false, is_start_node: false, is_end_node: false }]);
-  };
-
+  
   const columns = [
     { title: t('workflow.processName'), dataIndex: 'process_name' },
-    { title: t('workflow.documentType'), dataIndex: 'document_type', render: (value: string) => t(`workflow.documentTypes.${value === 'purchase_order' ? 'purchaseOrder' : value === 'sales_order' ? 'salesOrder' : value === 'purchase_receipt' ? 'purchaseReceipt' : value === 'sales_delivery' ? 'salesDelivery' : 'voucher'}`) },
+    { title: t('workflow.documentType'), dataIndex: 'document_type', render: (value: string) => DOCUMENT_TYPE_OPTIONS.find((item) => item.value === value)?.label || value },
     { title: t('workflow.processCode'), dataIndex: 'process_code' },
     { title: t('workflow.version'), dataIndex: 'version', width: 80 },
     { title: t('workflow.status'), dataIndex: 'is_active', width: 100, render: (value: boolean) => <Tag color={value ? 'green' : 'default'}>{value ? t('workflow.active') : t('workflow.inactive')}</Tag> },
@@ -201,62 +323,138 @@ export function WorkflowConfig() {
         title={editing ? t('workflow.editProcess') : t('workflow.createProcess')}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        width="90%"
+        width="95%"
         destroyOnHidden
-        extra={
-          <Space>
-            <Button onClick={() => setModalOpen(false)}>{t('common.cancel')}</Button>
-            <Button type="primary" onClick={() => void handleSave()}>{t('common.save')}</Button>
-          </Space>
-        }
+        extra={<Space><Button onClick={() => setModalOpen(false)}>{t('common.cancel')}</Button><Button type="primary" onClick={() => void handleSave()}>{t('common.save')}</Button></Space>}
       >
-        <Row gutter={16}>
-          <Col span={8}>
-            <Card size="small" title={t('workflow.flow.preview')} style={{ marginBottom: 16 }}>
-              <WorkflowDiagram nodes={nodes} />
-            </Card>
-          </Col>
-          <Col span={16}>
-            <Form form={form} layout="vertical">
-              <Row gutter={16}>
-                <Col span={8}><Form.Item name="process_code" label={t('workflow.processCode')} rules={[{ required: true }]}><Input placeholder="purchase_order_default" disabled={!!editing} /></Form.Item></Col>
-                <Col span={8}><Form.Item name="process_name" label={t('workflow.processName')} rules={[{ required: true }]}><Input placeholder={t('workflow.processName')} /></Form.Item></Col>
-                <Col span={8}><Form.Item name="document_type" label={t('workflow.documentType')} rules={[{ required: true }]}><Select options={[{ label: t('workflow.documentTypes.purchaseOrder'), value: 'purchase_order' }, { label: t('workflow.documentTypes.salesOrder'), value: 'sales_order' }, { label: t('workflow.documentTypes.purchaseReceipt'), value: 'purchase_receipt' }, { label: t('workflow.documentTypes.salesDelivery'), value: 'sales_delivery' }, { label: t('workflow.documentTypes.voucher'), value: 'voucher' }]} /></Form.Item></Col>
-                <Col span={8}><Form.Item name="version" label={t('workflow.version')} rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item></Col>
-                <Col span={8}><Form.Item name="is_active" label={t('workflow.active')} valuePropName="checked"><Switch /></Form.Item></Col>
-                <Col span={8}><Form.Item name="description" label={t('workflow.description')}><Input  /></Form.Item></Col>
-              </Row>
-            </Form>
-              <Table
-                rowKey={(record, index) => `${record.node_key}-${index}`}
-                pagination={false}
-                dataSource={nodes}
-                columns={[
-                  { title: t('workflow.sequenceNo') || t('workflow.version'), dataIndex: 'sequence_no', width: 90, render: (value, _, index) => <InputNumber min={1} value={value} onChange={(next) => updateNode(index, { sequence_no: Number(next || 1) })} /> },
-                  { title: t('workflow.nodeKey'), dataIndex: 'node_key', width: 180, render: (value, _, index) => <Input value={value} onChange={(e) => updateNode(index, { node_key: e.target.value })} /> },
-                  { title: t('workflow.nodeName'), dataIndex: 'node_name', width: 180, render: (value, _, index) => <Input value={value} onChange={(e) => updateNode(index, { node_name: e.target.value })} /> },
-                  { title: t('workflow.approverRole'), dataIndex: 'approver_role_code', width: 240, render: (value, _, index) => <Select value={value || undefined} options={roles} onChange={(next) => updateNode(index, { approver_role_code: next || null })} style={{ width: '100%' }} /> },
-                  { title: t('workflow.allowReject'), dataIndex: 'allow_reject', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { allow_reject: next })} /> },
-                  { title: t('workflow.allowWithdraw'), dataIndex: 'allow_withdraw', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { allow_withdraw: next })} /> },
-                  { title: t('workflow.startNode'), dataIndex: 'is_start_node', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { is_start_node: next })} /> },
-                  { title: t('workflow.endNode'), dataIndex: 'is_end_node', width: 120, render: (value, _, index) => <Switch checked={value} onChange={(next) => updateNode(index, { is_end_node: next })} /> },
-                  { title: t('workflow.action'), key: 'action', width: 80, render: (_: unknown, __: WorkflowNode, index: number) => <Button danger type="text" icon={<DeleteOutlined />} onClick={() => setNodes((prev) => prev.filter((_, i) => i !== index))} /> },
-                ]}
-              />
-              <Button block type="dashed" icon={<PlusOutlined />} onClick={addNode}>{t('workflow.addNode')}</Button>
-          </Col>
-        </Row>
-        
-
-        
-
-        
+        <Splitter style={{ height: 'calc(100vh - 220px)' }}>
+          <Splitter.Panel defaultSize="15%" min="10%" max="16%">
+            <div style={{ paddingRight: 12, height: '100%', overflow: 'auto' }}>
+              <Card size="small" title={t('workflow.basicInfo')} style={{ marginBottom: 12 }}>
+                <Form form={form} layout="vertical">
+                  <Form.Item name="process_code" label={t('workflow.processCode')} rules={[{ required: true }]}><Input placeholder="purchase_order_default" disabled={!!editing} /></Form.Item>
+                  <Form.Item name="process_name" label={t('workflow.processName')} rules={[{ required: true }]}><Input placeholder={t('workflow.processName')} /></Form.Item>
+                  <Form.Item name="document_type" label={t('workflow.documentType')} rules={[{ required: true }]}><Select options={DOCUMENT_TYPE_OPTIONS} /></Form.Item>
+                  <Form.Item name="version" label={t('workflow.version')} rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
+                  <Form.Item name="is_active" label={t('workflow.active')} valuePropName="checked"><Switch /></Form.Item>
+                  <Form.Item name="description" label={t('workflow.description')}><Input.TextArea rows={2} /></Form.Item>
+                </Form>
+              </Card>
+              <Card size="small" title={t('workflow.quickAdd')}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Button block icon={<PlusOutlined />} onClick={() => addNode('approval')}>{t('workflow.addApprovalNode')}</Button>
+                  <Button block icon={<PlusOutlined />} onClick={() => addNode('condition')}>{t('workflow.addConditionNode')}</Button>
+                  <Button block icon={<PlusOutlined />} onClick={() => addNode('end')}>{t('workflow.addEndNode')}</Button>
+                </Space>
+              </Card>
+            </div>
+          </Splitter.Panel>
+          <Splitter.Panel defaultSize="70%" min="62%" max="82%">
+            <div style={{ padding: '0 12px', height: '100%', overflow: 'auto' }}>
+              <Card size="small" title={t('workflow.flow.preview')} style={{ marginBottom: 12 }}>
+                <WorkflowDiagram nodes={nodes} onSelectNode={(key) => setSelectedKey(key)} selectedKey={selectedKey} />
+              </Card>
+              <Card size="small" title={t('workflow.nodeList')}>
+                <Table
+                  size="small"
+                  pagination={false}
+                  rowKey="node_key"
+                  dataSource={nodes}
+                  rowClassName={(record) => record.node_key === selectedKey ? 'ant-table-row-selected' : ''}
+                  onRow={(record) => ({ onClick: () => setSelectedKey(record.node_key) })}
+                  columns={[
+                    { title: t('workflow.nodeName'), dataIndex: 'node_name' },
+                    { title: t('workflow.nodeType'), dataIndex: 'node_type' },
+                    { title: t('workflow.sequenceNo'), dataIndex: 'sequence_no', width: 90 },
+                    { title: t('workflow.routeType'), dataIndex: 'rule_json', render: (_, record) => record.node_type === 'condition' ? t('workflow.conditionNode') : record.is_start_node ? t('workflow.startNode') : record.is_end_node ? t('workflow.endNode') : t('workflow.approvalNode') },
+                    { title: t('workflow.action'), key: 'action', width: 120, render: (_: unknown, __: WorkflowNode, index: number) => <Space><Button type="text" onClick={() => { setSelectedKey(nodes[index].node_key); const current = nodes[index]; nodeForm.setFieldsValue(toNodeFormValues(current)); }}>{t('common.edit')}</Button><Button type="text" danger icon={<DeleteOutlined />} onClick={() => setNodes((prev) => prev.filter((_, i) => i !== index))} /></Space> },
+                  ]}
+                />
+              </Card>
+            </div>
+          </Splitter.Panel>
+          <Splitter.Panel defaultSize="15%" min="14%" max="24%">
+            <div style={{ height: '100%', overflow: 'auto' }}>
+              <Card size="small" title={t('workflow.nodeProperties')} extra={selectedNode ? <Space><Tag>{selectedNode.node_key}</Tag>
+              <Button type="primary" onClick={() => void saveSelectedNode()}>{t('workflow.applyNode')}</Button></Space> : null}>
+                {selectedNode ? (
+                  <Form form={nodeForm} layout="vertical">
+                    <Form.Item name="node_name" label={t('workflow.nodeName')} rules={[{ required: true }]}><Input /></Form.Item>
+                    <Form.Item name="node_type" label={t('workflow.nodeType')}><Select options={[{ label: t('workflow.approvalNode'), value: 'approval' }, { label: t('workflow.conditionNode'), value: 'condition' }, { label: t('workflow.startNode'), value: 'start' }, { label: t('workflow.endNode'), value: 'end' }]} /></Form.Item>
+                    <Form.Item name="sequence_no" label={t('workflow.sequenceNo')}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
+                    <Form.Item name="approver_mode" label={t('workflow.approverMode')}><Select options={[{ label: t('workflow.approverModeRole'), value: 'role' }, { label: t('workflow.approverModeSystem'), value: 'system' }]} /></Form.Item>
+                    <Form.Item name="approver_role_code" label={t('workflow.approverRole')}><Select allowClear options={roles} /></Form.Item>
+                    <Row gutter={12}>
+                      <Col span={12}><Form.Item name="allow_reject" label={t('workflow.allowReject')} valuePropName="checked"><Switch /></Form.Item></Col>
+                      <Col span={12}><Form.Item name="allow_withdraw" label={t('workflow.allowWithdraw')} valuePropName="checked"><Switch /></Form.Item></Col>
+                    </Row>
+                    <Row gutter={12}>
+                      <Col span={12}><Form.Item name="is_start_node" label={t('workflow.startNode')} valuePropName="checked"><Switch /></Form.Item></Col>
+                      <Col span={12}><Form.Item name="is_end_node" label={t('workflow.endNode')} valuePropName="checked"><Switch /></Form.Item></Col>
+                    </Row>
+                    <Form.Item name="condition_expr" label={t('workflow.conditionExpr')}><Input placeholder="amount >= 50000" /></Form.Item>
+                    <Form.Item name="condition_label" label={t('workflow.conditionLabel')}><Input placeholder={t('workflow.conditionLabelPlaceholder')} /></Form.Item>
+                    <Form.Item name="true_target_key" label={t('workflow.trueTargetKey')}><Select allowClear options={nodes.filter((node) => node.node_key !== selectedNode.node_key).map((node) => ({ label: `${node.node_name} (${node.node_key})`, value: node.node_key }))} /></Form.Item>
+                    <Form.Item name="false_target_key" label={t('workflow.falseTargetKey')}><Select allowClear options={nodes.filter((node) => node.node_key !== selectedNode.node_key).map((node) => ({ label: `${node.node_name} (${node.node_key})`, value: node.node_key }))} /></Form.Item>
+                    <Form.Item name="is_default_path" label={t('workflow.defaultPath')} valuePropName="checked"><Switch /></Form.Item>
+                  </Form>
+                ) : <div>{t('workflow.noNodeSelected')}</div>}
+              </Card>
+            </div>
+          </Splitter.Panel>
+        </Splitter>
       </Drawer>
     </Card>
   );
 }
 
+function toNodeFormValues(node: WorkflowNode): NodeFormValues {
+  const rule = (node.rule_json || {}) as Record<string, unknown>;
+  return {
+    node_key: node.node_key,
+    node_name: node.node_name,
+    node_type: node.node_type,
+    sequence_no: node.sequence_no,
+    approver_mode: node.approver_mode,
+    approver_role_code: node.approver_role_code,
+    allow_reject: node.allow_reject,
+    allow_withdraw: node.allow_withdraw,
+    is_start_node: node.is_start_node,
+    is_end_node: node.is_end_node,
+    condition_expr: String(rule.expr || ''),
+    condition_label: String(rule.conditionLabel || ''),
+    true_target_key: (rule.trueTargetKey as string) || null,
+    false_target_key: (rule.falseTargetKey as string) || null,
+    is_default_path: Boolean(rule.isDefaultPath),
+  };
+}
 
+function mergeNodeForm(node: WorkflowNode, values: NodeFormValues): WorkflowNode {
+  const rule_json = node.node_type === 'condition'
+    ? {
+        expr: values.condition_expr,
+        conditionLabel: values.condition_label,
+        trueTargetKey: values.true_target_key,
+        falseTargetKey: values.false_target_key,
+        isDefaultPath: values.is_default_path,
+      }
+    : {};
+  return {
+    ...node,
+    node_name: values.node_name,
+    node_type: values.node_type,
+    sequence_no: values.sequence_no,
+    approver_mode: values.approver_mode,
+    approver_role_code: values.approver_role_code,
+    allow_reject: values.allow_reject,
+    allow_withdraw: values.allow_withdraw,
+    is_start_node: values.is_start_node,
+    is_end_node: values.is_end_node,
+    rule_json,
+  };
+}
 
-
-
+function addBranch(nodeKey: string, branch: 'true' | 'false') {
+  void nodeKey;
+  void branch;
+}
