@@ -293,7 +293,7 @@ export function SupaModal({
                     <Card title={t('modal.documentHistory')} size="small" variant="borderless" style={{ borderRadius: 0 }}>
                       <Spin spinning={historyLoading}>
                         {historyItems.length > 0 ? (
-                          <Timeline items={historyItems} />
+                          <Timeline items={historyItems} style={{ height: '300px', overflowY: 'auto' }} />
                         ) : (
                           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('modal.noHistoryRecords')} />
                         )}

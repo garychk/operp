@@ -98,7 +98,7 @@ export function WorkflowHistoryCard({
     <Card title={title || t('workflow.workflowHistory.title')} size="small" variant="borderless" style={{ borderRadius: 0, marginTop: 12 }}>
       <Spin spinning={loading}>
         {items.length > 0 ? (
-          <Timeline items={items} />
+          <Timeline items={items} style={{ height: '300px', overflowY: 'auto' }} />
         ) : (
           <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('workflow.workflowHistory.empty')} />
         )}
