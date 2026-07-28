@@ -3,7 +3,6 @@ import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, I
 import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, ShoppingCartOutlined, CheckOutlined, PrinterOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
-import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
 import { SupaModal } from '../../components/SupaModal';
@@ -33,6 +32,7 @@ export function PurchaseOrders() {
   const [editingDetail, setEditingDetail] = useState<PurchaseOrderDetail | null>(null);
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
+  const [isDisabled, setIsDisabled] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -207,34 +207,12 @@ export function PurchaseOrders() {
     }
   };
 
-  const businessUser = { id: user?.profile.id, username: user?.profile.username };
 
-  const handleSubmitApproval = async (record: PurchaseOrder) => {
-    try {
-      await runBusinessAction({ action: 'submit', documentType: 'purchase_order', documentId: record.id, user: businessUser });
-      message.success('提交审批成功');
-      fetchOrders();
-    } catch (error: any) {
-      console.error('Error submitting purchase order:', error);
-      message.error(error?.message || '提交审批失败');
-    }
-  };
-
-  const handleApprove = async (record: PurchaseOrder) => {
-    try {
-      await runBusinessAction({ action: 'approve', documentType: 'purchase_order', documentId: record.id, user: businessUser });
-      message.success('审核成功');
-      fetchOrders();
-    } catch (error: any) {
-      console.error('Error approving purchase order:', error);
-      message.error(error?.message || '审核失败');
-    }
-  };
   const handleEdit = async (record: PurchaseOrder) => {
     setEditingOrder(record);
+    setIsDisabled(['approved', 'partially_received', 'received', 'closed'].includes(record.status || ''));
     const formValues = { ...record };
-    if (formValues.order_date) {
-      formValues.order_date = dayjs(formValues.order_date);
+    if (formValues.order_date) { formValues.order_date = dayjs(formValues.order_date);
     }
     if (formValues.delivery_date) {
       formValues.delivery_date = dayjs(formValues.delivery_date);
@@ -294,7 +272,8 @@ export function PurchaseOrders() {
     setIsModalOpen(true);
   };
 
-  const handleAddDetail = () => {
+  const handleAddDetail = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setEditingDetail(null);
     detailForm.setFieldsValue({
       product_id: undefined,
@@ -422,17 +401,7 @@ export function PurchaseOrders() {
       key: 'action',
       render: (_: any, record: PurchaseOrder) => (
         <Space size="small">
-          {record.status === 'draft' && (
-            <Button type="text" onClick={() => handleSubmitApproval(record)} disabled={record.status !== 'draft'}>
-              提交
-            </Button>
-          )}
-          {record.status === 'pending' && (
-            <Button type="text" onClick={() => handleApprove(record)}>
-              审核
-            </Button>
-          )}
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={['approved', 'partially_received', 'received', 'closed'].includes(record.status || '')}>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} >
             编辑
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} disabled={record.status !== 'draft'}>
@@ -502,10 +471,10 @@ export function PurchaseOrders() {
       key: 'action',
       render: (_: any, record: PurchaseOrderDetail) => (
         <Space size="middle">
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)} disabled={isDisabled}>
             编辑
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)}>
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)} disabled={isDisabled}>
             删除
           </Button>
         </Space>
@@ -562,7 +531,7 @@ export function PurchaseOrders() {
         historyTable={purchaseOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
         detailExtra={
-          <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
+          <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail} disabled={isDisabled}>新增明细</Button>
         }
         form={form}
         workflowDocumentType="purchase_order"
@@ -629,7 +598,7 @@ export function PurchaseOrders() {
                   <TextArea rows={5} placeholder="请输入备注" />
                 </Form.Item>
                 <Form.Item label="状态" name="status" initialValue="draft">
-                  <Select>
+                  <Select disabled>
                     <Option value="draft">草稿</Option>
                     <Option value="pending">待审批</Option>
                     <Option value="approved">已审批</Option>
@@ -663,7 +632,7 @@ export function PurchaseOrders() {
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => form.submit()}>保存</Button>
+            <Button type="primary" onClick={() => form.submit()} disabled={isDisabled}>保存</Button>
           </Space>
         }
         height={680}

@@ -11,6 +11,7 @@ type WorkflowActionBarProps = {
   documentId?: string | number | null;
   currentStatus?: string | null;
   onActionDone?: () => void;
+  disabled?: boolean;
 };
 
 const ACTION_CONFIG: Record<WorkflowAction, { icon: ReactNode; key: string; type?: 'primary' | 'default' | 'text'; danger?: boolean }> = {
@@ -26,7 +27,7 @@ function getAllowedActions(status?: string | null): WorkflowAction[] {
   return [];
 }
 
-export function WorkflowActionBar({ documentType, documentId, currentStatus, onActionDone }: WorkflowActionBarProps) {
+export function WorkflowActionBar({ documentType, documentId, currentStatus, onActionDone, disabled = false }: WorkflowActionBarProps) {
   const { t } = useTranslation();
 
   const handleWorkflowAction = async (action: WorkflowAction) => {
@@ -62,7 +63,9 @@ export function WorkflowActionBar({ documentType, documentId, currentStatus, onA
           danger={ACTION_CONFIG[action].danger}
           icon={ACTION_CONFIG[action].icon}
           onClick={() => void handleWorkflowAction(action)}
+          disabled={disabled}
           size="small"
+          ghost
         >
           {t('workflow.actionBar.' + ACTION_CONFIG[action].key)}
         </Button>

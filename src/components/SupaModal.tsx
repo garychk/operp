@@ -54,6 +54,7 @@ interface SupaModalProps {
   detailPanelTitle?: string;
   detailExtra?: ReactNode;
   tableEle?: ReactNode;
+  disabled?: boolean;
   detailData?: any[];
   historyTable?: string;
   historyRecordId?: string | number | null;
@@ -77,6 +78,7 @@ export function SupaModal({
   detailPanelTitle,
   detailExtra,
   tableEle,
+  disabled,
   detailData,
   historyTable,
   historyRecordId,
@@ -99,6 +101,8 @@ export function SupaModal({
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const currentFormName = formTable || historyTable;
+  const currentStatus = form?.getFieldValue('status') || '';
+  const resolvedDisabled = disabled ?? ['approved', 'partially_received', 'received', 'closed'].includes(currentStatus);
 
   useEffect(() => {
     const fetchDocumentHistory = async () => {
@@ -257,8 +261,8 @@ export function SupaModal({
             <Button type="default" size="small" icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />} onClick={() => setIsExpand(!isExpand)} />
             <Button type="default" size="small" icon={<LeftOutlined />} />
             <Button type="default" size="small" icon={<RightOutlined />} />
-            <WorkflowActionBar documentType={workflowDocumentType} documentId={historyRecordId} currentStatus={form?.getFieldValue('status')} onActionDone={combinedOnCancel} />
-            <Switch checked={isPreview} onChange={setIsPreview} checkedChildren="D" unCheckedChildren="P" size="middle" />
+            <WorkflowActionBar documentType={workflowDocumentType} documentId={historyRecordId} currentStatus={form?.getFieldValue('status')} onActionDone={combinedOnCancel} disabled={resolvedDisabled} />
+            <Switch checked={isPreview} onChange={setIsPreview} checkedChildren="P" unCheckedChildren="D" size="middle" disabled={resolvedDisabled} />
             <Button type="default" size="small" icon={<PrinterOutlined />} onClick={handleOpenDesigner} />
             <Tag color="magenta">{t('modal.pressEscToClose')}</Tag>
           </Space>
@@ -276,11 +280,11 @@ export function SupaModal({
         <div>
           {children || (
             <Collapse
-              defaultActiveKey={['1']}
+              defaultActiveKey={['1', '2']}
               expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}
-              size="small"
+              size="small"              
             >
-              <Collapse.Panel header={headerPanelTitle || t('modal.headerPanelTitle')} key="1" extra={headerExtra}>
+              <Collapse.Panel header={headerPanelTitle || t('modal.headerPanelTitle')} key="1" extra={headerExtra} >
                 <Splitter>
                   <Splitter.Panel defaultSize="70%" min="20%" max="70%">
                     {formEle}
