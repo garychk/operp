@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Col, Drawer, Form, Input, InputNumber, Popconfirm, Row, Select, Space, Switch, Table, Tag, message } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Button, Card, Col, Drawer, Form, Input, InputNumber, Row, Select, Space, Switch, Table, Tag, Tabs, message } from 'antd';
+import { DeleteOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Splitter } from 'antd';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
-import { WorkflowDiagram, WorkflowNodeItem } from '../../components/workflow/WorkflowDiagram';
+import { WorkflowDiagram, WorkflowEdgeItem, WorkflowNodeItem } from '../../components/workflow/WorkflowDiagram';
 
- type WorkflowDefinition = {
+type WorkflowDefinition = {
   id: number;
   process_code: string;
   process_name: string;
@@ -15,10 +15,10 @@ import { WorkflowDiagram, WorkflowNodeItem } from '../../components/workflow/Wor
   description: string | null;
   is_active: boolean | null;
   version: number | null;
- };
+  config_json?: Record<string, unknown> | null;
+};
 
 type WorkflowNode = WorkflowNodeItem;
-
 type RoleOption = { label: string; value: string };
 
 type NodeFormValues = {
@@ -34,9 +34,12 @@ type NodeFormValues = {
   is_end_node: boolean;
   condition_expr: string;
   condition_label: string;
-  true_target_key: string | null;
-  false_target_key: string | null;
   is_default_path: boolean;
+};
+
+type GraphState = {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdgeItem[];
 };
 
 const DOCUMENT_TYPE_OPTIONS = [
@@ -47,73 +50,22 @@ const DOCUMENT_TYPE_OPTIONS = [
   { label: '凭证', value: 'voucher' },
 ];
 
-const DEFAULT_NODES: WorkflowNode[] = [
-  {
-    node_key: 'start',
-    node_name: '提交审批',
-    node_type: 'start',
-    sequence_no: 1,
-    approver_mode: 'system',
-    approver_role_code: null,
-    allow_reject: false,
-    allow_withdraw: false,
-    is_start_node: true,
-    is_end_node: false,
-    rule_json: {},
-  },
-  {
-    node_key: 'amount_condition',
-    node_name: '金额判断',
-    node_type: 'condition',
-    sequence_no: 2,
-    approver_mode: 'system',
-    approver_role_code: null,
-    allow_reject: false,
-    allow_withdraw: false,
-    is_start_node: false,
-    is_end_node: false,
-    rule_json: { expr: 'amount >= 50000', trueTargetKey: 'finance_manager', falseTargetKey: 'dept_manager' },
-  },
-  {
-    node_key: 'dept_manager',
-    node_name: '部门审批',
-    node_type: 'approval',
-    sequence_no: 3,
-    approver_mode: 'role',
-    approver_role_code: 'inventory_manager',
-    allow_reject: true,
-    allow_withdraw: false,
-    is_start_node: false,
-    is_end_node: false,
-    rule_json: {},
-  },
-  {
-    node_key: 'finance_manager',
-    node_name: '财务复核',
-    node_type: 'approval',
-    sequence_no: 4,
-    approver_mode: 'role',
-    approver_role_code: 'finance_manager',
-    allow_reject: true,
-    allow_withdraw: false,
-    is_start_node: false,
-    is_end_node: false,
-    rule_json: {},
-  },
-  {
-    node_key: 'final',
-    node_name: '终审完成',
-    node_type: 'end',
-    sequence_no: 5,
-    approver_mode: 'system',
-    approver_role_code: null,
-    allow_reject: false,
-    allow_withdraw: false,
-    is_start_node: false,
-    is_end_node: true,
-    rule_json: {},
-  },
-];
+const DEFAULT_GRAPH: GraphState = {
+  nodes: [
+    { node_key: 'start', node_name: '提交审批', node_type: 'start', sequence_no: 1, approver_mode: 'system', approver_role_code: null, allow_reject: false, allow_withdraw: false, is_start_node: true, is_end_node: false, rule_json: { layout: { x: 40, y: 24 } } },
+    { node_key: 'amount_condition', node_name: '金额判断', node_type: 'condition', sequence_no: 2, approver_mode: 'system', approver_role_code: null, allow_reject: false, allow_withdraw: false, is_start_node: false, is_end_node: false, rule_json: { expr: 'amount >= 50000', trueTargetKey: 'finance_manager', falseTargetKey: 'dept_manager', layout: { x: 260, y: 24 } } },
+    { node_key: 'dept_manager', node_name: '部门审批', node_type: 'approval', sequence_no: 3, approver_mode: 'role', approver_role_code: 'inventory_manager', allow_reject: true, allow_withdraw: false, is_start_node: false, is_end_node: false, rule_json: { layout: { x: 40, y: 116 } } },
+    { node_key: 'finance_manager', node_name: '财务复核', node_type: 'approval', sequence_no: 4, approver_mode: 'role', approver_role_code: 'finance_manager', allow_reject: true, allow_withdraw: false, is_start_node: false, is_end_node: false, rule_json: { layout: { x: 480, y: 116 } } },
+    { node_key: 'final', node_name: '终审完成', node_type: 'end', sequence_no: 5, approver_mode: 'system', approver_role_code: null, allow_reject: false, allow_withdraw: false, is_start_node: false, is_end_node: true, rule_json: { layout: { x: 260, y: 208 } } },
+  ],
+  edges: [
+    { id: 'start-to-condition', source: 'start', target: 'amount_condition', kind: 'default' },
+    { id: 'condition-true', source: 'amount_condition', target: 'finance_manager', sourcePort: 'amount_condition-right', targetPort: 'finance_manager-left', kind: 'true', label: '是' },
+    { id: 'condition-false', source: 'amount_condition', target: 'dept_manager', sourcePort: 'amount_condition-bottom', targetPort: 'dept_manager-left', kind: 'false', label: '否' },
+    { id: 'dept-to-final', source: 'dept_manager', target: 'final', kind: 'default' },
+    { id: 'finance-to-final', source: 'finance_manager', target: 'final', kind: 'default' },
+  ],
+};
 
 export function WorkflowConfig() {
   const { t } = useTranslation();
@@ -123,17 +75,26 @@ export function WorkflowConfig() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<WorkflowDefinition | null>(null);
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
+  const [edges, setEdges] = useState<WorkflowEdgeItem[]>([]);
   const [selectedKey, setSelectedKey] = useState<string>('');
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [propertyTab, setPropertyTab] = useState("node");
   const [canvasHeight, setCanvasHeight] = useState<number>(640);
   const [form] = Form.useForm();
   const [nodeForm] = Form.useForm<NodeFormValues>();
+  const [edgeForm] = Form.useForm<WorkflowEdgeItem>();
+
+  useEffect(() => {
+    void fetchDefinitions();
+    void fetchRoles();
+  }, []);
 
   const fetchDefinitions = async () => {
     setLoading(true);
     try {
       const { data, error } = await supabase
         .from('wf_process_definitions')
-        .select('id, process_code, process_name, document_type, description, is_active, version')
+        .select('id, process_code, process_name, document_type, description, is_active, version, config_json')
         .eq('is_deleted', 'n')
         .order('document_type', { ascending: true })
         .order('version', { ascending: false });
@@ -147,22 +108,12 @@ export function WorkflowConfig() {
   };
 
   const fetchRoles = async () => {
-    const { data, error } = await supabase
-      .from('sys_roles')
-      .select('role_code, role_name')
-      .eq('is_deleted', 'n')
-      .eq('status', '1')
-      .order('sort_order', { ascending: true });
+    const { data, error } = await supabase.from('sys_roles').select('role_code, role_name').eq('is_deleted', 'n').eq('status', '1').order('sort_order', { ascending: true });
     if (error) return;
     setRoles((data || []).map((role) => ({ label: `${role.role_name} (${role.role_code})`, value: role.role_code })));
   };
 
-  useEffect(() => {
-    void fetchDefinitions();
-    void fetchRoles();
-  }, []);
-
-  const loadNodes = async (processId: number) => {
+  const loadGraph = async (processId: number, configJson?: Record<string, unknown> | null) => {
     const { data, error } = await supabase
       .from('wf_process_nodes')
       .select('node_key, node_name, node_type, sequence_no, approver_mode, approver_role_code, allow_reject, allow_withdraw, is_start_node, is_end_node, rule_json')
@@ -170,50 +121,121 @@ export function WorkflowConfig() {
       .eq('process_id', processId)
       .order('sequence_no', { ascending: true });
     if (error) throw error;
-    const loaded = ((data || []) as WorkflowNode[]).map((node) => ({
-      ...node,
-      rule_json: node.rule_json && typeof node.rule_json === 'object' ? node.rule_json : {},
-    }));
-    setCanvasHeight(computeCanvasHeight(loaded));
-    const initialNodes = loaded.length ? loaded : DEFAULT_NODES;
+
+    const loadedNodes = ((data || []) as WorkflowNode[]).map((node) => ({ ...node, rule_json: normalizeRuleJson(node.rule_json) }));
+    const initialNodes = loadedNodes.length ? loadedNodes : DEFAULT_GRAPH.nodes;
+    const initialEdges = parseEdges(configJson, initialNodes);
+
     setNodes(initialNodes);
+    setEdges(initialEdges);
     setSelectedKey(initialNodes[0]?.node_key || '');
+    setSelectedEdgeId(initialEdges[0]?.id || null);
     setCanvasHeight(computeCanvasHeight(initialNodes));
-    nodeForm.setFieldsValue(toNodeFormValues(loaded[0] || DEFAULT_NODES[0]));
+    nodeForm.setFieldsValue(toNodeFormValues(initialNodes[0] || DEFAULT_GRAPH.nodes[0]));
   };
 
   const handleAdd = () => {
     setEditing(null);
     form.setFieldsValue({ process_code: '', process_name: '', document_type: 'purchase_order', description: '', is_active: true, version: 1 });
-    setNodes(DEFAULT_NODES);
-    setSelectedKey(DEFAULT_NODES[0].node_key);
-    setCanvasHeight(computeCanvasHeight(DEFAULT_NODES));
-    nodeForm.setFieldsValue(toNodeFormValues(DEFAULT_NODES[0]));
+    setNodes(DEFAULT_GRAPH.nodes);
+    setEdges(DEFAULT_GRAPH.edges);
+    setSelectedKey(DEFAULT_GRAPH.nodes[0].node_key);
+    setSelectedEdgeId(DEFAULT_GRAPH.edges[0]?.id || null);
+    setCanvasHeight(computeCanvasHeight(DEFAULT_GRAPH.nodes));
+    nodeForm.setFieldsValue(toNodeFormValues(DEFAULT_GRAPH.nodes[0]));
     setModalOpen(true);
   };
 
   const handleEdit = async (record: WorkflowDefinition) => {
     setEditing(record);
     form.setFieldsValue(record);
-    await loadNodes(record.id);
+    await loadGraph(record.id, record.config_json);
     setModalOpen(true);
   };
 
-  const selectedNode = useMemo(() => nodes.find((node) => node.node_key === selectedKey) || nodes[0] || null, [nodes, selectedKey]);
+  const selectedNode = useMemo(() => nodes.find((node) => node.node_key === selectedKey) || null, [nodes, selectedKey]);
+  const selectedEdge = useMemo(() => edges.find((edge) => edge.id === selectedEdgeId) || null, [edges, selectedEdgeId]);
 
   useEffect(() => {
     if (!selectedNode) return;
     nodeForm.setFieldsValue(toNodeFormValues(selectedNode));
   }, [selectedNode, nodeForm]);
 
+  useEffect(() => {
+    if (selectedEdge) edgeForm.setFieldsValue(selectedEdge);
+  }, [selectedEdge, edgeForm]);
+
+  const saveSelectedEdge = async () => {
+    if (!selectedEdge) return;
+    const values = await edgeForm.validateFields();
+    setEdges((prev) => prev.map((edge) => (edge.id === selectedEdge.id ? { ...edge, ...values } : edge)));
+    message.success(t("workflow.edgeSaved"));
+  };
+
   const saveSelectedNode = async () => {
     const values = await nodeForm.validateFields();
     setNodes((prev) => {
-      const next = prev.map((node) => node.node_key === selectedKey ? mergeNodeForm(node, values) : node);
+      const next = prev.map((node) => (node.node_key === selectedKey ? mergeNodeForm(node, values) : node));
       setCanvasHeight(computeCanvasHeight(next));
       return next;
     });
     message.success(t('workflow.nodeSaved'));
+  };
+
+  const updateNodePosition = (key: string, position: { x: number; y: number }) => {
+    setNodes((prev) => prev.map((node) => (node.node_key === key ? { ...node, rule_json: { ...normalizeRuleJson(node.rule_json), layout: position } } : node)));
+  };
+
+  const updateEdges = (nextEdges: WorkflowEdgeItem[]) => {
+    setEdges(nextEdges);
+    setSelectedEdgeId(nextEdges[0]?.id || null);
+  };
+
+  const insertNodeAfterSelected = (nodeType: WorkflowNode['node_type'] = 'approval') => {
+    const anchorIndex = Math.max(0, nodes.findIndex((node) => node.node_key === selectedKey));
+    const node_key = `node_${Date.now()}`;
+    const nextNode: WorkflowNode = {
+      node_key,
+      node_name: nodeType === 'condition' ? t('workflow.conditionNode') : t('workflow.nodesTitle'),
+      node_type: nodeType,
+      sequence_no: nodes.length + 1,
+      approver_mode: nodeType === 'condition' || nodeType === 'end' || nodeType === 'start' ? 'system' : 'role',
+      approver_role_code: null,
+      allow_reject: true,
+      allow_withdraw: false,
+      is_start_node: false,
+      is_end_node: false,
+      rule_json: nodeType === 'condition'
+        ? { expr: '', isDefaultPath: false, layout: { x: 260, y: 24 } }
+        : { layout: { x: 40, y: 300 + anchorIndex * 92 } },
+    };
+
+    setNodes((prev) => renumberNodes([...prev.slice(0, anchorIndex + 1), nextNode, ...prev.slice(anchorIndex + 1)]));
+    setSelectedKey(node_key);
+    nodeForm.setFieldsValue(toNodeFormValues(nextNode));
+  };
+
+  const removeNode = (nodeKey: string) => {
+    setNodes((prev) => renumberNodes(prev.filter((node) => node.node_key !== nodeKey)));
+    setEdges((prev) => prev.filter((edge) => edge.source !== nodeKey && edge.target !== nodeKey));
+    if (selectedKey === nodeKey) setSelectedKey('');
+  };
+
+  const removeSelectedEdge = () => {
+    if (!selectedEdge) return;
+    setEdges((prev) => prev.filter((edge) => edge.id !== selectedEdge.id));
+    setSelectedEdgeId(null);
+  };
+
+  const handleDelete = async (id: number) => {
+    await logWithTiming(t('workflow.configTitle'), 'DELETE', async () => {
+      const { error } = await supabase.from('wf_process_definitions').update({ is_deleted: 'y', is_active: false }).eq('id', id);
+      if (error) throw error;
+      const { error: nodeError } = await supabase.from('wf_process_nodes').update({ is_deleted: 'y' }).eq('process_id', id);
+      if (nodeError) throw nodeError;
+    }, { process_id: id });
+    message.success(t('workflow.deleteSuccess'));
+    await fetchDefinitions();
   };
 
   const handleSave = async () => {
@@ -224,9 +246,17 @@ export function WorkflowConfig() {
     }
 
     await logWithTiming(t('workflow.configTitle'), 'UPSERT', async () => {
-      const processPayload = { process_code: values.process_code, process_name: values.process_name, document_type: values.document_type, description: values.description, is_active: values.is_active, version: values.version, is_deleted: 'n' };
+      const processPayload = {
+        process_code: values.process_code,
+        process_name: values.process_name,
+        document_type: values.document_type,
+        description: values.description,
+        is_active: values.is_active,
+        version: values.version,
+        config_json: buildConfigJson(edges),
+        is_deleted: 'n',
+      };
       let processId = editing?.id;
-
       if (editing) {
         const { error } = await supabase.from('wf_process_definitions').update(processPayload).eq('id', editing.id);
         if (error) throw error;
@@ -235,7 +265,6 @@ export function WorkflowConfig() {
         if (error) throw error;
         processId = data.id;
       }
-
       if (!processId) throw new Error(t('workflow.noProcessId'));
 
       await supabase.from('wf_process_nodes').delete().eq('process_id', processId);
@@ -251,7 +280,7 @@ export function WorkflowConfig() {
         allow_withdraw: node.allow_withdraw,
         is_start_node: node.is_start_node,
         is_end_node: node.is_end_node,
-        rule_json: node.rule_json || {},
+        rule_json: normalizeRuleJson(node.rule_json),
         is_deleted: 'n',
       }));
       const { error } = await supabase.from('wf_process_nodes').insert(nodePayload);
@@ -263,73 +292,14 @@ export function WorkflowConfig() {
     await fetchDefinitions();
   };
 
-  const handleToggleActive = async (record: WorkflowDefinition) => {
-    const nextActive = !record.is_active;
-    try {
-      const { error } = await supabase
-        .from('wf_process_definitions')
-        .update({ is_active: nextActive })
-        .eq('id', record.id);
-      if (error) throw error;
-      message.success(nextActive ? t('workflow.enableSuccess') : t('workflow.disableSuccess'));
-      await fetchDefinitions();
-    } catch {
-      message.error(t('workflow.saveFailed'));
-    }
-  };
 
-  const handleDelete = async (id: number) => {
-    await logWithTiming(t('workflow.configTitle'), 'DELETE', async () => {
-      const { error } = await supabase.from('wf_process_definitions').update({ is_deleted: 'y', is_active: false }).eq('id', id);
-      if (error) throw error;
-      const { error: nodeError } = await supabase.from('wf_process_nodes').update({ is_deleted: 'y' }).eq('process_id', id);
-      if (nodeError) throw nodeError;
-    }, { process_id: id });
-    message.success(t('workflow.deleteSuccess'));
-    await fetchDefinitions();
-  };
-
-  const addNode = (nodeType: WorkflowNode['node_type'] = 'approval') => {
-    const nextSeq = nodes.length ? Math.max(...nodes.map((n) => Number(n.sequence_no) || 0)) + 1 : 1;
-    const node_key = `node_${Date.now()}`;
-    const nextNode: WorkflowNode = {
-      node_key,
-      node_name: nodeType === 'condition' ? t('workflow.conditionNode') : t('workflow.nodesTitle'),
-      node_type: nodeType,
-      sequence_no: nextSeq,
-      approver_mode: nodeType === 'condition' || nodeType === 'end' || nodeType === 'start' ? 'system' : 'role',
-      approver_role_code: null,
-      allow_reject: true,
-      allow_withdraw: false,
-      is_start_node: false,
-      is_end_node: false,
-      rule_json: nodeType === 'condition' ? { expr: '', trueTargetKey: '', falseTargetKey: '', isDefaultPath: false } : {},
-    };
-    setNodes((prev) => {
-      const next = [...prev, nextNode];
-      setCanvasHeight(computeCanvasHeight(next));
-      return next;
-    });
-    setSelectedKey(node_key);
-    nodeForm.setFieldsValue(toNodeFormValues(nextNode));
-  };
-
-  const updateNode = (index: number, patch: Partial<WorkflowNode>) => {
-    setNodes((prev) => {
-      const next = prev.map((node, i) => (i === index ? { ...node, ...patch } : node));
-      setCanvasHeight(computeCanvasHeight(next));
-      return next;
-    });
-  };
-
-  
   const columns = [
     { title: t('workflow.processName'), dataIndex: 'process_name' },
     { title: t('workflow.documentType'), dataIndex: 'document_type', render: (value: string) => DOCUMENT_TYPE_OPTIONS.find((item) => item.value === value)?.label || value },
     { title: t('workflow.processCode'), dataIndex: 'process_code' },
     { title: t('workflow.version'), dataIndex: 'version', width: 80 },
     { title: t('workflow.status'), dataIndex: 'is_active', width: 100, render: (value: boolean) => <Tag color={value ? 'green' : 'default'}>{value ? t('workflow.active') : t('workflow.inactive')}</Tag> },
-    { title: t('workflow.action'), key: 'action', render: (_: unknown, record: WorkflowDefinition) => (<Space><Button type="text" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>{t('common.edit')}</Button><Button type="text" onClick={() => void handleToggleActive(record)}>{record.is_active ? t('workflow.disable') : t('workflow.enable')}</Button><Popconfirm title={t('workflow.deleteConfirm')} onConfirm={() => void handleDelete(record.id)}><Button type="text" danger icon={<DeleteOutlined />}>{t('common.delete')}</Button></Popconfirm></Space>) },
+    { title: t('workflow.action'), key: 'action', render: (_: unknown, record: WorkflowDefinition) => (<Space><Button type="text" onClick={() => void handleEdit(record)}>{t('common.edit')}</Button><Button type="text" danger onClick={() => void handleDelete(record.id)}>{t('common.delete')}</Button></Space>) },
   ];
 
   return (
@@ -357,14 +327,13 @@ export function WorkflowConfig() {
         rowKey="id"
         loading={loading}
       />
-
       <Drawer
         title={
           editing ? t("workflow.editProcess") : t("workflow.createProcess")
         }
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        size="90%"
+        width="95%"
         destroyOnHidden
         extra={
           <Space>
@@ -437,21 +406,21 @@ export function WorkflowConfig() {
                   <Button
                     block
                     icon={<PlusOutlined />}
-                    onClick={() => addNode("approval")}
+                    onClick={() => insertNodeAfterSelected("approval")}
                   >
                     {t("workflow.addApprovalNode")}
                   </Button>
                   <Button
                     block
                     icon={<PlusOutlined />}
-                    onClick={() => addNode("condition")}
+                    onClick={() => insertNodeAfterSelected("condition")}
                   >
                     {t("workflow.addConditionNode")}
                   </Button>
                   <Button
                     block
                     icon={<PlusOutlined />}
-                    onClick={() => addNode("end")}
+                    onClick={() => insertNodeAfterSelected("end")}
                   >
                     {t("workflow.addEndNode")}
                   </Button>
@@ -459,99 +428,29 @@ export function WorkflowConfig() {
               </Card>
             </div>
           </Splitter.Panel>
-          <Splitter.Panel defaultSize="68%" min="62%" max="82%">
+          <Splitter.Panel defaultSize="70%" min="62%" max="82%">
             <WorkflowDiagram
               nodes={nodes}
-              onSelectNode={(key) => setSelectedKey(key)}
-              onNodeMove={(key, position) => {
-                setNodes((prev) => {
-                  const next = prev.map((node) => node.node_key === key
-                    ? {
-                        ...node,
-                        rule_json: {
-                          ...(node.rule_json || {}),
-                          layout: position,
-                        },
-                      }
-                    : node);
-                  setCanvasHeight(computeCanvasHeight(next));
-                  return next;
-                });
-              }}
+              edges={edges}
               selectedKey={selectedKey}
+              selectedEdgeId={selectedEdgeId || undefined}
+              onSelectNode={(key) => { setSelectedKey(key); setPropertyTab("node"); }}
+              onSelectEdge={(edgeId) => { setSelectedEdgeId(edgeId); if (edgeId) setPropertyTab("edge"); }}
+              onNodeMove={updateNodePosition}
+              onEdgeChange={updateEdges}
               height={canvasHeight}
             />
-            <Table
-              style={{ display: "none" }}
-              size="small"
-              pagination={false}
-              rowKey="node_key"
-              dataSource={nodes}
-              rowClassName={(record) =>
-                record.node_key === selectedKey ? "ant-table-row-selected" : ""
-              }
-              onRow={(record) => ({
-                onClick: () => setSelectedKey(record.node_key),
-              })}
-              columns={[
-                { title: t("workflow.nodeName"), dataIndex: "node_name" },
-                { title: t("workflow.nodeType"), dataIndex: "node_type" },
-                {
-                  title: t("workflow.sequenceNo"),
-                  dataIndex: "sequence_no",
-                  width: 90,
-                },
-                {
-                  title: t("workflow.routeType"),
-                  dataIndex: "rule_json",
-                  render: (_, record) =>
-                    record.node_type === "condition"
-                      ? t("workflow.conditionNode")
-                      : record.is_start_node
-                        ? t("workflow.startNode")
-                        : record.is_end_node
-                          ? t("workflow.endNode")
-                          : t("workflow.approvalNode"),
-                },
-                {
-                  title: t("workflow.action"),
-                  key: "action",
-                  width: 120,
-                  render: (_: unknown, __: WorkflowNode, index: number) => (
-                    <Space>
-                      <Button
-                        type="text"
-                        onClick={() => {
-                          setSelectedKey(nodes[index].node_key);
-                          const current = nodes[index];
-                          nodeForm.setFieldsValue(toNodeFormValues(current));
-                        }}
-                      >
-                        {t("common.edit")}
-                      </Button>
-                      <Button
-                        type="text"
-                        danger
-                        icon={<DeleteOutlined />}
-                        onClick={() =>
-                          setNodes((prev) => prev.filter((_, i) => i !== index))
-                        }
-                      />
-                    </Space>
-                  ),
-                },
-              ]}
-            />
           </Splitter.Panel>
-          <Splitter.Panel defaultSize="20%" min="14%" max="24%">
+          <Splitter.Panel defaultSize="18%" min="14%" max="24%">
             <div style={{ height: "100%", overflow: "auto", paddingLeft: 12 }}>
+              <Tabs activeKey={propertyTab} onChange={setPropertyTab}>
+                <Tabs.TabPane key="node" tab={t("workflow.nodeProperties")}>
               <Card
                 size="small"
                 title={t("workflow.nodeProperties")}
                 extra={
                   selectedNode ? (
                     <Space>
-                      <Tag>{selectedNode.node_key}</Tag>
                       <Button
                         type="link"
                         size="small"
@@ -563,11 +462,7 @@ export function WorkflowConfig() {
                         icon={<DeleteOutlined />}
                         danger
                         type="link"
-                        onClick={() => {
-                          if (!selectedNode) return;
-                          setNodes((prev) => prev.filter((n) => n.node_key !== selectedNode.node_key));
-                          setSelectedKey('');
-                        }}
+                        onClick={() => removeNode(selectedNode.node_key)}
                       />
                     </Space>
                   ) : null
@@ -575,6 +470,13 @@ export function WorkflowConfig() {
               >
                 {selectedNode ? (
                   <Form form={nodeForm} layout="vertical">
+                    <Form.Item
+                      name="node_key"
+                      label={t("workflow.nodeKey")}
+                      rules={[{ required: true }]}
+                    >
+                      <Input />
+                    </Form.Item>
                     <Form.Item
                       name="node_name"
                       label={t("workflow.nodeName")}
@@ -682,38 +584,6 @@ export function WorkflowConfig() {
                       />
                     </Form.Item>
                     <Form.Item
-                      name="true_target_key"
-                      label={t("workflow.trueTargetKey")}
-                    >
-                      <Select
-                        allowClear
-                        options={nodes
-                          .filter(
-                            (node) => node.node_key !== selectedNode.node_key,
-                          )
-                          .map((node) => ({
-                            label: `${node.node_name} (${node.node_key})`,
-                            value: node.node_key,
-                          }))}
-                      />
-                    </Form.Item>
-                    <Form.Item
-                      name="false_target_key"
-                      label={t("workflow.falseTargetKey")}
-                    >
-                      <Select
-                        allowClear
-                        options={nodes
-                          .filter(
-                            (node) => node.node_key !== selectedNode.node_key,
-                          )
-                          .map((node) => ({
-                            label: `${node.node_name} (${node.node_key})`,
-                            value: node.node_key,
-                          }))}
-                      />
-                    </Form.Item>
-                    <Form.Item
                       name="is_default_path"
                       label={t("workflow.defaultPath")}
                       valuePropName="checked"
@@ -725,6 +595,44 @@ export function WorkflowConfig() {
                   <div>{t("workflow.noNodeSelected")}</div>
                 )}
               </Card>
+                </Tabs.TabPane>
+                <Tabs.TabPane key="edge" tab={t("workflow.edgeProperties")}>
+              <Card
+                size="small"
+                title={t("workflow.edgeProperties")}
+                style={{ marginTop: 12 }}
+                extra={
+                  selectedEdge ? (
+                    <Space>
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={removeSelectedEdge}
+                      >
+                        {t("common.delete")}
+                      </Button>
+                    </Space>
+                  ) : null
+                }
+              >
+                {selectedEdge ? (
+                  <Form form={edgeForm} layout="vertical">
+                    <Form.Item name="label" label={t("workflow.edgeLabel")}><Input /></Form.Item>
+                    <Form.Item name="lineStyle" label={t("workflow.edgeLineStyle")}><Select options={[{ label: t("workflow.edgeSolid"), value: "solid" }, { label: t("workflow.edgeDashed"), value: "dashed" }]} /></Form.Item>
+                    <Form.Item name="color" label={t("workflow.edgeColor")}><Select options={[{ label: t("workflow.edgeColorBlue"), value: "#1677ff" }, { label: t("workflow.edgeColorOrange"), value: "#f59e0b" }, { label: t("workflow.edgeColorGray"), value: "#91a4b7" }]} /></Form.Item>
+                    <Button type="primary" block onClick={() => void saveSelectedEdge()}>{t("workflow.applyEdge")}</Button>
+                    <div style={{ marginTop: 12 }}>
+                      <div>{t("common.id")}:<Tag>{selectedEdge.id}</Tag></div>
+                      <div>{t("workflow.edgeSource")}:<Tag>{selectedEdge.source}</Tag></div>
+                      <div>{t("workflow.edgeTarget")}:<Tag>{selectedEdge.target}</Tag></div>
+                    </div>
+                  </Form>
+                ) : (
+                  <div>{t("workflow.noEdgeSelected")}</div>
+                )}
+              </Card>
+                </Tabs.TabPane>
+              </Tabs>
             </div>
           </Splitter.Panel>
         </Splitter>
@@ -733,75 +641,43 @@ export function WorkflowConfig() {
   );
 }
 
+function normalizeRuleJson(ruleJson: unknown) {
+  return ruleJson && typeof ruleJson === 'object' ? (ruleJson as Record<string, unknown>) : {};
+}
+
 function toNodeFormValues(node: WorkflowNode): NodeFormValues {
-  const rule = (node.rule_json || {}) as Record<string, unknown>;
-  return {
-    node_key: node.node_key,
-    node_name: node.node_name,
-    node_type: node.node_type,
-    sequence_no: node.sequence_no,
-    approver_mode: node.approver_mode,
-    approver_role_code: node.approver_role_code,
-    allow_reject: node.allow_reject,
-    allow_withdraw: node.allow_withdraw,
-    is_start_node: node.is_start_node,
-    is_end_node: node.is_end_node,
-    condition_expr: String(rule.expr || ''),
-    condition_label: String(rule.conditionLabel || ''),
-    true_target_key: (rule.trueTargetKey as string) || null,
-    false_target_key: (rule.falseTargetKey as string) || null,
-    is_default_path: Boolean(rule.isDefaultPath),
-  };
+  const rule = normalizeRuleJson(node.rule_json);
+  return { node_key: node.node_key, node_name: node.node_name, node_type: node.node_type, sequence_no: node.sequence_no, approver_mode: node.approver_mode, approver_role_code: node.approver_role_code, allow_reject: node.allow_reject, allow_withdraw: node.allow_withdraw, is_start_node: node.is_start_node, is_end_node: node.is_end_node, condition_expr: String(rule.expr || ''), condition_label: String(rule.conditionLabel || ''), is_default_path: Boolean(rule.isDefaultPath) };
 }
 
 function mergeNodeForm(node: WorkflowNode, values: NodeFormValues): WorkflowNode {
-  const existingLayout = getNodeLayout(node.rule_json);
-  const rule_json = node.node_type === 'condition'
-    ? {
-        ...node.rule_json,
-        expr: values.condition_expr,
-        conditionLabel: values.condition_label,
-        trueTargetKey: values.true_target_key,
-        falseTargetKey: values.false_target_key,
-        isDefaultPath: values.is_default_path,
-      }
-    : {
-        ...node.rule_json,
-      };
-  if (existingLayout) {
-    (rule_json as Record<string, unknown>).layout = existingLayout;
-  } else if (node.rule_json && typeof node.rule_json === 'object' && 'layout' in node.rule_json) {
-    (rule_json as Record<string, unknown>).layout = (node.rule_json as Record<string, unknown>).layout;
-  }
-  return {
-    ...node,
-    node_name: values.node_name,
-    node_type: values.node_type,
-    sequence_no: values.sequence_no,
-    approver_mode: values.approver_mode,
-    approver_role_code: values.approver_role_code,
-    allow_reject: values.allow_reject,
-    allow_withdraw: values.allow_withdraw,
-    is_start_node: values.is_start_node,
-    is_end_node: values.is_end_node,
-    rule_json,
-  };
+  const rule = normalizeRuleJson(node.rule_json);
+  const layout = (normalizeRuleJson(node.rule_json) as Record<string, unknown>).layout;
+  const nextRule: Record<string, unknown> = node.node_type === 'condition' ? { ...rule, expr: values.condition_expr, conditionLabel: values.condition_label, isDefaultPath: values.is_default_path } : { ...rule };
+  if (layout) nextRule.layout = layout;
+  return { ...node, node_name: values.node_name, node_type: values.node_type, sequence_no: values.sequence_no, approver_mode: values.approver_mode, approver_role_code: values.approver_role_code, allow_reject: values.allow_reject, allow_withdraw: values.allow_withdraw, is_start_node: values.is_start_node, is_end_node: values.is_end_node, rule_json: nextRule };
+}
+
+function renumberNodes(nodes: WorkflowNode[]) {
+  return nodes.map((node, index) => ({ ...node, sequence_no: index + 1 }));
 }
 
 function computeCanvasHeight(nodes: WorkflowNode[]) {
   if (!nodes.length) return 640;
   const maxY = nodes.reduce((acc, node) => {
-    const layout = getNodeLayout(node.rule_json);
-    return Math.max(acc, layout?.y ?? 0);
+    const layout = normalizeRuleJson(node.rule_json).layout as { y?: number } | undefined;
+    return Math.max(acc, Number(layout?.y || 0));
   }, 0);
   return Math.max(640, maxY + 220);
 }
 
-function getNodeLayout(ruleJson: Record<string, unknown>) {
-  const layout = ruleJson.layout;
-  if (!layout || typeof layout !== 'object') return null;
-  const x = Number((layout as Record<string, unknown>).x);
-  const y = Number((layout as Record<string, unknown>).y);
-  if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
-  return null;
+function parseEdges(configJson: Record<string, unknown> | null | undefined, nodes: WorkflowNode[]) {
+  const edges = (configJson?.workflowEdges as WorkflowEdgeItem[] | undefined) || [];
+  if (edges.length) return edges;
+  const nodeKeys = new Set(nodes.map((node) => node.node_key));
+  return DEFAULT_GRAPH.edges.filter((edge) => nodeKeys.has(edge.source) && nodeKeys.has(edge.target));
+}
+
+function buildConfigJson(edges: WorkflowEdgeItem[]) {
+  return { workflowEdges: edges };
 }
