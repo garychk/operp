@@ -327,7 +327,7 @@ export function WorkflowConfig() {
         destroyOnHidden
         extra={<Space><Button onClick={() => setModalOpen(false)}>{t('common.cancel')}</Button><Button type="primary" onClick={() => void handleSave()}>{t('common.save')}</Button></Space>}
       >
-        <Splitter style={{ height: 'calc(100vh - 120px)' }}>
+        <Splitter style={{ height: 'calc(100vh - 114px)' }}>
           <Splitter.Panel defaultSize="12%" min="10%" max="16%">
             <div style={{ paddingRight: 12, height: '100%', overflow: 'auto' }}>
               <Card size="small" title={t('workflow.basicInfo')} style={{ marginBottom: 12 }}>
@@ -350,7 +350,10 @@ export function WorkflowConfig() {
             </div>
           </Splitter.Panel>
           <Splitter.Panel defaultSize="70%" min="62%" max="82%">
-              <WorkflowDiagram nodes={nodes} onSelectNode={(key) => setSelectedKey(key)} selectedKey={selectedKey} />
+              <WorkflowDiagram 
+              nodes={nodes} 
+              onSelectNode={(key) => setSelectedKey(key)} selectedKey={selectedKey} 
+              />
               <Table
                   style={{display:'none'}}
                   size="small"

@@ -21,6 +21,7 @@ type WorkflowDiagramProps = {
   nodes: WorkflowNodeItem[];
   selectedKey?: string;
   onSelectNode?: (key: string) => void;
+  height?: string | number;
 };
 
 type DiagramNode = {
@@ -94,7 +95,7 @@ const ensureShapeRegistered = () => {
   shapeRegistered = true;
 };
 
-export function WorkflowDiagram({ nodes, selectedKey, onSelectNode }: WorkflowDiagramProps) {
+export function WorkflowDiagram({ nodes, selectedKey, onSelectNode, height }: WorkflowDiagramProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -114,7 +115,7 @@ export function WorkflowDiagram({ nodes, selectedKey, onSelectNode }: WorkflowDi
     const graph = new Graph({
       container,
       width: container.clientWidth || 900,
-      height: Math.max(320, model.height),
+      height: typeof height === 'number' ? height : container.clientHeight || Math.max(320, model.height),
       grid: { size: 10, visible: true, type: 'mesh', args: { color: '#eef2f6', thickness: 1 } },
       background: { color: '#fafafa' },
       interacting: { nodeMovable: true, edgeMovable: false, vertexMovable: false },
@@ -167,7 +168,7 @@ export function WorkflowDiagram({ nodes, selectedKey, onSelectNode }: WorkflowDi
     };
   }, [model, onSelectNode, selectedKey]);
 
-  return nodes.length ? <div ref={containerRef} style={{ width: '100%', minHeight: 320 }} /> : <Empty description={t('workflow.flow.empty')} />;
+  return nodes.length ? <div ref={containerRef} style={{ width: '100%', height: height ?? '100%' }} /> : <Empty description={t('workflow.flow.empty')} />;
 }
 
 function buildGraphModel(nodes: WorkflowNodeItem[]) {
