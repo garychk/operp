@@ -316,87 +316,381 @@ export function WorkflowConfig() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('workflow.configTitle')} extra={<Space><Button icon={<ReloadOutlined />} onClick={() => void fetchDefinitions()}>{t('workflow.refresh')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('workflow.addProcess')}</Button></Space>}>
-      <Table columns={columns} dataSource={definitions} rowKey="id" loading={loading} />
+    <Card
+      className="mainContent"
+      variant="borderless"
+      title={t("workflow.configTitle")}
+      extra={
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => void fetchDefinitions()}
+          >
+            {t("workflow.refresh")}
+          </Button>
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+            {t("workflow.addProcess")}
+          </Button>
+        </Space>
+      }
+    >
+      <Table
+        columns={columns}
+        dataSource={definitions}
+        rowKey="id"
+        loading={loading}
+      />
 
       <Drawer
-        title={editing ? t('workflow.editProcess') : t('workflow.createProcess')}
+        title={
+          editing ? t("workflow.editProcess") : t("workflow.createProcess")
+        }
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         size="90%"
         destroyOnHidden
-        extra={<Space><Button onClick={() => setModalOpen(false)}>{t('common.cancel')}</Button><Button type="primary" onClick={() => void handleSave()}>{t('common.save')}</Button></Space>}
+        extra={
+          <Space>
+            <Button onClick={() => setModalOpen(false)}>
+              {t("common.cancel")}
+            </Button>
+            <Button type="primary" onClick={() => void handleSave()}>
+              {t("common.save")}
+            </Button>
+          </Space>
+        }
       >
-        <Splitter style={{ height: 'calc(100vh - 114px)' }}>
+        <Splitter style={{ height: "calc(100vh - 114px)" }}>
           <Splitter.Panel defaultSize="12%" min="10%" max="16%">
-            <div style={{ paddingRight: 12, height: '100%', overflow: 'auto' }}>
-              <Card size="small" title={t('workflow.basicInfo')} style={{ marginBottom: 12 }}>
+            <div style={{ paddingRight: 12, height: "100%", overflow: "auto" }}>
+              <Card
+                size="small"
+                title={t("workflow.basicInfo")}
+                style={{ marginBottom: 12 }}
+              >
                 <Form form={form} layout="vertical">
-                  <Form.Item name="process_code" label={t('workflow.processCode')} rules={[{ required: true }]}><Input placeholder="purchase_order_default" disabled={!!editing} /></Form.Item>
-                  <Form.Item name="process_name" label={t('workflow.processName')} rules={[{ required: true }]}><Input placeholder={t('workflow.processName')} /></Form.Item>
-                  <Form.Item name="document_type" label={t('workflow.documentType')} rules={[{ required: true }]}><Select options={DOCUMENT_TYPE_OPTIONS} /></Form.Item>
-                  <Form.Item name="version" label={t('workflow.version')} rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
-                  <Form.Item name="is_active" label={t('workflow.active')} valuePropName="checked"><Switch /></Form.Item>
-                  <Form.Item name="description" label={t('workflow.description')}><Input.TextArea rows={2} /></Form.Item>
+                  <Form.Item
+                    name="process_code"
+                    label={t("workflow.processCode")}
+                    rules={[{ required: true }]}
+                  >
+                    <Input
+                      placeholder="purchase_order_default"
+                      disabled={!!editing}
+                    />
+                  </Form.Item>
+                  <Form.Item
+                    name="process_name"
+                    label={t("workflow.processName")}
+                    rules={[{ required: true }]}
+                  >
+                    <Input placeholder={t("workflow.processName")} />
+                  </Form.Item>
+                  <Form.Item
+                    name="document_type"
+                    label={t("workflow.documentType")}
+                    rules={[{ required: true }]}
+                  >
+                    <Select options={DOCUMENT_TYPE_OPTIONS} />
+                  </Form.Item>
+                  <Form.Item
+                    name="version"
+                    label={t("workflow.version")}
+                    rules={[{ required: true }]}
+                  >
+                    <InputNumber min={1} style={{ width: "100%" }} />
+                  </Form.Item>
+                  <Form.Item
+                    name="is_active"
+                    label={t("workflow.active")}
+                    valuePropName="checked"
+                  >
+                    <Switch />
+                  </Form.Item>
+                  <Form.Item
+                    name="description"
+                    label={t("workflow.description")}
+                  >
+                    <Input.TextArea rows={2} />
+                  </Form.Item>
                 </Form>
               </Card>
-              <Card size="small" title={t('workflow.quickAdd')}>
-                <Space direction="vertical" style={{ width: '100%' }}>
-                  <Button block icon={<PlusOutlined />} onClick={() => addNode('approval')}>{t('workflow.addApprovalNode')}</Button>
-                  <Button block icon={<PlusOutlined />} onClick={() => addNode('condition')}>{t('workflow.addConditionNode')}</Button>
-                  <Button block icon={<PlusOutlined />} onClick={() => addNode('end')}>{t('workflow.addEndNode')}</Button>
+              <Card size="small" title={t("workflow.quickAdd")}>
+                <Space direction="vertical" style={{ width: "100%" }}>
+                  <Button
+                    block
+                    icon={<PlusOutlined />}
+                    onClick={() => addNode("approval")}
+                  >
+                    {t("workflow.addApprovalNode")}
+                  </Button>
+                  <Button
+                    block
+                    icon={<PlusOutlined />}
+                    onClick={() => addNode("condition")}
+                  >
+                    {t("workflow.addConditionNode")}
+                  </Button>
+                  <Button
+                    block
+                    icon={<PlusOutlined />}
+                    onClick={() => addNode("end")}
+                  >
+                    {t("workflow.addEndNode")}
+                  </Button>
                 </Space>
               </Card>
             </div>
           </Splitter.Panel>
-          <Splitter.Panel defaultSize="70%" min="62%" max="82%">
-              <WorkflowDiagram 
-              nodes={nodes} 
-              onSelectNode={(key) => setSelectedKey(key)} selectedKey={selectedKey} 
-              />
-              <Table
-                  style={{display:'none'}}
-                  size="small"
-                  pagination={false}
-                  rowKey="node_key"
-                  dataSource={nodes}
-                  rowClassName={(record) => record.node_key === selectedKey ? 'ant-table-row-selected' : ''}
-                  onRow={(record) => ({ onClick: () => setSelectedKey(record.node_key) })}
-                  columns={[
-                    { title: t('workflow.nodeName'), dataIndex: 'node_name' },
-                    { title: t('workflow.nodeType'), dataIndex: 'node_type' },
-                    { title: t('workflow.sequenceNo'), dataIndex: 'sequence_no', width: 90 },
-                    { title: t('workflow.routeType'), dataIndex: 'rule_json', render: (_, record) => record.node_type === 'condition' ? t('workflow.conditionNode') : record.is_start_node ? t('workflow.startNode') : record.is_end_node ? t('workflow.endNode') : t('workflow.approvalNode') },
-                    { title: t('workflow.action'), key: 'action', width: 120, render: (_: unknown, __: WorkflowNode, index: number) => <Space><Button type="text" onClick={() => { setSelectedKey(nodes[index].node_key); const current = nodes[index]; nodeForm.setFieldsValue(toNodeFormValues(current)); }}>{t('common.edit')}</Button><Button type="text" danger icon={<DeleteOutlined />} onClick={() => setNodes((prev) => prev.filter((_, i) => i !== index))} /></Space> },
-                  ]}
-                />
+          <Splitter.Panel defaultSize="68%" min="62%" max="82%">
+            <WorkflowDiagram
+              nodes={nodes}
+              onSelectNode={(key) => setSelectedKey(key)}
+              selectedKey={selectedKey}
+            />
+            <Table
+              style={{ display: "none" }}
+              size="small"
+              pagination={false}
+              rowKey="node_key"
+              dataSource={nodes}
+              rowClassName={(record) =>
+                record.node_key === selectedKey ? "ant-table-row-selected" : ""
+              }
+              onRow={(record) => ({
+                onClick: () => setSelectedKey(record.node_key),
+              })}
+              columns={[
+                { title: t("workflow.nodeName"), dataIndex: "node_name" },
+                { title: t("workflow.nodeType"), dataIndex: "node_type" },
+                {
+                  title: t("workflow.sequenceNo"),
+                  dataIndex: "sequence_no",
+                  width: 90,
+                },
+                {
+                  title: t("workflow.routeType"),
+                  dataIndex: "rule_json",
+                  render: (_, record) =>
+                    record.node_type === "condition"
+                      ? t("workflow.conditionNode")
+                      : record.is_start_node
+                        ? t("workflow.startNode")
+                        : record.is_end_node
+                          ? t("workflow.endNode")
+                          : t("workflow.approvalNode"),
+                },
+                {
+                  title: t("workflow.action"),
+                  key: "action",
+                  width: 120,
+                  render: (_: unknown, __: WorkflowNode, index: number) => (
+                    <Space>
+                      <Button
+                        type="text"
+                        onClick={() => {
+                          setSelectedKey(nodes[index].node_key);
+                          const current = nodes[index];
+                          nodeForm.setFieldsValue(toNodeFormValues(current));
+                        }}
+                      >
+                        {t("common.edit")}
+                      </Button>
+                      <Button
+                        type="text"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() =>
+                          setNodes((prev) => prev.filter((_, i) => i !== index))
+                        }
+                      />
+                    </Space>
+                  ),
+                },
+              ]}
+            />
           </Splitter.Panel>
-          <Splitter.Panel defaultSize="18%" min="14%" max="24%">
-            <div style={{ height: '100%', overflow: 'auto',paddingLeft: 12 }}>
-              <Card size="small" title={t('workflow.nodeProperties')} extra={selectedNode ? <Space><Tag>{selectedNode.node_key}</Tag>
-              <Button type="link" size='small' onClick={() => void saveSelectedNode()}>{t('workflow.applyNode')}</Button></Space> : null}>
+          <Splitter.Panel defaultSize="20%" min="14%" max="24%">
+            <div style={{ height: "100%", overflow: "auto", paddingLeft: 12 }}>
+              <Card
+                size="small"
+                title={t("workflow.nodeProperties")}
+                extra={
+                  selectedNode ? (
+                    <Space>
+                      <Tag>{selectedNode.node_key}</Tag>
+                      <Button
+                        type="link"
+                        size="small"
+                        onClick={() => void saveSelectedNode()}
+                      >
+                        {t("workflow.applyNode")}
+                      </Button>
+                      <Button
+                        icon={<DeleteOutlined />}
+                        danger
+                        type="link"
+                        onClick={() => {
+                          if (!selectedNode) return;
+                          setNodes((prev) => prev.filter((n) => n.node_key !== selectedNode.node_key));
+                          setSelectedKey('');
+                        }}
+                      />
+                    </Space>
+                  ) : null
+                }
+              >
                 {selectedNode ? (
                   <Form form={nodeForm} layout="vertical">
-                    <Form.Item name="node_name" label={t('workflow.nodeName')} rules={[{ required: true }]}><Input /></Form.Item>
-                    <Form.Item name="node_type" label={t('workflow.nodeType')}><Select options={[{ label: t('workflow.approvalNode'), value: 'approval' }, { label: t('workflow.conditionNode'), value: 'condition' }, { label: t('workflow.startNode'), value: 'start' }, { label: t('workflow.endNode'), value: 'end' }]} /></Form.Item>
-                    <Form.Item name="sequence_no" label={t('workflow.sequenceNo')}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
-                    <Form.Item name="approver_mode" label={t('workflow.approverMode')}><Select options={[{ label: t('workflow.approverModeRole'), value: 'role' }, { label: t('workflow.approverModeSystem'), value: 'system' }]} /></Form.Item>
-                    <Form.Item name="approver_role_code" label={t('workflow.approverRole')}><Select allowClear options={roles} /></Form.Item>
+                    <Form.Item
+                      name="node_name"
+                      label={t("workflow.nodeName")}
+                      rules={[{ required: true }]}
+                    >
+                      <Input />
+                    </Form.Item>
+                    <Form.Item name="node_type" label={t("workflow.nodeType")}>
+                      <Select
+                        options={[
+                          {
+                            label: t("workflow.approvalNode"),
+                            value: "approval",
+                          },
+                          {
+                            label: t("workflow.conditionNode"),
+                            value: "condition",
+                          },
+                          { label: t("workflow.startNode"), value: "start" },
+                          { label: t("workflow.endNode"), value: "end" },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="sequence_no"
+                      label={t("workflow.sequenceNo")}
+                    >
+                      <InputNumber min={1} style={{ width: "100%" }} />
+                    </Form.Item>
+                    <Form.Item
+                      name="approver_mode"
+                      label={t("workflow.approverMode")}
+                    >
+                      <Select
+                        options={[
+                          {
+                            label: t("workflow.approverModeRole"),
+                            value: "role",
+                          },
+                          {
+                            label: t("workflow.approverModeSystem"),
+                            value: "system",
+                          },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="approver_role_code"
+                      label={t("workflow.approverRole")}
+                    >
+                      <Select allowClear options={roles} />
+                    </Form.Item>
                     <Row gutter={12}>
-                      <Col span={12}><Form.Item name="allow_reject" label={t('workflow.allowReject')} valuePropName="checked"><Switch /></Form.Item></Col>
-                      <Col span={12}><Form.Item name="allow_withdraw" label={t('workflow.allowWithdraw')} valuePropName="checked"><Switch /></Form.Item></Col>
+                      <Col span={12}>
+                        <Form.Item
+                          name="allow_reject"
+                          label={t("workflow.allowReject")}
+                          valuePropName="checked"
+                        >
+                          <Switch />
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item
+                          name="allow_withdraw"
+                          label={t("workflow.allowWithdraw")}
+                          valuePropName="checked"
+                        >
+                          <Switch />
+                        </Form.Item>
+                      </Col>
                     </Row>
                     <Row gutter={12}>
-                      <Col span={12}><Form.Item name="is_start_node" label={t('workflow.startNode')} valuePropName="checked"><Switch /></Form.Item></Col>
-                      <Col span={12}><Form.Item name="is_end_node" label={t('workflow.endNode')} valuePropName="checked"><Switch /></Form.Item></Col>
+                      <Col span={12}>
+                        <Form.Item
+                          name="is_start_node"
+                          label={t("workflow.startNode")}
+                          valuePropName="checked"
+                        >
+                          <Switch />
+                        </Form.Item>
+                      </Col>
+                      <Col span={12}>
+                        <Form.Item
+                          name="is_end_node"
+                          label={t("workflow.endNode")}
+                          valuePropName="checked"
+                        >
+                          <Switch />
+                        </Form.Item>
+                      </Col>
                     </Row>
-                    <Form.Item name="condition_expr" label={t('workflow.conditionExpr')}><Input placeholder="amount >= 50000" /></Form.Item>
-                    <Form.Item name="condition_label" label={t('workflow.conditionLabel')}><Input placeholder={t('workflow.conditionLabelPlaceholder')} /></Form.Item>
-                    <Form.Item name="true_target_key" label={t('workflow.trueTargetKey')}><Select allowClear options={nodes.filter((node) => node.node_key !== selectedNode.node_key).map((node) => ({ label: `${node.node_name} (${node.node_key})`, value: node.node_key }))} /></Form.Item>
-                    <Form.Item name="false_target_key" label={t('workflow.falseTargetKey')}><Select allowClear options={nodes.filter((node) => node.node_key !== selectedNode.node_key).map((node) => ({ label: `${node.node_name} (${node.node_key})`, value: node.node_key }))} /></Form.Item>
-                    <Form.Item name="is_default_path" label={t('workflow.defaultPath')} valuePropName="checked"><Switch /></Form.Item>
+                    <Form.Item
+                      name="condition_expr"
+                      label={t("workflow.conditionExpr")}
+                    >
+                      <Input placeholder="amount >= 50000" />
+                    </Form.Item>
+                    <Form.Item
+                      name="condition_label"
+                      label={t("workflow.conditionLabel")}
+                    >
+                      <Input
+                        placeholder={t("workflow.conditionLabelPlaceholder")}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="true_target_key"
+                      label={t("workflow.trueTargetKey")}
+                    >
+                      <Select
+                        allowClear
+                        options={nodes
+                          .filter(
+                            (node) => node.node_key !== selectedNode.node_key,
+                          )
+                          .map((node) => ({
+                            label: `${node.node_name} (${node.node_key})`,
+                            value: node.node_key,
+                          }))}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="false_target_key"
+                      label={t("workflow.falseTargetKey")}
+                    >
+                      <Select
+                        allowClear
+                        options={nodes
+                          .filter(
+                            (node) => node.node_key !== selectedNode.node_key,
+                          )
+                          .map((node) => ({
+                            label: `${node.node_name} (${node.node_key})`,
+                            value: node.node_key,
+                          }))}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      name="is_default_path"
+                      label={t("workflow.defaultPath")}
+                      valuePropName="checked"
+                    >
+                      <Switch />
+                    </Form.Item>
                   </Form>
-                ) : <div>{t('workflow.noNodeSelected')}</div>}
+                ) : (
+                  <div>{t("workflow.noNodeSelected")}</div>
+                )}
               </Card>
             </div>
           </Splitter.Panel>
