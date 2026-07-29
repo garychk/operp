@@ -323,12 +323,12 @@ export function WorkflowConfig() {
         title={editing ? t('workflow.editProcess') : t('workflow.createProcess')}
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        width="95%"
+        size="90%"
         destroyOnHidden
         extra={<Space><Button onClick={() => setModalOpen(false)}>{t('common.cancel')}</Button><Button type="primary" onClick={() => void handleSave()}>{t('common.save')}</Button></Space>}
       >
-        <Splitter style={{ height: 'calc(100vh - 220px)' }}>
-          <Splitter.Panel defaultSize="15%" min="10%" max="16%">
+        <Splitter style={{ height: 'calc(100vh - 120px)' }}>
+          <Splitter.Panel defaultSize="12%" min="10%" max="16%">
             <div style={{ paddingRight: 12, height: '100%', overflow: 'auto' }}>
               <Card size="small" title={t('workflow.basicInfo')} style={{ marginBottom: 12 }}>
                 <Form form={form} layout="vertical">
@@ -350,12 +350,9 @@ export function WorkflowConfig() {
             </div>
           </Splitter.Panel>
           <Splitter.Panel defaultSize="70%" min="62%" max="82%">
-            <div style={{ padding: '0 12px', height: '100%', overflow: 'auto' }}>
-              <Card size="small" title={t('workflow.flow.preview')} style={{ marginBottom: 12 }}>
-                <WorkflowDiagram nodes={nodes} onSelectNode={(key) => setSelectedKey(key)} selectedKey={selectedKey} />
-              </Card>
-              <Card size="small" title={t('workflow.nodeList')}>
-                <Table
+              <WorkflowDiagram nodes={nodes} onSelectNode={(key) => setSelectedKey(key)} selectedKey={selectedKey} />
+              <Table
+                  style={{display:'none'}}
                   size="small"
                   pagination={false}
                   rowKey="node_key"
@@ -370,13 +367,11 @@ export function WorkflowConfig() {
                     { title: t('workflow.action'), key: 'action', width: 120, render: (_: unknown, __: WorkflowNode, index: number) => <Space><Button type="text" onClick={() => { setSelectedKey(nodes[index].node_key); const current = nodes[index]; nodeForm.setFieldsValue(toNodeFormValues(current)); }}>{t('common.edit')}</Button><Button type="text" danger icon={<DeleteOutlined />} onClick={() => setNodes((prev) => prev.filter((_, i) => i !== index))} /></Space> },
                   ]}
                 />
-              </Card>
-            </div>
           </Splitter.Panel>
-          <Splitter.Panel defaultSize="15%" min="14%" max="24%">
-            <div style={{ height: '100%', overflow: 'auto' }}>
+          <Splitter.Panel defaultSize="18%" min="14%" max="24%">
+            <div style={{ height: '100%', overflow: 'auto',paddingLeft: 12 }}>
               <Card size="small" title={t('workflow.nodeProperties')} extra={selectedNode ? <Space><Tag>{selectedNode.node_key}</Tag>
-              <Button type="primary" onClick={() => void saveSelectedNode()}>{t('workflow.applyNode')}</Button></Space> : null}>
+              <Button type="link" size='small' onClick={() => void saveSelectedNode()}>{t('workflow.applyNode')}</Button></Space> : null}>
                 {selectedNode ? (
                   <Form form={nodeForm} layout="vertical">
                     <Form.Item name="node_name" label={t('workflow.nodeName')} rules={[{ required: true }]}><Input /></Form.Item>
