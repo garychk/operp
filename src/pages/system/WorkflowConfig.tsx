@@ -583,13 +583,6 @@ export function WorkflowConfig() {
                         placeholder={t("workflow.conditionLabelPlaceholder")}
                       />
                     </Form.Item>
-                    <Form.Item
-                      name="is_default_path"
-                      label={t("workflow.defaultPath")}
-                      valuePropName="checked"
-                    >
-                      <Switch />
-                    </Form.Item>
                   </Form>
                 ) : (
                   <div>{t("workflow.noNodeSelected")}</div>
@@ -600,7 +593,6 @@ export function WorkflowConfig() {
               <Card
                 size="small"
                 title={t("workflow.edgeProperties")}
-                style={{ marginTop: 12 }}
                 extra={
                   selectedEdge ? (
                     <Space>
@@ -617,15 +609,14 @@ export function WorkflowConfig() {
               >
                 {selectedEdge ? (
                   <Form form={edgeForm} layout="vertical">
+                    <Form.Item name="id" label={t("common.id")}>{selectedEdge.id}</Form.Item>
+                    <Form.Item name="source" label={t("workflow.edgeSource")}>{selectedEdge.source}</Form.Item>
+                    <Form.Item name="target" label={t("workflow.edgeTarget")}>{selectedEdge.target}</Form.Item>
                     <Form.Item name="label" label={t("workflow.edgeLabel")}><Input /></Form.Item>
                     <Form.Item name="lineStyle" label={t("workflow.edgeLineStyle")}><Select options={[{ label: t("workflow.edgeSolid"), value: "solid" }, { label: t("workflow.edgeDashed"), value: "dashed" }]} /></Form.Item>
                     <Form.Item name="color" label={t("workflow.edgeColor")}><Select options={[{ label: t("workflow.edgeColorBlue"), value: "#1677ff" }, { label: t("workflow.edgeColorOrange"), value: "#f59e0b" }, { label: t("workflow.edgeColorGray"), value: "#91a4b7" }]} /></Form.Item>
                     <Button type="primary" block onClick={() => void saveSelectedEdge()}>{t("workflow.applyEdge")}</Button>
-                    <div style={{ marginTop: 12 }}>
-                      <div>{t("common.id")}:<Tag>{selectedEdge.id}</Tag></div>
-                      <div>{t("workflow.edgeSource")}:<Tag>{selectedEdge.source}</Tag></div>
-                      <div>{t("workflow.edgeTarget")}:<Tag>{selectedEdge.target}</Tag></div>
-                    </div>
+                    
                   </Form>
                 ) : (
                   <div>{t("workflow.noEdgeSelected")}</div>
