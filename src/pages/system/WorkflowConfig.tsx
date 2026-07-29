@@ -124,6 +124,7 @@ export function WorkflowConfig() {
   const [editing, setEditing] = useState<WorkflowDefinition | null>(null);
   const [nodes, setNodes] = useState<WorkflowNode[]>([]);
   const [selectedKey, setSelectedKey] = useState<string>('');
+  const [canvasHeight, setCanvasHeight] = useState<number>(640);
   const [form] = Form.useForm();
   const [nodeForm] = Form.useForm<NodeFormValues>();
 
@@ -173,8 +174,11 @@ export function WorkflowConfig() {
       ...node,
       rule_json: node.rule_json && typeof node.rule_json === 'object' ? node.rule_json : {},
     }));
-    setNodes(loaded.length ? loaded : DEFAULT_NODES);
-    setSelectedKey(loaded[0]?.node_key || DEFAULT_NODES[0].node_key);
+    setCanvasHeight(computeCanvasHeight(loaded));
+    const initialNodes = loaded.length ? loaded : DEFAULT_NODES;
+    setNodes(initialNodes);
+    setSelectedKey(initialNodes[0]?.node_key || '');
+    setCanvasHeight(computeCanvasHeight(initialNodes));
     nodeForm.setFieldsValue(toNodeFormValues(loaded[0] || DEFAULT_NODES[0]));
   };
 
@@ -183,6 +187,7 @@ export function WorkflowConfig() {
     form.setFieldsValue({ process_code: '', process_name: '', document_type: 'purchase_order', description: '', is_active: true, version: 1 });
     setNodes(DEFAULT_NODES);
     setSelectedKey(DEFAULT_NODES[0].node_key);
+    setCanvasHeight(computeCanvasHeight(DEFAULT_NODES));
     nodeForm.setFieldsValue(toNodeFormValues(DEFAULT_NODES[0]));
     setModalOpen(true);
   };
@@ -203,7 +208,11 @@ export function WorkflowConfig() {
 
   const saveSelectedNode = async () => {
     const values = await nodeForm.validateFields();
-    setNodes((prev) => prev.map((node) => node.node_key === selectedKey ? mergeNodeForm(node, values) : node));
+    setNodes((prev) => {
+      const next = prev.map((node) => node.node_key === selectedKey ? mergeNodeForm(node, values) : node);
+      setCanvasHeight(computeCanvasHeight(next));
+      return next;
+    });
     message.success(t('workflow.nodeSaved'));
   };
 
@@ -296,13 +305,21 @@ export function WorkflowConfig() {
       is_end_node: false,
       rule_json: nodeType === 'condition' ? { expr: '', trueTargetKey: '', falseTargetKey: '', isDefaultPath: false } : {},
     };
-    setNodes((prev) => [...prev, nextNode]);
+    setNodes((prev) => {
+      const next = [...prev, nextNode];
+      setCanvasHeight(computeCanvasHeight(next));
+      return next;
+    });
     setSelectedKey(node_key);
     nodeForm.setFieldsValue(toNodeFormValues(nextNode));
   };
 
   const updateNode = (index: number, patch: Partial<WorkflowNode>) => {
-    setNodes((prev) => prev.map((node, i) => (i === index ? { ...node, ...patch } : node)));
+    setNodes((prev) => {
+      const next = prev.map((node, i) => (i === index ? { ...node, ...patch } : node));
+      setCanvasHeight(computeCanvasHeight(next));
+      return next;
+    });
   };
 
   
@@ -446,7 +463,23 @@ export function WorkflowConfig() {
             <WorkflowDiagram
               nodes={nodes}
               onSelectNode={(key) => setSelectedKey(key)}
+              onNodeMove={(key, position) => {
+                setNodes((prev) => {
+                  const next = prev.map((node) => node.node_key === key
+                    ? {
+                        ...node,
+                        rule_json: {
+                          ...(node.rule_json || {}),
+                          layout: position,
+                        },
+                      }
+                    : node);
+                  setCanvasHeight(computeCanvasHeight(next));
+                  return next;
+                });
+              }}
               selectedKey={selectedKey}
+              height={canvasHeight}
             />
             <Table
               style={{ display: "none" }}
@@ -722,15 +755,24 @@ function toNodeFormValues(node: WorkflowNode): NodeFormValues {
 }
 
 function mergeNodeForm(node: WorkflowNode, values: NodeFormValues): WorkflowNode {
+  const existingLayout = getNodeLayout(node.rule_json);
   const rule_json = node.node_type === 'condition'
     ? {
+        ...node.rule_json,
         expr: values.condition_expr,
         conditionLabel: values.condition_label,
         trueTargetKey: values.true_target_key,
         falseTargetKey: values.false_target_key,
         isDefaultPath: values.is_default_path,
       }
-    : {};
+    : {
+        ...node.rule_json,
+      };
+  if (existingLayout) {
+    (rule_json as Record<string, unknown>).layout = existingLayout;
+  } else if (node.rule_json && typeof node.rule_json === 'object' && 'layout' in node.rule_json) {
+    (rule_json as Record<string, unknown>).layout = (node.rule_json as Record<string, unknown>).layout;
+  }
   return {
     ...node,
     node_name: values.node_name,
@@ -746,7 +788,20 @@ function mergeNodeForm(node: WorkflowNode, values: NodeFormValues): WorkflowNode
   };
 }
 
-function addBranch(nodeKey: string, branch: 'true' | 'false') {
-  void nodeKey;
-  void branch;
+function computeCanvasHeight(nodes: WorkflowNode[]) {
+  if (!nodes.length) return 640;
+  const maxY = nodes.reduce((acc, node) => {
+    const layout = getNodeLayout(node.rule_json);
+    return Math.max(acc, layout?.y ?? 0);
+  }, 0);
+  return Math.max(640, maxY + 220);
+}
+
+function getNodeLayout(ruleJson: Record<string, unknown>) {
+  const layout = ruleJson.layout;
+  if (!layout || typeof layout !== 'object') return null;
+  const x = Number((layout as Record<string, unknown>).x);
+  const y = Number((layout as Record<string, unknown>).y);
+  if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+  return null;
 }

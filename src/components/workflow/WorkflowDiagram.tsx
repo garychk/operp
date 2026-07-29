@@ -21,6 +21,7 @@ type WorkflowDiagramProps = {
   nodes: WorkflowNodeItem[];
   selectedKey?: string;
   onSelectNode?: (key: string) => void;
+  onNodeMove?: (key: string, position: { x: number; y: number }) => void;
   height?: string | number;
 };
 
@@ -95,7 +96,7 @@ const ensureShapeRegistered = () => {
   shapeRegistered = true;
 };
 
-export function WorkflowDiagram({ nodes, selectedKey, onSelectNode, height }: WorkflowDiagramProps) {
+export function WorkflowDiagram({ nodes, selectedKey, onSelectNode, onNodeMove, height }: WorkflowDiagramProps) {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
@@ -161,6 +162,9 @@ export function WorkflowDiagram({ nodes, selectedKey, onSelectNode, height }: Wo
 
     graph.centerContent();
     graph.on('node:click', ({ node }) => onSelectNode?.(String(node.id)));
+    graph.on('node:mouseup', ({ node }) => {
+      onNodeMove?.(String(node.id), { x: node.position().x, y: node.position().y });
+    });
 
     return () => {
       graph.dispose();
@@ -178,12 +182,13 @@ function buildGraphModel(nodes: WorkflowNodeItem[]) {
     const kind = node.node_type;
     const column = kind === 'condition' ? 1 : kind === 'end' ? 2 : 0;
     const row = kind === 'condition' ? 0 : index;
+    const layout = getNodeLayout(node.rule_json);
     maxRow = Math.max(maxRow, row);
     return {
       key: node.node_key,
       kind,
-      x: 40 + column * COLUMN_GAP,
-      y: 24 + row * ROW_GAP,
+      x: layout?.x ?? 40 + column * COLUMN_GAP,
+      y: layout?.y ?? 24 + row * ROW_GAP,
       title: node.node_name,
       subtitle: kind === 'condition'
         ? String(node.rule_json?.expr || '条件分支')
@@ -214,4 +219,13 @@ function buildGraphModel(nodes: WorkflowNodeItem[]) {
   });
 
   return { nodes: graphNodes, edges, height: 24 + (maxRow + 1) * ROW_GAP + 100 };
+}
+
+function getNodeLayout(ruleJson: Record<string, unknown>) {
+  const layout = ruleJson.layout;
+  if (!layout || typeof layout !== 'object') return null;
+  const x = Number((layout as Record<string, unknown>).x);
+  const y = Number((layout as Record<string, unknown>).y);
+  if (Number.isFinite(x) && Number.isFinite(y)) return { x, y };
+  return null;
 }
