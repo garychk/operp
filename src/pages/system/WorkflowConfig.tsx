@@ -42,14 +42,7 @@ type GraphState = {
   edges: WorkflowEdgeItem[];
 };
 
-const DOCUMENT_TYPE_OPTIONS = [
-  { label: '采购订单', value: 'purchase_order' },
-  { label: '销售订单', value: 'sales_order' },
-  { label: '采购入库', value: 'purchase_receipt' },
-  { label: '销售出货', value: 'sales_delivery' },
-  { label: '凭证', value: 'voucher' },
-];
-
+type DocumentTypeOption = { label: string; value: string };
 const DEFAULT_GRAPH: GraphState = {
   nodes: [
     { node_key: 'start', node_name: '提交审批', node_type: 'start', sequence_no: 1, approver_mode: 'system', approver_role_code: null, allow_reject: false, allow_withdraw: false, is_start_node: true, is_end_node: false, rule_json: { layout: { x: 40, y: 24 } } },
@@ -71,6 +64,7 @@ export function WorkflowConfig() {
   const { t } = useTranslation();
   const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
   const [roles, setRoles] = useState<RoleOption[]>([]);
+  const [documentTypes, setDocumentTypes] = useState<DocumentTypeOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<WorkflowDefinition | null>(null);
@@ -87,6 +81,7 @@ export function WorkflowConfig() {
   useEffect(() => {
     void fetchDefinitions();
     void fetchRoles();
+    void fetchDocumentTypes();
   }, []);
 
   const fetchDefinitions = async () => {
@@ -105,6 +100,12 @@ export function WorkflowConfig() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchDocumentTypes = async () => {
+    const { data, error } = await supabase.from("sys_document_types").select("document_type, document_name").eq("is_deleted", "n").eq("status", "1").order("sort_order", { ascending: true }).order("document_name", { ascending: true });
+    if (error) { message.error(error.message); return; }
+    setDocumentTypes((data || []).map((item) => ({ label: item.document_name, value: item.document_type })));
   };
 
   const fetchRoles = async () => {
@@ -136,7 +137,7 @@ export function WorkflowConfig() {
 
   const handleAdd = () => {
     setEditing(null);
-    form.setFieldsValue({ process_code: '', process_name: '', document_type: 'purchase_order', description: '', is_active: true, version: 1 });
+    form.setFieldsValue({ process_code: '', process_name: '', document_type: documentTypes[0]?.value || '', description: '', is_active: true, version: 1 });
     setNodes(DEFAULT_GRAPH.nodes);
     setEdges(DEFAULT_GRAPH.edges);
     setSelectedKey(DEFAULT_GRAPH.nodes[0].node_key);
@@ -295,7 +296,7 @@ export function WorkflowConfig() {
 
   const columns = [
     { title: t('workflow.processName'), dataIndex: 'process_name' },
-    { title: t('workflow.documentType'), dataIndex: 'document_type', render: (value: string) => DOCUMENT_TYPE_OPTIONS.find((item) => item.value === value)?.label || value },
+    { title: t('workflow.documentType'), dataIndex: 'document_type', render: (value: string) => documentTypes.find((item) => item.value === value)?.label || value },
     { title: t('workflow.processCode'), dataIndex: 'process_code' },
     { title: t('workflow.version'), dataIndex: 'version', width: 80 },
     { title: t('workflow.status'), dataIndex: 'is_active', width: 100, render: (value: boolean) => <Tag color={value ? 'green' : 'default'}>{value ? t('workflow.active') : t('workflow.inactive')}</Tag> },
@@ -377,7 +378,7 @@ export function WorkflowConfig() {
                     label={t("workflow.documentType")}
                     rules={[{ required: true }]}
                   >
-                    <Select options={DOCUMENT_TYPE_OPTIONS} />
+                    <Select options={documentTypes} loading={!documentTypes.length} />
                   </Form.Item>
                   <Form.Item
                     name="version"

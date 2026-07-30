@@ -34,6 +34,7 @@ import { Logs } from './pages/system/Logs';
 import { Settings } from './pages/system/Settings';
 import { Dictionaries } from './pages/system/Dictionaries';
 import { WorkflowConfig } from './pages/system/WorkflowConfig';
+import { DocumentTypeBuilder } from './pages/system/DocumentTypeBuilder';
 import { PageDesigner } from './features/page-builder/PageDesigner';
 import { CustomPageRenderer } from './features/page-builder/PageRenderer';
 import { BaqDesigner } from './features/baq/BaqDesigner';
@@ -117,6 +118,7 @@ function AppContent() {
           <Route path="settings" element={<Settings />} />
           <Route path="dictionaries" element={<Dictionaries />} />
           <Route path="workflow" element={<WorkflowConfig />} />
+          <Route path="document-types" element={<DocumentTypeBuilder />} />
           <Route path="logs" element={<Logs />} />
           <Route path="page-designer" element={<PageDesigner />} />
           <Route path="baq" element={<BaqDesigner />} />

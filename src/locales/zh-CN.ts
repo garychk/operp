@@ -61,6 +61,7 @@ const zhCN = {
       pageDesigner: "页面设计器",
       baq: "BAQ管理",
       workflow: "流程配置",
+      documentTypes: "DocType构建",
     },
     settings: {
       title: "系统设置",

@@ -330,6 +330,7 @@ export const menuData: MenuRoute[] = [
       { path: "/system/menus", name: "菜单管理", icon: <MenuOutlined /> },
       { path: "/system/settings", name: "系统设置", icon: <SettingOutlined /> },
       { path: "/system/workflow", name: "流程配置", icon: <BranchesOutlined /> },
+      { path: "/system/document-types", name: "DocType构建", icon: <ProfileOutlined /> },
       {
         path: "/system/dictionaries",
         name: "数据字典",
@@ -376,6 +377,7 @@ const pathToNameMap: Record<string, string> = {
   "/system/menus": "菜单管理",
   "/system/settings": "系统设置",
   "/system/workflow": "流程配置",
+  "/system/document-types": "DocType构建",
   "/system/dictionaries": "数据字典",
   "/system/logs": "系统日志",
   "/system/page-designer": "页面设计器",
@@ -416,6 +418,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/system/menus": "menu.menus",
   "/system/settings": "menu.settings",
   "/system/workflow": "menu.workflow",
+  "/system/document-types": "menu.documentTypes",
   "/system/dictionaries": "menu.dictionaries",
   "/system/logs": "menu.logs",
   "/system/page-designer": "menu.pageDesigner",

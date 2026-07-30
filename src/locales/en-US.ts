@@ -61,6 +61,7 @@ const enUS = {
       pageDesigner: "Page Designer",
       baq: "BAQ Designer",
       workflow: "Workflow",
+      documentTypes: "DocType Builder",
     },
     settings: {
       title: "System Settings",

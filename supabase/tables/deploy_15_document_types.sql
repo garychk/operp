@@ -191,3 +191,65 @@ DROP POLICY IF EXISTS "Authenticated users can manage document type fields" ON p
 CREATE POLICY "Authenticated users can manage document type fields"
   ON public.sys_document_type_fields FOR ALL TO authenticated USING (true) WITH CHECK (true);
 SELECT public.install_role_table_rls('sys_document_type_fields');
+
+-- Import physical table columns into the DocType field metadata.
+CREATE OR REPLACE FUNCTION public.sync_document_type_fields(p_document_type_id INTEGER)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_table_name TEXT;
+  v_count INTEGER := 0;
+BEGIN
+  SELECT table_name INTO v_table_name
+  FROM public.sys_document_types
+  WHERE id = p_document_type_id
+    AND is_deleted = 'n';
+
+  IF v_table_name IS NULL OR v_table_name = '' THEN
+    RAISE EXCEPTION 'Document type has no physical table configured';
+  END IF;
+
+  INSERT INTO public.sys_document_type_fields (
+    document_type_id, field_name, label, field_type, data_type,
+    is_required, is_read_only, sort_order
+  )
+  SELECT
+    p_document_type_id,
+    c.column_name,
+    c.column_name,
+    CASE
+      WHEN c.data_type IN ('integer', 'bigint', 'smallint') THEN 'Int'
+      WHEN c.data_type IN ('numeric', 'decimal') THEN 'Currency'
+      WHEN c.data_type IN ('real', 'double precision') THEN 'Float'
+      WHEN c.data_type = 'boolean' THEN 'Check'
+      WHEN c.data_type = 'date' THEN 'Date'
+      WHEN c.data_type LIKE 'timestamp%' THEN 'DateTime'
+      WHEN c.data_type IN ('text', 'character varying', 'character') THEN 'Data'
+      WHEN c.data_type = 'jsonb' THEN 'LongText'
+      ELSE 'Data'
+    END,
+    c.data_type,
+    c.is_nullable = 'NO' AND c.column_default IS NULL,
+    c.column_name = 'id' OR c.column_name IN ('created_at', 'updated_at'),
+    c.ordinal_position
+  FROM information_schema.columns c
+  WHERE c.table_schema = 'public'
+    AND c.table_name = v_table_name
+  ON CONFLICT (document_type_id, field_name) DO UPDATE SET
+    data_type = EXCLUDED.data_type,
+    field_type = CASE
+      WHEN sys_document_type_fields.field_type IN ('SectionBreak', 'ColumnBreak')
+        THEN sys_document_type_fields.field_type
+      ELSE EXCLUDED.field_type
+    END,
+    updated_at = NOW();
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN v_count;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.sync_document_type_fields(INTEGER) TO authenticated;
