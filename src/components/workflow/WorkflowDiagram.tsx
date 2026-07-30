@@ -109,7 +109,7 @@ export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onS
     graph = new Graph({
       container: containerRef.current,
       width: containerRef.current.clientWidth || 900,
-      height: typeof height === 'number' ? height : containerRef.current.clientHeight || Math.max(320, model.height),
+      height: typeof height === 'number' ? Math.max(containerRef.current.clientHeight || 0, height) : containerRef.current.clientHeight || Math.max(320, model.height),
       grid: { size: 10, visible: true, type: 'mesh', args: { color: '#eef2f6', thickness: 1 } },
       background: { color: '#fafafa' },
       interacting: { nodeMovable: true, edgeMovable: true, vertexMovable: true, arrowheadMovable: false },
@@ -178,7 +178,7 @@ export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onS
     };
   }, [model, onSelectEdge, onSelectNode, onNodeMove, onEdgeChange, selectedEdgeId, selectedKey, height]);
 
-  return nodes.length ? <div ref={containerRef} style={{ width: '100%', height: height ?? '100%' }} /> : <Empty description={t('workflow.flow.empty')} />;
+  return nodes.length ? <div ref={containerRef} style={{ width: '100%', height: '100%' }} /> : <Empty description={t('workflow.flow.empty')} />;
 }
 
 function buildGraphModel(nodes: WorkflowNodeItem[], edges: WorkflowEdgeItem[]) {
