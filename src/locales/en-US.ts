@@ -576,6 +576,7 @@ const enUS = {
       deleteSuccess: "Deleted successfully",
       deleteFailed: "Delete failed",
       atLeastOneNode: "Please configure at least one workflow node",
+      duplicateNodeKey: "Node keys must be unique",
       noProcessId: "Failed to obtain process ID",
       documentTypes: {
         purchaseOrder: "Purchase Order",

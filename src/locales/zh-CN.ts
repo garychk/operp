@@ -572,6 +572,7 @@ const zhCN = {
       deleteSuccess: "删除成功",
       deleteFailed: "删除失败",
       atLeastOneNode: "请至少配置一个流程节点",
+      duplicateNodeKey: "节点编码不能重复",
       noProcessId: "未能获取流程ID",
       documentTypes: {
         purchaseOrder: "采购订单",

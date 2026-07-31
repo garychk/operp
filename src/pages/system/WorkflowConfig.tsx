@@ -181,11 +181,28 @@ export function WorkflowConfig() {
 
   const saveSelectedNode = async () => {
     const values = await nodeForm.validateFields();
+    const nextNodeKey = String(values.node_key).trim();
+    if (nodes.some((node) => node.node_key !== selectedKey && node.node_key === nextNodeKey)) {
+      message.error(t('workflow.duplicateNodeKey'));
+      return;
+    }
+
+    const previousKey = selectedKey;
     setNodes((prev) => {
-      const next = prev.map((node) => (node.node_key === selectedKey ? mergeNodeForm(node, values) : node));
+      const next = prev.map((node) => (node.node_key === previousKey ? mergeNodeForm(node, { ...values, node_key: nextNodeKey }) : node));
       setCanvasHeight(computeCanvasHeight(next));
       return next;
     });
+    if (nextNodeKey !== previousKey) {
+      setEdges((prev) => prev.map((edge) => ({
+        ...edge,
+        source: edge.source === previousKey ? nextNodeKey : edge.source,
+        target: edge.target === previousKey ? nextNodeKey : edge.target,
+        sourcePort: edge.source === previousKey ? edge.sourcePort?.replace(previousKey, nextNodeKey) : edge.sourcePort,
+        targetPort: edge.target === previousKey ? edge.targetPort?.replace(previousKey, nextNodeKey) : edge.targetPort,
+      })));
+      setSelectedKey(nextNodeKey);
+    }
     message.success(t('workflow.nodeSaved'));
   };
 
@@ -251,6 +268,10 @@ export function WorkflowConfig() {
       message.error(t('workflow.atLeastOneNode'));
       return;
     }
+    if (new Set(nodes.map((node) => node.node_key)).size !== nodes.length) {
+      message.error(t('workflow.duplicateNodeKey'));
+      return;
+    }
 
     await logWithTiming(t('workflow.configTitle'), 'UPSERT', async () => {
       const processPayload = {
@@ -274,7 +295,12 @@ export function WorkflowConfig() {
       }
       if (!processId) throw new Error(t('workflow.noProcessId'));
 
-      await supabase.from('wf_process_nodes').delete().eq('process_id', processId);
+      const { data: existingNodes, error: existingNodesError } = await supabase
+        .from('wf_process_nodes')
+        .select('node_key')
+        .eq('process_id', processId);
+      if (existingNodesError) throw existingNodesError;
+
       const nodePayload = nodes.map((node) => ({
         process_id: processId,
         node_key: node.node_key,
@@ -290,8 +316,23 @@ export function WorkflowConfig() {
         rule_json: normalizeRuleJson(node.rule_json),
         is_deleted: 'n',
       }));
-      const { error } = await supabase.from('wf_process_nodes').insert(nodePayload);
-      if (error) throw error;
+      const { error: upsertError } = await supabase
+        .from('wf_process_nodes')
+        .upsert(nodePayload, { onConflict: 'process_id,node_key' });
+      if (upsertError) throw upsertError;
+
+      const currentNodeKeys = new Set(nodes.map((node) => node.node_key));
+      const removedNodeKeys = (existingNodes || [])
+        .map((node) => node.node_key)
+        .filter((nodeKey) => !currentNodeKeys.has(nodeKey));
+      if (removedNodeKeys.length) {
+        const { error: softDeleteError } = await supabase
+          .from('wf_process_nodes')
+          .update({ is_deleted: 'y' })
+          .eq('process_id', processId)
+          .in('node_key', removedNodeKeys);
+        if (softDeleteError) throw softDeleteError;
+      }
     }, { process_code: values.process_code });
 
     message.success(t('workflow.saveSuccess'));
