@@ -33,7 +33,6 @@ type NodeFormValues = {
   allow_withdraw: boolean;
   is_start_node: boolean;
   is_end_node: boolean;
-  condition_expr: string;
   condition_label: string;
   is_default_path: boolean;
 };
@@ -54,8 +53,8 @@ const DEFAULT_GRAPH: GraphState = {
   ],
   edges: [
     { id: 'start-to-condition', source: 'start', target: 'amount_condition', kind: 'default' },
-    { id: 'condition-true', source: 'amount_condition', target: 'finance_manager', sourcePort: 'amount_condition-right', targetPort: 'finance_manager-left', kind: 'true', label: '是' },
-    { id: 'condition-false', source: 'amount_condition', target: 'dept_manager', sourcePort: 'amount_condition-bottom', targetPort: 'dept_manager-left', kind: 'false', label: '否' },
+    { id: 'condition-true', source: 'amount_condition', target: 'finance_manager', sourcePort: 'amount_condition-right', targetPort: 'finance_manager-left', kind: 'condition', label: '金额 >= 50000', condition: JSON.stringify({ logic: 'and', conditions: [{ field: 'amount', operator: '>=', value: '50000' }] }) },
+    { id: 'condition-false', source: 'amount_condition', target: 'dept_manager', sourcePort: 'amount_condition-bottom', targetPort: 'dept_manager-left', kind: 'default', label: '其他情况' },
     { id: 'dept-to-final', source: 'dept_manager', target: 'final', kind: 'default' },
     { id: 'finance-to-final', source: 'finance_manager', target: 'final', kind: 'default' },
   ],
@@ -79,6 +78,7 @@ export function WorkflowConfig() {
   const [nodeForm] = Form.useForm<NodeFormValues>();
   const [edgeForm] = Form.useForm<WorkflowEdgeItem>();
   const currentDocumentType = Form.useWatch("document_type", form);
+  const currentEdgeKind = Form.useWatch("kind", edgeForm);
 
   useEffect(() => {
     void fetchDefinitions();
@@ -171,7 +171,11 @@ export function WorkflowConfig() {
   const saveSelectedEdge = async () => {
     if (!selectedEdge) return;
     const values = await edgeForm.validateFields();
-    setEdges((prev) => prev.map((edge) => (edge.id === selectedEdge.id ? { ...edge, ...values } : edge)));
+    if (values.kind === "default" && edges.some((edge) => edge.id !== selectedEdge.id && edge.source === selectedEdge.source && edge.kind === "default")) {
+      message.error(t("workflow.onlyOneDefaultEdge"));
+      return;
+    }
+    setEdges((prev) => prev.map((edge) => (edge.id === selectedEdge.id ? { ...edge, ...values, condition: values.kind === "condition" ? values.condition : undefined } : edge)));
     message.success(t("workflow.edgeSaved"));
   };
 
@@ -504,12 +508,6 @@ export function WorkflowConfig() {
                       />
                     </Form.Item>
                     <Form.Item
-                      name="condition_expr"
-                      label={t("workflow.conditionExpr")}
-                    >
-                      <ConditionEditor documentType={currentDocumentType} />
-                    </Form.Item>
-                    <Form.Item
                       name="condition_label"
                       label={t("workflow.conditionLabel")}
                     >
@@ -616,6 +614,8 @@ export function WorkflowConfig() {
                     <Form.Item name="id" label={t("common.id")}>{selectedEdge.id}</Form.Item>
                     <Form.Item name="source" label={t("workflow.edgeSource")}>{selectedEdge.source}</Form.Item>
                     <Form.Item name="target" label={t("workflow.edgeTarget")}>{selectedEdge.target}</Form.Item>
+                    <Form.Item name="kind" label={t("workflow.edgeKind")}><Select options={[{ label: t("workflow.edgeKindCondition"), value: "condition" }, { label: t("workflow.edgeKindDefault"), value: "default" }]} /></Form.Item>
+                    {currentEdgeKind === "condition" && <Form.Item name="condition" label={t("workflow.edgeCondition")} rules={[{ required: true }]}><ConditionEditor documentType={currentDocumentType} /></Form.Item>}
                     <Form.Item name="label" label={t("workflow.edgeLabel")}><Input /></Form.Item>
                     <Form.Item name="lineStyle" label={t("workflow.edgeLineStyle")}><Select options={[{ label: t("workflow.edgeSolid"), value: "solid" }, { label: t("workflow.edgeDashed"), value: "dashed" }]} /></Form.Item>
                     <Form.Item name="color" label={t("workflow.edgeColor")}><Select options={[{ label: t("workflow.edgeColorBlue"), value: "#1677ff" }, { label: t("workflow.edgeColorOrange"), value: "#f59e0b" }, { label: t("workflow.edgeColorGray"), value: "#91a4b7" }]} /></Form.Item>
@@ -642,13 +642,13 @@ function normalizeRuleJson(ruleJson: unknown) {
 
 function toNodeFormValues(node: WorkflowNode): NodeFormValues {
   const rule = normalizeRuleJson(node.rule_json);
-  return { node_key: node.node_key, node_name: node.node_name, node_type: node.node_type, sequence_no: node.sequence_no, approver_mode: node.approver_mode, approver_role_code: node.approver_role_code, allow_reject: node.allow_reject, allow_withdraw: node.allow_withdraw, is_start_node: node.is_start_node, is_end_node: node.is_end_node, condition_expr: String(rule.expr || ''), condition_label: String(rule.conditionLabel || ''), is_default_path: Boolean(rule.isDefaultPath) };
+  return { node_key: node.node_key, node_name: node.node_name, node_type: node.node_type, sequence_no: node.sequence_no, approver_mode: node.approver_mode, approver_role_code: node.approver_role_code, allow_reject: node.allow_reject, allow_withdraw: node.allow_withdraw, is_start_node: node.is_start_node, is_end_node: node.is_end_node, condition_label: String(rule.conditionLabel || ''), is_default_path: Boolean(rule.isDefaultPath) };
 }
 
 function mergeNodeForm(node: WorkflowNode, values: NodeFormValues): WorkflowNode {
   const rule = normalizeRuleJson(node.rule_json);
   const layout = (normalizeRuleJson(node.rule_json) as Record<string, unknown>).layout;
-  const nextRule: Record<string, unknown> = node.node_type === 'condition' ? { ...rule, expr: values.condition_expr, conditionLabel: values.condition_label, isDefaultPath: values.is_default_path } : { ...rule };
+  const nextRule: Record<string, unknown> = node.node_type === 'condition' ? { ...rule, conditionLabel: values.condition_label, isDefaultPath: values.is_default_path } : { ...rule };
   if (layout) nextRule.layout = layout;
   return { ...node, node_name: values.node_name, node_type: values.node_type, sequence_no: values.sequence_no, approver_mode: values.approver_mode, approver_role_code: values.approver_role_code, allow_reject: values.allow_reject, allow_withdraw: values.allow_withdraw, is_start_node: values.is_start_node, is_end_node: values.is_end_node, rule_json: nextRule };
 }
@@ -668,7 +668,14 @@ function computeCanvasHeight(nodes: WorkflowNode[]) {
 
 function parseEdges(configJson: Record<string, unknown> | null | undefined, nodes: WorkflowNode[]) {
   const edges = (configJson?.workflowEdges as WorkflowEdgeItem[] | undefined) || [];
-  if (edges.length) return edges;
+  if (edges.length) {
+    return edges.map((edge) => {
+      const sourceNode = nodes.find((node) => node.node_key === edge.source);
+      if (edge.kind === 'true') return { ...edge, kind: 'condition' as const, condition: edge.condition || String(sourceNode?.rule_json?.expr || ''), label: edge.label === '是' ? String(sourceNode?.rule_json?.conditionLabel || '条件成立') : edge.label };
+      if (edge.kind === 'false') return { ...edge, kind: 'default' as const, label: edge.label === '否' ? '其他情况' : edge.label };
+      return edge;
+    });
+  }
   const nodeKeys = new Set(nodes.map((node) => node.node_key));
   return DEFAULT_GRAPH.edges.filter((edge) => nodeKeys.has(edge.source) && nodeKeys.has(edge.target));
 }

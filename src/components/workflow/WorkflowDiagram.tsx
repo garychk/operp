@@ -23,8 +23,9 @@ export type WorkflowEdgeItem = {
   target: string;
   sourcePort?: string;
   targetPort?: string;
-  kind: 'default' | 'true' | 'false';
+  kind: 'default' | 'condition' | 'true' | 'false';
   label?: string;
+  condition?: string;
   lineStyle?: 'solid' | 'dashed';
   color?: '#1677ff' | '#f59e0b' | '#91a4b7';
 };
@@ -159,7 +160,8 @@ export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onS
         shape: 'workflow-branch-edge',
         source: { cell: edge.source, port: edge.sourcePort || `${edge.source}-bottom` },
         target: { cell: edge.target, port: edge.targetPort || `${edge.target}-top` },
-        attrs: { line: { stroke: edge.color || (edge.kind === 'default' ? '#91a4b7' : edge.kind === 'true' ? '#1677ff' : '#f59e0b'), strokeWidth: selectedEdgeId === edge.id ? 3 : 2, strokeDasharray: edge.lineStyle === 'dashed' || (!edge.lineStyle && edge.kind !== 'default') ? '6 4' : '0' } },
+        data: edge,
+        attrs: { line: { stroke: edge.color || (edge.kind === 'default' ? '#91a4b7' : edge.kind === 'false' ? '#f59e0b' : '#1677ff'), strokeWidth: selectedEdgeId === edge.id ? 3 : 2, strokeDasharray: edge.lineStyle === 'dashed' || (!edge.lineStyle && edge.kind !== 'default') ? '6 4' : '0' } },
         labels: edge.label ? [{ attrs: { text: { text: edge.label, fill: '#475467', fontSize: 11, fontWeight: 500 }, rect: { fill: '#fff', stroke: 'none' } } }] : [],
       });
     });
@@ -208,8 +210,8 @@ function buildGraphModel(nodes: WorkflowNodeItem[], edges: WorkflowEdgeItem[]) {
       const trueTargetKey = String(rule.trueTargetKey || '');
       const falseTargetKey = String(rule.falseTargetKey || '');
       return [
-        trueTargetKey ? { id: `${node.node_key}-true-${trueTargetKey}`, source: node.node_key, sourcePort: `${node.node_key}-right`, target: trueTargetKey, targetPort: `${trueTargetKey}-left`, kind: 'true' as const, label: '是' } : null,
-        falseTargetKey ? { id: `${node.node_key}-false-${falseTargetKey}`, source: node.node_key, sourcePort: `${node.node_key}-bottom`, target: falseTargetKey, targetPort: `${falseTargetKey}-left`, kind: 'false' as const, label: '否' } : null,
+        trueTargetKey ? { id: `${node.node_key}-true-${trueTargetKey}`, source: node.node_key, sourcePort: `${node.node_key}-right`, target: trueTargetKey, targetPort: `${trueTargetKey}-left`, kind: 'condition' as const, label: String(rule.conditionLabel || '条件成立'), condition: String(rule.expr || '') } : null,
+        falseTargetKey ? { id: `${node.node_key}-false-${falseTargetKey}`, source: node.node_key, sourcePort: `${node.node_key}-bottom`, target: falseTargetKey, targetPort: `${falseTargetKey}-left`, kind: 'default' as const, label: '其他情况' } : null,
       ].filter(Boolean) as WorkflowEdgeItem[];
     }
     if (!next) return [];
@@ -251,13 +253,17 @@ function toEdgeItem(edge: any): WorkflowEdgeItem {
   const source = String(edge.getSourceCellId?.() || edge.getSource?.().cell || '');
   const target = String(edge.getTargetCellId?.() || edge.getTarget?.().cell || '');
   const label = String(edge.getLabels?.()?.[0]?.attrs?.text?.text || edge.getData?.()?.label || '');
+  const data = (edge.getData?.() || {}) as Partial<WorkflowEdgeItem>;
   return {
     id: String(edge.id),
     source,
     target,
     sourcePort: edge.getSourcePortId?.() || edge.getSource?.().port || undefined,
     targetPort: edge.getTargetPortId?.() || edge.getTarget?.().port || undefined,
-    kind: label === '是' ? 'true' : label === '否' ? 'false' : 'default',
+    kind: data.kind || (label === '是' ? 'true' : label === '否' ? 'false' : 'default'),
     label,
+    condition: data.condition,
+    lineStyle: data.lineStyle,
+    color: data.color,
   };
 }
