@@ -6,6 +6,7 @@ import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
 import { WorkflowDiagram, WorkflowEdgeItem, WorkflowNodeItem } from '../../components/workflow/WorkflowDiagram';
+import { ConditionEditor } from '../../components/workflow/ConditionEditor';
 
 type WorkflowDefinition = {
   id: number;
@@ -77,6 +78,7 @@ export function WorkflowConfig() {
   const [form] = Form.useForm();
   const [nodeForm] = Form.useForm<NodeFormValues>();
   const [edgeForm] = Form.useForm<WorkflowEdgeItem>();
+  const currentDocumentType = Form.useWatch("document_type", form);
 
   useEffect(() => {
     void fetchDefinitions();
@@ -502,6 +504,20 @@ export function WorkflowConfig() {
                       />
                     </Form.Item>
                     <Form.Item
+                      name="condition_expr"
+                      label={t("workflow.conditionExpr")}
+                    >
+                      <ConditionEditor documentType={currentDocumentType} />
+                    </Form.Item>
+                    <Form.Item
+                      name="condition_label"
+                      label={t("workflow.conditionLabel")}
+                    >
+                      <Input
+                        placeholder={t("workflow.conditionLabelPlaceholder")}
+                      />
+                    </Form.Item>
+                    <Form.Item
                       name="sequence_no"
                       label={t("workflow.sequenceNo")}
                     >
@@ -570,20 +586,7 @@ export function WorkflowConfig() {
                         </Form.Item>
                       </Col>
                     </Row>
-                    <Form.Item
-                      name="condition_expr"
-                      label={t("workflow.conditionExpr")}
-                    >
-                      <Input placeholder="amount >= 50000" />
-                    </Form.Item>
-                    <Form.Item
-                      name="condition_label"
-                      label={t("workflow.conditionLabel")}
-                    >
-                      <Input
-                        placeholder={t("workflow.conditionLabelPlaceholder")}
-                      />
-                    </Form.Item>
+                    
                   </Form>
                 ) : (
                   <div>{t("workflow.noNodeSelected")}</div>

@@ -196,7 +196,7 @@ function buildGraphModel(nodes: WorkflowNodeItem[], edges: WorkflowEdgeItem[]) {
       x: layout?.x ?? 40 + column * COLUMN_GAP,
       y: layout?.y ?? 24 + row * ROW_GAP,
       title: node.node_name,
-      subtitle: kind === 'condition' ? String(node.rule_json?.expr || '条件分支') : node.approver_role_code ? `角色: ${node.approver_role_code}` : node.is_start_node ? '起始节点' : node.is_end_node ? '结束节点' : '审批节点',
+      subtitle: kind === 'condition' ? getConditionSummary(node.rule_json) : node.approver_role_code ? `角色: ${node.approver_role_code}` : node.is_start_node ? '起始节点' : node.is_end_node ? '结束节点' : '审批节点',
       tag: node.node_type.toUpperCase(),
     };
   });
@@ -219,6 +219,25 @@ function buildGraphModel(nodes: WorkflowNodeItem[], edges: WorkflowEdgeItem[]) {
   return { nodes: graphNodes, edges: edgeList, height: 24 + (maxRow + 1) * ROW_GAP + 140 };
 }
 
+function getConditionSummary(ruleJson: Record<string, unknown>) {
+  const explicitLabel = String(ruleJson.conditionLabel || '').trim();
+  if (explicitLabel) return explicitLabel;
+  const expression = ruleJson.expr;
+  if (typeof expression === 'string') {
+    try {
+      const parsed = JSON.parse(expression) as { logic?: string; conditions?: Array<{ field?: string; operator?: string; value?: string }> };
+      if (Array.isArray(parsed.conditions)) {
+        const joiner = parsed.logic === 'or' ? ' 或 ' : ' 且 ';
+        const parts = parsed.conditions.filter((item) => item.field).map((item) => `${item.field} ${item.operator || '='}${item.value ? ` ${item.value}` : ''}`);
+        if (parts.length) return parts.join(joiner);
+      }
+    } catch {
+      return expression;
+    }
+    return expression;
+  }
+  return '条件分支';
+}
 function getNodeLayout(ruleJson: Record<string, unknown>) {
   const layout = ruleJson.layout;
   if (!layout || typeof layout !== 'object') return null;

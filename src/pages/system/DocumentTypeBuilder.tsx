@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Card, Col, Drawer, Form, Input, InputNumber, Row, Select, Space, Splitter, Switch, Table, Tag, message } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, SaveOutlined, UpOutlined, DownOutlined, ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, PlusOutlined, SaveOutlined, ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
 
