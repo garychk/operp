@@ -28,7 +28,7 @@ import type { Tables } from "../../utils/supabase";
 import dayjs from 'dayjs';
 import SupaModal from "../../components/SupaModal";
 import DictSelect from "../../components/DictSelect";
-import { BomTreeGraph } from "../../components/BomTreeGraph";
+import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
 
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
@@ -769,10 +769,10 @@ export function Boms() {
           setTreeDrawerOpen(false);
           setTreeMaterialCode(null);
         }}
-        size="large"
+        size="95%"
         destroyOnHidden
       >
-        <BomTreeGraph materialCode={treeMaterialCode} />
+        <BomEditableTreeGraph materialCode={treeMaterialCode} />
       </Drawer>
     </Card>
   );
