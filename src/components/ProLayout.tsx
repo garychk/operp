@@ -116,6 +116,9 @@ function buildDatabaseMenuTree(records: DatabaseMenu[]): MenuRoute[] {
 }
 
 function mergeMenuTrees(base: MenuRoute[], database: MenuRoute[]): MenuRoute[] {
+  const databasePathOrder = new Map<string, number>();
+  database.forEach((route, index) => databasePathOrder.set(route.path, index));
+
   const result: MenuRoute[] = base.map((route) => ({
     ...route,
     routes: route.routes ? mergeMenuTrees(route.routes, []) : undefined,
@@ -129,6 +132,19 @@ function mergeMenuTrees(base: MenuRoute[], database: MenuRoute[]): MenuRoute[] {
     existing.name = route.name;
     existing.routes = mergeMenuTrees(existing.routes || [], route.routes || []);
   });
+
+  // 按数据库排序号排列，首页始终第一，仅静态菜单排到末尾
+  result.sort((a, b) => {
+    if (a.path === "/") return -1;
+    if (b.path === "/") return 1;
+    const orderA = databasePathOrder.get(a.path);
+    const orderB = databasePathOrder.get(b.path);
+    if (orderA !== undefined && orderB !== undefined) return orderA - orderB;
+    if (orderA !== undefined) return -1;
+    if (orderB !== undefined) return 1;
+    return 0;
+  });
+
   return result;
 }
 

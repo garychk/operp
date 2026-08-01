@@ -106,7 +106,8 @@ export function Roles() {
         .from("sys_menus")
         .select("*")
         .eq("is_deleted", "n")
-        .eq("status", "1");
+        .eq("status", "1")
+        .order("sort_order", { ascending: true });
 
       if (error) throw error;
       setMenus(data || []);

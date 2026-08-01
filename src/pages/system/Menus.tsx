@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import type { Key } from 'react';
 import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, Popconfirm, message, Tag, Card, Row, Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
@@ -89,6 +89,38 @@ export function Menus() {
       fetchMenus();
     } catch (error) {
       message.error('删除失败');
+    }
+  };
+
+  const handleMove = async (record: Menu, direction: 'up' | 'down') => {
+    const siblings = menus
+      .filter(m => m.parent_id === record.parent_id)
+      .sort((a, b) => a.sort_order - b.sort_order);
+
+    const idx = siblings.findIndex(m => m.id === record.id);
+    if (idx === -1) return;
+
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= siblings.length) return;
+
+    const target = siblings[targetIdx];
+
+    try {
+      const { error: err1 } = await supabase
+        .from('sys_menus')
+        .update({ sort_order: target.sort_order })
+        .eq('id', record.id);
+      if (err1) throw err1;
+
+      const { error: err2 } = await supabase
+        .from('sys_menus')
+        .update({ sort_order: record.sort_order })
+        .eq('id', target.id);
+      if (err2) throw err2;
+
+      fetchMenus();
+    } catch {
+      message.error('排序失败');
     }
   };
 
@@ -280,7 +312,26 @@ export function Menus() {
     {
       title: '排序',
       dataIndex: 'sort_order',
-      width: 80,
+      width: 120,
+      render: (sortOrder, record) => (
+        <Space size={0}>
+          <Button
+            type="text"
+            size="small"
+            icon={<ArrowUpOutlined />}
+            onClick={() => handleMove(record, 'up')}
+            style={{ color: '#999' }}
+          />
+          <Button
+            type="text"
+            size="small"
+            icon={<ArrowDownOutlined />}
+            onClick={() => handleMove(record, 'down')}
+            style={{ color: '#999' }}
+          />
+          <span style={{ marginLeft: 4 }}>{sortOrder}</span>
+        </Space>
+      ),
     },
     {
       title: '状态',
