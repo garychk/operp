@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, Checkbox, DatePicker, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, message } from "antd";
+import { Button, Card, Checkbox, Col, DatePicker, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Spin, Splitter, message } from "antd";
 import { Graph, Edge } from "@antv/x6";
 import dayjs from "dayjs";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../utils/supabase";
 import type { Tables } from "../utils/supabase";
+import DictSelect from "./DictSelect";
 
 type BomRow = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type BomDetailRow = Tables["erp_bom_details_s_539dcf81_b"]["Row"];
@@ -478,40 +479,49 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
   if (!materialCode) return <Empty description={t("bomTree.empty.selectMaterial")} />;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "320px minmax(0, 1fr) 320px", gap: 16, width: "100%", minHeight: "calc(100vh - 220px)" }}>
-      <Card title="BOM主档" style={{ height: "100%", overflow: "auto" }}>
-        <Form form={leftForm} layout="vertical">
-          <Form.Item label="BOM编号" name="bom_no"><Input /></Form.Item>
-          <Form.Item label="产品" name="product_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
-          <Form.Item label="版本" name="version"><Input /></Form.Item>
-          <Form.Item label="数量" name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
-          <Form.Item label="单位" name="unit"><Input /></Form.Item>
-          <Form.Item label="备注" name="remark"><Input.TextArea rows={4} /></Form.Item>
-          <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "bom"}>保存主档</Button>
-        </Form>
-      </Card>
-
-      <Spin spinning={loading}>
-        <Card title={title} style={{ height: "100%" }} styles={{ body: { padding: 0, height: "100%" } }}>
-          <div ref={containerRef} style={{ width: "100%", height: "calc(100vh - 220px)", minHeight: 700 }} />
+    <>
+    <Splitter style={{ height: "calc(100vh - 120px)", width: "100%" }}>
+      <Splitter.Panel defaultSize="15%" min="260px">
+        <Card size="small" title="BOM主档" style={{ height: "100%", overflow: "auto" }}>
+          <Form form={leftForm} layout="vertical">
+            <Form.Item label="BOM编号" name="bom_no"><Input /></Form.Item>
+            <Form.Item label="产品" name="product_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
+            <Form.Item label="版本" name="version"><Input /></Form.Item>
+            <Form.Item label="数量" name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
+            <Form.Item label="单位" name="unit"><DictSelect dictType="uom" placeholder="请输入单位" allowClear /></Form.Item>
+            <Form.Item label="备注" name="remark"><Input.TextArea rows={4} /></Form.Item>
+            <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "bom"}>保存主档</Button>
+          </Form>
         </Card>
-      </Spin>
+      </Splitter.Panel>
 
-      <Card title="BOM子项" style={{ height: "100%", overflow: "auto" }}>
-        <Form form={rightForm} layout="vertical">
-          <Form.Item label="行号" name="line_no"><InputNumber style={{ width: "100%" }} /></Form.Item>
-          <Form.Item label="物料" name="material_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
-          <Form.Item label="数量" name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
-          <Form.Item label="单位" name="unit"><Input /></Form.Item>
-          <Form.Item label="损耗率" name="loss_rate"><InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} /></Form.Item>
-          <Form.Item label="工序" name="operation_id"><Select allowClear options={operations.map((o) => ({ label: o.name, value: o.id }))} /></Form.Item>
-          <Form.Item label="备注" name="remark"><Input.TextArea rows={4} /></Form.Item>
-          <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "detail"}>保存子项</Button>
-          <Space style={{ width: "100%", marginTop: 12 }}><Button block onClick={openCreateModal} disabled={!selectedNode}>添加子节点</Button></Space>
-        </Form>
-      </Card>
+      <Splitter.Panel defaultSize="70%" min="40%" style={{ overflow: "hidden" }}>
+        <Spin spinning={loading}>
+          <Card size="small" title={title} style={{ height: "100%" }} styles={{ body: { padding: 0, height: "100%", overflow: "hidden" } }}>
+            <div ref={containerRef} style={{ width: "100%", height: "calc(100vh - 160px)", minHeight: 700 }} />
+          </Card>
+        </Spin>
+      </Splitter.Panel>
 
-      <Modal
+      <Splitter.Panel defaultSize="15%" min="260px">
+        <Card size="small" title="BOM子项" style={{ height: "100%", overflow: "auto" }}>
+          <Form form={rightForm} layout="vertical">
+            <Form.Item label="行号" name="line_no"><InputNumber style={{ width: "100%" }} /></Form.Item>
+            <Form.Item label="物料" name="material_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
+            <Form.Item label="数量" name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
+            <Form.Item label="单位" name="unit"><DictSelect dictType="uom" placeholder="请输入单位" allowClear /></Form.Item>
+            <Form.Item label="损耗率" name="loss_rate"><InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} /></Form.Item>
+            <Form.Item label="工序" name="operation_id"><Select allowClear options={operations.map((o) => ({ label: o.name, value: o.id }))} /></Form.Item>
+            <Form.Item label="备注" name="remark"><Input.TextArea rows={4} /></Form.Item>
+            <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "detail"}>保存子项</Button>
+            <Space style={{ width: "100%", marginTop: 12 }}><Button block onClick={openCreateModal} disabled={!selectedNode}>添加子节点</Button></Space>
+          </Form>
+        </Card>
+      </Splitter.Panel>
+
+      
+    </Splitter>
+    <Modal
         title={createTarget === "detail" ? "新增BOM明细" : "新增下一层BOM主档"}
         open={createModalOpen}
         onCancel={() => setCreateModalOpen(false)}
@@ -520,68 +530,134 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         cancelText="取消"
         destroyOnHidden
       >
+        <Card size="small">
         <Form form={createForm} layout="vertical">
           {createTarget === "detail" ? (
             <>
-              <Form.Item label="物料" name="material_id" rules={[{ required: true, message: "请选择物料" }]}>
-                <Select showSearch optionFilterProp="label" options={products.filter((p) => !selectedNode || p.id !== selectedNode.productId).map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} />
-              </Form.Item>
-              <Form.Item label="行号" name="line_no">
-                <InputNumber style={{ width: "100%" }} min={1} />
-              </Form.Item>
-              <Form.Item label="数量" name="quantity" rules={[{ required: true, message: "请输入数量" }]}>
-                <InputNumber style={{ width: "100%" }} min={0} step={0.000001} precision={6} />
-              </Form.Item>
-              <Form.Item label="单位" name="unit">
-                <Input />
-              </Form.Item>
-              <Form.Item label="损耗率" name="loss_rate">
-                <InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} precision={4} />
-              </Form.Item>
-              <Form.Item label="工序" name="operation_id">
-                <Select allowClear showSearch optionFilterProp="label" options={operations.map((o) => ({ label: o.name, value: o.id }))} />
-              </Form.Item>
-              <Form.Item label="备注" name="remark">
-                <Input.TextArea rows={3} />
-              </Form.Item>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="物料" name="material_id" rules={[{ required: true, message: "请选择物料" }]}>
+                    <Select showSearch optionFilterProp="label" options={products.filter((p) => !selectedNode || p.id !== selectedNode.productId).map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="行号" name="line_no">
+                    <InputNumber style={{ width: "100%" }} min={1} />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="数量" name="quantity" rules={[{ required: true, message: "请输入数量" }]}>
+                    <InputNumber style={{ width: "100%" }} min={0} step={0.000001} precision={6} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="单位" name="unit">
+                    <DictSelect dictType="uom" placeholder="请输入单位" allowClear />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="损耗率" name="loss_rate">
+                    <InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} precision={4} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="工序" name="operation_id">
+                    <Select allowClear showSearch optionFilterProp="label" options={operations.map((o) => ({ label: o.name, value: o.id }))} />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={24}>
+                  <Form.Item label="备注" name="remark">
+                    <Input.TextArea rows={3} />
+                  </Form.Item>
+                </Col>
+              </Row>
             </>
           ) : (
             <>
-              <Form.Item label="BOM编号" name="bom_no" rules={[{ required: true, message: "请输入BOM编号" }]}>
-                <Input />
-              </Form.Item>
-              <Form.Item label="产品" name="product_id" rules={[{ required: true, message: "请选择产品" }]}>
-                <Select showSearch optionFilterProp="label" options={products.filter((p) => !selectedNode || p.id !== selectedNode.productId).map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} />
-              </Form.Item>
-              <Form.Item label="版本" name="version">
-                <Input />
-              </Form.Item>
-              <Form.Item label="数量" name="quantity">
-                <InputNumber style={{ width: "100%" }} min={0} step={0.000001} precision={6} />
-              </Form.Item>
-              <Form.Item label="单位" name="unit">
-                <Input />
-              </Form.Item>
-              <Form.Item label="启用" name="is_active" valuePropName="checked">
-                <Checkbox />
-              </Form.Item>
-              <Form.Item label="默认BOM" name="is_default" valuePropName="checked">
-                <Checkbox />
-              </Form.Item>
-              <Form.Item label="生效日期" name="effective_date">
-                <DatePicker style={{ width: "100%" }} />
-              </Form.Item>
-              <Form.Item label="失效日期" name="expiry_date">
-                <DatePicker style={{ width: "100%" }} />
-              </Form.Item>
-              <Form.Item label="备注" name="remark">
-                <Input.TextArea rows={3} />
-              </Form.Item>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="BOM编号" name="bom_no" rules={[{ required: true, message: "请输入BOM编号" }]}>
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="产品" name="product_id" rules={[{ required: true, message: "请选择产品" }]}>
+                    <Select
+                      showSearch
+                      optionFilterProp="label"
+                      options={products.filter((p) => !selectedNode || p.id !== selectedNode.productId).map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))}
+                      onChange={(val) => {
+                        const p = products.find((p) => p.id === val);
+                        if (p) createForm.setFieldsValue({ bom_no: p.code });
+                      }}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="版本" name="version">
+                    <Input />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="数量" name="quantity">
+                    <InputNumber style={{ width: "100%" }} min={0} step={0.000001} precision={6} />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                <Col span={12}>
+                  <Form.Item label="单位" name="unit">
+                    <DictSelect dictType="uom" placeholder="请输入单位" allowClear />
+                  </Form.Item>
+                </Col>
+                <Col span={6}>
+                  <Form.Item label="启用" name="is_active" valuePropName="checked">
+                    <Checkbox />
+                  </Form.Item>
+                </Col>
+                <Col span={6}>
+                  <Form.Item label="默认BOM" name="is_default" valuePropName="checked">
+                    <Checkbox />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                
+                <Col span={12}>
+                  <Form.Item label="生效日期" name="effective_date">
+                    <DatePicker style={{ width: "100%" }} />
+                  </Form.Item>
+                </Col>
+                <Col span={12}>
+                  <Form.Item label="失效日期" name="expiry_date">
+                    <DatePicker style={{ width: "100%" }} />
+                  </Form.Item>
+                </Col>
+              </Row>
+              <Row gutter={16}>
+                
+              </Row>
+              <Row gutter={16}>
+                <Col span={24}>
+                  <Form.Item label="备注" name="remark">
+                    <Input.TextArea rows={3} />
+                  </Form.Item>
+                </Col>
+              </Row>
             </>
           )}
         </Form>
+        </Card>
       </Modal>
-    </div>
+    </>
   );
 }
 
