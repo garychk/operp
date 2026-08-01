@@ -1,8 +1,9 @@
-import { Button, Space, message } from 'antd';
-import type { ReactNode } from 'react';
+import { Alert, Button, Space, message } from 'antd';
+import { useEffect, useState, type ReactNode } from 'react';
 import { CheckOutlined, CloseOutlined, RollbackOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { runBusinessAction } from '../utils/businessEngine';
+import { supabase } from '../utils/supabase';
 
 type WorkflowAction = 'submit' | 'approve' | 'reject' | 'withdraw';
 
@@ -29,6 +30,33 @@ function getAllowedActions(status?: string | null): WorkflowAction[] {
 
 export function WorkflowActionBar({ documentType, documentId, currentStatus, onActionDone, disabled = false }: WorkflowActionBarProps) {
   const { t } = useTranslation();
+  const [checkingWorkflow, setCheckingWorkflow] = useState(false);
+  const [hasAvailableWorkflow, setHasAvailableWorkflow] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Existing instances must remain actionable if a process is later disabled.
+    if (currentStatus && currentStatus !== 'draft') {
+      setHasAvailableWorkflow(true);
+      setCheckingWorkflow(false);
+      return () => { cancelled = true; };
+    }
+    if (!documentType) {
+      setHasAvailableWorkflow(null);
+      setCheckingWorkflow(false);
+      return () => { cancelled = true; };
+    }
+
+    setCheckingWorkflow(true);
+    void supabase.rpc('workflow_get_active_process', { p_document_type: documentType }).then(({ data, error }) => {
+      if (cancelled) return;
+      setCheckingWorkflow(false);
+      setHasAvailableWorkflow(!error && data !== null && data !== undefined);
+    });
+
+    return () => { cancelled = true; };
+  }, [currentStatus, documentType]);
 
   const handleWorkflowAction = async (action: WorkflowAction) => {
     if (!documentType || documentId === null || documentId === undefined) {
@@ -53,6 +81,9 @@ export function WorkflowActionBar({ documentType, documentId, currentStatus, onA
 
   const actions = getAllowedActions(currentStatus);
   if (!actions.length) return null;
+  if (!checkingWorkflow && hasAvailableWorkflow === false) {
+    return <Alert type="warning" showIcon message={t('workflow.actionBar.workflowMissing', { documentType })} />;
+  }
 
   return (
     <Space>
@@ -63,7 +94,8 @@ export function WorkflowActionBar({ documentType, documentId, currentStatus, onA
           danger={ACTION_CONFIG[action].danger}
           icon={ACTION_CONFIG[action].icon}
           onClick={() => void handleWorkflowAction(action)}
-          disabled={disabled}
+          disabled={disabled || checkingWorkflow || hasAvailableWorkflow !== true}
+          loading={checkingWorkflow}
           size="small"
           ghost
         >

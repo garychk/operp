@@ -500,6 +500,7 @@ const zhCN = {
         reject: "驳回",
         withdraw: "撤回",
         missingTarget: "缺少流程绑定的单据类型或单据ID",
+        workflowMissing: "单据类型 {{documentType}} 缺少可用流程",
         success: {
           submit: "提交审批成功",
           approve: "审核通过成功",

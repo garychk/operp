@@ -504,6 +504,7 @@ const enUS = {
         reject: "Reject",
         withdraw: "Withdraw",
         missingTarget: "Missing workflow document type or document ID",
+        workflowMissing: "Document type {{documentType}} has no available workflow",
         success: {
           submit: "Submitted for approval",
           approve: "Approved successfully",
