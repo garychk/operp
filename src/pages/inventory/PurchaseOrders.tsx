@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Key } from "react";
 import {
   Button,
   Input,
@@ -8,7 +9,6 @@ import {
   Form,
   Select,
   Space,
-  Card,
   message,
   InputNumber,
   Row,
@@ -17,18 +17,15 @@ import {
 } from "antd";
 import {
   PlusOutlined,
-  SearchOutlined,
   DeleteOutlined,
   EditOutlined,
   ShoppingCartOutlined,
-  CheckOutlined,
-  PrinterOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
-import { useAuth } from "../../contexts/AuthContext";
 import type { Tables } from "../../utils/supabase";
 import { SupaModal } from "../../components/SupaModal";
+import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
 
 type PurchaseOrder = Tables["erp_purchase_orders_s_539dcf81_b"]["Row"];
@@ -48,6 +45,8 @@ export function PurchaseOrders() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
@@ -60,7 +59,6 @@ export function PurchaseOrders() {
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
   const [isDisabled, setIsDisabled] = useState(false);
-  const { user } = useAuth();
 
   useEffect(() => {
     fetchOrders();
@@ -409,11 +407,12 @@ export function PurchaseOrders() {
   };
 
   const filteredOrders = orders.filter(
-    (o) =>
-      o.order_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getSupplierName(o.supplier_id)
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()),
+    (order) =>
+      (order.order_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        getSupplierName(order.supplier_id)
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())) &&
+      (!statusFilter || order.status === statusFilter),
   );
 
   const statusLabels: Record<string, { text: string; color: string }> = {
@@ -431,6 +430,7 @@ export function PurchaseOrders() {
       title: "订单号",
       dataIndex: "order_no",
       key: "order_no",
+      width: 150,
     },
     {
       title: "供应商",
@@ -442,29 +442,34 @@ export function PurchaseOrders() {
       title: "订单日期",
       dataIndex: "order_date",
       key: "order_date",
+      width: 130,
     },
     {
       title: "交货日期",
       dataIndex: "delivery_date",
       key: "delivery_date",
+      width: 130,
       render: (text: string) => text || "-",
     },
     {
       title: "金额",
       dataIndex: "total_amount",
       key: "total_amount",
+      width: 130,
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
       title: "应付金额",
       dataIndex: "payable_amount",
       key: "payable_amount",
+      width: 130,
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
       title: "状态",
       dataIndex: "status",
       key: "status",
+      width: 120,
       render: (status: string) => {
         const config = statusLabels[status] || {
           text: status,
@@ -476,6 +481,9 @@ export function PurchaseOrders() {
     {
       title: "操作",
       key: "action",
+      width: 160,
+      defaultFixed: "right" as const,
+      lockWidth: true,
       render: (_: any, record: PurchaseOrder) => (
         <Space size="small">
           <Button
@@ -589,32 +597,45 @@ export function PurchaseOrders() {
   );
 
   return (
-    <Card
-      className="mainContent"
-      variant="borderless"
-      title="采购订单"
-      extra={
-        <Space>
-          <Input.Search
-            placeholder="搜索订单号或供应商..."
-            allowClear
-            onSearch={(value) => {
-              setSearchTerm(value);
-              fetchOrders();
-            }}
-          />
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增订单
-          </Button>
-        </Space>
-      }
-    >
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredOrders}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="purchase-orders"
+        headerTitle="采购订单"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+          新增订单
+        </Button>
+            <Input.Search
+              allowClear
+              placeholder="订单号或供应商"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              onSearch={fetchOrders}
+              style={{ width: 240 }}
+            />
+            <Select
+              allowClear
+              placeholder="全部状态"
+              value={statusFilter}
+              onChange={setStatusFilter}
+              style={{ width: 140 }}
+              options={Object.entries(statusLabels).map(([value, item]) => ({
+                value,
+                label: item.text,
+              }))}
+            />
+          </Space>
+        }
       />
       <SupaModal
         open={isModalOpen}
@@ -883,6 +904,6 @@ export function PurchaseOrders() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }

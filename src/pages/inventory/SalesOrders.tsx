@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Key } from "react";
 import {
   Button,
   Input,
@@ -8,7 +9,6 @@ import {
   Form,
   Select,
   Space,
-  Card,
   message,
   InputNumber,
   Row,
@@ -17,9 +17,9 @@ import {
 } from "antd";
 import {
   PlusOutlined,
-  SearchOutlined,
   DeleteOutlined,
   EditOutlined,
+  ShoppingCartOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
@@ -27,7 +27,8 @@ import { runBusinessAction } from "../../utils/businessEngine";
 import { useAuth } from "../../contexts/AuthContext";
 import type { Tables } from "../../utils/supabase";
 import dayjs from "dayjs";
-import SupaModal from "../../components/SupaModal";
+import { SupaModal } from "../../components/SupaModal";
+import { SuperTable } from "../../components/SuperTable";
 
 type SalesOrder = Tables["erp_sales_orders_s_539dcf81_b"]["Row"];
 type SalesOrderDetail = Tables["erp_sales_order_details_s_539dcf81_b"]["Row"];
@@ -45,6 +46,7 @@ export function SalesOrders() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<SalesOrder | null>(null);
@@ -55,6 +57,7 @@ export function SalesOrders() {
   );
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
+  const [isDisabled, setIsDisabled] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -256,8 +259,13 @@ export function SalesOrders() {
       message.error(error?.message || '审核失败');
     }
   };
-  const handleEdit = (record: SalesOrder) => {
+  const handleEdit = async (record: SalesOrder) => {
     setEditingOrder(record);
+    setIsDisabled(
+      ["approved", "partially_delivered", "delivered", "closed"].includes(
+        record.status || "",
+      ),
+    );
     const formValues = { ...record };
     if (formValues.order_date) {
       formValues.order_date = dayjs(formValues.order_date);
@@ -267,6 +275,7 @@ export function SalesOrders() {
     }
     form.setFieldsValue(formValues);
     setSelectedOrder(record);
+    await fetchDetails(record.id);
     setIsModalOpen(true);
   };
 
@@ -320,7 +329,8 @@ export function SalesOrders() {
     setIsModalOpen(true);
   };
 
-  const handleAddDetail = () => {
+  const handleAddDetail = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setEditingDetail(null);
     detailForm.setFieldsValue({
       product_id: undefined,
@@ -548,6 +558,7 @@ export function SalesOrders() {
             type="text"
             icon={<EditOutlined />}
             onClick={() => handleEditDetail(record)}
+            disabled={isDisabled}
           >
             编辑
           </Button>
@@ -556,6 +567,7 @@ export function SalesOrders() {
             danger
             icon={<DeleteOutlined />}
             onClick={() => handleDeleteDetail(record.id)}
+            disabled={isDisabled}
           >
             删除
           </Button>
@@ -573,33 +585,42 @@ export function SalesOrders() {
   );
 
   return (
-    <Card
-      className='mainContent'
-      variant="borderless"
-      title="销售订单"
-      extra={
-        <Space>
-          <Input
-            placeholder="搜索订单号或客户..."
-            prefix={<SearchOutlined />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增订单
-          </Button>
-        </Space>
-      }
-    >
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredOrders}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="sales-orders"
+        headerTitle="销售订单"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增订单
+            </Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索订单号或客户..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchOrders}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
       <SupaModal
-        title={editingOrder ? "编辑销售订单" : "新增销售订单"}
+        title={
+          <>
+            <ShoppingCartOutlined />
+            <span>{editingOrder ? "编辑销售订单" : "新增销售订单"}</span>
+          </>
+        }
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -607,25 +628,34 @@ export function SalesOrders() {
           setEditingOrder(null);
           setSelectedOrder(null);
         }}
-        footer={
-          <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              保存
-            </Button>
-          </Space>
+        headerExtra={
+          <Tag color={editingOrder?.status === "draft" ? "blue" : "green"}>
+            {editingOrder?.status === "draft" ? "草稿" : "已审核"}
+          </Tag>
         }
-        width={'70%'}
-        height={680}
+        headerPanelTitle="销售订单头"
+        detailPanelTitle="销售订单明细"
         historyTable={salesOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
+        workflowDocumentType="sales_order"
         form={form}
+        detailExtra={
+          <Button
+            type="link"
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={handleAddDetail}
+            disabled={isDisabled}
+          >
+            新增明细
+          </Button>
+        }
         formEle={
           <Form
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ marginRight: 16 }}
+            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
               <Col span={12}>
@@ -750,19 +780,17 @@ export function SalesOrders() {
             )}
           />
         }
-        detailExtra={
+        footer={
           <Space>
-            <Button
-              type="link"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={handleAddDetail}
-            >
-              新增明细
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()} disabled={isDisabled}>
+              保存
             </Button>
           </Space>
         }
-      ></SupaModal>
+        width={'70%'}
+        height={680}
+      />
 
       <Modal
         title={editingDetail ? "编辑销售订单明细" : "新增销售订单明细"}
@@ -858,7 +886,7 @@ export function SalesOrders() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }
 

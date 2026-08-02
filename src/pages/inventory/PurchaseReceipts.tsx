@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, message, InputNumber, Row, Col, DatePicker } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
-import SupaModal from '../../components/SupaModal';
+import { SupaModal } from '../../components/SupaModal';
+import { SuperTable } from '../../components/SuperTable';
 
 type PurchaseReceipt = Tables['erp_purchase_receipts_s_539dcf81_b']['Row'];
 type PurchaseReceiptDetail = Tables['erp_purchase_receipt_details_s_539dcf81_b']['Row'];
@@ -19,6 +21,8 @@ type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 const { TextArea } = Input;
+const purchaseReceiptTable = 'erp_purchase_receipts_s_539dcf81_b';
+const purchaseReceiptDetailTable = 'erp_purchase_receipt_details_s_539dcf81_b';
 
 export function PurchaseReceipts() {
   const [receipts, setReceipts] = useState<PurchaseReceipt[]>([]);
@@ -29,6 +33,7 @@ export function PurchaseReceipts() {
   const [purchaseOrderDetails, setPurchaseOrderDetails] = useState<PurchaseOrderDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
@@ -509,11 +514,13 @@ export function PurchaseReceipts() {
       title: '入库单号',
       dataIndex: 'receipt_no',
       key: 'receipt_no',
+      width: 120,
     },
     {
       title: '采购订单',
       dataIndex: 'order_id',
       key: 'order_id',
+      width: 120,
       render: (orderId: number) => getOrderNo(orderId),
     },
     {
@@ -526,23 +533,27 @@ export function PurchaseReceipts() {
       title: '仓库',
       dataIndex: 'warehouse_id',
       key: 'warehouse_id',
+      width: 120,
       render: (warehouseId: number) => getWarehouseName(warehouseId),
     },
     {
       title: '入库日期',
       dataIndex: 'receipt_date',
       key: 'receipt_date',
+      width: 180,
     },
     {
       title: '金额',
       dataIndex: 'total_amount',
       key: 'total_amount',
+      width: 100,
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
+      width: 100,
       render: (status: string) => {
         const config = statusLabels[status] || { text: status, color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -551,6 +562,7 @@ export function PurchaseReceipts() {
     {
       title: '操作',
       key: 'action',
+      width: 140,
       render: (_: any, record: PurchaseReceipt) => (
         <Space>
           {record.status === 'draft' && (
@@ -565,7 +577,6 @@ export function PurchaseReceipts() {
           {record.status === 'posted' && (
             <Button type="text" onClick={() => runReceiptAction('reverse_post', record)}>反过账</Button>
           )}
-          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetails(record)}>明细</Button>
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.status === 'posted'}>
             编辑
           </Button>
@@ -655,22 +666,34 @@ export function PurchaseReceipts() {
   }), { amount: 0 });
 
   return (
-    <Card className='mainContent' variant="borderless" title="采购入库单" extra={
-      <Space>
-        <Input
-          placeholder="搜索入库单号、供应商或采购订单..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增入库单</Button>
-      </Space>}>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredReceipts}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="purchase-receipts"
+        headerTitle="采购入库单"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增入库单
+            </Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索入库单号、供应商或采购订单..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchReceipts}
+              style={{ width: 280 }}
+            />
+          </Space>
+        }
       />
 
       <SupaModal
@@ -683,16 +706,11 @@ export function PurchaseReceipts() {
           setSelectedOrderId(null);
           setPurchaseOrderDetails([]);
         }}
-        footer={<Space>
-          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-          <Button type="primary" onClick={() => form.submit()}>
-            保存
-          </Button>
-        </Space>}
-        width={'70%'}
-        height={600}
-        historyTable={"erp_purchase_receipts_s_539dcf81_b"}
+        headerPanelTitle="采购入库单头"
+        detailPanelTitle="采购入库单明细"
+        historyTable={purchaseReceiptTable}
         historyRecordId={editingReceipt?.id}
+        workflowDocumentType="purchase_receipt"
         form={form}
         detailData={details}
         detailExtra={
@@ -785,9 +803,17 @@ export function PurchaseReceipts() {
             </Table.Summary.Row>
           )}
         />}
-      >
-       
-      </SupaModal>
+        footer={
+          <Space>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
+        width={'70%'}
+        height={600}
+      />
 
       <Modal
         title={editingDetail ? '编辑采购入库明细' : '新增采购入库明细'}
@@ -881,7 +907,7 @@ export function PurchaseReceipts() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }
 
