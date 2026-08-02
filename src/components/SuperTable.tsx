@@ -11,6 +11,8 @@ import {
   UnlockOutlined,
   LayoutOutlined,
   DeleteOutlined,
+  DownloadOutlined,
+  UploadOutlined,
 } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ActionType, ProColumns, ProTableProps } from "@ant-design/pro-components";
@@ -28,6 +30,7 @@ export interface SuperTableProps<
 > extends Omit<ProTableProps<RecordType, Query>, "columns"> {
   columns: SuperTableColumn<RecordType>[];
   storageKey: string;
+  tableName?: string;
   queryBar?: ReactNode;
   onResetColumns?: () => void;
 }
@@ -311,6 +314,12 @@ const storageColumns = `${storageKey}:columns`;
   function deleteRows(): void {
     console.log("deleteRows");
   }
+  const exportData = () => {
+    console.log("exportData");
+  };
+  const importData = () => {
+    console.log("importData");
+  };
 
   return (
     <>
@@ -339,10 +348,13 @@ const storageColumns = `${storageKey}:columns`;
           queryBar ? <div key="query-bar">{queryBar}</div> : null,
           <Button key="delete" danger ghost icon={<DeleteOutlined />} onClick={deleteRows}>
             删除
-          </Button>,
-          <Button key="reset" icon={<ReloadOutlined />} onClick={resetColumns}>
-            重置列
-          </Button>,
+          </Button>,   
+          <Button key="export" icon={<UploadOutlined />} onClick={exportData}>
+            导出
+          </Button>,          
+          <Button key="import" icon={<DownloadOutlined />} onClick={importData}>
+            导入
+          </Button>,          
           <Button key="settings" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}>
             列设置
           </Button>,
@@ -352,20 +364,25 @@ const storageColumns = `${storageKey}:columns`;
       />
       <Drawer
         open={settingsOpen}
-        width={560}
-        title="超级表格配置"
+        size={560}
+        title="表格配置"
         onClose={() => setSettingsOpen(false)}
       >
         <Typography.Paragraph type="secondary">
           支持列显示/隐藏、固定位置、拖拽排序和列宽持久化。你可以随时恢复默认配置。
         </Typography.Paragraph>
-        <Input.Search
-          allowClear
-          placeholder="搜索列名或列标识"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          style={{ marginBottom: 12 }}
-        />
+        <Space style={{ marginBottom: 12 }}>
+          <Button key="reset" icon={<ReloadOutlined />} onClick={resetColumns}>
+            重置列
+          </Button>
+          <Input.Search
+            allowClear
+            placeholder="搜索列名或列标识"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}            
+          />
+        </Space>
+        
         {settingsRows}
       </Drawer>
     </>

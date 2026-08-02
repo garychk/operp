@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, Row, Col, InputNumber } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, Row, Col, InputNumber } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
 import type { Tables } from '../../utils/supabase';
+import { SuperTable } from '../../components/SuperTable';
 
 type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
+const customerTable = 'erp_customers_s_539dcf81_b';
 
 export function Customers() {
   const { t } = useTranslation();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [form] = Form.useForm();
@@ -27,7 +31,7 @@ export function Customers() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_customers_s_539dcf81_b')
+        .from(customerTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('created_at', { ascending: false });
@@ -47,7 +51,7 @@ export function Customers() {
       if (editingCustomer) {
         await logWithTiming(t('customers.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_customers_s_539dcf81_b')
+            .from(customerTable)
             .update(values)
             .eq('id', editingCustomer.id);
           if (error) throw error;
@@ -56,7 +60,7 @@ export function Customers() {
       } else {
         await logWithTiming(t('customers.createAction'), 'INSERT', async () => {
           const { error } = await supabase
-            .from('erp_customers_s_539dcf81_b')
+            .from(customerTable)
             .insert([values]);
           if (error) throw error;
         });
@@ -86,8 +90,8 @@ export function Customers() {
         try {
           await logWithTiming(t('customers.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
-              .from('erp_customers_s_539dcf81_b')
-              .update({ is_deleted: 'y' })
+              .from(customerTable)
+            .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
@@ -132,6 +136,7 @@ export function Customers() {
       title: t('customers.code'),
       dataIndex: 'code',
       key: 'code',
+      width: 160,
     },
     {
       title: t('customers.name'),
@@ -142,30 +147,35 @@ export function Customers() {
       title: t('customers.type'),
       dataIndex: 'type',
       key: 'type',
+      width: 120,
       render: (type: string) => (typeKeys[type] ? t(typeKeys[type]) : type),
     },
     {
       title: t('customers.level'),
       dataIndex: 'level',
       key: 'level',
+      width: 120,
       render: (level: string) => (levelKeys[level] ? t(levelKeys[level]) : level),
     },
     {
       title: t('customers.contactName'),
       dataIndex: 'contact_name',
       key: 'contact_name',
+      width: 160,
       render: (text: string) => text || '-',
     },
     {
       title: t('customers.contactPhone'),
       dataIndex: 'contact_phone',
       key: 'contact_phone',
+      width: 160,
       render: (text: string) => text || '-',
     },
     {
       title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
+      width: 120,
       render: (status: string) => (
         <Tag color={status === 'active' ? 'success' : 'default'}>
           {status === 'active' ? t('common.enabled') : t('common.disabled')}
@@ -175,6 +185,7 @@ export function Customers() {
     {
       title: t('common.actions'),
       key: 'action',
+      width: 120,
       render: (_: any, record: Customer) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
@@ -189,23 +200,33 @@ export function Customers() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('customers.title')} extra={
-      <Space>
-        <Input
-          placeholder={t('customers.searchPlaceholder')}
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('customers.addCustomer')}</Button>
-      </Space>
-    }>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredCustomers}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="customers"
+        tableName={customerTable}
+        headerTitle={t('customers.title')}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('customers.addCustomer')}</Button>
+            <Input.Search
+              allowClear
+              placeholder={t('customers.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchCustomers}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -288,6 +309,6 @@ export function Customers() {
           </Row>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }

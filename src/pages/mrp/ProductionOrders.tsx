@@ -326,7 +326,7 @@ export function ProductionOrders() {
       title: "操作",
       key: "action",
       render: (_: any, record: ProductionOrder) => (
-        <Space size="middle">
+        <Space>
           <Button
             type="text"
             icon={<EditOutlined />}

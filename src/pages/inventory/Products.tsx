@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Key } from "react";
 import {
   Button,
   Input,
@@ -8,7 +9,6 @@ import {
   Form,
   Select,
   Space,
-  Card,
   message,
   InputNumber,
   Checkbox,
@@ -25,7 +25,8 @@ import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import { Categories } from "./Categories";
-import SupaModal from "../../components/SupaModal";
+import { SupaModal } from "../../components/SupaModal";
+import { SuperTable } from "../../components/SuperTable";
 import DictSelect from "../../components/DictSelect";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
@@ -39,6 +40,7 @@ export function Products() {
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
@@ -53,7 +55,7 @@ export function Products() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("erp_products_s_539dcf81_b")
+        .from(productTable)
         .select("*")
         .eq("is_deleted", "n")
         .order("created_at", { ascending: false });
@@ -124,7 +126,7 @@ export function Products() {
       onOk: async () => {
         try {
           const { error } = await supabase
-            .from("erp_products_s_539dcf81_b")
+            .from(productTable)
             .update({ is_deleted: "y" })
             .eq("id", id);
           if (error) throw error;
@@ -189,6 +191,7 @@ export function Products() {
       title: "物料编码",
       dataIndex: "code",
       key: "code",
+      width: 160,
     },
     {
       title: "物料名称",
@@ -199,35 +202,41 @@ export function Products() {
       title: "类别",
       dataIndex: "category_id",
       key: "category_id",
+      width: 120,
       render: (categoryId: number) => getCategoryName(categoryId),
     },
     {
       title: "规格",
       dataIndex: "specification",
       key: "specification",
+      width: 280,
       render: (text: string) => text || "-",
     },
     {
       title: "单位",
       dataIndex: "unit",
       key: "unit",
+      width: 120,
     },
     {
       title: "采购价",
       dataIndex: "purchase_price",
       key: "purchase_price",
+      width: 120,
       render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
     },
     {
       title: "销售价",
       dataIndex: "sale_price",
       key: "sale_price",
+      width: 120,
       render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
     },
     {
       title: "状态",
       dataIndex: "status",
       key: "status",
+      width: 120,
       render: (status: string) => (
         <Tag color={status === "active" ? "success" : "default"}>
           {status === "active" ? "启用" : "停用"}
@@ -237,8 +246,9 @@ export function Products() {
     {
       title: "操作",
       key: "action",
+      width: 120,
       render: (_: any, record: Product) => (
-        <Space size="middle">
+        <Space>
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -260,38 +270,41 @@ export function Products() {
   ];
 
   return (
-    <Card
-     className='mainContent'
-      variant="borderless"
-      title="物料管理"
-      extra={
-        <Space>
-          <Input.Search
-            placeholder="搜索物料名称或编码..."
-            allowClear
-            onSearch={(value) => {
-              setSearchTerm(value);
-              fetchProducts();
-            }}
-          />
-          <Button
-            icon={<SettingOutlined />}
-            onClick={() => setIsCategoryModalOpen(true)}
-          >
-            类别管理
-          </Button>
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增物料
-          </Button>
-        </Space>
-      }
-    >
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredProducts}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="products"
+        tableName={productTable}
+        headerTitle="物料管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增物料
+            </Button>
+            <Button
+              icon={<SettingOutlined />}
+              onClick={() => setIsCategoryModalOpen(true)}
+            >
+              类别管理
+            </Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索物料名称或编码..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchProducts}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <SupaModal
@@ -302,16 +315,6 @@ export function Products() {
           form.resetFields();
           setEditingProduct(null);
         }}
-        footer={
-          <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              保存
-            </Button>
-          </Space>
-        }
-        width={"70%"}
-        height={650}
         headerPanelTitle="物料主档"
         historyTable={productTable}
         historyRecordId={editingProduct?.id}
@@ -321,7 +324,7 @@ export function Products() {
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ marginRight: 16 }}
+            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
               <Col span={8}>
@@ -449,7 +452,17 @@ export function Products() {
             </Row>
           </Form>
         }
-      ></SupaModal>
+        footer={
+          <Space>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
+        width={"70%"}
+        height={650}
+      />
       <Modal
         title="物料类别管理"
         open={isCategoryModalOpen}
@@ -460,6 +473,6 @@ export function Products() {
       >
         <Categories />
       </Modal>
-    </Card>
+    </div>
   );
 }

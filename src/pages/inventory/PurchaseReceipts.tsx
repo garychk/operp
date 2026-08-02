@@ -23,6 +23,8 @@ const { Option } = Select;
 const { TextArea } = Input;
 const purchaseReceiptTable = 'erp_purchase_receipts_s_539dcf81_b';
 const purchaseReceiptDetailTable = 'erp_purchase_receipt_details_s_539dcf81_b';
+const purchaseOrderTable = 'erp_purchase_orders_s_539dcf81_b';
+const purchaseOrderDetailTable = 'erp_purchase_order_details_s_539dcf81_b';
 
 export function PurchaseReceipts() {
   const [receipts, setReceipts] = useState<PurchaseReceipt[]>([]);
@@ -57,7 +59,7 @@ export function PurchaseReceipts() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_purchase_receipts_s_539dcf81_b')
+        .from(purchaseReceiptTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('receipt_date', { ascending: false });
@@ -117,7 +119,7 @@ export function PurchaseReceipts() {
   const fetchPurchaseOrders = async () => {
     try {
       const { data, error } = await supabase
-        .from('erp_purchase_orders_s_539dcf81_b')
+        .from(purchaseOrderTable)
         .select('*')
         .eq('is_deleted', 'n')
         // .in('status', ['approved']);
@@ -132,7 +134,7 @@ export function PurchaseReceipts() {
   const fetchPurchaseOrderDetails = async (orderId: number) => {
     try {
       const { data, error } = await supabase
-        .from('erp_purchase_order_details_s_539dcf81_b')
+        .from(purchaseOrderDetailTable)
         .select('*')
         .eq('is_deleted', 'n')
         .eq('order_id', orderId);
@@ -147,7 +149,7 @@ export function PurchaseReceipts() {
   const fetchDetails = async (receiptId: number) => {
     try {
       const { data, error } = await supabase
-        .from('erp_purchase_receipt_details_s_539dcf81_b')
+        .from(purchaseReceiptDetailTable)
         .select('*')
         .eq('is_deleted', 'n')
         .eq('receipt_id', receiptId)
@@ -165,7 +167,7 @@ export function PurchaseReceipts() {
       if (editingReceipt) {
         await logWithTiming('更新采购入库单', 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_purchase_receipts_s_539dcf81_b')
+            .from(purchaseReceiptTable)
             .update(values)
             .eq('id', editingReceipt.id);
           if (error) throw error;
@@ -174,7 +176,7 @@ export function PurchaseReceipts() {
       } else {
         await logWithTiming('新增采购入库单', 'INSERT', async () => {
           const { error } = await supabase
-            .from('erp_purchase_receipts_s_539dcf81_b')
+            .from(purchaseReceiptTable)
             .insert([values]);
           if (error) throw error;
         });
@@ -199,7 +201,7 @@ export function PurchaseReceipts() {
       
       if (editingDetail) {
         await supabase
-          .from('erp_purchase_receipt_details_s_539dcf81_b')
+          .from(purchaseReceiptDetailTable)
           .update(values)
           .eq('id', editingDetail.id);
         message.success('更新成功');
@@ -211,7 +213,7 @@ export function PurchaseReceipts() {
         
         console.log('PurchaseReceipts: Inserting detail with values:', values);
         const { data, error } = await supabase
-          .from('erp_purchase_receipt_details_s_539dcf81_b')
+          .from(purchaseReceiptDetailTable)
           .insert([values]);
         console.log('PurchaseReceipts: Insert result:', data, error);
         if (error) throw error;
@@ -235,7 +237,7 @@ export function PurchaseReceipts() {
   const updateOrderDetailReceivedQuantity = async (orderDetailId: number, quantity: number) => {
     try {
       const { data, error } = await supabase
-        .from('erp_purchase_order_details_s_539dcf81_b')
+        .from(purchaseOrderDetailTable)
         .select('received_quantity, quantity, order_id')
         .eq('id', orderDetailId)
         .single();
@@ -243,7 +245,7 @@ export function PurchaseReceipts() {
       
       const newReceivedQty = (data.received_quantity || 0) + quantity;
       await supabase
-        .from('erp_purchase_order_details_s_539dcf81_b')
+        .from(purchaseOrderDetailTable)
         .update({ received_quantity: newReceivedQty as number })
         .eq('id', orderDetailId);
       
@@ -258,7 +260,7 @@ export function PurchaseReceipts() {
   const updatePurchaseOrderStatus = async (orderId: number) => {
     try {
       const { data, error } = await supabase
-        .from('erp_purchase_order_details_s_539dcf81_b')
+        .from(purchaseOrderDetailTable)
         .select('quantity, received_quantity')
         .eq('order_id', orderId)
         .eq('is_deleted', 'n');
@@ -275,7 +277,7 @@ export function PurchaseReceipts() {
       }
       
       await supabase
-        .from('erp_purchase_orders_s_539dcf81_b')
+        .from(purchaseOrderTable)
         .update({ status })
         .eq('id', orderId);
     } catch (error) {
@@ -286,7 +288,7 @@ export function PurchaseReceipts() {
   const updateReceiptTotal = async (receiptId: number) => {
     try {
       const { data, error } = await supabase
-        .from('erp_purchase_receipt_details_s_539dcf81_b')
+        .from(purchaseReceiptDetailTable)
         .select('amount')
         .eq('is_deleted', 'n')
         .eq('receipt_id', receiptId);
@@ -295,7 +297,7 @@ export function PurchaseReceipts() {
       const totalAmount = data?.reduce((sum, d) => sum + (d.amount || 0), 0) || 0;
       
       await supabase
-        .from('erp_purchase_receipts_s_539dcf81_b')
+        .from(purchaseReceiptTable)
         .update({ total_amount: totalAmount })
         .eq('id', receiptId);
       
@@ -340,12 +342,12 @@ export function PurchaseReceipts() {
         try {
           await logWithTiming('删除采购入库单', 'DELETE', async () => {
             const { error } = await supabase
-              .from('erp_purchase_receipts_s_539dcf81_b')
+              .from(purchaseReceiptTable)
               .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
             await supabase
-              .from('erp_purchase_receipt_details_s_539dcf81_b')
+              .from(purchaseReceiptDetailTable)
               .update({ is_deleted: 'y' })
               .eq('receipt_id', id);
           });
@@ -410,7 +412,7 @@ export function PurchaseReceipts() {
       onOk: async () => {
         try {
           await supabase
-            .from('erp_purchase_receipt_details_s_539dcf81_b')
+            .from(purchaseReceiptDetailTable)
             .update({ is_deleted: 'y' })
             .eq('id', id);
           message.success('删除成功');
@@ -674,6 +676,7 @@ export function PurchaseReceipts() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="purchase-receipts"
+        tableName={purchaseReceiptTable}
         headerTitle="采购入库单"
         rowSelection={{
           selectedRowKeys,

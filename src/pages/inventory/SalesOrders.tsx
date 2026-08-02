@@ -23,7 +23,6 @@ import {
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
-import { runBusinessAction } from "../../utils/businessEngine";
 import { useAuth } from "../../contexts/AuthContext";
 import type { Tables } from "../../utils/supabase";
 import dayjs from "dayjs";
@@ -70,7 +69,7 @@ export function SalesOrders() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("erp_sales_orders_s_539dcf81_b")
+        .from(salesOrderTable)
         .select("*")
         .eq("is_deleted", "n")
         .order("order_date", { ascending: false });
@@ -116,7 +115,7 @@ export function SalesOrders() {
   const fetchDetails = async (orderId: number) => {
     try {
       const { data, error } = await supabase
-        .from("erp_sales_order_details_s_539dcf81_b")
+        .from(salesOrderDetailTable)
         .select("*")
         .eq("is_deleted", "n")
         .eq("order_id", orderId)
@@ -176,7 +175,7 @@ export function SalesOrders() {
 
       if (editingDetail) {
         await supabase
-          .from("erp_sales_order_details_s_539dcf81_b")
+          .from(salesOrderDetailTable)
           .update(values)
           .eq("id", editingDetail.id);
         message.success("更新成功");
@@ -189,7 +188,7 @@ export function SalesOrders() {
         values.is_deleted = "n";
 
         await supabase
-          .from("erp_sales_order_details_s_539dcf81_b")
+          .from(salesOrderDetailTable)
           .insert([values]);
         message.success("新增成功");
       }
@@ -207,7 +206,7 @@ export function SalesOrders() {
   const updateOrderTotal = async (orderId: number) => {
     try {
       const { data, error } = await supabase
-        .from("erp_sales_order_details_s_539dcf81_b")
+        .from(salesOrderDetailTable)
         .select("amount, tax_amount")
         .eq("is_deleted", "n")
         .eq("order_id", orderId);
@@ -222,7 +221,7 @@ export function SalesOrders() {
       const discountAmount = order?.discount_amount || 0;
 
       await supabase
-        .from("erp_sales_orders_s_539dcf81_b")
+        .from(salesOrderTable)
         .update({
           total_amount: totalAmount,
           tax_amount: taxAmount,
@@ -236,29 +235,6 @@ export function SalesOrders() {
     }
   };
 
-  const businessUser = { id: user?.profile.id, username: user?.profile.username };
-
-  const handleSubmitApproval = async (record: SalesOrder) => {
-    try {
-      await runBusinessAction({ action: 'submit', documentType: 'sales_order', documentId: record.id, user: businessUser });
-      message.success('提交审批成功');
-      fetchOrders();
-    } catch (error: any) {
-      console.error('Error submitting sales order:', error);
-      message.error(error?.message || '提交审批失败');
-    }
-  };
-
-  const handleApprove = async (record: SalesOrder) => {
-    try {
-      await runBusinessAction({ action: 'approve', documentType: 'sales_order', documentId: record.id, user: businessUser });
-      message.success('审核成功');
-      fetchOrders();
-    } catch (error: any) {
-      console.error('Error approving sales order:', error);
-      message.error(error?.message || '审核失败');
-    }
-  };
   const handleEdit = async (record: SalesOrder) => {
     setEditingOrder(record);
     setIsDisabled(
@@ -357,7 +333,7 @@ export function SalesOrders() {
       onOk: async () => {
         try {
           await supabase
-            .from("erp_sales_order_details_s_539dcf81_b")
+            .from(salesOrderDetailTable)
             .update({ is_deleted: "y" })
             .eq("id", id);
           message.success("删除成功");
@@ -416,6 +392,7 @@ export function SalesOrders() {
       title: "订单号",
       dataIndex: "order_no",
       key: "order_no",
+      width: 120,
     },
     {
       title: "客户",
@@ -427,29 +404,34 @@ export function SalesOrders() {
       title: "订单日期",
       dataIndex: "order_date",
       key: "order_date",
+      width: 120,
     },
     {
       title: "交货日期",
       dataIndex: "delivery_date",
       key: "delivery_date",
+      width: 120,
       render: (text: string) => text || "-",
     },
     {
       title: "金额",
       dataIndex: "total_amount",
       key: "total_amount",
+      width: 120,
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
       title: "应收金额",
       dataIndex: "receivable_amount",
       key: "receivable_amount",
+      width: 120,
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
       title: "状态",
       dataIndex: "status",
       key: "status",
+      width: 120,
       render: (status: string) => {
         const config = statusLabels[status] || {
           text: status,
@@ -461,18 +443,9 @@ export function SalesOrders() {
     {
       title: "操作",
       key: "action",
+      width: 120,
       render: (_: any, record: SalesOrder) => (
-        <Space size="middle">
-          {record.status === 'draft' && (
-            <Button type="text" onClick={() => handleSubmitApproval(record)} disabled={record.status !== 'draft'}>
-              提交
-            </Button>
-          )}
-          {record.status === 'pending' && (
-            <Button type="text" onClick={() => handleApprove(record)}>
-              审核
-            </Button>
-          )}
+        <Space>
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -593,6 +566,7 @@ export function SalesOrders() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="sales-orders"
+        tableName={salesOrderTable}
         headerTitle="销售订单"
         rowSelection={{
           selectedRowKeys,
