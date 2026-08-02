@@ -497,7 +497,12 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
 
       <Splitter.Panel defaultSize="70%" min="40%" style={{ overflow: "hidden" }}>
         <Spin spinning={loading}>
-          <Card size="small" title={title} style={{ height: "100%" }} styles={{ body: { padding: 0, height: "100%", overflow: "hidden" } }}>
+          <Card  title={title} style={{ height: "100%" }} styles={{ body: { padding: 0, height: "100%", overflow: "hidden" } }}
+          extra={
+          <Space>
+              <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "detail"}>保存</Button>
+              <Button block onClick={openCreateModal} disabled={!selectedNode}>添加子节点</Button></Space>
+          }>
             <div ref={containerRef} style={{ width: "100%", height: "calc(100vh - 160px)", minHeight: 700 }} />
           </Card>
         </Spin>
@@ -513,8 +518,8 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
             <Form.Item label="损耗率" name="loss_rate"><InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} /></Form.Item>
             <Form.Item label="工序" name="operation_id"><Select allowClear options={operations.map((o) => ({ label: o.name, value: o.id }))} /></Form.Item>
             <Form.Item label="备注" name="remark"><Input.TextArea rows={4} /></Form.Item>
-            <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "detail"}>保存子项</Button>
-            <Space style={{ width: "100%", marginTop: 12 }}><Button block onClick={openCreateModal} disabled={!selectedNode}>添加子节点</Button></Space>
+            
+            
           </Form>
         </Card>
       </Splitter.Panel>
