@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, InputNumber, Row, Col, DatePicker } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
+import { SuperTable } from '../../components/SuperTable';
 import { useTranslation } from 'react-i18next';
 
 type FixedAsset = Tables['erp_fixed_assets_s_539dcf81_b']['Row'];
 type AssetCategory = Tables['erp_asset_categories_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
+const fixedAssetTable = 'erp_fixed_assets_s_539dcf81_b';
 
 export function FixedAssets() {
   const { t } = useTranslation();
@@ -18,6 +21,7 @@ export function FixedAssets() {
   const [categories, setCategories] = useState<AssetCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<FixedAsset | null>(null);
   const [form] = Form.useForm();
@@ -31,7 +35,7 @@ export function FixedAssets() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_fixed_assets_s_539dcf81_b')
+        .from(fixedAssetTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('created_at', { ascending: false });
@@ -64,7 +68,7 @@ export function FixedAssets() {
       if (editingAsset) {
         await logWithTiming(t('fixedAssets.log.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_fixed_assets_s_539dcf81_b')
+            .from(fixedAssetTable)
             .update(values)
             .eq('id', editingAsset.id);
           if (error) throw error;
@@ -73,7 +77,7 @@ export function FixedAssets() {
       } else {
         await logWithTiming(t('fixedAssets.log.createAction'), 'INSERT', async () => {
           const { error } = await supabase
-            .from('erp_fixed_assets_s_539dcf81_b')
+            .from(fixedAssetTable)
             .insert([{
               ...values,
               accumulated_depreciation: 0,
@@ -110,8 +114,8 @@ export function FixedAssets() {
         try {
           await logWithTiming(t('fixedAssets.log.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
-              .from('erp_fixed_assets_s_539dcf81_b')
-              .update({ is_deleted: 'y' })
+              .from(fixedAssetTable)
+            .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
@@ -224,23 +228,32 @@ export function FixedAssets() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('fixedAssets.title')} extra={
-      <Space>
-        <Input
-          placeholder={t('fixedAssets.searchPlaceholder')}
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('fixedAssets.addAsset')}</Button>
-      </Space>
-    }>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredAssets}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="fixed-assets"
+        headerTitle={t('fixedAssets.title')}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('fixedAssets.addAsset')}</Button>
+            <Input.Search
+              allowClear
+              placeholder={t('fixedAssets.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchAssets}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -335,6 +348,6 @@ export function FixedAssets() {
           </Row>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }

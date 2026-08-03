@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker, Row, Col } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, InputNumber, DatePicker, Row, Col } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
+import { SuperTable } from '../../components/SuperTable';
 import dayjs from 'dayjs';
-import SupaModal from '../../components/SupaModal';
+import { SupaModal } from '../../components/SupaModal';
 import { useTranslation } from 'react-i18next';
 
 type Receivable = Tables['erp_receivables_s_539dcf81_b']['Row'];
@@ -20,6 +22,7 @@ export function Receivables() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReceivable, setEditingReceivable] = useState<Receivable | null>(null);
   const [form] = Form.useForm();
@@ -33,7 +36,7 @@ export function Receivables() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_receivables_s_539dcf81_b')
+        .from(tableName)
         .select('*')
         .eq('is_deleted', 'n')
         .order('doc_date', { ascending: false });
@@ -67,7 +70,7 @@ export function Receivables() {
       if (editingReceivable) {
         await logWithTiming(t('receivables.log.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_receivables_s_539dcf81_b')
+            .from(tableName)
             .update(values)
             .eq('id', editingReceivable.id);
           if (error) throw error;
@@ -76,7 +79,7 @@ export function Receivables() {
       } else {
         await logWithTiming(t('receivables.log.createAction'), 'INSERT', async () => {
           const { error } = await supabase
-            .from('erp_receivables_s_539dcf81_b')
+            .from(tableName)
             .insert([{
               ...values,
               balance: values.amount,
@@ -113,7 +116,7 @@ export function Receivables() {
         try {
           await logWithTiming(t('receivables.log.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
-              .from('erp_receivables_s_539dcf81_b')
+              .from(tableName)
               .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
@@ -221,25 +224,33 @@ export function Receivables() {
   ];
 
   return (
-    <Card variant="borderless" title={t('receivables.title')} extra={
-      <Space>
-        <Input
-          placeholder={t('receivables.searchPlaceholder')}
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('receivables.addReceivable')}</Button>
-      </Space>
-    }>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredReceivables}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="receivables"
+        headerTitle={t('receivables.title')}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('receivables.addReceivable')}</Button>
+            <Input.Search
+              allowClear
+              placeholder={t('receivables.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchReceivables}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
-
       <SupaModal
         title={editingReceivable ? t('receivables.editReceivable') : t('receivables.addReceivable')}
         open={isModalOpen}
@@ -258,63 +269,61 @@ export function Receivables() {
         </Space>}
         historyTable={tableName}
       >
-        <Card>
-          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  label={t('receivables.customer')}
-                  name="customer_id"
-                  rules={[{ required: true, message: t('receivables.customerRequired') }]}
-                >
-                  <Select placeholder={t('receivables.customerPlaceholder')}>
-                    {customers.map((c) => (
-                      <Option key={c.id} value={c.id}>{c.name}</Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-                <Form.Item label={t('receivables.docType')} name="doc_type" initialValue="invoice">
-                  <Select>
-                    <Option value="invoice">{t('receivables.typeOptions.invoice')}</Option>
-                    <Option value="order">{t('receivables.typeOptions.order')}</Option>
-                    <Option value="other">{t('receivables.typeOptions.other')}</Option>
-                  </Select>
-                </Form.Item>
-                <Form.Item
-                  label={t('receivables.docNo')}
-                  name="doc_no"
-                  rules={[{ required: true, message: t('receivables.docNoRequired') }]}
-                >
-                  <Input placeholder={t('receivables.docNoPlaceholder')} disabled={!!editingReceivable} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  label={t('receivables.docDate')}
-                  name="doc_date"
-                  rules={[{ required: true, message: t('receivables.docDateRequired') }]}
-                >
-                  <DatePicker style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item label={t('receivables.dueDate')} name="due_date">
-                  <DatePicker style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item
-                  label={t('receivables.amount')}
-                  name="amount"
-                  rules={[{ required: true, message: t('receivables.amountRequired') }]}
-                  initialValue={0}
-                >
-                  <InputNumber style={{ width: '100%' }} placeholder={t('receivables.amountPlaceholder')} />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Form.Item label={t('receivables.remark')} name="remark">
-              <Input.TextArea rows={3} placeholder={t('receivables.remarkPlaceholder')} />
-            </Form.Item>
-          </Form>
-        </Card>
+        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: '0 16px 0 0' }}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={t('receivables.customer')}
+                name="customer_id"
+                rules={[{ required: true, message: t('receivables.customerRequired') }]}
+              >
+                <Select placeholder={t('receivables.customerPlaceholder')}>
+                  {customers.map((c) => (
+                    <Option key={c.id} value={c.id}>{c.name}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item label={t('receivables.docType')} name="doc_type" initialValue="invoice">
+                <Select>
+                  <Option value="invoice">{t('receivables.typeOptions.invoice')}</Option>
+                  <Option value="order">{t('receivables.typeOptions.order')}</Option>
+                  <Option value="other">{t('receivables.typeOptions.other')}</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item
+                label={t('receivables.docNo')}
+                name="doc_no"
+                rules={[{ required: true, message: t('receivables.docNoRequired') }]}
+              >
+                <Input placeholder={t('receivables.docNoPlaceholder')} disabled={!!editingReceivable} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={t('receivables.docDate')}
+                name="doc_date"
+                rules={[{ required: true, message: t('receivables.docDateRequired') }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item label={t('receivables.dueDate')} name="due_date">
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item
+                label={t('receivables.amount')}
+                name="amount"
+                rules={[{ required: true, message: t('receivables.amountRequired') }]}
+                initialValue={0}
+              >
+                <InputNumber style={{ width: '100%' }} placeholder={t('receivables.amountPlaceholder')} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item label={t('receivables.remark')} name="remark">
+            <Input.TextArea rows={3} placeholder={t('receivables.remarkPlaceholder')} />
+          </Form.Item>
+        </Form>
       </SupaModal>
-    </Card>
+    </div>
   );
 }

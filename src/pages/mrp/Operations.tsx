@@ -1,14 +1,13 @@
 import { useEffect, useState } from "react";
+import type { Key } from "react";
 import {
   Button,
   Input,
-  Table,
   Tag,
   Modal,
   Form,
   Select,
   Space,
-  Card,
   message,
   InputNumber,
   Row,
@@ -16,11 +15,11 @@ import {
 } from "antd";
 import {
   PlusOutlined,
-  SearchOutlined,
   DeleteOutlined,
   EditOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
+import { SuperTable } from "../../components/SuperTable";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 
@@ -30,11 +29,14 @@ type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 const { Option } = Select;
 const { TextArea } = Input;
 
+const operationTable = 'erp_operations_s_539dcf81_b';
+
 export function Operations() {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingOperation, setEditingOperation] = useState<Operation | null>(
     null,
@@ -50,7 +52,7 @@ export function Operations() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("erp_operations_s_539dcf81_b")
+        .from(operationTable)
         .select("*")
         .eq("is_deleted", "n")
         .order("created_at", { ascending: false });
@@ -83,7 +85,7 @@ export function Operations() {
       if (editingOperation) {
         await logWithTiming("更新工序", "UPDATE", async () => {
           const { error } = await supabase
-            .from("erp_operations_s_539dcf81_b")
+            .from(operationTable)
             .update(values)
             .eq("id", editingOperation.id);
           if (error) throw error;
@@ -92,7 +94,7 @@ export function Operations() {
       } else {
         await logWithTiming("新增工序", "INSERT", async () => {
           const { error } = await supabase
-            .from("erp_operations_s_539dcf81_b")
+            .from(operationTable)
             .insert([values]);
           if (error) throw error;
         });
@@ -122,7 +124,7 @@ export function Operations() {
         try {
           await logWithTiming("删除工序", "DELETE", async () => {
             const { error } = await supabase
-              .from("erp_operations_s_539dcf81_b")
+              .from(operationTable)
               .update({ is_deleted: "y" })
               .eq("id", id);
             if (error) throw error;
@@ -241,30 +243,34 @@ export function Operations() {
   ];
 
   return (
-    <Card
-      className='mainContent'
-      variant="borderless"
-      title="工序管理"
-      extra={
-        <Space>
-          <Input
-          placeholder="搜索工序名称或编码..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增工序
-        </Button>
-        </Space>
-      }
-    >
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredOperations}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="operations"
+        headerTitle="工序管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增工序
+            </Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索工序名称或编码..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchOperations}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -366,6 +372,6 @@ export function Operations() {
           </Row>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Key } from "react";
 import {
   Button,
   Input,
@@ -8,7 +9,6 @@ import {
   Form,
   Select,
   Space,
-  Card,
   message,
   InputNumber,
   Checkbox,
@@ -28,6 +28,7 @@ import {
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
+import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
 import { RoutingMap } from "../../components/RoutingMap";
@@ -48,6 +49,7 @@ export function RoutingOperations() {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingRouting, setEditingRouting] = useState<Routing | null>(null);
@@ -83,7 +85,7 @@ export function RoutingOperations() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("erp_routing_operations_s_539dcf81_b")
+        .from(routingTable)
         .select("*")
         .eq("is_deleted", "n")
         .order("created_at", { ascending: false });
@@ -228,7 +230,7 @@ export function RoutingOperations() {
         data?.reduce((sum, d) => sum + (d.standard_hours || 0), 0) || 0;
 
       await supabase
-        .from("erp_routing_operations_s_539dcf81_b")
+        .from(routingTable)
         .update({ total_standard_hours: totalHours })
         .eq("id", routingId);
 
@@ -304,7 +306,7 @@ export function RoutingOperations() {
     setIsModalOpen(true);
   };
 
-  const handleAddDetail = () => {
+  const handleAddDetail = (e: React.MouseEvent) => { e.stopPropagation();
     setEditingDetail(null);
     detailForm.setFieldsValue({
       sequence_no: details.length + 1,
@@ -510,28 +512,34 @@ export function RoutingOperations() {
   );
 
   return (
-    <Card
-      variant="borderless"
-      title="工艺路线管理"
-      className='mainContent'
-      extra={
-        <Space>
-          <Input.Search placeholder="搜索工艺路线编号或产品..." allowClear onSearch={(value) => {
-            setSearchTerm(value);
-            fetchRoutings();
-          }} />
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增工艺路线
-          </Button>
-        </Space>
-      }
-    >
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredRoutings}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="routing-operations"
+        headerTitle="工艺路线管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增工艺路线
+            </Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索工艺路线编号或产品..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchRoutings}
+              style={{ width: 260 }}
+            />
+          </Space>
+        }
       />
 
       <RoutingMap
@@ -815,6 +823,6 @@ export function RoutingOperations() {
           </Row>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }

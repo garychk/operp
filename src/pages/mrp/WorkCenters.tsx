@@ -1,24 +1,24 @@
 import { useEffect, useState } from "react";
+import type { Key } from "react";
 import {
+  Card,
   Button,
   Input,
-  Table,
   Tag,
   Modal,
   Form,
   Select,
   Space,
-  Card,
   message,
   InputNumber,
 } from "antd";
 import {
   PlusOutlined,
-  SearchOutlined,
   DeleteOutlined,
   EditOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
+import { SuperTable } from "../../components/SuperTable";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 
@@ -27,11 +27,14 @@ type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 
+const workCenterTable = "erp_work_centers_s_539dcf81_b";
+
 export function WorkCenters() {
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWorkCenter, setEditingWorkCenter] = useState<WorkCenter | null>(
     null,
@@ -47,7 +50,7 @@ export function WorkCenters() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("erp_work_centers_s_539dcf81_b")
+        .from(workCenterTable)
         .select("*")
         .eq("is_deleted", "n")
         .order("created_at", { ascending: false });
@@ -80,7 +83,7 @@ export function WorkCenters() {
       if (editingWorkCenter) {
         await logWithTiming("更新工作中心", "UPDATE", async () => {
           const { error } = await supabase
-            .from("erp_work_centers_s_539dcf81_b")
+            .from(workCenterTable)
             .update(values)
             .eq("id", editingWorkCenter.id);
           if (error) throw error;
@@ -89,7 +92,7 @@ export function WorkCenters() {
       } else {
         await logWithTiming("新增工作中心", "INSERT", async () => {
           const { error } = await supabase
-            .from("erp_work_centers_s_539dcf81_b")
+            .from(workCenterTable)
             .insert([values]);
           if (error) throw error;
         });
@@ -119,7 +122,7 @@ export function WorkCenters() {
         try {
           await logWithTiming("删除工作中心", "DELETE", async () => {
             const { error } = await supabase
-              .from("erp_work_centers_s_539dcf81_b")
+              .from(workCenterTable)
               .update({ is_deleted: "y" })
               .eq("id", id);
             if (error) throw error;
@@ -243,30 +246,34 @@ export function WorkCenters() {
   ];
 
   return (
-    <Card
-      className="mainContent"
-      variant="borderless"
-      title="工作中心管理"
-      extra={
-        <Space>
-          <Input
-            placeholder="搜索工作中心名称或编码..."
-            prefix={<SearchOutlined />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增工作中心
-          </Button>
-        </Space>
-      }
-    >
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredWorkCenters}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="work-centers"
+        headerTitle="工作中心管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增工作中心
+            </Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索工作中心名称或编码..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchWorkCenters}
+              style={{ width: 260 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -354,6 +361,6 @@ export function WorkCenters() {
         </Form>
         </Card>
       </Modal>
-    </Card>
+    </div>
   );
 }

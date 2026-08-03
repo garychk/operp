@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message,DatePicker } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker } from 'antd';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
+import { SuperTable } from '../../components/SuperTable';
 import dayjs from 'dayjs';
 
 type MrpPlan = Tables['erp_mrp_plans_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 const { TextArea } = Input;
+const mrpPlanTable = 'erp_mrp_plans_s_539dcf81_b';
 
 export function MrpPlans() {
   const [plans, setPlans] = useState<MrpPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form] = Form.useForm();
 
@@ -25,7 +29,7 @@ export function MrpPlans() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_mrp_plans_s_539dcf81_b')
+        .from(mrpPlanTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('plan_date', { ascending: false });
@@ -43,7 +47,7 @@ export function MrpPlans() {
   const handleSubmit = async (values: any) => {
     try {
       const { error } = await supabase
-        .from('erp_mrp_plans_s_539dcf81_b')
+        .from(mrpPlanTable)
         .insert([values]);
       if (error) throw error;
       message.success('新增成功');
@@ -63,7 +67,7 @@ export function MrpPlans() {
       onOk: async () => {
         try {
           const { error } = await supabase
-            .from('erp_mrp_plans_s_539dcf81_b')
+            .from(mrpPlanTable)
             .update({ is_deleted: 'y' })
             .eq('id', id);
           if (error) throw error;
@@ -84,7 +88,7 @@ export function MrpPlans() {
       onOk: async () => {
         try {
           const { error } = await supabase
-            .from('erp_mrp_plans_s_539dcf81_b')
+            .from(mrpPlanTable)
             .update({ status: 'running' })
             .eq('id', id);
           if (error) throw error;
@@ -191,23 +195,32 @@ export function MrpPlans() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title="MRP计划管理" extra={
-      <Space>
-        <Input
-          placeholder="搜索计划号..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增计划</Button>
-      </Space>
-    }>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredPlans}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="mrp-plans"
+        headerTitle="MRP计划管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增计划</Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索计划号..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchPlans}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -261,6 +274,6 @@ export function MrpPlans() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }

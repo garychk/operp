@@ -1,19 +1,23 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, Row, Col, InputNumber } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, message, Row, Col, InputNumber } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
-import SupaModal from '../../components/SupaModal';
+import { SupaModal } from '../../components/SupaModal';
+import { SuperTable } from '../../components/SuperTable';
 
 type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
+const supplierTable = 'erp_suppliers_s_539dcf81_b';
 
 export function Suppliers() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
   const [form] = Form.useForm();
@@ -26,7 +30,7 @@ export function Suppliers() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_suppliers_s_539dcf81_b')
+        .from(supplierTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('created_at', { ascending: false });
@@ -46,7 +50,7 @@ export function Suppliers() {
       if (editingSupplier) {
         await logWithTiming('更新供应商', 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_suppliers_s_539dcf81_b')
+            .from(supplierTable)
             .update(values)
             .eq('id', editingSupplier.id);
           if (error) throw error;
@@ -54,7 +58,7 @@ export function Suppliers() {
         message.success('更新成功');
       } else {
         const { error } = await supabase
-          .from('erp_suppliers_s_539dcf81_b')
+          .from(supplierTable)
           .insert([values]);
         if (error) throw error;
         message.success('新增成功');
@@ -83,8 +87,8 @@ export function Suppliers() {
         try {
           await logWithTiming('删除供应商', 'DELETE', async () => {
             const { error } = await supabase
-              .from('erp_suppliers_s_539dcf81_b')
-              .update({ is_deleted: 'y' })
+              .from(supplierTable)
+            .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
@@ -187,23 +191,32 @@ export function Suppliers() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title="供应商管理" extra={
-      <Space>
-        <Input
-          placeholder="搜索供应商名称或编码..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增供应商</Button>
-      </Space>
-    }>      
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredSuppliers}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="suppliers"
+        headerTitle="供应商管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增供应商</Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索供应商名称或编码..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchSuppliers}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <SupaModal
@@ -214,21 +227,16 @@ export function Suppliers() {
           form.resetFields();
           setEditingSupplier(null);
         }}
-        width={800}
-        height={660}
-        footer={
-          <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              保存
-            </Button>
-          </Space>
-        }
-      >
-        <Card>
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
+        width={1000}
+        height={500}
+        headerPanelTitle="供应商主档"
+        historyTable={supplierTable}
+        historyRecordId={editingSupplier?.id}
+        form={form}
+        formEle={
+          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: "0 16px 0 0" }}>
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item
                 label="供应商编码"
                 name="code"
@@ -263,20 +271,22 @@ export function Suppliers() {
                   <Option value="potential">潜在</Option>
                 </Select>
               </Form.Item>
+            </Col>
+            <Col span={8}>
               <Form.Item label="联系人" name="contact_name">
                 <Input placeholder="请输入联系人" />
               </Form.Item>
               <Form.Item label="联系电话" name="contact_phone">
                 <Input placeholder="请输入联系电话" />
               </Form.Item>
-            </Col>
-            <Col span={12}>
               <Form.Item label="地址" name="address">
                 <Input placeholder="请输入地址" />
               </Form.Item>
               <Form.Item label="税号" name="tax_no">
                 <Input placeholder="请输入税号" />
               </Form.Item>
+            </Col>
+            <Col span={8}>
               <Form.Item label="开户银行" name="bank_name">
                 <Input placeholder="请输入开户银行" />
               </Form.Item>
@@ -295,8 +305,16 @@ export function Suppliers() {
             </Col>
           </Row>
         </Form>
-        </Card>
-      </SupaModal>
-    </Card>
+        }
+        footer={
+          <Space>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
+      />
+    </div>
   );
 }

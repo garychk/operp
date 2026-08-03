@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker, Row, Col } from 'antd';
+import type { Key } from 'react';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, InputNumber, DatePicker, Row, Col } from 'antd';
 import dayjs from 'dayjs';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
-import SupaModal from '../../components/SupaModal';
+import { SuperTable } from '../../components/SuperTable';
+import { SupaModal } from '../../components/SupaModal';
 import { useTranslation } from 'react-i18next';
 
-type Payable = Tables['erp_payables_s_539dcf81_b']['Row'];
+type Payable = Tables[payableTable]['Row'];
 type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
+
+const payableTable = 'erp_payables_s_539dcf81_b';
 
 export function Payables() {
   const { t } = useTranslation();
@@ -19,6 +23,7 @@ export function Payables() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPayable, setEditingPayable] = useState<Payable | null>(null);
   const [form] = Form.useForm();
@@ -32,7 +37,7 @@ export function Payables() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_payables_s_539dcf81_b')
+        .from(payableTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('doc_date', { ascending: false });
@@ -66,7 +71,7 @@ export function Payables() {
       if (editingPayable) {
         await logWithTiming(t('payables.log.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_payables_s_539dcf81_b')
+            .from(payableTable)
             .update(values)
             .eq('id', editingPayable.id);
           if (error) throw error;
@@ -75,7 +80,7 @@ export function Payables() {
       } else {
         await logWithTiming(t('payables.log.createAction'), 'INSERT', async () => {
           const { error } = await supabase
-            .from('erp_payables_s_539dcf81_b')
+            .from(payableTable)
             .insert([{
               ...values,
               balance: values.amount,
@@ -115,7 +120,7 @@ export function Payables() {
         try {
           await logWithTiming(t('payables.log.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
-              .from('erp_payables_s_539dcf81_b')
+              .from(payableTable)
               .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
@@ -223,25 +228,33 @@ export function Payables() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('payables.title')} extra={
-      <Space>
-        <Input
-          placeholder={t('payables.searchPlaceholder')}
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('payables.addPayable')}</Button>
-      </Space>
-    }>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredPayables}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="payables"
+        headerTitle={t('payables.title')}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('payables.addPayable')}</Button>
+            <Input.Search
+              allowClear
+              placeholder={t('payables.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchPayables}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
-
       <SupaModal
         title={editingPayable ? t('payables.editPayable') : t('payables.addPayable')}
         open={isModalOpen}
@@ -258,64 +271,63 @@ export function Payables() {
             {t('common.save')}
           </Button>
         </Space>}
+        historyTable={payableTable}
       >
-        <Card>
-          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item
-                  label={t('payables.supplier')}
-                  name="supplier_id"
-                  rules={[{ required: true, message: t('payables.supplierRequired') }]}
-                >
-                  <Select placeholder={t('payables.supplierPlaceholder')}>
-                    {suppliers.map((s) => (
-                      <Option key={s.id} value={s.id}>{s.name}</Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-                <Form.Item label={t('payables.docType')} name="doc_type" initialValue="invoice">
-                  <Select>
-                    <Option value="invoice">{t('payables.typeOptions.invoice')}</Option>
-                    <Option value="order">{t('payables.typeOptions.order')}</Option>
-                    <Option value="other">{t('payables.typeOptions.other')}</Option>
-                  </Select>
-                </Form.Item>
-                <Form.Item
-                  label={t('payables.docNo')}
-                  name="doc_no"
-                  rules={[{ required: true, message: t('payables.docNoRequired') }]}
-                >
-                  <Input placeholder={t('payables.docNoPlaceholder')} disabled={!!editingPayable} />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  label={t('payables.docDate')}
-                  name="doc_date"
-                  rules={[{ required: true, message: t('payables.docDateRequired') }]}
-                >
-                  <DatePicker style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item label={t('payables.dueDate')} name="due_date">
-                  <DatePicker style={{ width: '100%' }} />
-                </Form.Item>
-                <Form.Item
-                  label={t('payables.amount')}
-                  name="amount"
-                  rules={[{ required: true, message: t('payables.amountRequired') }]}
-                  initialValue={0}
-                >
-                  <InputNumber style={{ width: '100%' }} placeholder={t('payables.amountPlaceholder')} />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Form.Item label={t('payables.remark')} name="remark">
-              <Input.TextArea rows={3} placeholder={t('payables.remarkPlaceholder')} />
-            </Form.Item>
-          </Form>
-        </Card>
+        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: '0 16px 0 0' }}>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={t('payables.supplier')}
+                name="supplier_id"
+                rules={[{ required: true, message: t('payables.supplierRequired') }]}
+              >
+                <Select placeholder={t('payables.supplierPlaceholder')}>
+                  {suppliers.map((s) => (
+                    <Option key={s.id} value={s.id}>{s.name}</Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item label={t('payables.docType')} name="doc_type" initialValue="invoice">
+                <Select>
+                  <Option value="invoice">{t('payables.typeOptions.invoice')}</Option>
+                  <Option value="order">{t('payables.typeOptions.order')}</Option>
+                  <Option value="other">{t('payables.typeOptions.other')}</Option>
+                </Select>
+              </Form.Item>
+              <Form.Item
+                label={t('payables.docNo')}
+                name="doc_no"
+                rules={[{ required: true, message: t('payables.docNoRequired') }]}
+              >
+                <Input placeholder={t('payables.docNoPlaceholder')} disabled={!!editingPayable} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={t('payables.docDate')}
+                name="doc_date"
+                rules={[{ required: true, message: t('payables.docDateRequired') }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item label={t('payables.dueDate')} name="due_date">
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+              <Form.Item
+                label={t('payables.amount')}
+                name="amount"
+                rules={[{ required: true, message: t('payables.amountRequired') }]}
+                initialValue={0}
+              >
+                <InputNumber style={{ width: '100%' }} placeholder={t('payables.amountPlaceholder')} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item label={t('payables.remark')} name="remark">
+            <Input.TextArea rows={3} placeholder={t('payables.remarkPlaceholder')} />
+          </Form.Item>
+        </Form>
       </SupaModal>
-    </Card>
+    </div>
   );
 }

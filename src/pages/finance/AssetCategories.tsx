@@ -1,19 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Modal, Form, Select, Space, Card, message, InputNumber } from 'antd';
-import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Modal, Form, Select, Space, message, InputNumber } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
+import { SuperTable } from '../../components/SuperTable';
 import { useTranslation } from 'react-i18next';
 
 type AssetCategory = Tables['erp_asset_categories_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
 
+const assetCategoryTable = 'erp_asset_categories_s_539dcf81_b';
+
 export function AssetCategories() {
   const { t } = useTranslation();
   const [categories, setCategories] = useState<AssetCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<AssetCategory | null>(null);
   const [form] = Form.useForm();
@@ -26,7 +31,7 @@ export function AssetCategories() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_asset_categories_s_539dcf81_b')
+        .from(assetCategoryTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('code');
@@ -45,14 +50,14 @@ export function AssetCategories() {
     try {
       if (editingCategory) {
         const { error } = await supabase
-          .from('erp_asset_categories_s_539dcf81_b')
+          .from(assetCategoryTable)
           .update(values)
           .eq('id', editingCategory.id);
         if (error) throw error;
         message.success(t('common.updateSuccess'));
       } else {
         const { error } = await supabase
-          .from('erp_asset_categories_s_539dcf81_b')
+          .from(assetCategoryTable)
           .insert([values]);
         if (error) throw error;
         message.success(t('common.createSuccess'));
@@ -74,7 +79,7 @@ export function AssetCategories() {
       onOk: async () => {
         try {
           const { error } = await supabase
-            .from('erp_asset_categories_s_539dcf81_b')
+            .from(assetCategoryTable)
             .update({ is_deleted: 'y' })
             .eq('id', id);
           if (error) throw error;
@@ -178,22 +183,32 @@ export function AssetCategories() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('assetCategories.title')} extra={<Space>
-      <Input
-        placeholder={t('assetCategories.searchPlaceholder')}
-        prefix={<SearchOutlined />}
-        value={searchTerm}
-        onChange={(e) => setSearchTerm(e.target.value)}
-      />
-      <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('assetCategories.addCategory')}</Button>
-    </Space>}>
-
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredCategories}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="asset-categories"
+        headerTitle={t('assetCategories.title')}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('assetCategories.addCategory')}</Button>
+            <Input.Search
+              allowClear
+              placeholder={t('assetCategories.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchCategories}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -249,7 +264,7 @@ export function AssetCategories() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }
 

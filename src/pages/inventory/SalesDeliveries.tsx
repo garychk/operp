@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, Row, Col, DatePicker } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, message, InputNumber, Row, Col, DatePicker } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
-import SupaModal from '../../components/SupaModal';
+import { SupaModal } from '../../components/SupaModal';
+import { SuperTable } from '../../components/SuperTable';
 
 type SalesDelivery = Tables['erp_sales_deliveries_s_539dcf81_b']['Row'];
 type SalesDeliveryDetail = Tables['erp_sales_delivery_details_s_539dcf81_b']['Row'];
@@ -31,6 +33,7 @@ export function SalesDeliveries() {
   const [salesOrderDetails, setSalesOrderDetails] = useState<SalesOrderDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingDelivery, setEditingDelivery] = useState<SalesDelivery | null>(null);
@@ -39,6 +42,7 @@ export function SalesDeliveries() {
   const [editingDetail, setEditingDetail] = useState<SalesDeliveryDetail | null>(null);
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
+  const [isDisabled, setIsDisabled] = useState(false);
   const [, setSelectedOrderId] = useState<number | null>(null);
   const { user } = useAuth();
 
@@ -327,6 +331,7 @@ export function SalesDeliveries() {
   const handleEdit = (record: SalesDelivery) => {
     setEditingDelivery(record);
     setSelectedDelivery(record);
+    setIsDisabled(record.status === 'posted');
     setSelectedOrderId(record.order_id || null);
     if (record.order_id) {
       fetchSalesOrderDetails(record.order_id);
@@ -387,7 +392,8 @@ export function SalesDeliveries() {
     fetchDetails(record.id);
   };
 
-  const handleAddDetail = () => {
+  const handleAddDetail = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setEditingDetail(null);
     detailForm.setFieldsValue({
       order_detail_id: undefined,
@@ -644,10 +650,10 @@ export function SalesDeliveries() {
       key: 'action',
       render: (_: any, record: SalesDeliveryDetail) => (
         <Space size="middle">
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)} disabled={isDisabled}>
             编辑
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)}>
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)} disabled={isDisabled}>
             删除
           </Button>
         </Space>
@@ -660,27 +666,41 @@ export function SalesDeliveries() {
   }), { amount: 0 });
 
   return (
-    <Card className='mainContent' variant="borderless" title="销售出货单" extra={
-      <Space>
-        <Input
-          placeholder="搜索出货单号、客户或销售订单..."
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增出货单</Button>
-      </Space>
-    }>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredDeliveries}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="sales-deliveries"
+        headerTitle="销售出货单"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增出货单</Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索出货单号、客户或销售订单..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchDeliveries}
+              style={{ width: 280 }}
+            />
+          </Space>
+        }
       />
 
       <SupaModal
-        title={editingDelivery ? '编辑销售出货单' : '新增销售出货单'}
+        title={
+          <>
+            <EyeOutlined />
+            <span>{editingDelivery ? '编辑销售出货单' : '新增销售出货单'}</span>
+          </>
+        }
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -690,18 +710,32 @@ export function SalesDeliveries() {
           setSelectedOrderId(null);
           setSalesOrderDetails([]);
         }}
-        footer={<Space>
-          <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-          <Button type="primary" onClick={() => form.submit()}>
-            保存
-          </Button>
-        </Space>}
-        width={'60%'}
+        headerExtra={
+          editingDelivery ? (
+            <Tag color={editingDelivery.status === 'draft' ? 'blue' : editingDelivery.status === 'posted' ? 'success' : 'green'}>
+              {statusLabels[editingDelivery.status ?? '']?.text || editingDelivery.status}
+            </Tag>
+          ) : null
+        }
+        headerPanelTitle="销售出货单头"
+        detailPanelTitle="销售出货单明细"
         historyTable={salesDeliveryTable}
         historyRecordId={editingDelivery?.id || selectedDelivery?.id}
+        workflowDocumentType="sales_delivery"
         form={form}
+        detailExtra={
+          <Button
+            type="link"
+            size="small"
+            icon={<PlusOutlined />}
+            onClick={handleAddDetail}
+            disabled={isDisabled}
+          >
+            新增明细
+          </Button>
+        }
         formEle={
-          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
+          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: "0 16px 0 0" }}>
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
@@ -719,6 +753,7 @@ export function SalesDeliveries() {
                     placeholder="请选择销售订单"
                     onChange={handleOrderChange}
                     allowClear
+                    disabled={isDisabled}
                   >
                     {salesOrders.map((o) => (
                       <Option key={o.id} value={o.id}>{o.order_no}</Option>
@@ -730,7 +765,7 @@ export function SalesDeliveries() {
                   name="customer_id"
                   rules={[{ required: true, message: '请选择客户' }]}
                 >
-                  <Select placeholder="请选择客户">
+                  <Select placeholder="请选择客户" disabled={isDisabled}>
                     {customers.map((c) => (
                       <Option key={c.id} value={c.id}>{c.name}</Option>
                     ))}
@@ -741,7 +776,7 @@ export function SalesDeliveries() {
                   name="warehouse_id"
                   rules={[{ required: true, message: '请选择仓库' }]}
                 >
-                  <Select placeholder="请选择仓库">
+                  <Select placeholder="请选择仓库" disabled={isDisabled}>
                     {warehouses.map((w) => (
                       <Option key={w.id} value={w.id}>{w.name}</Option>
                     ))}
@@ -754,13 +789,13 @@ export function SalesDeliveries() {
                   name="delivery_date"
                   rules={[{ required: true, message: '请选择出货日期' }]}
                 >
-                  <DatePicker />
+                  <DatePicker disabled={isDisabled} />
                 </Form.Item>
                 <Form.Item label="总金额" name="total_amount" initialValue={0}>
                   <InputNumber disabled style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item label="状态" name="status" initialValue="draft">
-                  <Select>
+                  <Select disabled={isDisabled}>
                     <Option value="draft">草稿</Option>
                     <Option value="pending">待审核</Option>
                     <Option value="approved">已审核</Option>
@@ -770,7 +805,7 @@ export function SalesDeliveries() {
               </Col>
             </Row>
             <Form.Item label="备注" name="remark">
-              <TextArea rows={2} placeholder="请输入备注" />
+              <TextArea rows={2} placeholder="请输入备注" disabled={isDisabled} />
             </Form.Item>
           </Form>
         }
@@ -787,14 +822,17 @@ export function SalesDeliveries() {
             </Table.Summary.Row>
           )}
         />}
-        detailExtra={
+        footer={
           <Space>
-            <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>新增明细</Button>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()} disabled={isDisabled}>
+              保存
+            </Button>
           </Space>
         }
-      >
-
-      </SupaModal>
+        width={'60%'}
+        height={680}
+      />
 
       <Modal
         title={editingDetail ? '编辑销售出货明细' : '新增销售出货明细'}
@@ -821,6 +859,7 @@ export function SalesDeliveries() {
               placeholder="选择关联的销售订单明细"
               onChange={handleOrderDetailChange}
               allowClear
+              disabled={isDisabled}
             >
               {salesOrderDetails.map((d) => {
                 const remaining = (d.quantity || 0) - (d.delivered_quantity || 0);
@@ -841,6 +880,7 @@ export function SalesDeliveries() {
           >
             <Select
               placeholder="请选择产品"
+              disabled={isDisabled}
               onChange={(value) => {
                 const price = getProductPrice(value as number);
                 detailForm.setFieldsValue({ unit_price: price });
@@ -858,7 +898,7 @@ export function SalesDeliveries() {
                 name="quantity"
                 rules={[{ required: true, message: '请输入数量' }]}
               >
-                <InputNumber min={1} style={{ width: '100%' }} placeholder="请输入数量" />
+                <InputNumber min={1} style={{ width: '100%' }} placeholder="请输入数量" disabled={isDisabled} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -867,19 +907,19 @@ export function SalesDeliveries() {
                 name="unit_price"
                 rules={[{ required: true, message: '请输入单价' }]}
               >
-                <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入单价" />
+                <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入单价" disabled={isDisabled} />
               </Form.Item>
             </Col>
           </Row>
           <Form.Item label="批次号" name="batch_no">
-            <Input placeholder="请输入批次号" />
+            <Input placeholder="请输入批次号" disabled={isDisabled} />
           </Form.Item>
           <Form.Item label="备注" name="remark">
-            <Input placeholder="请输入备注" />
+            <Input placeholder="请输入备注" disabled={isDisabled} />
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { Key } from "react";
 import {
   Button,
   Input,
@@ -9,7 +10,6 @@ import {
   Form,
   Select,
   Space,
-  Card,
   message,
   InputNumber,
   Checkbox,
@@ -25,8 +25,9 @@ import {
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
+import { SuperTable } from "../../components/SuperTable";
 import dayjs from 'dayjs';
-import SupaModal from "../../components/SupaModal";
+import { SupaModal } from "../../components/SupaModal";
 import DictSelect from "../../components/DictSelect";
 import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
 
@@ -46,6 +47,7 @@ export function Boms() {
   const [operations, setOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingBom, setEditingBom] = useState<Bom | null>(null);
@@ -68,7 +70,7 @@ export function Boms() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("erp_boms_s_539dcf81_b")
+        .from(bomTable)
         .select("*")
         .eq("is_deleted", "n")
         .order("created_at", { ascending: false });
@@ -290,7 +292,8 @@ export function Boms() {
     setIsModalOpen(true);
   };
 
-  const handleAddDetail = (e: any) => {
+  const handleAddDetail = (e: React.MouseEvent) => {
+    e.stopPropagation();
     e.preventDefault();
     setEditingDetail(null);
     detailForm.setFieldsValue({
@@ -504,33 +507,34 @@ export function Boms() {
   ];
 
   return (
-    <Card
-      className='mainContent'
-      variant="borderless"
-      title="BOM管理"
-      style={{ borderRadius: 0 }}
-      extra={
-        <Space>
-          <Input.Search
-            placeholder="搜索BOM编号或产品..."
-            allowClear
-            onSearch={(value) => {
-              setSearchTerm(value);
-              fetchBoms();
-            }}
-          />
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增BOM
-          </Button>
-        </Space>
-      }
-    >
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredBoms}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="boms"
+        headerTitle="BOM管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增BOM
+            </Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索BOM编号或产品..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchBoms}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <SupaModal
@@ -542,16 +546,6 @@ export function Boms() {
           setEditingBom(null);
           setSelectedBom(null);
         }}
-        footer={
-          <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              保存
-            </Button>
-          </Space>
-        }
-        width={"60%"}
-        height={680}
         headerPanelTitle="BOM主档"
         detailPanelTitle="子项明细"
         historyTable={bomTable}
@@ -562,7 +556,7 @@ export function Boms() {
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ marginRight: 16 }}
+            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
               <Col span={12}>
@@ -663,7 +657,17 @@ export function Boms() {
             pagination={false}
           />
         }
-      ></SupaModal>
+        footer={
+          <Space>
+            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button type="primary" onClick={() => form.submit()}>
+              保存
+            </Button>
+          </Space>
+        }
+        width={"60%"}
+        height={680}
+      />
 
       <Modal
         title={editingDetail ? "编辑BOM子项" : "新增BOM子项"}
@@ -774,7 +778,7 @@ export function Boms() {
       >
         <BomEditableTreeGraph materialCode={treeMaterialCode} />
       </Drawer>
-    </Card>
+    </div>
   );
 }
 

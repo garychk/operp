@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
+import type { Key } from "react";
 import {
   Button,
   Input,
-  Table,
   Tag,
   Modal,
   Form,
@@ -13,22 +13,25 @@ import {
 } from "antd";
 import {
   PlusOutlined,
-  SearchOutlined,
   DeleteOutlined,
   EditOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
+import { SuperTable } from "../../components/SuperTable";
 
 type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 
+const departmentTable = 'erp_departments_s_539dcf81_b';
+
 export function Departments() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(
     null,
@@ -43,7 +46,7 @@ export function Departments() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from("erp_departments_s_539dcf81_b")
+        .from(departmentTable)
         .select("*")
         .eq("is_deleted", "n")
         .order("created_at", { ascending: false });
@@ -63,7 +66,7 @@ export function Departments() {
       if (editingDepartment) {
         await logWithTiming("更新部门", "UPDATE", async () => {
           const { error } = await supabase
-            .from("erp_departments_s_539dcf81_b")
+            .from(departmentTable)
             .update(values)
             .eq("id", editingDepartment.id);
           if (error) throw error;
@@ -72,7 +75,7 @@ export function Departments() {
       } else {
         await logWithTiming("新增部门", "INSERT", async () => {
           const { error } = await supabase
-            .from("erp_departments_s_539dcf81_b")
+            .from(departmentTable)
             .insert([values]);
           if (error) throw error;
         });
@@ -102,7 +105,7 @@ export function Departments() {
         try {
           await logWithTiming("删除部门", "DELETE", async () => {
             const { error } = await supabase
-              .from("erp_departments_s_539dcf81_b")
+              .from(departmentTable)
               .update({ is_deleted: "y" })
               .eq("id", id);
             if (error) throw error;
@@ -195,30 +198,34 @@ export function Departments() {
   ];
 
   return (
-    <Card
-      className="mainContent"
-      variant="borderless"
-      title="部门管理"
-      extra={
-        <Space>
-          <Input
-            placeholder="搜索部门名称或编码..."
-            prefix={<SearchOutlined />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-            新增部门
-          </Button>
-        </Space>
-      }
-    >
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredDepartments}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="departments"
+        headerTitle="部门管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
+              新增部门
+            </Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索部门名称或编码..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchDepartments}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -284,6 +291,6 @@ export function Departments() {
           </Form>
         </Card>
       </Modal>
-    </Card>
+    </div>
   );
 }

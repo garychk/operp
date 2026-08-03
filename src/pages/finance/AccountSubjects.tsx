@@ -1,19 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message } from 'antd';
-import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Tag, Modal, Form, Select, Space, message } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { useTranslation } from 'react-i18next';
 import type { Tables } from '../../utils/supabase';
+import { SuperTable } from '../../components/SuperTable';
 
 type AccountSubject = Tables['erp_account_subjects_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
+
+const accountSubjectTable = 'erp_account_subjects_s_539dcf81_b';
 
 export function AccountSubjects() {
   const { t } = useTranslation();
   const [subjects, setSubjects] = useState<AccountSubject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSubject, setEditingSubject] = useState<AccountSubject | null>(null);
   const [form] = Form.useForm();
@@ -26,7 +31,7 @@ export function AccountSubjects() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_account_subjects_s_539dcf81_b')
+        .from(accountSubjectTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('code');
@@ -45,14 +50,14 @@ export function AccountSubjects() {
     try {
       if (editingSubject) {
         const { error } = await supabase
-          .from('erp_account_subjects_s_539dcf81_b')
+          .from(accountSubjectTable)
           .update(values)
           .eq('id', editingSubject.id);
         if (error) throw error;
         message.success(t('common.updateSuccess'));
       } else {
         const { error } = await supabase
-          .from('erp_account_subjects_s_539dcf81_b')
+          .from(accountSubjectTable)
           .insert([values]);
         if (error) throw error;
         message.success(t('common.createSuccess'));
@@ -74,7 +79,7 @@ export function AccountSubjects() {
       onOk: async () => {
         try {
           const { error } = await supabase
-            .from('erp_account_subjects_s_539dcf81_b')
+            .from(accountSubjectTable)
             .update({ is_deleted: 'y' })
             .eq('id', id);
           if (error) throw error;
@@ -170,24 +175,32 @@ export function AccountSubjects() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('accountSubjects.title')} extra={
-      <Space>
-        <Input
-          placeholder={t('accountSubjects.searchPlaceholder')}
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('accountSubjects.addSubject')}</Button>
-        </Space>
-      }
-    > 
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredSubjects}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="account-subjects"
+        headerTitle={t('accountSubjects.title')}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('accountSubjects.addSubject')}</Button>
+            <Input.Search
+              allowClear
+              placeholder={t('accountSubjects.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchSubjects}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -241,6 +254,6 @@ export function AccountSubjects() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }

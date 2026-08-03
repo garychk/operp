@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, InputNumber, DatePicker, Row, Col, Switch } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined, AccountBookOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Table, Tag, Modal, Form, Select, Space, message, InputNumber, DatePicker, Row, Col, Switch } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined, AccountBookOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SupaModal } from '../../components/SupaModal';
@@ -9,6 +10,7 @@ import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { SuperTable } from '../../components/SuperTable';
 
 type Voucher = Tables['erp_vouchers_s_539dcf81_b']['Row'];
 type VoucherDetail = Tables['erp_voucher_details_s_539dcf81_b']['Row'];
@@ -25,6 +27,7 @@ export function Vouchers() {
   const [accountSubjects, setAccountSubjects] = useState<AccountSubject[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
@@ -477,23 +480,32 @@ export function Vouchers() {
   }), { debit: 0, credit: 0 });
 
   return (
-    <Card className='mainContent'  variant="borderless" title={t('vouchers.title')} extra={
-      <Space>
-        <Input
-          placeholder={t('vouchers.searchPlaceholder')}
-          prefix={<SearchOutlined />}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-        <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('vouchers.addVoucher')}</Button>
-      </Space>
-    }>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredVouchers}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="vouchers"
+        headerTitle={t('vouchers.title')}
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('vouchers.addVoucher')}</Button>
+            <Input.Search
+              allowClear
+              placeholder={t('vouchers.searchPlaceholder')}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchVouchers}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <SupaModal
@@ -607,49 +619,47 @@ export function Vouchers() {
         height={450}
         form={detailForm}
       >
-        <Card>
-          <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ marginRight: 16 }}>
-            <Form.Item
-              label={t('vouchers.accountSubject')}
-              name="subject_id"
-              rules={[{ required: true, message: t('vouchers.accountSubjectRequired') }]}
-            >
-              <Select placeholder={t('vouchers.accountSubjectPlaceholder')}>
-                {accountSubjects.map((s) => (
-                  <Option key={s.id} value={s.id}>{s.code} - {s.name}</Option>
-                ))}
-              </Select>
-            </Form.Item>
-            
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item label={t('vouchers.debitCreditDirection')}>
-                  <Switch checkedChildren={t('vouchers.debit')} unCheckedChildren={t('vouchers.credit')} checked={isDebit} onChange={setIsDebit} />
+        <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ padding: '0 16px 0 0' }}>
+          <Form.Item
+            label={t('vouchers.accountSubject')}
+            name="subject_id"
+            rules={[{ required: true, message: t('vouchers.accountSubjectRequired') }]}
+          >
+            <Select placeholder={t('vouchers.accountSubjectPlaceholder')}>
+              {accountSubjects.map((s) => (
+                <Option key={s.id} value={s.id}>{s.code} - {s.name}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label={t('vouchers.debitCreditDirection')}>
+                <Switch checkedChildren={t('vouchers.debit')} unCheckedChildren={t('vouchers.credit')} checked={isDebit} onChange={setIsDebit} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              {isDebit ? (
+                <Form.Item label={t('vouchers.debitAmount')} name="debit_amount" initialValue={0}>
+                <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.debitAmountPlaceholder')} />
+              </Form.Item>
+              ) : (
+                <Form.Item label={t('vouchers.creditAmount')} name="credit_amount" initialValue={0}>
+                  <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.creditAmountPlaceholder')} />
                 </Form.Item>
-              </Col>
-              <Col span={12}>
-                {isDebit ? (
-                  <Form.Item label={t('vouchers.debitAmount')} name="debit_amount" initialValue={0}>
-                  <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.debitAmountPlaceholder')} />
-                </Form.Item>
-                ) : (
-                  <Form.Item label={t('vouchers.creditAmount')} name="credit_amount" initialValue={0}>
-                    <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.creditAmountPlaceholder')} />
-                  </Form.Item>
-                )}
-              </Col>
-            </Row>
-            <Form.Item label={t('vouchers.auxiliaryType')} name="auxiliary_type">
-              <Input placeholder={t('vouchers.auxiliaryTypePlaceholder')} />
-            </Form.Item>
-            <Form.Item label={t('vouchers.summary')} name="summary">
-              <TextArea rows={3} placeholder={t('vouchers.summaryPlaceholder')} />
-            </Form.Item>
-          </Form>
-        </Card>
+              )}
+            </Col>
+          </Row>
+          <Form.Item label={t('vouchers.auxiliaryType')} name="auxiliary_type">
+            <Input placeholder={t('vouchers.auxiliaryTypePlaceholder')} />
+          </Form.Item>
+          <Form.Item label={t('vouchers.summary')} name="summary">
+            <TextArea rows={3} placeholder={t('vouchers.summaryPlaceholder')} />
+          </Form.Item>
+        </Form>
       </SupaModal>
-      
-    </Card>
+
+    </div>
   );
 }
 

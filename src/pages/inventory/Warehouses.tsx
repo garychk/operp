@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Modal, Form, Select, Space, Card, message, Checkbox } from 'antd';
-import { PlusOutlined, SearchOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import type { Key } from 'react';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, Checkbox } from 'antd';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import type { Tables } from '../../utils/supabase';
+import { SuperTable } from '../../components/SuperTable';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Employee = Tables['erp_employees_s_539dcf81_b']['Row'];
 
 const { Option } = Select;
+const warehouseTable = 'erp_warehouses_s_539dcf81_b';
 
 export function Warehouses() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
   const [form] = Form.useForm();
@@ -28,7 +32,7 @@ export function Warehouses() {
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('erp_warehouses_s_539dcf81_b')
+        .from(warehouseTable)
         .select('*')
         .eq('is_deleted', 'n')
         .order('created_at', { ascending: false });
@@ -62,7 +66,7 @@ export function Warehouses() {
       if (editingWarehouse) {
         await logWithTiming('更新仓库', 'UPDATE', async () => {
           const { error } = await supabase
-            .from('erp_warehouses_s_539dcf81_b')
+            .from(warehouseTable)
             .update(values)
             .eq('id', editingWarehouse.id);
           if (error) throw error;
@@ -71,7 +75,7 @@ export function Warehouses() {
       } else {
         await logWithTiming('新增仓库', 'INSERT', async () => {
           const { error } = await supabase
-            .from('erp_warehouses_s_539dcf81_b')
+            .from(warehouseTable)
             .insert([values]);
           if (error) throw error;
         });
@@ -104,8 +108,8 @@ export function Warehouses() {
         try {
           await logWithTiming('删除仓库', 'DELETE', async () => {
             const { error } = await supabase
-              .from('erp_warehouses_s_539dcf81_b')
-              .update({ is_deleted: 'y' })
+              .from(warehouseTable)
+            .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
@@ -215,23 +219,32 @@ export function Warehouses() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title="仓库管理" extra={
-      <Space>
-          <Input
-            placeholder="搜索仓库名称或编码..."
-            prefix={<SearchOutlined />}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增仓库</Button>
-      </Space>  
-    }>
-      <Table
+    <div className="mainContent">
+      <SuperTable
         columns={columns}
         dataSource={filteredWarehouses}
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
+        storageKey="warehouses"
+        headerTitle="仓库管理"
+        rowSelection={{
+          selectedRowKeys,
+          onChange: setSelectedRowKeys,
+        }}
+        queryBar={
+          <Space wrap>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增仓库</Button>
+            <Input.Search
+              allowClear
+              placeholder="搜索仓库名称或编码..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              onSearch={fetchWarehouses}
+              style={{ width: 240 }}
+            />
+          </Space>
+        }
       />
 
       <Modal
@@ -298,6 +311,6 @@ export function Warehouses() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 }
