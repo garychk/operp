@@ -607,6 +607,19 @@ export function ProLayout() {
     [tabs, activeTabKey, navigate],
   );
 
+  const closeOtherTabs = useCallback(() => {
+    setTabs((prev) => prev.filter((tab) => !tab.closable || tab.key === activeTabKey));
+  }, [activeTabKey]);
+
+  const closeAllTabs = useCallback(() => {
+    setTabs((prev) => prev.filter((tab) => !tab.closable));
+    const homeTab = tabs.find((tab) => !tab.closable);
+    if (homeTab) {
+      setActiveTabKey(homeTab.key);
+      navigate(homeTab.key);
+    }
+  }, [tabs, navigate]);
+
   const handleTabChange = useCallback(
     (key: string) => {
       setActiveTabKey(key);
@@ -860,6 +873,23 @@ export function ProLayout() {
                 if (action === "remove") {
                   removeTab(targetKey as string);
                 }
+              }}
+              tabBarExtraContent={{
+                right: (
+                  <Dropdown
+                    menu={{
+                      items: [
+                        { key: "close-others", label: t("tabs.closeOthers"), onClick: closeOtherTabs },
+                        { key: "close-all", label: t("tabs.closeAll"), onClick: closeAllTabs },
+                      ],
+                    }}
+                    trigger={["click"]}
+                  >
+                    <Button type="link">
+                      <SettingOutlined />
+                    </Button>
+                  </Dropdown>
+                ),
               }}
             />
             <MenuPermissionGuard>

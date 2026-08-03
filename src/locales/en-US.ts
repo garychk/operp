@@ -650,6 +650,10 @@ const enUS = {
       description: "You do not have permission to access this page. Please contact your administrator to request the appropriate menu permissions.",
       backToHome: "Back to Home",
     },
+    tabs: {
+      closeOthers: "Close Others",
+      closeAll: "Close All",
+    },
     layout: {
       switchThemeColor: "Switch theme color",
       aboutTitle: "About",

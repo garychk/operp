@@ -355,9 +355,7 @@ const storageColumns = `${storageKey}:columns`;
           <Button key="import" icon={<DownloadOutlined />} onClick={importData}>
             导入
           </Button>,          
-          <Button key="settings" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}>
-            列设置
-          </Button>,
+          <Button key="settings" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}></Button>,
           ...(toolBarRender ? toolBarRender(undefined as never, {}) : []),
         ]}
         {...rest}

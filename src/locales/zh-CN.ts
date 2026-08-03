@@ -646,6 +646,10 @@ const zhCN = {
       description: "您没有权限访问此页面，请联系管理员分配相应的菜单权限。",
       backToHome: "返回首页",
     },
+    tabs: {
+      closeOthers: "关闭其它",
+      closeAll: "关闭所有",
+    },
     layout: {
       switchThemeColor: "切换主题色",
       aboutTitle: "关于软件",
