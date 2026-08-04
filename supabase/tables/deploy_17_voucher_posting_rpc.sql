@@ -57,11 +57,20 @@ BEGIN
       USING ERRCODE = 'P0002';
   END IF;
 
+  IF COALESCE(v_period.is_locked, FALSE) THEN
+    RAISE EXCEPTION 'Accounting period is locked'
+      USING ERRCODE = '55000';
+  END IF;
+
   IF COALESCE(v_period.is_closed, FALSE) THEN
     RAISE EXCEPTION 'Accounting period is closed'
       USING ERRCODE = '55000';
   END IF;
 
+  IF NOT COALESCE(v_period.is_enabled, FALSE) THEN
+    RAISE EXCEPTION 'Accounting period is not enabled'
+      USING ERRCODE = '55000';
+  END IF;
 
   SELECT COALESCE(SUM(debit_amount), 0), COALESCE(SUM(credit_amount), 0)
   INTO v_total_debit, v_total_credit
@@ -175,6 +184,11 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Accounting period does not exist or is deleted'
       USING ERRCODE = 'P0002';
+  END IF;
+
+  IF COALESCE(v_period.is_locked, FALSE) THEN
+    RAISE EXCEPTION 'Accounting period is locked'
+      USING ERRCODE = '55000';
   END IF;
 
   IF COALESCE(v_period.is_closed, FALSE) THEN
