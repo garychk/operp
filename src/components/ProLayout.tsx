@@ -50,6 +50,7 @@ import {
   OpenAIOutlined,
   ExperimentOutlined,
   TranslationOutlined,
+  UnorderedListOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { MenuPermissionGuard } from "./ProtectedRoute";
@@ -885,8 +886,8 @@ export function ProLayout() {
                     }}
                     trigger={["click"]}
                   >
-                    <Button type="link">
-                      <SettingOutlined />
+                    <Button type="text">
+                      <UnorderedListOutlined />
                     </Button>
                   </Dropdown>
                 ),
