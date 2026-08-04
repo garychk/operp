@@ -6,6 +6,9 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { AccountSubjects } from './pages/finance/AccountSubjects';
 import { Vouchers } from './pages/finance/Vouchers';
+import { GeneralLedgerBalance } from './pages/finance/GeneralLedgerBalance';
+import { TrialBalance } from './pages/finance/TrialBalance';
+import { SubjectLedger } from './pages/finance/SubjectLedger';
 import { Receivables } from './pages/finance/Receivables';
 import { Payables } from './pages/finance/Payables';
 import { FixedAssets } from './pages/finance/FixedAssets';
@@ -79,6 +82,9 @@ function AppContent() {
           <Route index element={<Navigate to="subjects" replace />} />
           <Route path="subjects" element={<AccountSubjects />} />
           <Route path="vouchers" element={<Vouchers />} />
+          <Route path="gl-balance" element={<GeneralLedgerBalance />} />
+          <Route path="trial-balance" element={<TrialBalance />} />
+          <Route path="ledger" element={<SubjectLedger />} />
           <Route path="receivables" element={<Receivables />} />
           <Route path="payables" element={<Payables />} />
           <Route path="assets" element={<FixedAssets />} />
@@ -144,6 +150,10 @@ function App() {
 }
 
 export default App;
+
+
+
+
 
 
 

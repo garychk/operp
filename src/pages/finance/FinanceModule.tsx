@@ -6,12 +6,18 @@ import {
   RiseOutlined,
   FallOutlined,
   BuildOutlined,
+  LineChartOutlined,
+  BarChartOutlined,
+  TableOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 
 const menuItems: MenuProps['items'] = [
   { key: 'subjects', label: '会计科目', icon: <ContainerOutlined /> },
   { key: 'vouchers', label: '凭证管理', icon: <ProfileOutlined /> },
+  { key: 'gl-balance', label: '总账余额', icon: <LineChartOutlined /> },
+  { key: 'trial-balance', label: '试算平衡', icon: <BarChartOutlined /> },
+  { key: 'ledger', label: '科目/明细账', icon: <TableOutlined /> },
   { key: 'receivables', label: '应收账款', icon: <RiseOutlined /> },
   { key: 'payables', label: '应付账款', icon: <FallOutlined /> },
   { key: 'assets', label: '固定资产', icon: <BuildOutlined /> },
@@ -56,3 +62,4 @@ export function FinanceModule() {
     </div>
   );
 }
+

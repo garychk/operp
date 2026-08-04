@@ -260,6 +260,31 @@ export interface ErpGeneralLedgerBalancesS539Dcf81BRow {
 export type ErpGeneralLedgerBalancesS539Dcf81BInsert = Omit<ErpGeneralLedgerBalancesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpGeneralLedgerBalancesS539Dcf81BUpdate = Partial<ErpGeneralLedgerBalancesS539Dcf81BInsert>;
 
+export interface ErpGlEntriesRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  voucher_id: number;  // FK -> erp_vouchers_s_539dcf81_b.id
+  voucher_detail_id: number;  // FK -> erp_voucher_details_s_539dcf81_b.id
+  period_id: number | null;  // FK -> erp_accounting_periods_s_539dcf81_b.id
+  subject_id: number;  // FK -> erp_account_subjects_s_539dcf81_b.id
+  voucher_no: string;
+  voucher_date: string;
+  summary: string | null;
+  debit_amount: number;
+  credit_amount: number;
+  source_type: string | null;
+  source_id: number | null;
+  source_detail_id: number | null;
+  posted_at: string | null;
+  posted_by: number | null;
+}
+export type ErpGlEntriesInsert = Omit<ErpGlEntriesRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpGlEntriesUpdate = Partial<ErpGlEntriesInsert>;
+
 export interface ErpInventoryS539Dcf81BRow {
   id: number;
   corp_id: string | null;
@@ -1055,4 +1080,9 @@ export interface SysUsersRow {
 }
 export type SysUsersInsert = Omit<SysUsersRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type SysUsersUpdate = Partial<SysUsersInsert>;
+
+
+
+
+
 

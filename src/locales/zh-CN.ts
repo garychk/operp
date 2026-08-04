@@ -28,6 +28,9 @@ const zhCN = {
       finance: "财务管理",
       subjects: "会计科目",
       vouchers: "凭证管理",
+      glBalance: "总账余额",
+      trialBalance: "试算平衡",
+      ledger: "科目/明细账",
       receivables: "应收账款",
       payables: "应付账款",
       assets: "固定资产",
@@ -678,4 +681,7 @@ const zhCN = {
   },
 };
 export default zhCN;
+
+
+
 

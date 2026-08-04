@@ -28,6 +28,9 @@ const enUS = {
       finance: "Finance",
       subjects: "Chart of Accounts",
       vouchers: "Vouchers",
+      glBalance: "General Ledger Balance",
+      trialBalance: "Trial Balance",
+      ledger: "Account/Ledger",
       receivables: "Receivables",
       payables: "Payables",
       assets: "Fixed Assets",
@@ -682,3 +685,4 @@ const enUS = {
   },
 };
 export default enUS;
+

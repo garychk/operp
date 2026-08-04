@@ -564,12 +564,10 @@ export function Vouchers() {
                 <Form.Item label={t('vouchers.remark')} name="remark">
                   <TextArea rows={5} placeholder={t('vouchers.remarkPlaceholder')} />
                 </Form.Item>
-                <Form.Item label={t('common.status')} name="status" initialValue="draft">
-                  <Select>
-                    <Option value="draft">{t('vouchers.statusOptions.draft')}</Option>
-                    <Option value="posted">{t('vouchers.statusOptions.posted')}</Option>
-                    <Option value="cancelled">{t('vouchers.statusOptions.cancelled')}</Option>
-                  </Select>
+                <Form.Item label={t('common.status')}>
+                  <Tag color={editingVoucher?.status === 'posted' ? 'success' : editingVoucher?.status === 'cancelled' ? 'error' : 'default'}>
+                    {editingVoucher ? t(statusKeys[editingVoucher.status || 'draft']?.textKey || editingVoucher.status || 'draft') : t('vouchers.statusOptions.draft')}
+                  </Tag>
                 </Form.Item>
               </Col>
             </Row>
@@ -662,6 +660,7 @@ export function Vouchers() {
     </div>
   );
 }
+
 
 
 

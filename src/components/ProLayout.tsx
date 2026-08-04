@@ -51,6 +51,9 @@ import {
   ExperimentOutlined,
   TranslationOutlined,
   UnorderedListOutlined,
+  LineChartOutlined,
+  BarChartOutlined,
+  TableOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { MenuPermissionGuard } from "./ProtectedRoute";
@@ -261,6 +264,21 @@ export const menuData: MenuRoute[] = [
         icon: <ProfileOutlined />,
       },
       {
+        path: "/finance/gl-balance",
+        name: "总账余额",
+        icon: <LineChartOutlined />,
+      },
+      {
+        path: "/finance/trial-balance",
+        name: "试算平衡",
+        icon: <BarChartOutlined />,
+      },
+      {
+        path: "/finance/ledger",
+        name: "科目/明细账",
+        icon: <TableOutlined />,
+      },
+      {
         path: "/finance/receivables",
         name: "应收账款",
         icon: <RiseOutlined />,
@@ -368,6 +386,9 @@ const pathToNameMap: Record<string, string> = {
   "/": "首页",
   "/finance/subjects": "会计科目",
   "/finance/vouchers": "凭证管理",
+  "/finance/gl-balance": "总账余额",
+  "/finance/trial-balance": "试算平衡",
+  "/finance/ledger": "科目/明细账",
   "/finance/receivables": "应收账款",
   "/finance/payables": "应付账款",
   "/finance/assets": "固定资产",
@@ -406,6 +427,9 @@ const pathToTranslationKey: Record<string, string> = {
   "/finance": "menu.finance",
   "/finance/subjects": "menu.subjects",
   "/finance/vouchers": "menu.vouchers",
+  "/finance/gl-balance": "menu.glBalance",
+  "/finance/trial-balance": "menu.trialBalance",
+  "/finance/ledger": "menu.ledger",
   "/finance/receivables": "menu.receivables",
   "/finance/payables": "menu.payables",
   "/finance/assets": "menu.assets",
@@ -922,6 +946,7 @@ export function ProLayout() {
     </ConfigProvider>
   );
 }
+
 
 
 

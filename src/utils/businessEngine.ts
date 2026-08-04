@@ -178,17 +178,12 @@ export async function postVoucher(voucherId: number, user?: BusinessUser) {
     '凭证过账',
     'POST',
     async () => {
-      const totals = await validateVoucherBalance(voucherId);
-      const { error } = await supabase
-        .from('erp_vouchers_s_539dcf81_b')
-        .update({
-          status: 'posted',
-          posted_at: new Date().toISOString(),
-          posted_by: user?.id ?? null,
-          total_amount: totals.totalAmount,
-        })
-        .eq('id', voucherId);
+      const { data, error } = await supabase.rpc('post_voucher_document', {
+        p_voucher_id: voucherId,
+        p_idempotency_key: crypto.randomUUID(),
+      });
       if (error) throw error;
+      return data;
     },
     { table: 'erp_vouchers_s_539dcf81_b', recordId: voucherId, user: user?.username },
   );
@@ -199,15 +194,12 @@ export async function reverseVoucher(voucherId: number, user?: BusinessUser) {
     '凭证反过账',
     'UNPOST',
     async () => {
-      const { error } = await supabase
-        .from('erp_vouchers_s_539dcf81_b')
-        .update({
-          status: 'draft',
-          posted_at: null,
-          posted_by: null,
-        })
-        .eq('id', voucherId);
+      const { data, error } = await supabase.rpc('reverse_voucher_document', {
+        p_voucher_id: voucherId,
+        p_idempotency_key: crypto.randomUUID(),
+      });
       if (error) throw error;
+      return data;
     },
     { table: 'erp_vouchers_s_539dcf81_b', recordId: voucherId, user: user?.username },
   );
@@ -251,3 +243,4 @@ export async function runBusinessAction(params: RunBusinessActionParams) {
 
   throw new Error(`不支持的业务动作：${documentType}/${action}`);
 }
+

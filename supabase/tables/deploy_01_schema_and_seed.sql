@@ -358,6 +358,42 @@ CREATE TABLE IF NOT EXISTS public.erp_voucher_details_s_539dcf81_b (
     auxiliary_id INTEGER
 );
 
+-- 总账流水表
+CREATE TABLE IF NOT EXISTS public.erp_gl_entries (
+    id SERIAL PRIMARY KEY,
+    corp_id VARCHAR(128),
+    emp_id VARCHAR(128),
+    is_deleted CHAR(1) NOT NULL DEFAULT 'n',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    voucher_id INTEGER NOT NULL REFERENCES public.erp_vouchers_s_539dcf81_b(id) ON DELETE CASCADE,
+    voucher_detail_id INTEGER NOT NULL REFERENCES public.erp_voucher_details_s_539dcf81_b(id) ON DELETE CASCADE,
+    period_id INTEGER REFERENCES public.erp_accounting_periods_s_539dcf81_b(id),
+    subject_id INTEGER NOT NULL REFERENCES public.erp_account_subjects_s_539dcf81_b(id),
+    voucher_no VARCHAR(50) NOT NULL,
+    voucher_date DATE NOT NULL,
+    summary TEXT,
+    debit_amount DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    credit_amount DECIMAL(18, 2) NOT NULL DEFAULT 0,
+    source_type VARCHAR(50) DEFAULT 'voucher',
+    source_id INTEGER,
+    source_detail_id INTEGER,
+    posted_at TIMESTAMPTZ,
+    posted_by INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS idx_erp_gl_entries_subject_period
+  ON public.erp_gl_entries(subject_id, period_id);
+
+CREATE INDEX IF NOT EXISTS idx_erp_gl_entries_voucher
+  ON public.erp_gl_entries(voucher_id);
+
+CREATE INDEX IF NOT EXISTS idx_erp_gl_entries_voucher_detail
+  ON public.erp_gl_entries(voucher_detail_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_erp_gl_entries_detail
+  ON public.erp_gl_entries(voucher_detail_id)
+  WHERE is_deleted = 'n';
 -- 总账余额表
 CREATE TABLE IF NOT EXISTS public.erp_general_ledger_balances_s_539dcf81_b (
     id SERIAL PRIMARY KEY,
@@ -1154,5 +1190,6 @@ WITH CHECK (bucket_id = 'avatars');
 -- ============================================================
 -- End: supabase\tables\004_create_avatar_storage_bucket.sql
 -- ============================================================
+
 
 

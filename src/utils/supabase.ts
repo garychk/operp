@@ -23,6 +23,7 @@ import type {
   ErpVouchersS539Dcf81BRow,
   ErpVoucherDetailsS539Dcf81BRow,
   ErpGeneralLedgerBalancesS539Dcf81BRow,
+  ErpGlEntriesRow,
   ErpReceivablesS539Dcf81BRow,
   ErpPayablesS539Dcf81BRow,
   ErpAssetCategoriesS539Dcf81BRow,
@@ -149,6 +150,7 @@ export type Tables = {
   erp_vouchers_s_539dcf81_b: { Row: ErpVouchersS539Dcf81BRow };
   erp_voucher_details_s_539dcf81_b: { Row: ErpVoucherDetailsS539Dcf81BRow };
   erp_general_ledger_balances_s_539dcf81_b: { Row: ErpGeneralLedgerBalancesS539Dcf81BRow };
+  erp_gl_entries: { Row: ErpGlEntriesRow };
   erp_receivables_s_539dcf81_b: { Row: ErpReceivablesS539Dcf81BRow };
   erp_payables_s_539dcf81_b: { Row: ErpPayablesS539Dcf81BRow };
   erp_asset_categories_s_539dcf81_b: { Row: ErpAssetCategoriesS539Dcf81BRow };
@@ -172,3 +174,4 @@ export type Tables = {
   sys_forms: { Row: SysFormsRow };
   sys_config: { Row: SysConfigRow };
 };
+
