@@ -279,6 +279,11 @@ export const menuData: MenuRoute[] = [
         icon: <TableOutlined />,
       },
       {
+        path: "/finance/periods",
+        name: "会计期间",
+        icon: <CalendarOutlined />,
+      },
+      {
         path: "/finance/receivables",
         name: "应收账款",
         icon: <RiseOutlined />,
@@ -946,6 +951,7 @@ export function ProLayout() {
     </ConfigProvider>
   );
 }
+
 
 
 

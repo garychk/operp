@@ -31,6 +31,7 @@ const zhCN = {
       glBalance: "总账余额",
       trialBalance: "试算平衡",
       ledger: "科目/明细账",
+      periods: "会计期间",
       receivables: "应收账款",
       payables: "应付账款",
       assets: "固定资产",
@@ -681,6 +682,7 @@ const zhCN = {
   },
 };
 export default zhCN;
+
 
 
 

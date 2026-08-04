@@ -32,8 +32,14 @@ export interface ErpAccountingPeriodsS539Dcf81BRow {
   month: number;
   start_date: string;
   end_date: string;
+  is_enabled: boolean | null;
+  enabled_at: string | null;
+  enabled_by: number | null;
   is_closed: boolean | null;
   closed_at: string | null;
+  is_locked: boolean | null;
+  locked_at: string | null;
+  locked_by: number | null;
 }
 export type ErpAccountingPeriodsS539Dcf81BInsert = Omit<ErpAccountingPeriodsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpAccountingPeriodsS539Dcf81BUpdate = Partial<ErpAccountingPeriodsS539Dcf81BInsert>;
@@ -1080,6 +1086,7 @@ export interface SysUsersRow {
 }
 export type SysUsersInsert = Omit<SysUsersRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type SysUsersUpdate = Partial<SysUsersInsert>;
+
 
 
 

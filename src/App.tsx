@@ -9,6 +9,7 @@ import { Vouchers } from './pages/finance/Vouchers';
 import { GeneralLedgerBalance } from './pages/finance/GeneralLedgerBalance';
 import { TrialBalance } from './pages/finance/TrialBalance';
 import { SubjectLedger } from './pages/finance/SubjectLedger';
+import { AccountingPeriods } from './pages/finance/AccountingPeriods';
 import { Receivables } from './pages/finance/Receivables';
 import { Payables } from './pages/finance/Payables';
 import { FixedAssets } from './pages/finance/FixedAssets';
@@ -85,6 +86,7 @@ function AppContent() {
           <Route path="gl-balance" element={<GeneralLedgerBalance />} />
           <Route path="trial-balance" element={<TrialBalance />} />
           <Route path="ledger" element={<SubjectLedger />} />
+          <Route path="periods" element={<AccountingPeriods />} />
           <Route path="receivables" element={<Receivables />} />
           <Route path="payables" element={<Payables />} />
           <Route path="assets" element={<FixedAssets />} />

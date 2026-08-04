@@ -31,6 +31,7 @@ const enUS = {
       glBalance: "General Ledger Balance",
       trialBalance: "Trial Balance",
       ledger: "Account/Ledger",
+      periods: "Accounting Periods",
       receivables: "Receivables",
       payables: "Payables",
       assets: "Fixed Assets",
@@ -685,4 +686,5 @@ const enUS = {
   },
 };
 export default enUS;
+
 

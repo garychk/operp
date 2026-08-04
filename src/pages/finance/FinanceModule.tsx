@@ -3,6 +3,7 @@ import { Menu, Card } from 'antd';
 import {
   ContainerOutlined,
   ProfileOutlined,
+  CalendarOutlined,
   RiseOutlined,
   FallOutlined,
   BuildOutlined,
@@ -18,6 +19,7 @@ const menuItems: MenuProps['items'] = [
   { key: 'gl-balance', label: '总账余额', icon: <LineChartOutlined /> },
   { key: 'trial-balance', label: '试算平衡', icon: <BarChartOutlined /> },
   { key: 'ledger', label: '科目/明细账', icon: <TableOutlined /> },
+  { key: 'periods', label: '会计期间', icon: <CalendarOutlined /> },
   { key: 'receivables', label: '应收账款', icon: <RiseOutlined /> },
   { key: 'payables', label: '应付账款', icon: <FallOutlined /> },
   { key: 'assets', label: '固定资产', icon: <BuildOutlined /> },
@@ -35,10 +37,7 @@ export function FinanceModule() {
   return (
     <div style={{ display: 'flex', height: '100%' }}>
       <aside style={{ width: 256, background: '#fff', borderRight: '1px solid #f0f0f0' }}>
-        <Card
-          size="small"
-          style={{ borderRadius: 0, border: 'none', borderBottom: '1px solid #f0f0f0' }}
-        >
+        <Card size="small" style={{ borderRadius: 0, border: 'none', borderBottom: '1px solid #f0f0f0' }}>
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#262626' }}>
               财务管理
@@ -62,4 +61,3 @@ export function FinanceModule() {
     </div>
   );
 }
-

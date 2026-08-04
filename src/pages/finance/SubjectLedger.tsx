@@ -1,11 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, DatePicker, Select, Space, Tabs, message, Tag, Card } from 'antd';
-import dayjs, { type Dayjs } from 'dayjs';
+import { Button, Select, Space, Tabs, message, Tag } from 'antd';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
-
-const { Option } = Select;
 
 type Period = Tables['erp_accounting_periods_s_539dcf81_b']['Row'];
 type Subject = Tables['erp_account_subjects_s_539dcf81_b']['Row'];
@@ -119,7 +116,6 @@ export function SubjectLedger() {
 
   return (
     <div className="mainContent">
-      <Card size='small' variant='borderless'>
       <Tabs
         defaultActiveKey="balance"
         items={[
@@ -137,27 +133,8 @@ export function SubjectLedger() {
                 headerTitle="科目余额"
                 queryBar={
                   <Space wrap>
-                    <Select
-                      allowClear
-                      placeholder="选择期间"
-                      style={{ width: 180 }}
-                      value={periodId}
-                      onChange={(value) => {
-                        setPeriodId(value);
-                        fetchBalances(value);
-                      }}
-                      options={periods.map((item) => ({ value: item.id, label: `${item.year}-${String(item.month).padStart(2, '0')}` }))}
-                    />
-                    <Select
-                      allowClear
-                      showSearch
-                      placeholder="选择科目"
-                      style={{ width: 260 }}
-                      optionFilterProp="label"
-                      value={subjectId}
-                      onChange={(value) => setSubjectId(value)}
-                      options={subjects.map((item) => ({ value: item.id, label: `${item.code} - ${item.name}` }))}
-                    />
+                    <Select allowClear placeholder="选择期间" style={{ width: 180 }} value={periodId} onChange={(value) => { setPeriodId(value); fetchBalances(value); }} options={periods.map((item) => ({ value: item.id, label: `${item.year}-${String(item.month).padStart(2, '0')}` }))} />
+                    <Select allowClear showSearch placeholder="选择科目" style={{ width: 260 }} optionFilterProp="label" value={subjectId} onChange={(value) => setSubjectId(value)} options={subjects.map((item) => ({ value: item.id, label: `${item.code} - ${item.name}` }))} />
                     <Button onClick={() => fetchBalances(periodId)}>刷新</Button>
                   </Space>
                 }
@@ -178,30 +155,8 @@ export function SubjectLedger() {
                 headerTitle={activeSubject ? `明细账 - ${activeSubject.code} ${activeSubject.name}` : '明细账'}
                 queryBar={
                   <Space wrap>
-                    <Select
-                      allowClear
-                      placeholder="选择期间"
-                      style={{ width: 180 }}
-                      value={periodId}
-                      onChange={(value) => {
-                        setPeriodId(value);
-                        fetchDetails(value, subjectId);
-                      }}
-                      options={periods.map((item) => ({ value: item.id, label: `${item.year}-${String(item.month).padStart(2, '0')}` }))}
-                    />
-                    <Select
-                      allowClear
-                      showSearch
-                      placeholder="选择科目"
-                      style={{ width: 260 }}
-                      optionFilterProp="label"
-                      value={subjectId}
-                      onChange={(value) => {
-                        setSubjectId(value);
-                        fetchDetails(periodId, value);
-                      }}
-                      options={subjects.map((item) => ({ value: item.id, label: `${item.code} - ${item.name}` }))}
-                    />
+                    <Select allowClear placeholder="选择期间" style={{ width: 180 }} value={periodId} onChange={(value) => { setPeriodId(value); fetchDetails(value, subjectId); }} options={periods.map((item) => ({ value: item.id, label: `${item.year}-${String(item.month).padStart(2, '0')}` }))} />
+                    <Select allowClear showSearch placeholder="选择科目" style={{ width: 260 }} optionFilterProp="label" value={subjectId} onChange={(value) => { setSubjectId(value); fetchDetails(periodId, value); }} options={subjects.map((item) => ({ value: item.id, label: `${item.code} - ${item.name}` }))} />
                     <Button onClick={() => fetchDetails(periodId, subjectId)}>刷新</Button>
                   </Space>
                 }
@@ -210,7 +165,6 @@ export function SubjectLedger() {
           },
         ]}
       />
-      </Card>
     </div>
   );
 }
