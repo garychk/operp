@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Select, Space, Tabs, message, Tag } from 'antd';
+import { Button, Select, Space, Tabs, message, Tag, Card } from 'antd';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
@@ -115,8 +115,9 @@ export function SubjectLedger() {
   const activeSubject = subjectId ? subjectMap.get(subjectId) : null;
 
   return (
-    <div className="mainContent">
+    <Card className="mainContent" size='small' variant='borderless'>
       <Tabs
+        tabPlacement='start'
         defaultActiveKey="balance"
         items={[
           {
@@ -165,6 +166,6 @@ export function SubjectLedger() {
           },
         ]}
       />
-    </div>
+    </Card>
   );
 }
