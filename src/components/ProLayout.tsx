@@ -435,6 +435,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/finance/gl-balance": "menu.glBalance",
   "/finance/trial-balance": "menu.trialBalance",
   "/finance/ledger": "menu.ledger",
+  "/finance/periods": "menu.periods",
   "/finance/receivables": "menu.receivables",
   "/finance/payables": "menu.payables",
   "/finance/assets": "menu.assets",
