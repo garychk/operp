@@ -401,8 +401,9 @@ export function Vouchers() {
     {
       title: t('common.actions'),
       key: 'action',
+      width: 200,
       render: (_: any, record: Voucher) => (
-        <Space size="middle">
+        <Space size="small">
           {record.status === 'posted' ? (
             <Button type="text" onClick={() => handleReversePost(record)}>
               {t('vouchers.actions.reversePost')}

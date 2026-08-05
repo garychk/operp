@@ -25,10 +25,17 @@ export function FixedAssets() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAsset, setEditingAsset] = useState<FixedAsset | null>(null);
   const [form] = Form.useForm();
+  const [openPeriodId, setOpenPeriodId] = useState<number>();
+
+  const fetchOpenPeriod = async () => {
+    const { data } = await supabase.from('erp_accounting_periods_s_539dcf81_b').select('id').eq('is_deleted', 'n').eq('is_enabled', true).eq('is_closed', false).eq('is_locked', false).order('year', { ascending: false }).order('month', { ascending: false }).limit(1).maybeSingle();
+    setOpenPeriodId(data?.id);
+  };
 
   useEffect(() => {
     fetchAssets();
     fetchCategories();
+    fetchOpenPeriod();
   }, []);
 
   const fetchAssets = async () => {
@@ -104,6 +111,30 @@ export function FixedAssets() {
       purchase_date: dayjs(record.purchase_date),
     });
     setIsModalOpen(true);
+  };
+
+  const handleDepreciate = (record: FixedAsset) => {
+    Modal.confirm({
+      title: '计提本期折旧',
+      content: openPeriodId ? `将对资产 ${record.asset_no} 按当前启用期间计提折旧。` : '没有可用的启用期间，请先启用会计期间。',
+      okButtonProps: { disabled: !openPeriodId },
+      onOk: async () => {
+        const { error } = await supabase.rpc('accrue_asset_depreciation', { p_asset_id: record.id, p_period_id: openPeriodId, p_idempotency_key: crypto.randomUUID() });
+        if (error) throw error;
+        message.success('折旧计提成功');
+        fetchAssets();
+      },
+    });
+  };
+
+
+  const handleSelectedDepreciate = () => {
+    if (selectedRowKeys.length !== 1) {
+      message.warning('请先选择一项固定资产计提折旧');
+      return;
+    }
+    const record = assets.find((item) => item.id === Number(selectedRowKeys[0]));
+    if (record) handleDepreciate(record);
   };
 
   const handleDelete = async (id: number) => {
@@ -214,8 +245,9 @@ export function FixedAssets() {
     {
       title: t('common.actions'),
       key: 'action',
+      width: 200,
       render: (_: any, record: FixedAsset) => (
-        <Space size="middle">
+        <Space>
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('common.edit')}
           </Button>
@@ -244,6 +276,7 @@ export function FixedAssets() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('fixedAssets.addAsset')}</Button>
+            <Button onClick={handleSelectedDepreciate} disabled={!openPeriodId || selectedRowKeys.length !== 1}>计提折旧</Button>
             <Input.Search
               allowClear
               placeholder={t('fixedAssets.searchPlaceholder')}

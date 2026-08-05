@@ -19,3 +19,14 @@
 \i supabase/tables/deploy_11_sys_forms_rls.sql
 \i supabase/tables/deploy_12_baq.sql
 \i supabase/tables/deploy_13_stock_posting_rpc.sql
+
+\i supabase/tables/deploy_14_workflow_engine.sql
+\i supabase/tables/deploy_15_document_types.sql
+\i supabase/tables/deploy_16_workflow_routing_engine.sql
+\i supabase/tables/deploy_17_voucher_posting_rpc.sql
+\i supabase/tables/deploy_18_finance_reporting_views.sql
+\i supabase/tables/deploy_19_accounting_period_controls.sql
+\i supabase/tables/deploy_20_depreciation_and_settlement.sql
+\i supabase/tables/deploy_21_finance_required_subjects.sql
+\i supabase/tables/deploy_22_accounting_period_generation.sql
+\i supabase/tables/deploy_23_fix_voucher_posting_rls.sql

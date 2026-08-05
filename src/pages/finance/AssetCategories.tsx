@@ -169,8 +169,9 @@ export function AssetCategories() {
     {
       title: t('common.actions'),
       key: 'action',
+      width: 200,
       render: (_: any, record: AssetCategory) => (
-        <Space size="middle">
+        <Space>
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('common.edit')}
           </Button>

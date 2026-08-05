@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Modal, Space, Tag, message } from 'antd';
+import { Button, Input, InputNumber, Modal, Space, Tag, message } from 'antd';
 import { CheckOutlined, LockOutlined, UnlockOutlined, ReloadOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
@@ -14,6 +14,8 @@ export function AccountingPeriods() {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<number[]>([]);
+  const [generationYear, setGenerationYear] = useState(new Date().getFullYear());
+  const [generating, setGenerating] = useState(false);
 
   const fetchRows = async () => {
     setLoading(true);
@@ -38,6 +40,27 @@ export function AccountingPeriods() {
     fetchRows();
   }, []);
 
+  const handleGenerateYear = async () => {
+    if (!generationYear || generationYear < 1900 || generationYear > 2999) {
+      message.warning('请输入有效的会计年度');
+      return;
+    }
+    setGenerating(true);
+    try {
+      const { error } = await supabase.rpc('generate_accounting_periods', {
+        p_year: generationYear,
+        p_idempotency_key: crypto.randomUUID(),
+      });
+      if (error) throw error;
+      message.success('会计年度生成成功');
+      await fetchRows();
+    } catch (error: any) {
+      console.error(error);
+      message.error(error?.message || '生成会计期间失败');
+    } finally {
+      setGenerating(false);
+    }
+  };
   const handleAction = (action: 'enable' | 'close' | 'lock', record: Period) => {
     const actionLabels = {
       enable: '启用期间',
@@ -105,6 +128,7 @@ export function AccountingPeriods() {
     {
       title: '操作',
       key: 'action',
+      width: 200,
       render: (_: any, record: Period) => (
         <Space size="middle">
           <Button type="text" icon={<CheckOutlined />} onClick={() => handleAction('enable', record)} disabled={!!record.is_locked}>
@@ -137,6 +161,8 @@ export function AccountingPeriods() {
         }}
         queryBar={
           <Space wrap>
+            <InputNumber min={1900} max={2999} value={generationYear} onChange={(value) => setGenerationYear(value || new Date().getFullYear())} addonAfter="年" />
+            <Button type="primary" loading={generating} onClick={handleGenerateYear}>生成年度期间</Button>
             <Button icon={<ReloadOutlined />} onClick={fetchRows}>{'刷新'}</Button>
             <Input.Search
               allowClear
@@ -152,3 +178,4 @@ export function AccountingPeriods() {
     </div>
   );
 }
+

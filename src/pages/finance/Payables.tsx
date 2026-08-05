@@ -27,10 +27,17 @@ export function Payables() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPayable, setEditingPayable] = useState<Payable | null>(null);
   const [form] = Form.useForm();
+  const [openPeriodId, setOpenPeriodId] = useState<number>();
+
+  const fetchOpenPeriod = async () => {
+    const { data } = await supabase.from('erp_accounting_periods_s_539dcf81_b').select('id').eq('is_deleted', 'n').eq('is_enabled', true).eq('is_closed', false).eq('is_locked', false).order('year', { ascending: false }).order('month', { ascending: false }).limit(1).maybeSingle();
+    setOpenPeriodId(data?.id);
+  };
 
   useEffect(() => {
     fetchPayables();
     fetchSuppliers();
+    fetchOpenPeriod();
   }, []);
 
   const fetchPayables = async () => {
@@ -110,6 +117,32 @@ export function Payables() {
     }
     form.setFieldsValue(formValues);
     setIsModalOpen(true);
+  };
+
+  const handleSettle = (record: Payable) => {
+    let amount = Number(record.balance || 0);
+    Modal.confirm({
+      title: '应付核销',
+      content: <InputNumber min={0.01} max={Number(record.balance || 0)} defaultValue={amount} onChange={(value) => { amount = Number(value || 0); }} style={{ width: '100%' }} />,
+      okButtonProps: { disabled: !openPeriodId },
+      onOk: async () => {
+        if (!openPeriodId || amount <= 0) throw new Error('没有可用期间或核销金额无效');
+        const { error } = await supabase.rpc('settle_ar_ap', { p_settlement_type: 'payable', p_source_id: record.id, p_period_id: openPeriodId, p_amount: amount, p_settlement_date: new Date().toISOString().slice(0, 10), p_remark: null, p_idempotency_key: crypto.randomUUID() });
+        if (error) throw error;
+        message.success('应付核销成功');
+        fetchPayables();
+      },
+    });
+  };
+
+
+  const handleSelectedSettle = () => {
+    if (selectedRowKeys.length !== 1) {
+      message.warning('请先选择一条应付账款进行核销');
+      return;
+    }
+    const record = payables.find((item) => item.id === Number(selectedRowKeys[0]));
+    if (record) handleSettle(record);
   };
 
   const handleDelete = async (id: number) => {
@@ -244,6 +277,7 @@ export function Payables() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('payables.addPayable')}</Button>
+            <Button onClick={handleSelectedSettle} disabled={!openPeriodId || selectedRowKeys.length !== 1}>核销</Button>
             <Input.Search
               allowClear
               placeholder={t('payables.searchPlaceholder')}
