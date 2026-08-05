@@ -16,6 +16,7 @@ import {
 } from "@ant-design/icons";
 import { ProTable } from "@ant-design/pro-components";
 import type { ActionType, ProColumns, ProTableProps } from "@ant-design/pro-components";
+import { useTranslation } from "react-i18next";
 
 export type SuperTableColumn<RecordType> = ColumnsType<RecordType>[number] & {
   key: string;
@@ -74,6 +75,7 @@ export function SuperTable<
   rowSelection,
   ...rest
 }: SuperTableProps<RecordType, Query>) {
+  const { t } = useTranslation();
   const internalActionRef = useRef<ActionType | undefined>(undefined);
   const mergedActionRef = actionRef ?? internalActionRef;
     const mergedCardProps =
@@ -153,7 +155,7 @@ const storageColumns = `${storageKey}:columns`;
             </span>
             {!column.lockWidth && (
               <span
-                aria-label={"调整" + String(column.title) + "列宽"}
+                aria-label={t('superTable.resizeColumn', { name: String(column.title) })}
                 role="separator"
                 onMouseDown={(event) => {
                   event.preventDefault();
@@ -237,8 +239,8 @@ const storageColumns = `${storageKey}:columns`;
             <Space wrap>
               <Switch
                 checked={isVisible}
-                checkedChildren="显示"
-                unCheckedChildren="隐藏"
+                checkedChildren={t('superTable.show')}
+                unCheckedChildren={t('superTable.hide')}
                 onChange={(checked) =>
                   setSettings((current) => ({
                     ...current,
@@ -250,9 +252,9 @@ const storageColumns = `${storageKey}:columns`;
                 value={fixedValue}
                 style={{ width: 92 }}
                 options={[
-                  { value: false, label: "不固定" },
-                  { value: "left", label: "左固定" },
-                  { value: "right", label: "右固定" },
+                  { value: false, label: t('superTable.unfixed') },
+                  { value: "left", label: t('superTable.fixedLeft') },
+                  { value: "right", label: t('superTable.fixedRight') },
                 ]}
                 onChange={(value) =>
                   setSettings((current) => ({
@@ -265,7 +267,7 @@ const storageColumns = `${storageKey}:columns`;
                 value={widthValue}
                 disabled={column.lockWidth}
                 style={{ width: 94 }}
-                addonBefore="宽"
+                addonBefore={t('superTable.width')}
                 onChange={(event) => {
                   const nextWidth = Number(event.target.value);
                   if (Number.isNaN(nextWidth)) return;
@@ -347,13 +349,13 @@ const storageColumns = `${storageKey}:columns`;
         toolBarRender={() => [
           queryBar ? <div key="query-bar">{queryBar}</div> : null,
           <Button key="delete" danger ghost icon={<DeleteOutlined />} onClick={deleteRows}>
-            删除
+            {t('superTable.delete')}
           </Button>,   
           <Button key="export" icon={<UploadOutlined />} onClick={exportData}>
-            导出
+            {t('superTable.export')}
           </Button>,          
           <Button key="import" icon={<DownloadOutlined />} onClick={importData}>
-            导入
+            {t('superTable.import')}
           </Button>,          
           <Button key="settings" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}></Button>,
           ...(toolBarRender ? toolBarRender(undefined as never, {}) : []),
@@ -363,19 +365,19 @@ const storageColumns = `${storageKey}:columns`;
       <Drawer
         open={settingsOpen}
         size={560}
-        title="表格配置"
+        title={t('superTable.columnSettings')}
         onClose={() => setSettingsOpen(false)}
       >
         <Typography.Paragraph type="secondary">
-          支持列显示/隐藏、固定位置、拖拽排序和列宽持久化。你可以随时恢复默认配置。
+          {t('superTable.columnSettingsDesc')}
         </Typography.Paragraph>
         <Space style={{ marginBottom: 12 }}>
           <Button key="reset" icon={<ReloadOutlined />} onClick={resetColumns}>
-            重置列
+            {t('superTable.resetColumns')}
           </Button>
           <Input.Search
             allowClear
-            placeholder="搜索列名或列标识"
+            placeholder={t('superTable.searchColumns')}
             value={search}
             onChange={(event) => setSearch(event.target.value)}            
           />

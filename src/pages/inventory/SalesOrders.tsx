@@ -23,7 +23,6 @@ import {
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
-import { useAuth } from "../../contexts/AuthContext";
 import type { Tables } from "../../utils/supabase";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
@@ -57,7 +56,6 @@ export function SalesOrders() {
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
   const [isDisabled, setIsDisabled] = useState(false);
-  const { user } = useAuth();
 
   useEffect(() => {
     fetchOrders();

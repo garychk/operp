@@ -10,7 +10,7 @@ import { SuperTable } from '../../components/SuperTable';
 import { SupaModal } from '../../components/SupaModal';
 import { useTranslation } from 'react-i18next';
 
-type Payable = Tables[payableTable]['Row'];
+type Payable = Tables['erp_payables_s_539dcf81_b']['Row'];
 type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
 
 const { Option } = Select;

@@ -4,7 +4,6 @@ import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 
-const { Option } = Select;
 
 type Period = Tables['erp_accounting_periods_s_539dcf81_b']['Row'];
 type TrialRow = {

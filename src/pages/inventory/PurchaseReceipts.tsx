@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Input, Table, Tag, Modal, Form, Select, Space, message, InputNumber, Row, Col, DatePicker } from 'antd';
-import { PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
@@ -39,7 +39,7 @@ export function PurchaseReceipts() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
-  const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null);
+  const [selectedReceipt] = useState<PurchaseReceipt | null>(null);
   const [details, setDetails] = useState<PurchaseReceiptDetail[]>([]);
   const [editingDetail, setEditingDetail] = useState<PurchaseReceiptDetail | null>(null);
   const [detailForm] = Form.useForm();
@@ -378,10 +378,6 @@ export function PurchaseReceipts() {
     setIsModalOpen(true);
   };
 
-  const handleViewDetails = (record: PurchaseReceipt) => {
-    setSelectedReceipt(record);
-    fetchDetails(record.id);
-  };
   const handleAddDetail = async () => {
     setEditingDetail(null);
     detailForm.setFieldsValue({

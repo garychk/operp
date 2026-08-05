@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, DatePicker, Form, Input, InputNumber, Select, Space, Tag, message, Card, Row, Col } from 'antd';
-import dayjs from 'dayjs';
-import type { Dayjs } from 'dayjs';
+import { Button, Form, Select, Space, message } from 'antd';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
@@ -44,7 +42,7 @@ export function GeneralLedgerBalance() {
       setRows((data as GlBalance[]) || []);
     } catch (error) {
       console.error(error);
-      message.error('获取总账余额失败');
+      message.error(t('glBalance.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -59,10 +57,10 @@ export function GeneralLedgerBalance() {
   const periodMap = useMemo(() => new Map(periods.map((item) => [item.id, item])), [periods]);
 
   const columns = [
-    { title: '会计期间', dataIndex: 'period_id', key: 'period_id', render: (value: number) => periodMap.get(value)?.year && periodMap.get(value)?.month ? `${periodMap.get(value)?.year}-${String(periodMap.get(value)?.month).padStart(2, '0')}` : value || '-' },
-    { title: '会计科目', dataIndex: 'subject_id', key: 'subject_id', render: (value: number) => subjectMap.get(value) ? `${subjectMap.get(value)?.code} - ${subjectMap.get(value)?.name}` : value || '-' },
-    { title: '本期借方', dataIndex: 'period_debit', key: 'period_debit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: '本期贷方', dataIndex: 'period_credit', key: 'period_credit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
+    { title: t('glBalance.accountingPeriod'), dataIndex: 'period_id', key: 'period_id', render: (value: number) => periodMap.get(value)?.year && periodMap.get(value)?.month ? `${periodMap.get(value)?.year}-${String(periodMap.get(value)?.month).padStart(2, '0')}` : value || '-' },
+    { title: t('glBalance.accountSubject'), dataIndex: 'subject_id', key: 'subject_id', render: (value: number) => subjectMap.get(value) ? `${subjectMap.get(value)?.code} - ${subjectMap.get(value)?.name}` : value || '-' },
+    { title: t('glBalance.periodDebit'), dataIndex: 'period_debit', key: 'period_debit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
+    { title: t('glBalance.periodCredit'), dataIndex: 'period_credit', key: 'period_credit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
   ];
 
   return (
@@ -74,12 +72,12 @@ export function GeneralLedgerBalance() {
         loading={loading}
         pagination={{ pageSize: 20 }}
         storageKey="finance-gl-balance"
-        headerTitle="总账余额"
+        headerTitle={t('glBalance.title')}
         queryBar={
           <Space wrap>
             <Select
               allowClear
-              placeholder="选择期间"
+              placeholder={t('glBalance.selectPeriod')}
               style={{ width: 180 }}
               onChange={(value) => fetchRows(value, form.getFieldValue('subject_id'))}
               options={periods.map((item) => ({ value: item.id, label: `${item.year}-${String(item.month).padStart(2, '0')}` }))}
@@ -87,13 +85,13 @@ export function GeneralLedgerBalance() {
             <Select
               allowClear
               showSearch
-              placeholder="选择科目"
+              placeholder={t('glBalance.selectSubject')}
               style={{ width: 260 }}
               optionFilterProp="label"
               onChange={(value) => fetchRows(form.getFieldValue('period_id'), value)}
               options={subjects.map((item) => ({ value: item.id, label: `${item.code} - ${item.name}` }))}
             />
-            <Button onClick={() => fetchRows(form.getFieldValue('period_id'), form.getFieldValue('subject_id'))}>刷新</Button>
+            <Button onClick={() => fetchRows(form.getFieldValue('period_id'), form.getFieldValue('subject_id'))}>{t('glBalance.refresh')}</Button>
           </Space>
         }
       />
