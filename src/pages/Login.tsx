@@ -1,64 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { Form, Input, Button, Card, Typography, Alert, Tabs, Row, Col, Space, Tag, Divider } from 'antd';
+import { Form, Input, Button, Card, Typography, Alert, Tabs, Row, Col, Space, Tag, Dropdown } from 'antd';
 import {
   AppstoreOutlined,
   DatabaseOutlined,
-  GithubOutlined,
   LineChartOutlined,
   RobotOutlined,
   SafetyOutlined,
-  WechatFilled,
+  TranslationOutlined,
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 import { useTranslation } from 'react-i18next';
+import type { SupportedLanguage } from '../i18n';
 
 const { Title, Text } = Typography;
-
-const featureSlides = [
-  {
-    badge: '核心能力',
-    title: '面向中小型企业的一体化 ERP 平台',
-    desc: '统一承载财务、进销存、生产制造与系统管理，帮助企业用更少的系统完成更多协同。',
-    bullets: ['财务、库存、生产全链路打通', '标准化权限与组织管理', '可视化业务查询BAQ，动态页面设置'],
-  },
-  {
-    badge: 'AI 亮点',
-    title: '支持本地与远程模型的智能对话',
-    desc: '可以连接 Ollama 或代理接口，结合真实 ERP 数据完成分析、问答与辅助决策。',
-    bullets: ['多模型配置，灵活切换', 'ERP 数据增强回答', '自然语言创建业务数据'],
-  },
-  {
-    badge: '数据能力',
-    title: '围绕业务场景的真实数据驱动',
-    desc: '通过 Supabase 直接连接数据库与认证体系，让业务数据、权限和审计保持统一。',
-    bullets: ['Supabase 原生集成', '财务、库存、生产分析', '快速扩展，减少后端维护'],
-  },
-];
-
-const featureCards = [
-  {
-    icon: <AppstoreOutlined />,
-    title: 'BAQ 业务查询',
-    desc: '可视化配置主表、关联表、筛选、聚合与排序的业务查询。',
-  },
-  {
-    icon: <RobotOutlined />,
-    title: 'AI 智能对话',
-    desc: '支持模型切换、业务分析和自然语言创建常用业务数据。',
-  },
-  {
-    icon: <DatabaseOutlined />,
-    title: 'Supabase 驱动',
-    desc: '认证、数据库、业务表统一管理，开发效率更高。',
-  },
-  {
-    icon: <LineChartOutlined />,
-    title: 'Dynamic 动态页面',
-    desc: '支持组件化页面，接入静态或BAQ数据快速发布业务看板。',
-  },
-];
 
 export const Login: React.FC = () => {
   const [form] = Form.useForm();
@@ -70,7 +26,36 @@ export const Login: React.FC = () => {
   const [activeSlide, setActiveSlide] = useState(0);
   const { login } = useAuth();
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const language = (i18n.resolvedLanguage === 'en-US' ? 'en-US' : 'zh-CN') as SupportedLanguage;
+
+  const featureSlides = [
+    {
+      badge: t('login.hero.badgeCore'),
+      title: t('login.hero.titleCore'),
+      desc: t('login.hero.descCore'),
+      bullets: [t('login.hero.bullet1Core'), t('login.hero.bullet2Core'), t('login.hero.bullet3Core')],
+    },
+    {
+      badge: t('login.hero.badgeAI'),
+      title: t('login.hero.titleAI'),
+      desc: t('login.hero.descAI'),
+      bullets: [t('login.hero.bullet1AI'), t('login.hero.bullet2AI'), t('login.hero.bullet3AI')],
+    },
+    {
+      badge: t('login.hero.badgeData'),
+      title: t('login.hero.titleData'),
+      desc: t('login.hero.descData'),
+      bullets: [t('login.hero.bullet1Data'), t('login.hero.bullet2Data'), t('login.hero.bullet3Data')],
+    },
+  ];
+
+  const featureCards = [
+    { icon: <AppstoreOutlined />, title: t('login.features.baqTitle'), desc: t('login.features.baqDesc') },
+    { icon: <RobotOutlined />, title: t('login.features.aiTitle'), desc: t('login.features.aiDesc') },
+    { icon: <DatabaseOutlined />, title: t('login.features.supabaseTitle'), desc: t('login.features.supabaseDesc') },
+    { icon: <LineChartOutlined />, title: t('login.features.dynamicTitle'), desc: t('login.features.dynamicDesc') },
+  ];
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -78,7 +63,7 @@ export const Login: React.FC = () => {
     }, 4500);
 
     return () => window.clearInterval(timer);
-  }, []);
+  }, [featureSlides.length]);
 
   const onFinish = async (values: { username: string; password: string }) => {
     setLoading(true);
@@ -202,10 +187,10 @@ export const Login: React.FC = () => {
                 {t('login.login')}
               </Button>
             </Form.Item>
-            <Form.Item>
+            {/* <Form.Item>
                <Divider><WechatFilled style={{fontSize:20,color: '#1aad19'}} /></Divider>
-              <Divider><GithubOutlined /></Divider>
-            </Form.Item>
+               <Divider><GithubOutlined /></Divider>
+            </Form.Item> */}
           </Form>
         </>
       ),
@@ -318,29 +303,51 @@ export const Login: React.FC = () => {
         `,
       }}
     >
-      <div className="relative z-10 w-full" style={{ width: 'min(1180px, 100%)' }}>
-        <Row gutter={[28, 28]} align="stretch">
-          <Col xs={24} lg={13}>
-            <div style={{ color: '#0f172a' }}>
-              <Space direction="vertical" size={20} style={{ width: '100%' }}>
-                <Space size={10} wrap>
+      <div style={{ position: 'absolute', top: 24, right: 24, zIndex: 20 }}>
+        <Dropdown
+          trigger={['click']}
+          menu={{
+            selectable: true,
+            selectedKeys: [language],
+            onClick: ({ key }) => {
+              void i18n.changeLanguage(key as SupportedLanguage);
+            },
+            items: [
+              { key: 'zh-CN', label: t('language.zhCN') },
+              { key: 'en-US', label: t('language.enUS') },
+            ],
+          }}
+        >
+          <TranslationOutlined
+            title={t('language.switch')}
+            style={{ fontSize: 20, color: '#475569', cursor: 'pointer', padding: 8 }}
+          />
+        </Dropdown>
+      </div>
+      <div className="relative z-10 w-full" style={{ width: '70%' }}>
+        <Space orientation="vertical" size={20} style={{ marginBottom: 20 }}>
+          <Space size={10} wrap>
                   <Tag color="blue" style={{ marginInlineEnd: 0, padding: '4px 12px' }}>
-                    OPERP 管理系统
+                    {t('login.tag.operp')}
                   </Tag>
                   <Tag color="cyan" style={{ marginInlineEnd: 0, padding: '4px 12px' }}>
-                    AI + ERP
+                    {t('login.tag.aiErp')}
                   </Tag>
                 </Space>
 
                 <Title level={1} style={{ margin: 0, color: '#0f172a', lineHeight: 1.12 }}>
-                  一套更适合成长型企业
-                  <span style={{ color: '#2563eb' }}>智能管理平台</span>
+                  {t('login.heroHeading1')}
+                  <span style={{ color: '#2563eb' }}>{t('login.heroHeading2')}</span>
                 </Title>
-
-                <div
+        </Space>
+        <Row gutter={[28, 28]} align="stretch">
+          <Col xs={24} lg={15}>
+            <div style={{ color: '#0f172a' }}>
+              <Space orientation="vertical" size={20} style={{ width: '100%' }}> 
+                 <div
                   style={{
                     position: 'relative',
-                    minHeight: 300,
+                    minHeight: 330,
                     borderRadius: 22,
                     overflow: 'hidden',
                     background: 'linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.92))',
@@ -458,15 +465,15 @@ export const Login: React.FC = () => {
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', color: '#334155' }}>
-                  <Tag color="geekblue" style={{ padding: '6px 12px' }}>Supabase 后端即服务</Tag>
-                  <Tag color="processing" style={{ padding: '6px 12px' }}>本地或远程大模型接入</Tag>
-                  <Tag color="success" style={{ padding: '6px 12px' }}>BAQ 动态业务查询</Tag>
+                  <Tag color="geekblue" style={{ padding: '6px 12px' }}>{t('login.tag.supabase')}</Tag>
+                  <Tag color="processing" style={{ padding: '6px 12px' }}>{t('login.tag.llm')}</Tag>
+                  <Tag color="success" style={{ padding: '6px 12px' }}>{t('login.tag.baq')}</Tag>
                 </div>
               </Space>
             </div>
           </Col>
 
-          <Col xs={24} lg={11}>
+          <Col xs={24} lg={9}>
             <Card
               className="relative z-10"
               style={{
@@ -476,8 +483,7 @@ export const Login: React.FC = () => {
                 border: '1px solid rgba(255,255,255,0.8)',
                 background: 'rgba(255,255,255,0.88)',
                 backdropFilter: 'blur(18px)',
-                minHeight: 574,
-                marginTop: 110,
+                minHeight: 570,
               }}
             >
               <div style={{ textAlign: 'center', marginBottom: 24 }}>
