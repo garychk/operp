@@ -52,6 +52,7 @@ export function RoutingOperations() {
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState(false);
   const [editingRouting, setEditingRouting] = useState<Routing | null>(null);
   const [selectedRouting, setSelectedRouting] = useState<Routing | null>(null);
   const [details, setDetails] = useState<RoutingDetail[]>([]);
@@ -133,6 +134,7 @@ export function RoutingOperations() {
   const handleShowMap = async (record: Routing) => {
     await fetchDetails(record.id);
     setSelectedRouting(record);
+    setIsMapModalOpen(true);
   };
 
   const handleSubmit = async (values: any) => {
@@ -542,11 +544,19 @@ export function RoutingOperations() {
         }
       />
 
-      <RoutingMap
-        details={details}
-        operations={operations}
-        routingNo={selectedRouting?.routing_no || ""}
-      />
+      <Modal
+        title="工艺路线图"
+        open={isMapModalOpen}
+        onCancel={() => setIsMapModalOpen(false)}
+        footer={null}
+        width={850}
+      >
+        <RoutingMap
+          details={details}
+          operations={operations}
+          routingNo={selectedRouting?.routing_no || ""}
+        />
+      </Modal>
 
       <SupaModal
         open={isModalOpen}
