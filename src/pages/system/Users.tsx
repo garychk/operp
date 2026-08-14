@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Avatar, Tag, Card, Upload,Row,Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { RcFile } from 'antd/es/upload/interface';
 import { supabase } from '../../utils/supabase';
@@ -16,6 +16,7 @@ interface User {
   status: string;
   last_login_at: string;
   created_at: string;
+  auth_id?: string;
   roles?: Role[];
   role_ids?: number[];
 }
@@ -44,6 +45,10 @@ export function Users() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [form] = Form.useForm();
   const avatarUrl = Form.useWatch('avatar_url', form);
+  const [resetModalVisible, setResetModalVisible] = useState(false);
+  const [resettingUser, setResettingUser] = useState<User | null>(null);
+  const [resetForm] = Form.useForm();
+  const [resetLoading, setResetLoading] = useState(false);
 
   const getUserStorageFolder = (username: string) => {
     const normalized = username
@@ -211,6 +216,46 @@ export function Users() {
     }
   };
 
+  const handleResetPassword = (record: User) => {
+    setResettingUser(record);
+    resetForm.resetFields();
+    setResetModalVisible(true);
+  };
+
+  const handleResetSubmit = async (values: any) => {
+    if (!resettingUser) return;
+    const authId = resettingUser.auth_id;
+    if (!authId) {
+      message.error('该用户未绑定 Auth 账号，无法重置密码');
+      return;
+    }
+    try {
+      setResetLoading(true);
+      // 通过 Edge Function（service_role）重置密码，避免浏览器端 not_admin 报错
+      await logWithTiming('重置用户密码', 'UPDATE', async () => {
+        const { data, error } = await supabase.functions.invoke(
+          'reset-user-password',
+          {
+            body: { userId: authId, password: values.password },
+          },
+        );
+        if (error) throw error;
+        if (data && data.success === false) {
+          throw new Error(data.error || '重置密码失败');
+        }
+      });
+      message.success(`已重置 ${resettingUser.username} 的密码`);
+      setResetModalVisible(false);
+      resetForm.resetFields();
+      setResettingUser(null);
+    } catch (error: any) {
+      const msg = error?.message || '重置密码失败';
+      message.error(msg);
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const handleSave = async (values: any) => {
     try {
       const { role_ids = [], ...userValues } = values;
@@ -358,7 +403,6 @@ const columns: ColumnsType<User> = [
     {
       title: '角色',
       dataIndex: 'roles',
-      width: 220,
       render: (userRoles: Role[] = []) => (
         <Space size={[0, 4]} wrap>
           {userRoles.length > 0 ? userRoles.map((role) => (
@@ -393,11 +437,14 @@ const columns: ColumnsType<User> = [
       title: '操作',
       key: 'action',
       fixed: 'right',
-      width: 200,
+      width: 320,
       render: (_, record) => (
         <Space>
           <Button type="primary" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
+          </Button>
+          <Button icon={<KeyOutlined />} onClick={() => handleResetPassword(record)}>
+            重置密码
           </Button>
           <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>
             <Button danger icon={<DeleteOutlined />}>删除</Button>
@@ -490,6 +537,50 @@ const columns: ColumnsType<User> = [
               </Form.Item>
             </Col>
           </Row>
+        </Form>
+      </Modal>
+      <Modal
+        title={`重置密码 - ${resettingUser?.username || ''}`}
+        open={resetModalVisible}
+        onCancel={() => {
+          setResetModalVisible(false);
+          resetForm.resetFields();
+          setResettingUser(null);
+        }}
+        onOk={() => resetForm.submit()}
+        confirmLoading={resetLoading}
+        width={420}
+        destroyOnHidden
+      >
+        <Form form={resetForm} layout="vertical" onFinish={handleResetSubmit}>
+          <Form.Item
+            name="password"
+            label="新密码"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { min: 6, message: '密码至少 6 位' },
+            ]}
+          >
+            <Input.Password placeholder="请输入新密码" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="确认密码"
+            dependencies={['password']}
+            rules={[
+              { required: true, message: '请再次输入新密码' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('两次输入的密码不一致'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="请再次输入新密码" autoComplete="new-password" />
+          </Form.Item>
         </Form>
       </Modal>
     </Card>
