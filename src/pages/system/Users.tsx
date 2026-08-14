@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Avatar, Tag, Card, Upload,Row,Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, KeyOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { RcFile } from 'antd/es/upload/interface';
 import { supabase } from '../../utils/supabase';
@@ -443,7 +443,7 @@ const columns: ColumnsType<User> = [
           <Button type="primary" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Button icon={<KeyOutlined />} onClick={() => handleResetPassword(record)}>
+          <Button onClick={() => handleResetPassword(record)}>
             重置密码
           </Button>
           <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>

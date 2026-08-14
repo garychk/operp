@@ -1,11 +1,15 @@
+// @ts-nocheck
 // Supabase Edge Function: reset-user-password
 // 使用 service_role 权限重置指定用户的密码。
-// 部署：supabase functions deploy reset-user-password
-// 本地调试：supabase functions serve
+//
+// 纯 fetch 实现，直接调用 GoTrue 管理接口，避免在 Edge Runtime 启动时
+// 联网下载 npm 依赖（esm.sh / npm registry），从而规避自托管环境常见的
+// 容器外网 DNS 解析失败问题。
 //
 // 环境变量（Supabase 运行时自动注入）：
-//   SUPABASE_URL
-//   SUPABASE_SERVICE_ROLE_KEY
+//   SUPABASE_URL              -> 内部 API 网关地址（自托管通常为 http://kong:8000）
+//   SUPABASE_SERVICE_ROLE_KEY -> service_role 密钥
+//   SUPABASE_ANON_KEY         -> anon 密钥（用于校验调用方身份，可选回退）
 //
 // 请求体 (JSON):
 //   { "userId": "<auth uuid>", "password": "<new password>" }
@@ -13,9 +17,6 @@
 // 返回:
 //   成功 -> { "success": true }
 //   失败 -> { "success": false, "error": "<message>" } (HTTP 400/500)
-
-// import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { createClient } from '@supabase/supabase-js';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,36 +67,44 @@ Deno.serve(async (req: Request) => {
     return json({ success: false, error: "password is required (min 6 chars)" }, 400);
   }
 
-  // 校验调用方身份：必须携带有效的 Authorization Bearer（登录用户）
+  // 1) 校验调用方身份：必须携带有效的登录用户 token
   const authHeader = req.headers.get("Authorization") || "";
   const anonKey =
     req.headers.get("apikey") || Deno.env.get("SUPABASE_ANON_KEY") || "";
 
-  const userClient = createClient(supabaseUrl, anonKey, {
-    global: { headers: { Authorization: authHeader } },
-  });
-  const {
-    data: { user },
-    error: userError,
-  } = await userClient.auth.getUser();
-
-  if (userError || !user) {
+  if (!authHeader) {
     return json({ success: false, error: "Unauthorized" }, 401);
   }
 
-  // 使用 service_role 客户端执行重置
-  const adminClient = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
+  const userRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      Authorization: authHeader,
+      apikey: anonKey,
+    },
   });
 
-  const { error: updateError } = await adminClient.auth.admin.updateUserById(
-    userId,
-    { password },
+  if (!userRes.ok) {
+    return json({ success: false, error: "Unauthorized" }, 401);
+  }
+
+  // 2) 使用 service_role 调 GoTrue 管理员接口重置密码
+  const updateRes = await fetch(
+    `${supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+      },
+      body: JSON.stringify({ password }),
+    },
   );
 
-  if (updateError) {
+  if (!updateRes.ok) {
+    const errText = await updateRes.text();
     return json(
-      { success: false, error: updateError.message || "Failed to reset password" },
+      { success: false, error: errText || "Failed to reset password" },
       400,
     );
   }
