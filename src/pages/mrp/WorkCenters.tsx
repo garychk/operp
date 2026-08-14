@@ -175,6 +175,7 @@ export function WorkCenters() {
       title: "编码",
       dataIndex: "code",
       key: "code",
+      width: 200,
     },
     {
       title: "名称",
@@ -185,6 +186,7 @@ export function WorkCenters() {
       title: "类型",
       dataIndex: "type",
       key: "type",
+      width: 200,
       render: (type: string) => typeLabels[type] || type,
     },
     {
@@ -197,23 +199,27 @@ export function WorkCenters() {
       title: "日产能(小时)",
       dataIndex: "capacity_per_day",
       key: "capacity_per_day",
+      width: 200,
     },
     {
       title: "人工费率",
       dataIndex: "labor_rate",
       key: "labor_rate",
+      width: 200,
       render: (rate: number) => `¥${(rate ?? 0).toLocaleString()}/小时`,
     },
     {
       title: "制造费率",
       dataIndex: "overhead_rate",
       key: "overhead_rate",
+      width: 200,
       render: (rate: number) => `¥${(rate ?? 0).toLocaleString()}/小时`,
     },
     {
       title: "状态",
       dataIndex: "status",
       key: "status",
+      width: 200,
       render: (status: string) => (
         <Tag color={status === "active" ? "success" : "default"}>
           {status === "active" ? "启用" : "停用"}
@@ -223,6 +229,7 @@ export function WorkCenters() {
     {
       title: "操作",
       key: "action",
+      width: 200,
       render: (_: any, record: WorkCenter) => (
         <Space size="middle">
           <Button

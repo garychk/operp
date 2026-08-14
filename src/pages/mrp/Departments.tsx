@@ -20,6 +20,7 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { SuperTable } from "../../components/SuperTable";
+import type { SuperTableColumn } from "../../components/SuperTable";
 
 type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
 
@@ -145,11 +146,12 @@ export function Departments() {
       d.code.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const columns = [
+  const columns: SuperTableColumn<Department>[] = [
     {
       title: "部门编码",
       dataIndex: "code",
       key: "code",
+      width: 200,
     },
     {
       title: "部门名称",
@@ -160,12 +162,14 @@ export function Departments() {
       title: "上级部门",
       dataIndex: "parent_id",
       key: "parent_id",
+      width: 200,
       render: (parentId: number | null) => getParentDepartmentName(parentId),
     },
     {
       title: "状态",
       dataIndex: "status",
       key: "status",
+      width: 200,
       render: (status: string | null) => (
         <Tag color={status === "active" ? "success" : "default"}>
           {status === "active" ? "启用" : "停用"}
@@ -175,6 +179,8 @@ export function Departments() {
     {
       title: "操作",
       key: "action",
+      width: 200,
+      fixed: "right",
       render: (_: any, record: Department) => (
         <Space size="middle">
           <Button
