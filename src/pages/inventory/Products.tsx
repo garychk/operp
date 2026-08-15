@@ -284,6 +284,7 @@ export function Products() {
           onChange: setSelectedRowKeys,
         }}
         onImport={() => console.log("importData")}
+        onDataChanged={fetchProducts}
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>

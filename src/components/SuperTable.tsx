@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
-import { Button, Drawer, Input, Select, Space, Switch, Typography, message } from "antd";
+import type { Key, ReactNode } from "react";
+import { Button, Drawer, Input, Modal, Select, Space, Switch, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   ArrowDownOutlined,
@@ -17,6 +17,7 @@ import {
 import { ProTable } from "@ant-design/pro-components";
 import type { ActionType, ProColumns, ProTableProps } from "@ant-design/pro-components";
 import { useTranslation } from "react-i18next";
+import { supabase } from "../utils/supabase";
 
 export type SuperTableColumn<RecordType> = ColumnsType<RecordType>[number] & {
   key: string;
@@ -36,6 +37,8 @@ export interface SuperTableProps<
   onResetColumns?: () => void;
   toolbarActions?: ("delete" | "export" | "import")[];
   onImport?: () => void;
+  onDelete?: (selectedRowKeys: Key[]) => void | Promise<void>;
+  onDataChanged?: () => void;
 }
 
 interface ColumnSettingsState {
@@ -73,6 +76,10 @@ export function SuperTable<
   toolbarActions = ["delete", "export", "import"],
   dataSource,
   onImport,
+  onDelete,
+  onDataChanged,
+  tableName,
+  rowKey = "key",
   actionRef,
   toolBarRender,
   cardProps,
@@ -318,9 +325,43 @@ const storageColumns = `${storageKey}:columns`;
     [columns, draggedColumnKey, settings.fixed, settings.hidden, settings.order, settings.width],
   );
 
-  function deleteRows(): void {
-    console.log("deleteRows");
-  }
+  const hasRowKeyField =
+    typeof rowKey === "string" || typeof rowKey === "number";
+  const canDelete =
+    Boolean(onDelete) || (Boolean(tableName) && hasRowKeyField);
+
+  const deleteRows = () => {
+    const selectedKeys = rowSelection ? (rowSelection.selectedRowKeys ?? []) : [];
+    if (selectedKeys.length === 0) {
+      message.warning(t("superTable.deleteEmpty"));
+      return;
+    }
+    Modal.confirm({
+      title: t("superTable.deleteConfirmTitle"),
+      content: t("superTable.deleteConfirmContent", { count: selectedKeys.length }),
+      okText: t("superTable.delete"),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        try {
+          if (onDelete) {
+            await onDelete(selectedKeys);
+          } else if (tableName && hasRowKeyField) {
+            const { error } = await supabase
+              .from(tableName)
+              .update({ is_deleted: "y" })
+              .in(String(rowKey), selectedKeys as (string | number)[]);
+            if (error) throw error;
+          }
+          message.success(t("common.deleteSuccess"));
+          onDataChanged?.();
+          internalActionRef.current?.reload();
+        } catch (error) {
+          console.error("Error deleting rows:", error);
+          message.error(t("common.deleteFailed"));
+        }
+      },
+    });
+  };
   const exportData = () => {
     const rows = dataSource ?? [];
     if (rows.length === 0) {
@@ -378,6 +419,7 @@ const storageColumns = `${storageKey}:columns`;
         actionRef={mergedActionRef}
         columns={visibleColumns}
         dataSource={dataSource}
+        rowKey={rowKey}
         options={false}
         search={false}        
         cardProps={mergedCardProps}
@@ -399,7 +441,7 @@ const storageColumns = `${storageKey}:columns`;
         toolBarRender={() => [
           queryBar ? <div key="query-bar">{queryBar}</div> : null,
           toolbarActions.includes("delete") ? (
-            <Button key="delete" danger ghost icon={<DeleteOutlined />} onClick={deleteRows}>
+            <Button key="delete" danger ghost icon={<DeleteOutlined />} disabled={!canDelete} onClick={deleteRows}>
               {t('superTable.delete')}
             </Button>
           ) : null,

@@ -214,6 +214,7 @@ export function Customers() {
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
+        onDataChanged={fetchCustomers}
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('customers.addCustomer')}</Button>
