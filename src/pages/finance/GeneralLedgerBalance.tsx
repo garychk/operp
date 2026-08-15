@@ -73,6 +73,7 @@ export function GeneralLedgerBalance() {
         pagination={{ pageSize: 20 }}
         storageKey="finance-gl-balance"
         headerTitle={t('glBalance.title')}
+        toolbarActions={[]}
         queryBar={
           <Space wrap>
             <Select

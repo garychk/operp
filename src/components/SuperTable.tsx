@@ -34,6 +34,7 @@ export interface SuperTableProps<
   tableName?: string;
   queryBar?: ReactNode;
   onResetColumns?: () => void;
+  toolbarActions?: ("delete" | "export" | "import")[];
 }
 
 interface ColumnSettingsState {
@@ -68,6 +69,7 @@ export function SuperTable<
   storageKey,
   queryBar,
   onResetColumns,
+  toolbarActions = ["delete", "export", "import"],
   actionRef,
   toolBarRender,
   cardProps,
@@ -348,15 +350,21 @@ const storageColumns = `${storageKey}:columns`;
         scroll={{ x: "max-content", ...(typeof rest.scroll === "object" ? rest.scroll : {}) }}
         toolBarRender={() => [
           queryBar ? <div key="query-bar">{queryBar}</div> : null,
-          <Button key="delete" danger ghost icon={<DeleteOutlined />} onClick={deleteRows}>
-            {t('superTable.delete')}
-          </Button>,   
-          <Button key="export" icon={<UploadOutlined />} onClick={exportData}>
-            {t('superTable.export')}
-          </Button>,          
-          <Button key="import" icon={<DownloadOutlined />} onClick={importData}>
-            {t('superTable.import')}
-          </Button>,          
+          toolbarActions.includes("delete") ? (
+            <Button key="delete" danger ghost icon={<DeleteOutlined />} onClick={deleteRows}>
+              {t('superTable.delete')}
+            </Button>
+          ) : null,
+          toolbarActions.includes("export") ? (
+            <Button key="export" icon={<UploadOutlined />} onClick={exportData}>
+              {t('superTable.export')}
+            </Button>
+          ) : null,
+          toolbarActions.includes("import") ? (
+            <Button key="import" icon={<DownloadOutlined />} onClick={importData}>
+              {t('superTable.import')}
+            </Button>
+          ) : null,
           <Button key="settings" icon={<SettingOutlined />} onClick={() => setSettingsOpen(true)}></Button>,
           ...(toolBarRender ? toolBarRender(undefined as never, {}) : []),
         ]}
