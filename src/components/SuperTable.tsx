@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
-import { Button, Drawer, Input, Select, Space, Switch, Typography } from "antd";
+import { Button, Drawer, Input, Select, Space, Switch, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import {
   ArrowDownOutlined,
@@ -35,6 +35,7 @@ export interface SuperTableProps<
   queryBar?: ReactNode;
   onResetColumns?: () => void;
   toolbarActions?: ("delete" | "export" | "import")[];
+  onImport?: () => void;
 }
 
 interface ColumnSettingsState {
@@ -70,6 +71,8 @@ export function SuperTable<
   queryBar,
   onResetColumns,
   toolbarActions = ["delete", "export", "import"],
+  dataSource,
+  onImport,
   actionRef,
   toolBarRender,
   cardProps,
@@ -319,10 +322,54 @@ const storageColumns = `${storageKey}:columns`;
     console.log("deleteRows");
   }
   const exportData = () => {
-    console.log("exportData");
-  };
-  const importData = () => {
-    console.log("importData");
+    const rows = dataSource ?? [];
+    if (rows.length === 0) {
+      message.warning(t("superTable.exportEmpty"));
+      return;
+    }
+
+    const exportColumns = columns.filter(
+      (column): column is SuperTableColumn<RecordType> & { dataIndex: string } =>
+        "dataIndex" in column && typeof column.dataIndex === "string",
+    );
+
+    const escapeCsv = (value: unknown) => {
+      const text = value === null || value === undefined ? "" : String(value);
+      return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+
+    const header = exportColumns
+      .map((column) =>
+        escapeCsv(typeof column.title === "string" ? column.title : column.key),
+      )
+      .join(",");
+
+    const body = rows.map((record) =>
+      exportColumns
+        .map((column) => {
+          const raw = (record as Record<string, unknown>)[column.dataIndex];
+          if (column.render) {
+            const rendered = (
+              column.render as (value: unknown, record: RecordType, index: number) => ReactNode
+            )(raw, record, 0);
+            if (["string", "number", "boolean"].includes(typeof rendered)) {
+              return escapeCsv(rendered);
+            }
+          }
+          return escapeCsv(raw);
+        })
+        .join(","),
+    );
+
+    const csv = [header, ...body].join("\r\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${storageKey}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    message.success(t("superTable.exportSuccess"));
   };
 
   return (
@@ -330,6 +377,7 @@ const storageColumns = `${storageKey}:columns`;
       <ProTable<RecordType, Query>
         actionRef={mergedActionRef}
         columns={visibleColumns}
+        dataSource={dataSource}
         options={false}
         search={false}        
         cardProps={mergedCardProps}
@@ -361,7 +409,7 @@ const storageColumns = `${storageKey}:columns`;
             </Button>
           ) : null,
           toolbarActions.includes("import") ? (
-            <Button key="import" icon={<DownloadOutlined />} onClick={importData}>
+            <Button key="import" icon={<DownloadOutlined />} disabled={!onImport} onClick={onImport}>
               {t('superTable.import')}
             </Button>
           ) : null,

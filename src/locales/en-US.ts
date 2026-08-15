@@ -452,6 +452,8 @@ const enUS = {
       delete: "Delete",
       export: "Export",
       import: "Import",
+      exportSuccess: "Export succeeded",
+      exportEmpty: "No data to export",
       columnSettings: "Column Settings",
       columnSettingsDesc:
         "Supports show/hide, fixed position, drag sort and persistent column width. You can restore defaults anytime.",

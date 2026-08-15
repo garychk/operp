@@ -448,6 +448,8 @@ const zhCN = {
       delete: "删除",
       export: "导出",
       import: "导入",
+      exportSuccess: "导出成功",
+      exportEmpty: "没有可导出的数据",
       columnSettings: "表格配置",
       columnSettingsDesc: "支持列显示/隐藏、固定位置、拖拽排序和列宽持久化。你可以随时恢复默认配置。",
       resetColumns: "重置列",
