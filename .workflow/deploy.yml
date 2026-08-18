@@ -1,70 +1,100 @@
 # ========================================================
 # master 分支自动发布流水线
-# 功能：push 到 master -> 云端构建 dist -> SSH 同步到服务器 -> 重启 nginx 容器
+# 功能：push 到 master -> 云端构建 dist -> 上传制品 -> 部署到自有主机(主机组 operp) -> 重启 nginx 容器
+# 结构参照 .workflow/流水线-202608132225.yml（图形视图导出的当前版格式）
 #
-# 需要在 Gitee 仓库网页端配置密钥环境变量（Gitee Go -> 流水线设置 -> 环境变量管理）：
-#   SSH_HOST        服务器 IP 或域名
-#   SSH_PORT        SSH 端口（默认 22）
-#   SSH_USER        SSH 用户名（需有 docker 权限）
-#   SSH_PRIVATE_KEY SSH 私钥内容（对应服务器上 authorized_keys 中的公钥）
-#   DEPLOY_DIR      服务器部署目录（如 /opt/operp）
+# 前提：
+#   1. 服务器已安装 Gitee Go 主机 Agent 并注册到主机组 operp
+#   2. 服务器已装 Docker，部署用户有 docker 权限
+#   3. 制品解压目录为 ~/gitee_go/deploy（含 dist/ docker-compose.yml nginx.conf）
 # ========================================================
-version: '1.0'
+version: "1.0"
 name: deploy-master
-displayName: 'master 自动发布'
+displayName: master 自动发布
+stages:
+- name: 构建
+  displayName: 构建
+  strategy: naturally
+  trigger: auto
+  steps:
+  - step: build@nodejs
+    name: build
+    displayName: Nodejs 构建
+    nodeVersion: 20
+    commands:
+    - '# 设置NPM源，提升安装速度'
+    - npm config set registry https://registry.npmmirror.com
+    - '# 安装依赖并构建'
+    - npm install && npm run build
+    artifacts:
+    - name: BUILD_ARTIFACT
+      path:
+      - ./dist
+      - ./docker-compose.yml
+      - ./nginx.conf
+      type: .tar.gz
+    caches:
+    - "~/.npm"
+    - "~/.yarn"
+    notify: []
+    strategy:
+      retry: "0"
+      resource:
+        cpu: "2"
+        memory: "4"
+- name: 上传
+  displayName: 上传
+  strategy: naturally
+  trigger: auto
+  steps:
+  - step: publish@general_artifacts
+    name: upload
+    displayName: 上传制品
+    dependArtifact: BUILD_ARTIFACT
+    artifactName: output
+    notify: []
+    strategy:
+      retry: "0"
+      resource:
+        cpu: "2"
+        memory: "4"
+- name: 部署
+  displayName: 部署
+  strategy: naturally
+  trigger: auto
+  steps:
+  - step: deploy@agent
+    name: deploy
+    displayName: 主机部署
+    deployArtifact:
+    - name: output
+      target: "~/gitee_go/deploy"
+      source: artifact
+      dependArtifact: ""
+      artifactRepository: default
+      artifactName: output
+      artifactVersion: latest
+    script: |-
+      set -e
+      cd ~/gitee_go/deploy
+      echo "== 当前目录内容 =="
+      ls -la
+      echo "== 重启 nginx 容器 =="
+      docker compose up -d --force-recreate
+      docker ps --filter name=operp-web
+      echo "== 部署完成 =="
+    hostGroupID:
+      ID: operp
+      hostID:
+      - 4a269803-6151-46dd-9728-16b6706f694d
+    notify: []
+    strategy:
+      retry: "0"
 triggers:
   push:
-    - matchType: PRECISE
-      branch: master
-      commitMessage: ''
-stages:
-  - stage:
-      name: build-stage
-      displayName: '构建'
-      failFast: false
-      steps:
-        - step: npmbuild@1
-          name: npm-build
-          displayName: 'npm 构建'
-          inputs:
-            nodeVersion: 20
-            goals: |
-              set -e
-              npm config set registry https://registry.npmmirror.com
-              npm install
-              npm run build
-              ls -la dist/
-  - stage:
-      name: deploy-stage
-      displayName: '部署'
-      failFast: false
-      steps:
-        - step: npmbuild@1
-          name: ssh-deploy
-          displayName: 'SSH 同步并重启容器'
-          inputs:
-            nodeVersion: 20
-            goals: |
-              set -e
-              echo "== 配置 SSH 密钥 =="
-              mkdir -p ~/.ssh
-              printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-              chmod 600 ~/.ssh/id_rsa
-              ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
-
-              echo "== 打包构建产物 =="
-              tar czf deploy.tar.gz dist docker-compose.yml nginx.conf
-
-              echo "== 上传到服务器 =="
-              scp -P "$SSH_PORT" deploy.tar.gz "$SSH_USER@$SSH_HOST:/tmp/operp-deploy.tar.gz"
-
-              echo "== 服务器端解压并重启容器 =="
-              ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "set -e
-                mkdir -p '$DEPLOY_DIR'
-                tar xzf /tmp/operp-deploy.tar.gz -C '$DEPLOY_DIR'
-                rm -f /tmp/operp-deploy.tar.gz
-                cd '$DEPLOY_DIR'
-                docker compose up -d --force-recreate
-                docker image prune -f || true
-                echo '== 部署完成 =='
-                docker ps --filter name=operp-web"
+    branches:
+      precise:
+      - master
+notify: []
+strategy:
+  blocking: true
