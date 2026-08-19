@@ -71,8 +71,26 @@ stages:
       cd ~/gitee_go/deploy
       echo "== 当前目录内容 =="
       ls -la
+
+      # docker compose 默认读取当前目录的 docker-compose.yml / compose.yml
+      # 报错 "no configuration file provided: not found" 就是这一步找不到 compose 文件
+      if [ -f docker-compose.yml ]; then
+        COMPOSE_FILE=docker-compose.yml
+      elif [ -f compose.yml ]; then
+        COMPOSE_FILE=compose.yml
+      else
+        echo "错误：未找到 docker-compose.yml / compose.yml"
+        echo "请确认构建制品已包含 docker-compose.yml 并正确解压到本目录。"
+        exit 1
+      fi
+
+      if [ ! -f nginx.conf ]; then
+        echo "错误：未找到 nginx.conf，Nginx 容器将无法加载站点配置。"
+        exit 1
+      fi
+
       echo "== 重启 nginx 容器 =="
-      docker compose up -d --force-recreate
+      docker compose -f "$COMPOSE_FILE" up -d --force-recreate
       docker ps --filter name=operp-web
       echo "== 部署完成 =="
     hostGroupID:
