@@ -16,8 +16,8 @@ stages:
     - node -v && npm -v
     - '# 设置NPM源，提升安装速度'
     - npm config set registry https://registry.npmmirror.com
-    - '# 安装依赖并构建'
-    - npm install && npm run build
+    - '# 注入生产环境变量（Vite 构建时会读取进程环境中的 VITE_ 变量，优先级最高）'
+    - export VITE_SUPABASE_URL=$SUPABASE_URL && export VITE_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY && npm install && npm run build
     artifacts:
     - name: BUILD_ARTIFACT
       path:
