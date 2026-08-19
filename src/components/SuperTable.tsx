@@ -39,6 +39,7 @@ export interface SuperTableProps<
   onImport?: () => void;
   onDelete?: (selectedRowKeys: Key[]) => void | Promise<void>;
   onDataChanged?: () => void;
+  showIndex?: boolean;
 }
 
 interface ColumnSettingsState {
@@ -80,6 +81,7 @@ export function SuperTable<
   onDataChanged,
   tableName,
   rowKey = "key",
+  showIndex = true,
   actionRef,
   toolBarRender,
   cardProps,
@@ -203,6 +205,19 @@ const storageColumns = `${storageKey}:columns`;
       } as unknown as ProColumns<RecordType>;
     });
   }, [orderedColumns, settings.fixed, settings.width]);
+
+  const indexColumn: ProColumns<RecordType> = {
+    title: t("superTable.index"),
+    key: "index",
+    width: 60,
+    align: "center",
+    fixed: "left",
+    render: (_dom, _record, index, action) => {
+      const current = action?.pageInfo?.current ?? 1;
+      const pageSize = action?.pageInfo?.pageSize ?? 10;
+      return (current - 1) * pageSize + index + 1;
+    },
+  };
 
   const resetColumns = () => {
     setSettings(buildInitialSettings(columns));
@@ -417,7 +432,7 @@ const storageColumns = `${storageKey}:columns`;
     <>
       <ProTable<RecordType, Query>
         actionRef={mergedActionRef}
-        columns={visibleColumns}
+        columns={showIndex ? [indexColumn, ...visibleColumns] : visibleColumns}
         dataSource={dataSource}
         rowKey={rowKey}
         options={false}

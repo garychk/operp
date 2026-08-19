@@ -448,6 +448,7 @@ const enUS = {
       unfixed: "Unfixed",
       fixedLeft: "Fixed Left",
       fixedRight: "Fixed Right",
+      index: "Index",
       width: "Width",
       delete: "Delete",
       export: "Export",

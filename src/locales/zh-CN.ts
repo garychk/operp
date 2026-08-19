@@ -444,6 +444,7 @@ const zhCN = {
       unfixed: "不固定",
       fixedLeft: "左固定",
       fixedRight: "右固定",
+      index: "序号",
       width: "宽",
       delete: "删除",
       export: "导出",

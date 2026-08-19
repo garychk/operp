@@ -104,20 +104,23 @@ export function AccountingPeriods() {
     {
       title: '期间',
       key: 'period',
+      width: 120,
       render: (_: any, record: Period) => `${record.year}-${String(record.month).padStart(2, '0')}`,
     },
-    { title: '起始日期', dataIndex: 'start_date', key: 'start_date' },
-    { title: '结束日期', dataIndex: 'end_date', key: 'end_date' },
+    { title: '起始日期', dataIndex: 'start_date', key: 'start_date', width: 120 },
+    { title: '结束日期', dataIndex: 'end_date', key: 'end_date', width: 120 },
     {
       title: '启用状态',
       dataIndex: 'is_enabled',
       key: 'is_enabled',
+      width: 120,
       render: (value: boolean) => <Tag color={value ? 'success' : 'default'}>{value ? '已启用' : '未启用'}</Tag>,
     },
     {
       title: '结账状态',
       dataIndex: 'is_closed',
       key: 'is_closed',
+      width: 120,
       render: (value: boolean) => <Tag color={value ? 'warning' : 'default'}>{value ? '已结账' : '未结账'}</Tag>,
     },
     {
@@ -130,6 +133,7 @@ export function AccountingPeriods() {
       title: '操作',
       key: 'action',
       width: 200,
+      fixed: 'right',
       render: (_: any, record: Period) => (
         <Space size="middle">
           <Button type="text" icon={<CheckOutlined />} onClick={() => handleAction('enable', record)} disabled={!!record.is_locked}>
@@ -156,6 +160,7 @@ export function AccountingPeriods() {
         pagination={{ pageSize: 20 }}
         storageKey="finance-accounting-periods"
         headerTitle={t('menu.periods')}
+        scroll={{ y: 640, x: "max-content" }}
         rowSelection={{
           selectedRowKeys,
           onChange: (keys) => setSelectedRowKeys(keys as number[]),
