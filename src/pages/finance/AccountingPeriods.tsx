@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button, Input, InputNumber, Modal, Space, Tag, message } from 'antd';
 import { CheckOutlined, LockOutlined, UnlockOutlined, ReloadOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
+import { generateIdempotencyKey } from '../../utils/uuid';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import { useTranslation } from 'react-i18next';
@@ -49,7 +50,7 @@ export function AccountingPeriods() {
     try {
       const { error } = await supabase.rpc('generate_accounting_periods', {
         p_year: generationYear,
-        p_idempotency_key: crypto.randomUUID(),
+        p_idempotency_key: generateIdempotencyKey(),
       });
       if (error) throw error;
       message.success('会计年度生成成功');
@@ -80,7 +81,7 @@ export function AccountingPeriods() {
           const rpcName = action === 'enable' ? 'enable_accounting_period' : action === 'close' ? 'close_accounting_period' : 'lock_accounting_period';
           const { error } = await supabase.rpc(rpcName, {
             p_period_id: record.id,
-            p_idempotency_key: crypto.randomUUID(),
+            p_idempotency_key: generateIdempotencyKey(),
           });
           if (error) throw error;
           message.success(t('common.updateSuccess'));

@@ -109,6 +109,7 @@ body {
 
 .mainContent{
   border-radius: 0;
-  height: 90vh;
+  height: 83vh;
   margin-top: 0px;
+  overflow: auto;
 }

@@ -4,6 +4,7 @@ import { Button, Input, Tag, Modal, Form, Select, Space, message, InputNumber, R
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import { generateIdempotencyKey } from '../../utils/uuid';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import { SuperTable } from '../../components/SuperTable';
@@ -119,7 +120,7 @@ export function FixedAssets() {
       content: openPeriodId ? `将对资产 ${record.asset_no} 按当前启用期间计提折旧。` : '没有可用的启用期间，请先启用会计期间。',
       okButtonProps: { disabled: !openPeriodId },
       onOk: async () => {
-        const { error } = await supabase.rpc('accrue_asset_depreciation', { p_asset_id: record.id, p_period_id: openPeriodId, p_idempotency_key: crypto.randomUUID() });
+        const { error } = await supabase.rpc('accrue_asset_depreciation', { p_asset_id: record.id, p_period_id: openPeriodId, p_idempotency_key: generateIdempotencyKey() });
         if (error) throw error;
         message.success('折旧计提成功');
         fetchAssets();

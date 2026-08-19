@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import { generateIdempotencyKey } from '../../utils/uuid';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import { SupaModal } from '../../components/SupaModal';
@@ -127,7 +128,7 @@ export function Payables() {
       okButtonProps: { disabled: !openPeriodId },
       onOk: async () => {
         if (!openPeriodId || amount <= 0) throw new Error('没有可用期间或核销金额无效');
-        const { error } = await supabase.rpc('settle_ar_ap', { p_settlement_type: 'payable', p_source_id: record.id, p_period_id: openPeriodId, p_amount: amount, p_settlement_date: new Date().toISOString().slice(0, 10), p_remark: null, p_idempotency_key: crypto.randomUUID() });
+        const { error } = await supabase.rpc('settle_ar_ap', { p_settlement_type: 'payable', p_source_id: record.id, p_period_id: openPeriodId, p_amount: amount, p_settlement_date: new Date().toISOString().slice(0, 10), p_remark: null, p_idempotency_key: generateIdempotencyKey() });
         if (error) throw error;
         message.success('应付核销成功');
         fetchPayables();

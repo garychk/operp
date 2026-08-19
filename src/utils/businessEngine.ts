@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { logWithTiming } from './logger';
+import { generateIdempotencyKey } from './uuid';
 
 type StockDocumentType = 'purchase_receipt' | 'sales_delivery';
 type WorkflowAction = 'submit' | 'approve' | 'reject' | 'withdraw';
@@ -99,7 +100,7 @@ async function runStockPostingRpc(
       const { data, error } = await supabase.rpc(rpcName, {
         p_document_type: documentType,
         p_document_id: documentId,
-        p_idempotency_key: crypto.randomUUID(),
+        p_idempotency_key: generateIdempotencyKey(),
       });
 
       if (error) throw error;
@@ -180,7 +181,7 @@ export async function postVoucher(voucherId: number, user?: BusinessUser) {
     async () => {
       const { data, error } = await supabase.rpc('post_voucher_document', {
         p_voucher_id: voucherId,
-        p_idempotency_key: crypto.randomUUID(),
+        p_idempotency_key: generateIdempotencyKey(),
       });
       if (error) throw error;
       return data;
@@ -196,7 +197,7 @@ export async function reverseVoucher(voucherId: number, user?: BusinessUser) {
     async () => {
       const { data, error } = await supabase.rpc('reverse_voucher_document', {
         p_voucher_id: voucherId,
-        p_idempotency_key: crypto.randomUUID(),
+        p_idempotency_key: generateIdempotencyKey(),
       });
       if (error) throw error;
       return data;
