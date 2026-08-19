@@ -733,7 +733,7 @@ export function ProLayout() {
         menuItemRender={(item, dom) => (
           <div onClick={() => navigate(item.path || "/")}>{dom}</div>
         )}
-        headerContentRender={() => <Tag color="gold">V1.0</Tag>}
+        headerContentRender={() => <Tag color="gold">V1.0.2</Tag>}
         avatarProps={{
           src: user?.profile.avatar_url || defaultAvatar,
           size: "small",
