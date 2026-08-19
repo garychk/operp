@@ -20,8 +20,10 @@ stages:
   - step: build@nodejs
     name: build
     displayName: Nodejs 构建
-    nodeVersion: 20
+    nodeVersion: 20.18.0
     commands:
+    - '# 诊断：确认 node 环境'
+    - node -v && npm -v
     - '# 设置NPM源，提升安装速度'
     - npm config set registry https://registry.npmmirror.com
     - '# 安装依赖并构建'
