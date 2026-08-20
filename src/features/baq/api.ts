@@ -16,6 +16,10 @@ export async function listTableLabels() {
   if (error) throw error;
   return (data || []) as TableLabelRow[];
 }
+export async function refreshSysTables() {
+  const { error } = await supabase.rpc('refresh_sys_tables');
+  if (error) throw error;
+}
 export async function updateTableLabels(rows: Array<Pick<TableLabelRow, 'id' | 'table_label'>>) {
   const results = await Promise.all(rows.map(row => supabase.rpc('update_table_label', { target_table_id: row.id, new_label: row.table_label })));
   const failed = results.find(result => result.error);

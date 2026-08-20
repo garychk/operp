@@ -12,7 +12,7 @@ BEGIN
 END;
 $$;
 -- Step 7: fixed-asset depreciation and receivable/payable settlement.
-
+-- 应收/应付账款核销（结算）记录表
 CREATE TABLE IF NOT EXISTS public.erp_ar_ap_settlements (
   id BIGSERIAL PRIMARY KEY,
   corp_id VARCHAR(128),

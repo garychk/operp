@@ -6,6 +6,7 @@ import {
   DeleteOutlined,
   EyeOutlined,
   PlusOutlined,
+  ReloadOutlined,
   SaveOutlined,
   SendOutlined,
 } from "@ant-design/icons";
@@ -28,7 +29,7 @@ import {
   Typography,
   Tooltip,
 } from "antd";
-import { executeBaq, listBaqs, listTableLabels, loadCatalog, removeBaq, saveBaq, updateTableLabels } from "./api";
+import { executeBaq, listBaqs, listTableLabels, loadCatalog, refreshSysTables, removeBaq, saveBaq, updateTableLabels } from "./api";
 import type { TableLabelRow } from "./api";
 import { emptyBaq } from "./types";
 import type {
@@ -175,6 +176,20 @@ export function BaqDesigner() {
       message.success(`已更新 ${changed.length} 个表名称`);
     } catch (e) {
       message.error(e instanceof Error ? e.message : "表名称保存失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const refreshTableList = async () => {
+    setBusy(true);
+    try {
+      await refreshSysTables();
+      const rows = await listTableLabels();
+      setTableLabels(rows);
+      setOriginalLabels(Object.fromEntries(rows.map(row => [row.id, row.table_label])));
+      message.success("数据表已刷新");
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : "数据表刷新失败");
     } finally {
       setBusy(false);
     }
@@ -835,13 +850,18 @@ export function BaqDesigner() {
         onOk={() => void saveTableLabels()}
         onCancel={() => setTableLabelOpen(false)}
       >
-        <Input.Search
-          allowClear
-          placeholder="搜索真实表名或显示名称"
-          value={tableLabelSearch}
-          onChange={(event) => setTableLabelSearch(event.target.value)}
-          style={{ marginBottom: 12 }}
-        />
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <Input.Search
+            allowClear
+            placeholder="搜索真实表名或显示名称"
+            value={tableLabelSearch}
+            onChange={(event) => setTableLabelSearch(event.target.value)}
+            style={{ flex: 1 }}
+          />
+          <Button icon={<ReloadOutlined />} loading={busy} onClick={() => void refreshTableList()}>
+            更新表
+          </Button>
+        </div>
         <Table
           size="small"
           rowKey="id"
