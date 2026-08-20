@@ -200,11 +200,20 @@ export function SupaModal({
       loadedTemplate = {
         version: "1.0",
         templateName: "title",
-        pageSettings: {},
+        pageSettings: {
+          "paperSize": "A4",
+          "customWidth": 180,
+          "customHeight": 97,
+          "orientation": "portrait",
+          "marginTop": 10,
+          "marginRight": 10,
+          "marginBottom": 10,
+          "marginLeft": 10
+        },
         components: [],
       };
     }
-    if (!loadedTemplate.dataSources) {
+    if (!loadedTemplate.dataSources) {      
       loadedTemplate.dataSources = [
         {
           name: "MainData",
@@ -215,7 +224,7 @@ export function SupaModal({
         {
           name: "DetailData",
           type: "array",
-          data: JSON.stringify(detailData || []),
+          data: JSON.stringify(detailData?.length ? [detailData[0]] : []),
           createdAt: Date.now(),
         },
       ];

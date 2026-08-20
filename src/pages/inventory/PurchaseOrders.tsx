@@ -673,6 +673,7 @@ export function PurchaseOrders() {
         }
         form={form}
         workflowDocumentType="purchase_order"
+        detailData={details}
         formEle={
           <Form
             form={form}

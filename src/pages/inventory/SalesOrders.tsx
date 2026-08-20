@@ -610,6 +610,7 @@ export function SalesOrders() {
         historyTable={salesOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
         workflowDocumentType="sales_order"
+        detailData={details}
         form={form}
         detailExtra={
           <Button
