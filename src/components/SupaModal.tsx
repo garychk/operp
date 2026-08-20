@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useEffect, useState } from "react";
+import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Modal,
   Space,
@@ -14,7 +14,7 @@ import {
   message,
   Card,
   Switch,
-} from 'antd';
+} from "antd";
 import {
   CompressOutlined,
   FullscreenOutlined,
@@ -22,15 +22,15 @@ import {
   RightOutlined,
   CaretRightOutlined,
   PrinterOutlined,
-} from '@ant-design/icons';
-import type { FormInstance } from 'antd/es/form';
-import PrintDesigner from 'operp-print-designer';
-import 'operp-print-designer/dist/operp-print-designer.css';
-import { supabase } from '../utils/supabase';
-import type { SysFormsInsert } from '../types/database';
-import type { PrintDesignerDataSource } from 'operp-print-designer';
-import { WorkflowHistoryCard } from './WorkflowHistoryCard';
-import { WorkflowActionBar } from './WorkflowActionBar';
+} from "@ant-design/icons";
+import type { FormInstance } from "antd/es/form";
+import PrintDesigner from "operp-print-designer";
+import "operp-print-designer/dist/operp-print-designer.css";
+import { supabase } from "../utils/supabase";
+import type { SysFormsInsert } from "../types/database";
+import type { PrintDesignerDataSource } from "operp-print-designer";
+import { WorkflowHistoryCard } from "./WorkflowHistoryCard";
+import { WorkflowActionBar } from "./WorkflowActionBar";
 
 interface HistoryLog {
   id: number;
@@ -94,35 +94,47 @@ export function SupaModal({
   const [openDesigner, setOpenDesigner] = useState(false);
   const [isPreview, setIsPreview] = useState(true);
   const [templateData, setTemplateData] = useState<any>();
-  const [printDataSource, setPrintDataSource] = useState<PrintDesignerDataSource>();
+  const [printDataSource, setPrintDataSource] =
+    useState<PrintDesignerDataSource>();
   const [templateLoading, setTemplateLoading] = useState(false);
   const [designerInstanceKey, setDesignerInstanceKey] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const currentFormName = formTable || historyTable;
-  const currentStatus = form?.getFieldValue('status') || '';
-  const resolvedDisabled = disabled ?? ['approved', 'partially_received', 'received', 'closed'].includes(currentStatus);
+  const currentStatus = form?.getFieldValue("status") || "";
+  const resolvedDisabled =
+    disabled ??
+    ["approved", "partially_received", "received", "closed"].includes(
+      currentStatus,
+    );
 
   useEffect(() => {
     const fetchDocumentHistory = async () => {
-      if (!open || !historyTable || historyRecordId === null || historyRecordId === undefined) {
+      if (
+        !open ||
+        !historyTable ||
+        historyRecordId === null ||
+        historyRecordId === undefined
+      ) {
         setHistoryLogs([]);
         return;
       }
 
       setHistoryLoading(true);
       const { data, error } = await supabase
-        .from('sys_logs')
-        .select('id, username, operation, method, status, error_msg, created_at')
-        .eq('is_deleted', 'n')
-        .eq('params->>table', historyTable)
-        .eq('params->>recordId', String(historyRecordId))
-        .order('created_at', { ascending: false })
+        .from("sys_logs")
+        .select(
+          "id, username, operation, method, status, error_msg, created_at",
+        )
+        .eq("is_deleted", "n")
+        .eq("params->>table", historyTable)
+        .eq("params->>recordId", String(historyRecordId))
+        .order("created_at", { ascending: false })
         .limit(20);
 
       if (error) {
-        console.error('Failed to fetch document history:', error);
+        console.error("Failed to fetch document history:", error);
         setHistoryLogs([]);
       } else {
         setHistoryLogs(data || []);
@@ -144,15 +156,17 @@ export function SupaModal({
 
   const loadTemplate = async (formName: string) => {
     const { data, error } = await supabase
-      .from('sys_forms')
-      .select('print_template_json')
-      .eq('is_deleted', 'n')
-      .eq('form_name', formName)
+      .from("sys_forms")
+      .select("print_template_json")
+      .eq("is_deleted", "n")
+      .eq("form_name", formName)
       .maybeSingle();
 
     if (error) {
-      console.error('Failed to fetch print template:', error);
-      message.error(t('modal.messages.fetchTemplateFailed', { message: error.message }));
+      console.error("Failed to fetch print template:", error);
+      message.error(
+        t("modal.messages.fetchTemplateFailed", { message: error.message }),
+      );
       return undefined;
     }
 
@@ -161,15 +175,15 @@ export function SupaModal({
     try {
       return JSON.parse(data.print_template_json);
     } catch (parseError) {
-      console.error('Failed to parse print template:', parseError);
-      message.error(t('modal.messages.templateInvalid'));
+      console.error("Failed to parse print template:", parseError);
+      message.error(t("modal.messages.templateInvalid"));
       return undefined;
     }
   };
 
   const handleOpenDesigner = async () => {
     if (!currentFormName) {
-      message.error(t('modal.messages.missingFormName'));
+      message.error(t("modal.messages.missingFormName"));
       return;
     }
 
@@ -181,7 +195,32 @@ export function SupaModal({
     });
     setTemplateLoading(true);
 
-    const loadedTemplate = await loadTemplate(currentFormName);
+    let loadedTemplate = await loadTemplate(currentFormName);
+    if (!loadedTemplate) {
+      loadedTemplate = {
+        version: "1.0",
+        templateName: "title",
+        pageSettings: {},
+        components: [],
+      };
+    }
+    if (!loadedTemplate.dataSources) {
+      loadedTemplate.dataSources = [
+        {
+          name: "MainData",
+          type: "object",
+          data: JSON.stringify(form?.getFieldsValue() || {}),
+          createdAt: Date.now(),
+        },
+        {
+          name: "DetailData",
+          type: "array",
+          data: JSON.stringify(detailData || []),
+          createdAt: Date.now(),
+        },
+      ];
+    }
+
     setTemplateData(loadedTemplate);
     setDesignerInstanceKey((key) => key + 1);
     setTemplateLoading(false);
@@ -197,7 +236,7 @@ export function SupaModal({
   const handleSaveTemplate = async (data: any) => {
     const formName = currentFormName;
     if (!formName) {
-      message.error(t('modal.messages.missingFormNameSave'));
+      message.error(t("modal.messages.missingFormNameSave"));
       return;
     }
 
@@ -208,24 +247,28 @@ export function SupaModal({
       description: formDescription || formName,
       print_template_json: templateJson,
       form_config: {
-        headerPanelTitle: headerPanelTitle || t('modal.headerPanelTitle'),
-        detailPanelTitle: detailPanelTitle || t('modal.detailPanelTitle'),
+        headerPanelTitle: headerPanelTitle || t("modal.headerPanelTitle"),
+        detailPanelTitle: detailPanelTitle || t("modal.detailPanelTitle"),
         hasDetail: Boolean(tableEle),
       },
-      status: '1',
+      status: "1",
       sort_order: 0,
-      is_deleted: 'n',
+      is_deleted: "n",
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from('sys_forms').upsert(formSettings, { onConflict: 'form_name' });
+    const { error } = await supabase
+      .from("sys_forms")
+      .upsert(formSettings, { onConflict: "form_name" });
     if (error) {
-      console.error('Failed to save print template:', error);
-      message.error(t('modal.messages.saveTemplateFailed', { message: error.message }));
+      console.error("Failed to save print template:", error);
+      message.error(
+        t("modal.messages.saveTemplateFailed", { message: error.message }),
+      );
       return;
     }
 
-    message.success(t('modal.messages.saveTemplateSuccess'));
+    message.success(t("modal.messages.saveTemplateSuccess"));
     handleCloseDesigner();
   };
 
@@ -235,22 +278,25 @@ export function SupaModal({
   };
 
   const historyItems = historyLogs.map((log) => ({
-    color: log.status === '1' || log.status === 'success' ? 'green' : 'red',
+    color: log.status === "1" || log.status === "success" ? "green" : "red",
     content: (
       <Space direction="vertical" size={2}>
         <Space wrap>
           <span>{log.operation}</span>
           {log.method && <Tag>{log.method}</Tag>}
-          <span style={{ color: '#666' }}>{log.username || 'anonymous'}</span>
+          <span style={{ color: "#666" }}>{log.username || "anonymous"}</span>
         </Space>
-        <span style={{ color: '#999', fontSize: 12 }}>
-          {log.created_at ? new Date(log.created_at).toLocaleString() : '-'}
+        <span style={{ color: "#999", fontSize: 12 }}>
+          {log.created_at ? new Date(log.created_at).toLocaleString() : "-"}
         </span>
-        {log.error_msg && <span style={{ color: '#cf1322', fontSize: 12 }}>{log.error_msg}</span>}
+        {log.error_msg && (
+          <span style={{ color: "#cf1322", fontSize: 12 }}>
+            {log.error_msg}
+          </span>
+        )}
       </Space>
     ),
   }));
-
 
   return (
     <>
@@ -258,21 +304,46 @@ export function SupaModal({
         title={
           <Space>
             {title}
-            <Button type="default" size="small" icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />} onClick={() => setIsExpand(!isExpand)} />
+            <Button
+              type="default"
+              size="small"
+              icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />}
+              onClick={() => setIsExpand(!isExpand)}
+            />
             <Button type="default" size="small" icon={<LeftOutlined />} />
             <Button type="default" size="small" icon={<RightOutlined />} />
-            <WorkflowActionBar documentType={workflowDocumentType} documentId={historyRecordId} currentStatus={form?.getFieldValue('status')} onActionDone={combinedOnCancel} disabled={resolvedDisabled} />
-            <Switch checked={isPreview} onChange={setIsPreview} checkedChildren="P" unCheckedChildren="D" size="middle" disabled={resolvedDisabled} />
-            <Button type="default" size="small" icon={<PrinterOutlined />} onClick={handleOpenDesigner} />
-            <Tag color="magenta">{t('modal.pressEscToClose')}</Tag>
+            <WorkflowActionBar
+              documentType={workflowDocumentType}
+              documentId={historyRecordId}
+              currentStatus={form?.getFieldValue("status")}
+              onActionDone={combinedOnCancel}
+              disabled={resolvedDisabled}
+            />
+            <Switch
+              checked={isPreview}
+              onChange={setIsPreview}
+              checkedChildren="P"
+              unCheckedChildren="D"
+              size="middle"
+              disabled={resolvedDisabled}
+            />
+            <Button
+              type="default"
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={handleOpenDesigner}
+            />
+            <Tag color="magenta">{t("modal.pressEscToClose")}</Tag>
           </Space>
         }
         open={open}
         onCancel={combinedOnCancel}
         footer={footer}
-        width={isExpand ? '100%' : width}
+        width={isExpand ? "100%" : width}
         styles={{
-          body: isExpand ? { height: 'calc(90vh - 50px)', overflow: 'auto' } : { height, overflow: 'auto' },
+          body: isExpand
+            ? { height: "calc(90vh - 50px)", overflow: "auto" }
+            : { height, overflow: "auto" },
         }}
         style={{ top: isExpand ? 16 : 100 }}
         keyboard
@@ -280,31 +351,56 @@ export function SupaModal({
         <div>
           {children || (
             <Collapse
-              defaultActiveKey={['1', '2']}
-              expandIcon={({ isActive }) => <CaretRightOutlined rotate={isActive ? 90 : 0} />}
-              size="small"              
+              defaultActiveKey={["1", "2"]}
+              expandIcon={({ isActive }) => (
+                <CaretRightOutlined rotate={isActive ? 90 : 0} />
+              )}
+              size="small"
             >
-              <Collapse.Panel header={headerPanelTitle || t('modal.headerPanelTitle')} key="1" extra={headerExtra} >
+              <Collapse.Panel
+                header={headerPanelTitle || t("modal.headerPanelTitle")}
+                key="1"
+                extra={headerExtra}
+              >
                 <Splitter>
                   <Splitter.Panel defaultSize="70%" min="20%" max="70%">
                     {formEle}
                   </Splitter.Panel>
                   <Splitter.Panel>
-                    <Card title={t('modal.documentHistory')} size="small" variant="borderless" style={{ borderRadius: 0 }}>
+                    <Card
+                      title={t("modal.documentHistory")}
+                      size="small"
+                      variant="borderless"
+                      style={{ borderRadius: 0 }}
+                    >
                       <Spin spinning={historyLoading}>
                         {historyItems.length > 0 ? (
-                          <Timeline items={historyItems} style={{ height: '300px', overflowY: 'auto' }} />
+                          <Timeline
+                            items={historyItems}
+                            style={{ height: "300px", overflowY: "auto" }}
+                          />
                         ) : (
-                          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('modal.noHistoryRecords')} />
+                          <Empty
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                            description={t("modal.noHistoryRecords")}
+                          />
                         )}
                       </Spin>
                     </Card>
-                    <WorkflowHistoryCard open={open} documentType={workflowDocumentType} documentId={historyRecordId} />
+                    <WorkflowHistoryCard
+                      open={open}
+                      documentType={workflowDocumentType}
+                      documentId={historyRecordId}
+                    />
                   </Splitter.Panel>
                 </Splitter>
               </Collapse.Panel>
               {tableEle && (
-                <Collapse.Panel header={detailPanelTitle || t('modal.detailPanelTitle')} key="2" extra={detailExtra}>
+                <Collapse.Panel
+                  header={detailPanelTitle || t("modal.detailPanelTitle")}
+                  key="2"
+                  extra={detailExtra}
+                >
                   {tableEle}
                 </Collapse.Panel>
               )}
@@ -313,13 +409,13 @@ export function SupaModal({
         </div>
       </Modal>
       <Modal
-        title={t('modal.printDesigner')}
+        title={t("modal.printDesigner")}
         open={openDesigner}
         onCancel={handleCloseDesigner}
-        width="80%"
+        width="90%"
         destroyOnHidden
         styles={{
-          body: { height: 'calc(90vh - 50px)', overflow: 'auto' },
+          body: { height: "calc(90vh - 50px)", overflow: "auto" },
         }}
         style={{ top: 16 }}
         keyboard
@@ -328,7 +424,7 @@ export function SupaModal({
         <Spin spinning={templateLoading}>
           {!templateLoading && (
             <PrintDesigner
-              key={`${currentFormName || 'unknown'}-${designerInstanceKey}`}
+              key={`${currentFormName || "unknown"}-${designerInstanceKey}`}
               isPreview={isPreview}
               initialTemplateData={templateData}
               dataSource={printDataSource}
@@ -342,4 +438,3 @@ export function SupaModal({
 }
 
 export default SupaModal;
-
