@@ -342,6 +342,7 @@ export function BaqDesigner() {
                           <Select
                             className="wide"
                             showSearch
+                            style={{ width: 260 }}
                             optionFilterProp="label"
                             value={r.table}
                             options={tableOptions}
@@ -400,6 +401,7 @@ export function BaqDesigner() {
                               value: c.name,
                               label: c.name,
                             }))}
+                            style={{ width: 260 }}
                             onChange={(leftField) =>
                               patchDef({
                                 joins: baq.definition.joins.map((x, n) =>
@@ -418,6 +420,7 @@ export function BaqDesigner() {
                             className="join-field-select"
                             showSearch
                             value={r.rightField}
+                            style={{ width: 260 }}
                             options={(
                               catalog.find((t) => t.table === r.table)
                                 ?.columns || []
