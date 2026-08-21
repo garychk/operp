@@ -247,7 +247,7 @@ BEGIN
     ) VALUES (
       h.corp_id, actor_id::TEXT, 'n', LEFT(v_transaction_no, 50),
       CASE WHEN p_document_type = 'purchase_receipt'
-           THEN 'inbound' ELSE 'outbound' END,
+           THEN 'purchase_receipt_in' ELSE 'sales_delivery_out' END,
       h.document_date, d.product_id, h.warehouse_id, normalized_batch,
       CASE WHEN p_document_type = 'purchase_receipt'
            THEN d.quantity ELSE -d.quantity END,
