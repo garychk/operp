@@ -25,8 +25,12 @@
 
 .ai-chat-footer-tools {
   width: 100%;
-  justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.ai-chat-footer-controls {
+  width: 100%;
+  gap: 12px;
 }
 
 .ai-chat-action {
@@ -42,6 +46,54 @@
   min-width: 220px;
   max-width: 300px;
   border: none;
+}
+
+.ai-chat-skill-select {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  margin-top: 8px;
+  overflow-x: auto;
+  padding: 0 0 2px;
+  gap: 6px;
+  scrollbar-width: thin;
+}
+
+.ai-chat-skill-select .ant-radio-button-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 9px !important;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.ai-chat-skill-select .ant-radio-button-wrapper:not(:first-child)::before {
+  display: none;
+}
+
+.ai-chat-skill-select .ant-radio-button-wrapper:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.ai-chat-skill-select .ant-radio-button-wrapper-checked {
+  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 5px 12px rgb(0 0 0 / 10%);
+}
+
+.ai-skill-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
 }
 
 .ai-provider-card {

@@ -15,6 +15,7 @@ import {
   Flex,
   Input,
   Modal,
+  Radio,
   Select,
   Space,
   Typography,
@@ -27,6 +28,7 @@ import {
   type CreateFlowState,
 } from "../utils/aiCreateTools";
 import { handleBusinessActionSkill } from "../utils/aiBusinessActionTools";
+import { handleCreateBaqSkill } from "../utils/aiBaqTools";
 import { useAuth } from "../contexts/AuthContext";
 import {
   createId,
@@ -53,6 +55,7 @@ interface ChatMessage {
   content: string;
   status?: "loading" | "success" | "error";
 }
+type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
 const quickPrompts = [
   {
     key: "erp",
@@ -178,6 +181,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const [pendingCreate, setPendingCreate] = useState<CreateFlowState | null>(
     null,
   );
+  const [selectedSkill, setSelectedSkill] = useState<AiSkill>("auto");
   const [configOpen, setConfigOpen] = useState(false);
   const [aiSettings, setAISettings] =
     useState<AISettingsConfig>(defaultAISettings);
@@ -306,38 +310,47 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     window.setTimeout(() => listRef.current?.scrollTo({ top: "bottom" }), 0);
 
     try {
-      const businessActionResult = await handleBusinessActionSkill(prompt, {
-        id: user?.profile.id,
-        username: user?.profile.username,
-      });
-      if (businessActionResult.status !== "ignored") {
+      const runResult = async () => {
+        if (selectedSkill === "baq") {
+          return handleCreateBaqSkill(prompt, activeProvider);
+        }
+        if (selectedSkill === "action") {
+          return handleBusinessActionSkill(prompt, {
+            id: user?.profile.id,
+            username: user?.profile.username,
+          });
+        }
+        if (selectedSkill === "create") {
+          return handleCreateSkill(prompt, pendingCreate);
+        }
+        if (selectedSkill === "analysis") {
+          const context = await buildERPAnalysisContext(prompt);
+          return { status: "success", reply: await requestAIReply(context.prompt, activeProvider) };
+        }
+        if (selectedSkill === "chat") {
+          return { status: "success", reply: await requestAIReply(prompt, activeProvider) };
+        }
+        const baqResult = await handleCreateBaqSkill(prompt, activeProvider);
+        if (baqResult.status !== "ignored") return baqResult;
+        const businessActionResult = await handleBusinessActionSkill(prompt, {
+          id: user?.profile.id,
+          username: user?.profile.username,
+        });
+        if (businessActionResult.status !== "ignored") return businessActionResult;
+        return handleCreateSkill(prompt, pendingCreate);
+      };
+      const skillResult = await runResult();
+      if (skillResult.status !== "ignored") {
+        if ("pending" in skillResult) {
+          setPendingCreate(skillResult.pending || null);
+        }
         setMessages((prev) =>
           prev.map((item) =>
             item.id === assistantMessage.id
               ? {
                   ...item,
-                  content: businessActionResult.reply || "已处理业务动作。",
-                  status:
-                    businessActionResult.status === "error"
-                      ? "error"
-                      : "success",
-                }
-              : item,
-          ),
-        );
-        return;
-      }
-
-      const createResult = await handleCreateSkill(prompt, pendingCreate);
-      if (createResult.status !== "ignored") {
-        setPendingCreate(createResult.pending || null);
-        setMessages((prev) =>
-          prev.map((item) =>
-            item.id === assistantMessage.id
-              ? {
-                  ...item,
-                  content: createResult.reply || "已处理创建指令。",
-                  status: createResult.status === "error" ? "error" : "success",
+                  content: skillResult.reply || "已处理所选技能。",
+                  status: skillResult.status === "error" || skillResult.status === "invalid" ? "error" : "success",
                 }
               : item,
           ),
@@ -381,7 +394,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
 
   return (
     <Drawer
-      width={460}
+      width={600}
       open={open}
       onClose={onClose}
       title="AI 智能对话"
@@ -431,7 +444,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             variant="borderless"
             size="small"
             extra={
-              <Space className="ai-chat-footer-tools">
+              <Flex justify="space-between" align="center" className="ai-chat-footer-controls">
                 <Select
                   size="small"
                   value={activeProvider.id}
@@ -464,7 +477,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                     onClick={() => setConfigOpen(true)}
                   />
                 </Space>
-              </Space>
+              </Flex>
             }
           >
             <Sender
@@ -475,6 +488,50 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
               onSubmit={() => submitMessage(inputValue)}
               placeholder={`使用 ${activeProvider.name} 提问`}
             />
+            <Radio.Group
+              value={selectedSkill}
+              className="ai-chat-skill-select"
+              onChange={(event) => setSelectedSkill(event.target.value)}
+              optionType="button"
+              buttonStyle="solid"
+            >
+              <Radio.Button value="auto">
+                <span className="ai-skill-option">
+                  <SendOutlined />
+                  <span>自动</span>
+                </span>
+              </Radio.Button>
+              <Radio.Button value="analysis">
+                <span className="ai-skill-option">
+                  <DatabaseOutlined />
+                  <span>数据分析</span>
+                </span>
+              </Radio.Button>
+              <Radio.Button value="create">
+                <span className="ai-skill-option">
+                  <PlusOutlined />
+                  <span>创建业务</span>
+                </span>
+              </Radio.Button>
+              <Radio.Button value="action">
+                <span className="ai-skill-option">
+                  <SendOutlined />
+                  <span>业务动作</span>
+                </span>
+              </Radio.Button>
+              <Radio.Button value="baq">
+                <span className="ai-skill-option">
+                  <DatabaseOutlined />
+                  <span>创建 BAQ</span>
+                </span>
+              </Radio.Button>
+              <Radio.Button value="chat">
+                <span className="ai-skill-option">
+                  <BulbOutlined />
+                  <span>普通对话</span>
+                </span>
+              </Radio.Button>
+            </Radio.Group>
           </Card>
         </Flex>
       </XProvider>
