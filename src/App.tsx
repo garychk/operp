@@ -23,6 +23,9 @@ import { PurchaseOrders } from './pages/inventory/PurchaseOrders';
 import { SalesOrders } from './pages/inventory/SalesOrders';
 import { PurchaseReceipts } from './pages/inventory/PurchaseReceipts';
 import { SalesDeliveries } from './pages/inventory/SalesDeliveries';
+import { InventoryTransfers } from './pages/inventory/InventoryTransfers';
+import { StockCounts } from './pages/inventory/StockCounts';
+import { StockAdjustments } from './pages/inventory/StockAdjustments';
 import { Boms } from './pages/mrp/Boms';
 import { Departments } from './pages/mrp/Departments';
 import { RoutingOperations } from './pages/mrp/RoutingOperations';
@@ -104,6 +107,9 @@ function AppContent() {
           <Route path="purchase-receipts" element={<PurchaseReceipts />} />
           <Route path="sales" element={<SalesOrders />} />
           <Route path="sales-deliveries" element={<SalesDeliveries />} />
+          <Route path="transfers" element={<InventoryTransfers />} />
+          <Route path="stock-counts" element={<StockCounts />} />
+          <Route path="stock-adjustments" element={<StockAdjustments />} />
         </Route>
         
         <Route path="mrp">

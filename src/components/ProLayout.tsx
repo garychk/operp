@@ -343,6 +343,21 @@ export const menuData: MenuRoute[] = [
         name: "销售出货",
         icon: <TruckOutlined />,
       },
+      {
+        path: "/inventory/transfers",
+        name: "库存调拨",
+        icon: <TruckOutlined />,
+      },
+      {
+        path: "/inventory/stock-counts",
+        name: "库存盘点",
+        icon: <AppstoreOutlined />,
+      },
+      {
+        path: "/inventory/stock-adjustments",
+        name: "库存调整",
+        icon: <SettingOutlined />,
+      },
     ],
   },
   {
@@ -407,6 +422,9 @@ const pathToNameMap: Record<string, string> = {
   "/inventory/purchase-receipts": "采购入库",
   "/inventory/sales": "销售订单",
   "/inventory/sales-deliveries": "销售出货",
+  "/inventory/transfers": "库存调拨",
+  "/inventory/stock-counts": "库存盘点",
+  "/inventory/stock-adjustments": "库存调整",
   "/mrp/departments": "部门管理",
   "/mrp/boms": "BOM管理",
   "/mrp/routings": "工艺路线",
