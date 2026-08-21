@@ -324,8 +324,8 @@ export const Login: React.FC = () => {
           />
         </Dropdown>
       </div>
-      <div className="relative z-10 w-full" style={{ width: '70%' }}>
-        <Space orientation="vertical" size={20} style={{ marginBottom: 20 }}>
+      <div  className="relative z-10 w-full" style={{ width: '70%' }}>
+       <Space orientation="vertical" size={20} style={{ marginBottom: 20 }}>
           <Space size={10} wrap>
                   <Tag color="blue" style={{ marginInlineEnd: 0, padding: '4px 12px' }}>
                     {t('login.tag.operp')}
@@ -347,7 +347,7 @@ export const Login: React.FC = () => {
                  <div
                   style={{
                     position: 'relative',
-                    minHeight: 330,
+                    minHeight: 300,
                     borderRadius: 22,
                     overflow: 'hidden',
                     background: 'linear-gradient(135deg, rgba(15,23,42,0.96), rgba(30,41,59,0.92))',
@@ -370,9 +370,6 @@ export const Login: React.FC = () => {
                         }}
                       >
                         <Space direction="vertical" size={14} style={{ width: '100%' }}>
-                          <Tag color="processing" style={{ width: 'fit-content', marginInlineEnd: 0, padding: '4px 12px' }}>
-                            {slide.badge}
-                          </Tag>
                           <Title level={3} style={{ margin: 0, color: '#fff' }}>
                             {slide.title}
                           </Title>
