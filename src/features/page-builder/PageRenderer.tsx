@@ -99,7 +99,7 @@ export function PageCanvas({ page, editable = false, selectedId, onSelect, onLay
     <ResponsiveGrid className={`custom-page-grid${editable ? ' is-editing' : ''}`} layout={layout} cols={12} rowHeight={72} margin={[12, 12]} isDraggable={editable} isResizable={editable} onLayoutChange={onLayoutChange} draggableHandle=".widget-drag-handle">
       {page.config.widgets.map(widget => (
         <div key={widget.id} onClick={() => onSelect?.(widget.id)}>
-          <Card size="small" className={selectedId === widget.id ? 'page-widget selected' : 'page-widget'} title={<span className="widget-drag-handle">{widget.title}</span>}>
+          <Card size="small" className={selectedId === widget.id ? 'page-widget selected' : 'page-widget'} title={widget.title} classNames={{ header: 'widget-drag-handle' }}>
             <WidgetBody widget={widget} />
           </Card>
         </div>
