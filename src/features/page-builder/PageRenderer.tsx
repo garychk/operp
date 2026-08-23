@@ -96,14 +96,23 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
 export function PageCanvas({ page, editable = false, selectedId, onSelect, onLayoutChange }: { page: CustomPage; editable?: boolean; selectedId?: string; onSelect?: (id: string) => void; onLayoutChange?: (layout: GridLayout.Layout[]) => void }) {
   const layout = page.config.widgets.map(({ id, x, y, w, h }) => ({ i: id, x, y, w, h, minW: 2, minH: 2 }));
   return (
-    <ResponsiveGrid className={`custom-page-grid${editable ? ' is-editing' : ''}`} layout={layout} cols={12} rowHeight={72} margin={[12, 12]} isDraggable={editable} isResizable={editable} onLayoutChange={onLayoutChange} draggableHandle=".widget-drag-handle">
-      {page.config.widgets.map(widget => (
-        <div key={widget.id} onClick={() => onSelect?.(widget.id)}>
-          <Card size="small" className={selectedId === widget.id ? 'page-widget selected' : 'page-widget'} title={widget.title} classNames={{ header: 'widget-drag-handle' }}>
-            <WidgetBody widget={widget} />
-          </Card>
-        </div>
-      ))}
+    <ResponsiveGrid className={`custom-page-grid${editable ? ' is-editing' : ''}`} layout={layout} cols={12} rowHeight={editable ? 48 : 48} margin={[12, 12]} isDraggable={editable} isResizable={editable} onLayoutChange={onLayoutChange} draggableHandle=".widget-drag-handle">
+      {page.config.widgets.map(widget => {
+        const plain = !editable && (widget.type === 'text' || widget.type === 'button');
+        return (
+          <div key={widget.id} onClick={() => onSelect?.(widget.id)}>
+            <Card
+              size="small"
+              className={['page-widget', selectedId === widget.id ? 'selected' : '', plain ? 'page-widget-plain' : ''].filter(Boolean).join(' ')}
+              title={plain ? undefined : widget.title}
+              variant={plain ? 'borderless' : undefined}
+              classNames={{ header: 'widget-drag-handle' }}
+            >
+              <WidgetBody widget={widget} />
+            </Card>
+          </div>
+        );
+      })}
     </ResponsiveGrid>
   );
 }

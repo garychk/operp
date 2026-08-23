@@ -39,7 +39,7 @@ export interface CustomPage {
 
 export const widgetDefaults: Record<WidgetType, Omit<PageWidget, 'id' | 'type' | 'x' | 'y'>> = {
   text: { title: '文本', content: '双击右侧属性进行编辑', w: 4, h: 2, dataSource: { mode: 'static', staticData: [] } },
-  statistic: { title: '核心指标', xField: 'label', yField: 'value', w: 3, h: 2, dataSource: { mode: 'static', staticData: [{ label: '本月销售额', value: 128600 }] } },
+  statistic: { title: '核心指标', xField: 'label', yField: 'value', w: 3, h: 3, dataSource: { mode: 'static', staticData: [{ label: '本月销售额', value: 128600 }] } },
   button: { title: '操作按钮', content: '立即执行', w: 2, h: 2, dataSource: { mode: 'static', staticData: [] } },
   table: { title: '数据表格', w: 6, h: 4, pageSize: 10, dataSource: { mode: 'static', limit: 100, staticData: [{ name: '示例数据', value: 100 }, { name: '另一条数据', value: 80 }] } },
   line: { title: '趋势折线图', xField: 'name', yField: 'value', w: 6, h: 4, dataSource: { mode: 'static', staticData: [{ name: '一月', value: 30 }, { name: '二月', value: 52 }, { name: '三月', value: 45 }] } },

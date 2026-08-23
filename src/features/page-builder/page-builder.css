@@ -81,6 +81,14 @@
     overflow: auto;
 }
 
+.custom-page-grid:not(.is-editing) .page-widget .ant-card-body {
+    height: 100%;
+}
+
+.custom-page-grid:not(.is-editing) .page-widget {
+    box-shadow: none;
+}
+
 .page-widget.button-widget .ant-card-body {
     height: 100%;
     display: flex;
