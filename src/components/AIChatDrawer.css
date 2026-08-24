@@ -115,3 +115,99 @@
 .ai-chat-sender textarea {
   border: none !important;
 }
+
+.ai-markdown-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.ai-markdown-body > * {
+  margin: 0;
+}
+
+.ai-markdown-h1,
+.ai-markdown-h2,
+.ai-markdown-h3,
+.ai-markdown-h4,
+.ai-markdown-h5,
+.ai-markdown-h6 {
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ai-markdown-h1 {
+  font-size: 20px;
+}
+
+.ai-markdown-h2 {
+  font-size: 18px;
+}
+
+.ai-markdown-h3 {
+  font-size: 16px;
+}
+
+.ai-markdown-paragraph {
+  white-space: pre-wrap;
+}
+
+.ai-markdown-list {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.ai-markdown-list li + li {
+  margin-top: 4px;
+}
+
+.ai-markdown-quote {
+  padding: 10px 12px;
+  border-left: 3px solid var(--accent);
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-secondary);
+  border-radius: 8px;
+}
+
+.ai-markdown-inline-code {
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.06);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.92em;
+}
+
+.ai-markdown-codeblock {
+  padding: 14px 16px;
+  border-radius: 12px;
+  overflow: auto;
+  background: #111827;
+  color: #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.ai-markdown-codeblock code {
+  white-space: pre;
+}
+
+.ai-markdown-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--accent);
+}
+
+.ai-markdown-link:hover {
+  text-decoration: underline;
+}
+
+.ai-markdown-image {
+  max-width: 100%;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}

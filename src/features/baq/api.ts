@@ -30,7 +30,10 @@ export async function saveBaq(baq: BaqQuery) {
   const response = baq.id ? await supabase.from('sys_baq_queries').update(payload).eq('id', baq.id).select().single() : await supabase.from('sys_baq_queries').insert(payload).select().single();
   if (response.error) throw response.error; return response.data as BaqQuery;
 }
-export async function removeBaq(id: number) { const { error } = await supabase.from('sys_baq_queries').update({ is_deleted: 'y', updated_at: new Date().toISOString() }).eq('id', id); if (error) throw error; }
+export async function removeBaq(id: number) {
+  const { error } = await supabase.from('sys_baq_queries').delete().eq('id', id);
+  if (error) throw error;
+}
 export async function executeBaq(code: string, page = 1, pageSize = 100) {
   const [execution, query] = await Promise.all([
     supabase.rpc('execute_baq', { query_code: code, page_number: page, page_size: pageSize }),

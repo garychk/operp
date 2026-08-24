@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import {
   BulbOutlined,
   DatabaseOutlined,
   DeleteOutlined,
+  LinkOutlined,
   PlusOutlined,
   SendOutlined,
   SettingOutlined,
@@ -141,6 +143,158 @@ const getReplyContent = (data: unknown) => {
   );
 };
 
+const renderInlineMarkdown = (text: string) => {
+  const parts: ReactNode[] = [];
+  let index = 0;
+  const pattern =
+    /(`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]+\))/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text))) {
+    if (match.index > index) {
+      parts.push(text.slice(index, match.index));
+    }
+    const token = match[0];
+    if (token.startsWith("`")) {
+      parts.push(
+        <code key={`${match.index}-code`} className="ai-markdown-inline-code">
+          {token.slice(1, -1)}
+        </code>,
+      );
+    } else if (token.startsWith("**") || token.startsWith("__")) {
+      parts.push(
+        <strong key={`${match.index}-strong`}>
+          {token.slice(2, -2)}
+        </strong>,
+      );
+    } else if (token.startsWith("*") || token.startsWith("_")) {
+      parts.push(
+        <em key={`${match.index}-em`}>
+          {token.slice(1, -1)}
+        </em>,
+      );
+    } else if (token.startsWith("![")) {
+      const parsed = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+      if (parsed) {
+        parts.push(
+          <img
+            key={`${match.index}-img`}
+            className="ai-markdown-image"
+            src={parsed[2]}
+            alt={parsed[1]}
+          />,
+        );
+      } else {
+        parts.push(token);
+      }
+    } else if (token.startsWith("[")) {
+      const parsed = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+      if (parsed) {
+        parts.push(
+          <a
+            key={`${match.index}-link`}
+            href={parsed[2]}
+            target="_blank"
+            rel="noreferrer"
+            className="ai-markdown-link"
+          >
+            <LinkOutlined />
+            <span>{parsed[1]}</span>
+          </a>,
+        );
+      } else {
+        parts.push(token);
+      }
+    }
+    index = match.index + token.length;
+  }
+
+  if (index < text.length) {
+    parts.push(text.slice(index));
+  }
+
+  return parts;
+};
+
+const renderMarkdown = (value: string) => {
+  const normalized = value.replace(/\r\n/g, "\n");
+  const blocks = normalized.split(/\n{2,}/);
+  const nodes: ReactNode[] = [];
+
+  blocks.forEach((block, blockIndex) => {
+    const trimmed = block.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const codeMatch = trimmed.match(/^```(?:([^\n`]+))?\n([\s\S]*?)```$/);
+    if (codeMatch) {
+      nodes.push(
+        <pre key={`block-${blockIndex}`} className="ai-markdown-codeblock">
+          <code>{codeMatch[2].replace(/^\n+|\n+$/g, "")}</code>
+        </pre>,
+      );
+      return;
+    }
+
+    const lines = trimmed.split("\n");
+    if (lines.every((line) => /^[-*+]\s+/.test(line))) {
+      nodes.push(
+        <ul key={`block-${blockIndex}`} className="ai-markdown-list">
+          {lines.map((line, lineIndex) => (
+            <li key={`${blockIndex}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^[-*+]\s+/, ""))}</li>
+          ))}
+        </ul>,
+      );
+      return;
+    }
+
+    if (lines.every((line) => /^\d+\.\s+/.test(line))) {
+      nodes.push(
+        <ol key={`block-${blockIndex}`} className="ai-markdown-list">
+          {lines.map((line, lineIndex) => (
+            <li key={`${blockIndex}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^\d+\.\s+/, ""))}</li>
+          ))}
+        </ol>,
+      );
+      return;
+    }
+
+    if (/^>\s?/.test(lines[0])) {
+      nodes.push(
+        <blockquote key={`block-${blockIndex}`} className="ai-markdown-quote">
+          {renderInlineMarkdown(lines.map((line) => line.replace(/^>\s?/, "")).join("\n"))}
+        </blockquote>,
+      );
+      return;
+    }
+
+    const heading = trimmed.match(/^(#{1,6})\s+(.*)$/);
+    if (heading) {
+      const level = heading[1].length;
+      const Tag = `h${level}` as keyof JSX.IntrinsicElements;
+      nodes.push(
+        <Tag key={`block-${blockIndex}`} className={`ai-markdown-h${level}`}>
+          {renderInlineMarkdown(heading[2])}
+        </Tag>,
+      );
+      return;
+    }
+
+    nodes.push(
+      <p key={`block-${blockIndex}`} className="ai-markdown-paragraph">
+        {renderInlineMarkdown(trimmed)}
+      </p>,
+    );
+  });
+
+  return nodes.length ? nodes : value;
+};
+
+const MarkdownMessage = ({ content }: { content: string }) => (
+  <div className="ai-markdown-body">{renderMarkdown(content)}</div>
+);
+
 async function requestAIReply(prompt: string, provider: AIProviderConfig) {
   if (!provider.endpoint) {
     return [
@@ -205,7 +359,12 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       messages.map((item) => ({
         key: item.id,
         role: item.role,
-        content: item.content,
+        content:
+          item.role === "assistant" ? (
+            <MarkdownMessage content={item.content} />
+          ) : (
+            item.content
+          ),
         loading: item.status === "loading",
       })),
     [messages],
