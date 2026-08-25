@@ -24,13 +24,6 @@ import {
   message,
 } from "antd";
 import type { BubbleListRef } from "@ant-design/x/es/bubble";
-import { buildERPAnalysisContext } from "../utils/aiAnalysisTools";
-import {
-  handleCreateSkill,
-  type CreateFlowState,
-} from "../utils/aiCreateTools";
-import { handleBusinessActionSkill } from "../utils/aiBusinessActionTools";
-import { handleCreateBaqSkill } from "../utils/aiBaqTools";
 import { useAuth } from "../contexts/AuthContext";
 import {
   createId,
@@ -58,6 +51,18 @@ interface ChatMessage {
   status?: "loading" | "success" | "error";
 }
 type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
+type AiChatApiResponse = {
+  ok?: boolean;
+  status?: "success" | "error" | "need_confirmation" | "needs_more";
+  reply?: string;
+  focus?: unknown;
+  need_confirmation?: boolean;
+  next_questions?: string[];
+  data?: unknown;
+  error?: string;
+};
+const AI_SERVER_URL =
+  import.meta.env.VITE_AI_SERVER_URL || "http://localhost:3001";
 const quickPrompts = [
   {
     key: "erp",
@@ -85,62 +90,17 @@ const quickPrompts = [
   },
 ];
 
-const createRequestBody = (prompt: string, provider: AIProviderConfig) => {
-  return {
-    model: provider.model,
-    messages: [{ role: "user", content: prompt }],
-    stream: false,
-  };
-};
-
-const stringifyReply = (value: unknown): string => {
-  if (typeof value === "string") {
-    return value;
+const readSessionId = () => {
+  try {
+    const key = "operp-ai-chat-session-id";
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const next = createId();
+    localStorage.setItem(key, next);
+    return next;
+  } catch {
+    return createId();
   }
-
-  if (value == null) {
-    return "";
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(stringifyReply).filter(Boolean).join("\n");
-  }
-
-  if (typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    const nestedContent = stringifyReply(record.content);
-    if (nestedContent) {
-      return nestedContent;
-    }
-
-    const nestedMessage = stringifyReply(record.message);
-    if (nestedMessage) {
-      return nestedMessage;
-    }
-
-    return JSON.stringify(value, null, 2);
-  }
-
-  return String(value);
-};
-
-const getReplyContent = (data: unknown) => {
-  const record = data as Record<string, unknown>;
-  const choices = Array.isArray(record.choices)
-    ? (record.choices as Record<string, unknown>[])
-    : [];
-  const firstChoice = choices[0];
-
-  return (
-    stringifyReply(firstChoice?.message) ||
-    stringifyReply(firstChoice?.delta) ||
-    stringifyReply(firstChoice?.text) ||
-    stringifyReply(record.reply) ||
-    stringifyReply(record.content) ||
-    stringifyReply(record.message) ||
-    stringifyReply(record.response) ||
-    stringifyReply(data)
-  );
 };
 
 const renderInlineMarkdown = (text: string) => {
@@ -295,26 +255,13 @@ const MarkdownMessage = ({ content }: { content: string }) => (
   <div className="ai-markdown-body">{renderMarkdown(content)}</div>
 );
 
-async function requestAIReply(prompt: string, provider: AIProviderConfig) {
-  if (!provider.endpoint) {
-    return [
-      `${provider.name} 当前还没有配置接口地址。`,
-      "",
-      `你刚才问的是：“${prompt}”`,
-      "",
-      "点击底部齿轮可以新增或编辑多个大模型配置。Ollama 可直接使用 http://localhost:11434/api/chat。",
-    ].join("\n");
-  }
-
-  const response = await fetch(provider.endpoint, {
+async function requestAIReply(payload: Record<string, unknown>) {
+  const response = await fetch(`${AI_SERVER_URL}/api/ai/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(provider.apiKey
-        ? { Authorization: `Bearer ${provider.apiKey}` }
-        : {}),
     },
-    body: JSON.stringify(createRequestBody(prompt, provider)),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -324,17 +271,17 @@ async function requestAIReply(prompt: string, provider: AIProviderConfig) {
     );
   }
 
-  const data = (await response.json()) as unknown;
-  return getReplyContent(data) || "AI 服务未返回文本内容。";
+  const data = (await response.json()) as AiChatApiResponse;
+  if (data.error) {
+    throw new Error(data.error);
+  }
+  return data;
 }
 
 export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [pendingCreate, setPendingCreate] = useState<CreateFlowState | null>(
-    null,
-  );
   const [selectedSkill, setSelectedSkill] = useState<AiSkill>("auto");
   const [configOpen, setConfigOpen] = useState(false);
   const [aiSettings, setAISettings] =
@@ -345,6 +292,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const { user } = useAuth();
   const providers = aiSettings.providers;
   const activeProviderId = aiSettings.activeProviderId;
+  const sessionId = useMemo(() => readSessionId(), []);
 
   const activeProvider = useMemo(
     () =>
@@ -469,71 +417,40 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     window.setTimeout(() => listRef.current?.scrollTo({ top: "bottom" }), 0);
 
     try {
-      const runResult = async () => {
-        if (selectedSkill === "baq") {
-          return handleCreateBaqSkill(prompt, activeProvider);
-        }
-        if (selectedSkill === "action") {
-          return handleBusinessActionSkill(prompt, {
-            id: user?.profile.id,
-            username: user?.profile.username,
-          });
-        }
-        if (selectedSkill === "create") {
-          return handleCreateSkill(prompt, pendingCreate);
-        }
-        if (selectedSkill === "analysis") {
-          const context = await buildERPAnalysisContext(prompt);
-          return { status: "success", reply: await requestAIReply(context.prompt, activeProvider) };
-        }
-        if (selectedSkill === "chat") {
-          return { status: "success", reply: await requestAIReply(prompt, activeProvider) };
-        }
-        const baqResult = await handleCreateBaqSkill(prompt, activeProvider);
-        if (baqResult.status !== "ignored") return baqResult;
-        const businessActionResult = await handleBusinessActionSkill(prompt, {
-          id: user?.profile.id,
-          username: user?.profile.username,
-        });
-        if (businessActionResult.status !== "ignored") return businessActionResult;
-        return handleCreateSkill(prompt, pendingCreate);
-      };
-      const skillResult = await runResult();
-      if (skillResult.status !== "ignored") {
-        if ("pending" in skillResult) {
-          setPendingCreate(skillResult.pending || null);
-        }
-        setMessages((prev) =>
-          prev.map((item) =>
-            item.id === assistantMessage.id
-              ? {
-                  ...item,
-                  content: skillResult.reply || "已处理所选技能。",
-                  status: skillResult.status === "error" || skillResult.status === "invalid" ? "error" : "success",
-                }
-              : item,
-          ),
-        );
-        return;
-      }
-
-      const analysisContext = await buildERPAnalysisContext(prompt);
-      if (analysisContext.domains.length) {
-        message.info(
-          "已读取 ERP " + analysisContext.domains.join(" / ") + " 数据摘要",
-        );
-      }
-      const reply = await requestAIReply(
-        analysisContext.prompt,
-        activeProvider,
-      );
+      const data = await requestAIReply({
+        session_id: sessionId,
+        user_id: user?.profile.id,
+        text: prompt,
+        skill: selectedSkill,
+        context: {
+          page: window.location.pathname,
+          current_focus: null,
+          recent_messages: messages.slice(-12).map((item) => ({
+            role: item.role,
+            content: item.content,
+            status: item.status,
+          })),
+        },
+        provider: {
+          id: activeProvider.id,
+          name: activeProvider.name,
+          model: activeProvider.model,
+        },
+      });
       setMessages((prev) =>
         prev.map((item) =>
           item.id === assistantMessage.id
-            ? { ...item, content: stringifyReply(reply), status: "success" }
+            ? {
+                ...item,
+                content: data.reply || "已处理所选技能。",
+                status: data.status === "error" ? "error" : "success",
+              }
             : item,
         ),
       );
+      if (data.next_questions?.length) {
+        message.info(data.next_questions[0]);
+      }
     } catch (error) {
       const errorText =
         error instanceof Error ? error.message : "AI 服务暂时不可用。";
@@ -623,7 +540,6 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                       size="small"
                       onClick={() => {
                         setMessages([]);
-                        setPendingCreate(null);
                       }}
                     >
                       清空
