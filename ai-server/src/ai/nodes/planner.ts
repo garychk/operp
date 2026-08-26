@@ -3,10 +3,12 @@ import type { AiGraphState } from "../state.js";
 export async function plannerNode(state: AiGraphState): Promise<AiGraphState> {
   const plan =
     state.intent === "baq"
-      ? [{ step: "create_or_update_baq", tool: "baq.createOrUpdate", input: { text: state.text, currentFocus: state.currentFocus } }]
-      : state.intent === "knowledge"
-        ? [{ step: "search_kb", tool: "knowledge.search", input: { query: state.text } }]
-        : [{ step: "draft_reply", tool: "chat.respond", input: { text: state.text } }];
+      ? [{ step: "create_or_update_baq", tool: "baq.upsert", input: { text: state.text, currentFocus: state.currentFocus } }]
+      : state.intent === "master_data"
+        ? [{ step: "create_or_update_entity", tool: "entity.upsert", input: { text: state.text, currentFocus: state.currentFocus } }]
+        : state.intent === "finance"
+          ? [{ step: "finance_summary", tool: "finance.summary", input: { text: state.text } }]
+          : [{ step: "draft_reply", tool: "chat.respond", input: { text: state.text } }];
 
   return { ...state, plan };
 }
