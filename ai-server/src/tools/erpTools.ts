@@ -44,6 +44,7 @@ interface EntityDef {
   keywords: string[];
   defaults: () => Record<string, unknown>;
   createTitle: string;
+  requiredFields: Array<{ key: string; label: string }>;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -59,6 +60,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["客户", "客戶"],
     defaults: () => ({ type: "enterprise", level: "normal", credit_limit: 0, status: "active" }),
     createTitle: "AI新增客户",
+    requiredFields: [
+      { key: "code", label: "客户编码" },
+      { key: "name", label: "客户名称" },
+    ],
   },
   supplier: {
     key: "supplier",
@@ -69,6 +74,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["供应商", "供應商"],
     defaults: () => ({ type: "manufacturer", level: "normal", credit_limit: 0, status: "active" }),
     createTitle: "AI新增供应商",
+    requiredFields: [
+      { key: "code", label: "供应商编码" },
+      { key: "name", label: "供应商名称" },
+    ],
   },
   product: {
     key: "product",
@@ -79,6 +88,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["物料", "产品", "商品"],
     defaults: () => ({ unit: "件", purchase_price: 0, sale_price: 0, cost_price: 0, safety_stock: 0, max_stock: 0, min_stock: 0, is_purchased: true, is_sold: true, is_manufactured: false, status: "active" }),
     createTitle: "AI新增物料",
+    requiredFields: [
+      { key: "code", label: "物料编码" },
+      { key: "name", label: "物料名称" },
+    ],
   },
   warehouse: {
     key: "warehouse",
@@ -89,6 +102,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["仓库", "倉庫"],
     defaults: () => ({ type: "raw_material", is_negative_stock_allowed: false, status: "active" }),
     createTitle: "AI新增仓库",
+    requiredFields: [
+      { key: "code", label: "仓库编码" },
+      { key: "name", label: "仓库名称" },
+    ],
   },
   department: {
     key: "department",
@@ -99,6 +116,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["部门"],
     defaults: () => ({ status: "active" }),
     createTitle: "AI新增部门",
+    requiredFields: [
+      { key: "code", label: "部门编码" },
+      { key: "name", label: "部门名称" },
+    ],
   },
   workCenter: {
     key: "workCenter",
@@ -109,6 +130,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["工作中心"],
     defaults: () => ({ type: "machine", capacity_per_day: 8, labor_rate: 0, overhead_rate: 0, status: "active" }),
     createTitle: "AI新增工作中心",
+    requiredFields: [
+      { key: "code", label: "工作中心编码" },
+      { key: "name", label: "工作中心名称" },
+    ],
   },
   operation: {
     key: "operation",
@@ -119,6 +144,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["工序"],
     defaults: () => ({ standard_hours: 0, setup_hours: 0, labor_rate: 0, overhead_rate: 0, status: "active" }),
     createTitle: "AI新增工序",
+    requiredFields: [
+      { key: "code", label: "工序编码" },
+      { key: "name", label: "工序名称" },
+    ],
   },
   bom: {
     key: "bom",
@@ -129,6 +158,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["BOM", "bom"],
     defaults: () => ({ bom_no: `BOM${Date.now().toString().slice(-8)}`, version: "1.0", quantity: 1, unit: "件", is_default: true, is_active: true, effective_date: today() }),
     createTitle: "AI新增BOM",
+    requiredFields: [
+      { key: "bom_no", label: "BOM编号" },
+      { key: "product_id", label: "产品ID" },
+    ],
   },
   routing: {
     key: "routing",
@@ -139,6 +172,10 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["工艺路线", "路线"],
     defaults: () => ({ routing_no: `RT${Date.now().toString().slice(-8)}`, version: "1.0", is_default: true, is_active: true, effective_date: today(), total_standard_hours: 0 }),
     createTitle: "AI新增工艺路线",
+    requiredFields: [
+      { key: "routing_no", label: "工艺路线编号" },
+      { key: "product_id", label: "产品ID" },
+    ],
   },
   purchaseOrder: {
     key: "purchaseOrder",
@@ -149,6 +186,11 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["采购订单", "采购单"],
     defaults: () => ({ order_no: `PO${Date.now().toString().slice(-8)}`, order_date: today(), total_amount: 0, tax_amount: 0, payable_amount: 0, currency: "CNY", status: "draft" }),
     createTitle: "AI新增采购订单",
+    requiredFields: [
+      { key: "order_no", label: "采购单号" },
+      { key: "supplier_id", label: "供应商ID" },
+      { key: "order_date", label: "订单日期" },
+    ],
   },
   salesOrder: {
     key: "salesOrder",
@@ -159,6 +201,11 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["销售订单", "销售单"],
     defaults: () => ({ order_no: `SO${Date.now().toString().slice(-8)}`, order_date: today(), total_amount: 0, tax_amount: 0, discount_amount: 0, receivable_amount: 0, currency: "CNY", status: "draft" }),
     createTitle: "AI新增销售订单",
+    requiredFields: [
+      { key: "order_no", label: "销售单号" },
+      { key: "customer_id", label: "客户ID" },
+      { key: "order_date", label: "订单日期" },
+    ],
   },
   purchaseReceipt: {
     key: "purchaseReceipt",
@@ -169,6 +216,12 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["采购入库单", "采购入库", "入库单"],
     defaults: () => ({ receipt_no: `PR${Date.now().toString().slice(-8)}`, receipt_date: today(), total_amount: 0, status: "draft" }),
     createTitle: "AI新增采购入库单",
+    requiredFields: [
+      { key: "receipt_no", label: "入库单号" },
+      { key: "receipt_date", label: "入库日期" },
+      { key: "supplier_id", label: "供应商ID" },
+      { key: "warehouse_id", label: "仓库ID" },
+    ],
   },
   salesDelivery: {
     key: "salesDelivery",
@@ -179,6 +232,12 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["销售出货单", "销售出货", "出货单"],
     defaults: () => ({ delivery_no: `SD${Date.now().toString().slice(-8)}`, delivery_date: today(), total_amount: 0, status: "draft" }),
     createTitle: "AI新增销售出货单",
+    requiredFields: [
+      { key: "delivery_no", label: "出货单号" },
+      { key: "delivery_date", label: "出货日期" },
+      { key: "customer_id", label: "客户ID" },
+      { key: "warehouse_id", label: "仓库ID" },
+    ],
   },
   productionOrder: {
     key: "productionOrder",
@@ -189,6 +248,12 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     keywords: ["生产订单", "生产单", "工单"],
     defaults: () => ({ order_no: `MO${Date.now().toString().slice(-8)}`, order_date: today(), planned_quantity: 1, completed_quantity: 0, scrapped_quantity: 0, priority: 1, status: "draft" }),
     createTitle: "AI新增生产订单",
+    requiredFields: [
+      { key: "order_no", label: "生产单号" },
+      { key: "order_date", label: "订单日期" },
+      { key: "product_id", label: "产品ID" },
+      { key: "planned_quantity", label: "计划数量" },
+    ],
   },
 };
 
@@ -210,6 +275,14 @@ const entityFromText = (text: string): EntityKey | null => {
   ) || null;
 };
 
+const hasPronounReference = (text: string) => /(?:它|这个|那个|刚才|刚刚|上一个|上次|最近|继续|改一下|帮我改|修改一下)/.test(text);
+
+const missingRequiredFields = (entity: EntityDef, record: Record<string, unknown>) =>
+  entity.requiredFields.filter((field) => {
+    const value = record[field.key];
+    return value === undefined || value === null || value === "";
+  });
+
 async function runEntitySearch(entity: EntityDef, text: string) {
   const codeField = entity.codeField || "code";
   const nameField = entity.nameField || "name";
@@ -230,6 +303,7 @@ async function extractEntityPayload(entity: EntityDef, text: string, current?: R
     `你是ERP数据录入助手。请从用户描述中提取${entity.label}的字段值，只返回JSON，不要解释。`,
     `实体表：${entity.tableName}`,
     `允许字段：${Object.keys(entity.defaults()).join(", ")}`,
+    `必填字段：${entity.requiredFields.map((field) => field.label).join(", ")}`,
     current ? `当前记录：${JSON.stringify(current)}` : "当前记录：无",
     `用户原话：${text}`,
     "返回格式：{\"fields\":{...},\"need_more\":[],\"summary\":\"\"}",
@@ -248,20 +322,31 @@ async function extractEntityPayload(entity: EntityDef, text: string, current?: R
 
 async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unknown, provider?: AiChatRequest["provider"]) {
   const current = currentFocus && typeof currentFocus === "object" ? currentFocus as Record<string, unknown> : null;
-  const existing = current?.id ? current : await runEntitySearch(entity, text);
+  const existing = current?.id ? current : (hasPronounReference(text) ? current : await runEntitySearch(entity, text));
   const extracted = await extractEntityPayload(entity, text, existing);
-  if (extracted.need_more.length > 0 && !existing) {
+  const mergedDraft = {
+    ...entity.defaults(),
+    ...(existing || {}),
+    ...extracted.fields,
+  };
+  const missingRequired = missingRequiredFields(entity, mergedDraft);
+  const missingLabels = [
+    ...new Set([
+      ...extracted.need_more,
+      ...missingRequired.map((field) => field.label),
+    ]),
+  ];
+
+  if (missingLabels.length > 0 && !existing) {
     return {
       status: "needs_more" as const,
-      reply: `创建${entity.label}还缺少这些信息：${extracted.need_more.join("、")}`,
-      nextQuestions: extracted.need_more,
+      reply: `创建${entity.label}还缺少这些信息：${missingLabels.join("、")}`,
+      nextQuestions: missingLabels,
     };
   }
 
   const payload = {
-    ...entity.defaults(),
-    ...(existing || {}),
-    ...extracted.fields,
+    ...mergedDraft,
     updated_at: nowIso(),
   };
 
@@ -274,9 +359,10 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
     : await supabase.from(entity.tableName).insert(payload).select().single();
   if (response.error) throw response.error;
   const row = response.data as Record<string, unknown>;
+  const displayName = String(row[entity.nameField || entity.codeField || "id"] || row.id || "-");
   return {
     status: "success" as const,
-    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${String(row[entity.nameField || entity.codeField || "id"] || row.id || "-")}`,
+    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${displayName}${extracted.summary ? `\n${extracted.summary}` : ""}`,
     data: row,
     focus: { type: entity.key, id: row.id, code: row[entity.codeField || "code"], name: row[entity.nameField || entity.codeField || "name"] },
   };
@@ -347,7 +433,8 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
 }
 
 export async function createOrUpdateEntityTool(state: AiGraphState, entityKey?: EntityKey): Promise<ToolResult> {
-  const entity = entityKey ? entityDefs[entityKey] : (entityFromText(state.text) ? entityDefs[entityFromText(state.text)!] : null);
+  const detected = entityFromText(state.text);
+  const entity = entityKey ? entityDefs[entityKey] : (detected ? entityDefs[detected] : null);
   if (!entity) return { status: "error", reply: "未识别出要处理的业务对象。" };
   return upsertEntity(entity, state.text, state.currentFocus, state.provider);
 }
@@ -373,12 +460,37 @@ export async function financeSummaryTool(state: AiGraphState): Promise<ToolResul
   const currentDate = today();
   const overdueReceivables = receivables.filter((row) => String(row.due_date || "") < currentDate && Number(row.balance || 0) > 0);
   const overduePayables = payables.filter((row) => String(row.due_date || "") < currentDate && Number(row.balance || 0) > 0);
+  const topReceivables = [...receivables].sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0)).slice(0, 5);
+  const topPayables = [...payables].sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0)).slice(0, 5);
+
+  const money = (value: unknown) => Number(value || 0).toFixed(2);
+  const renderTopRows = (title: string, rows: Array<Record<string, unknown>>, nameField: string, amountField: string) =>
+    rows.length
+      ? `### ${title}\n| 名称 | 金额 |\n| --- | ---: |\n${rows.map((row) => `| ${String(row[nameField] || row.doc_no || row.id || "-")} | ${money(row[amountField])} |`).join("\n")}`
+      : `### ${title}\n暂无`;
 
   const reply = [
-    `应收 ${receivables.length} 条，余额 ${sum(receivables, "balance").toFixed(2)}，逾期 ${overdueReceivables.length} 条，逾期金额 ${sum(overdueReceivables, "balance").toFixed(2)}。`,
-    `应付 ${payables.length} 条，余额 ${sum(payables, "balance").toFixed(2)}，逾期 ${overduePayables.length} 条，逾期金额 ${sum(overduePayables, "balance").toFixed(2)}。`,
-    `凭证 ${vouchers.length} 张，合计金额 ${sum(vouchers, "total_amount").toFixed(2)}。`,
-    `固定资产 ${assets.length} 项，净值合计 ${sum(assets, "net_value").toFixed(2)}。`,
+    `# 财务分析报表`,
+    ``,
+    `## 关键指标`,
+    `- 应收单据：${receivables.length} 条`,
+    `- 应收余额：${sum(receivables, "balance").toFixed(2)}`,
+    `- 逾期应收：${overdueReceivables.length} 条，逾期金额 ${sum(overdueReceivables, "balance").toFixed(2)}`,
+    `- 应付单据：${payables.length} 条`,
+    `- 应付余额：${sum(payables, "balance").toFixed(2)}`,
+    `- 逾期应付：${overduePayables.length} 条，逾期金额 ${sum(overduePayables, "balance").toFixed(2)}`,
+    `- 凭证数量：${vouchers.length} 张，金额合计 ${sum(vouchers, "total_amount").toFixed(2)}`,
+    `- 固资数量：${assets.length} 项，净值合计 ${sum(assets, "net_value").toFixed(2)}`,
+    ``,
+    `## 风险提示`,
+    overdueReceivables.length || overduePayables.length
+      ? `- 存在逾期账款，建议优先跟进回款与付款。`
+      : `- 当前未发现明显逾期账款。`,
+    `- 财务数据以当前已启用单据为准。`,
+    ``,
+    renderTopRows("应收Top5", topReceivables, "customer_name", "balance"),
+    ``,
+    renderTopRows("应付Top5", topPayables, "supplier_name", "balance"),
   ].join("\n");
 
   return {

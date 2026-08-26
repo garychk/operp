@@ -9,7 +9,14 @@ import {
   SendOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { Bubble, Prompts, Sender, Welcome, XProvider } from "@ant-design/x";
+import {
+  Bubble,
+  Prompts,
+  Sender,
+  ThoughtChain,
+  Welcome,
+  XProvider,
+} from "@ant-design/x";
 import {
   Button,
   Card,
@@ -24,6 +31,7 @@ import {
   message,
 } from "antd";
 import type { BubbleListRef } from "@ant-design/x/es/bubble";
+import type { ThoughtChainItemType } from "@ant-design/x/es/thought-chain";
 import { useAuth } from "../contexts/AuthContext";
 import {
   createId,
@@ -49,18 +57,26 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   status?: "loading" | "success" | "error";
+  trace?: ThoughtChainItemType[];
 }
 type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
-type AiChatApiResponse = {
-  ok?: boolean;
-  status?: "success" | "error" | "need_confirmation" | "needs_more";
-  reply?: string;
-  focus?: unknown;
-  need_confirmation?: boolean;
-  next_questions?: string[];
-  data?: unknown;
+type AiChatStreamEvent =
+  | { type: "step"; step: string; message: string; data?: unknown }
+  | {
+      type: "final";
+      status?: "success" | "error" | "need_confirmation" | "needs_more";
+      reply?: string;
+      focus?: unknown;
+      need_confirmation?: boolean;
+      next_questions?: string[];
+      data?: unknown;
+    };
+type AiChatStreamErrorEvent = {
+  type: "error";
+  ok?: false;
   error?: string;
 };
+type AiChatStreamPacket = AiChatStreamEvent | AiChatStreamErrorEvent;
 const AI_SERVER_URL =
   import.meta.env.VITE_AI_SERVER_URL || "http://localhost:3001";
 const quickPrompts = [
@@ -255,28 +271,98 @@ const MarkdownMessage = ({ content }: { content: string }) => (
   <div className="ai-markdown-body">{renderMarkdown(content)}</div>
 );
 
-async function requestAIReply(payload: Record<string, unknown>) {
+const renderThoughtTitle = (message: string) => {
+  const value = message.trim();
+  if (!value) return "处理中";
+  if (value.includes("加载上下文")) return "加载上下文";
+  if (value.includes("识别意图")) return "识别意图";
+  if (value.includes("拆解任务")) return "任务拆解";
+  if (value.includes("执行工具")) return "工具调用";
+  if (value.includes("写入会话")) return "记忆写入";
+  if (value.includes("整理回复")) return "整理回复";
+  return value;
+};
+
+const AssistantMessage = ({
+  message: chatMessage,
+}: {
+  message: ChatMessage;
+}) => (
+  <div className="ai-assistant-block">
+    {chatMessage.trace?.length ? (
+      <ThoughtChain
+        className="ai-thought-chain"
+        items={chatMessage.trace}
+        line="solid"
+        defaultExpandedKeys={chatMessage.trace.map((item) => item.key).filter(Boolean) as string[]}
+      />
+    ) : null}
+    {chatMessage.content ? <MarkdownMessage content={chatMessage.content} /> : null}
+  </div>
+);
+
+const streamAIReply = async (
+  payload: Record<string, unknown>,
+  onEvent: (event: AiChatStreamPacket) => void | Promise<void>,
+) => {
   const response = await fetch(`${AI_SERVER_URL}/api/ai/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Accept: "text/event-stream",
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, stream: true }),
   });
 
-  if (!response.ok) {
+  if (!response.ok || !response.body) {
     const errorText = await response.text();
     throw new Error(
       `AI 服务请求失败：${response.status}${errorText ? `，${errorText}` : ""}`,
     );
   }
 
-  const data = (await response.json()) as AiChatApiResponse;
-  if (data.error) {
-    throw new Error(data.error);
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder("utf-8");
+  let buffer = "";
+  let eventName = "";
+  let dataLines: string[] = [];
+
+  const flush = async () => {
+    if (!eventName || !dataLines.length) return;
+    const raw = dataLines.join("\n");
+    try {
+      await onEvent(JSON.parse(raw) as AiChatStreamPacket);
+    } catch {
+      // ignore malformed event payloads
+    }
+    eventName = "";
+    dataLines = [];
+  };
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line) {
+        await flush();
+        continue;
+      }
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim();
+        continue;
+      }
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trim());
+      }
+    }
   }
-  return data;
-}
+
+  await flush();
+};
 
 export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const [inputValue, setInputValue] = useState("");
@@ -309,11 +395,11 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         role: item.role,
         content:
           item.role === "assistant" ? (
-            <MarkdownMessage content={item.content} />
+            <AssistantMessage message={item} />
           ) : (
             item.content
           ),
-        loading: item.status === "loading",
+        loading: false,
       })),
     [messages],
   );
@@ -409,6 +495,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       role: "assistant",
       content: "",
       status: "loading",
+      trace: [],
     };
 
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
@@ -417,7 +504,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     window.setTimeout(() => listRef.current?.scrollTo({ top: "bottom" }), 0);
 
     try {
-      const data = await requestAIReply({
+      const payload = {
         session_id: sessionId,
         user_id: user?.profile.id,
         text: prompt,
@@ -439,24 +526,69 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           apiType: activeProvider.apiType,
           apiKey: activeProvider.apiKey,
         },
+      } as const;
+
+      let traceItems: ThoughtChainItemType[] = [];
+      const updateAssistant = (patch: Partial<ChatMessage>) => {
+        setMessages((prev) =>
+          prev.map((item) => (item.id === assistantMessage.id ? { ...item, ...patch } : item)),
+        );
+      };
+
+      await streamAIReply(payload, async (event) => {
+        await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+
+        if (event.type === "step") {
+          const key = `${event.step}-${traceItems.length}`;
+          traceItems = [
+            ...traceItems,
+            {
+              key,
+              title: renderThoughtTitle(event.step || event.message),
+              description: event.message,
+              status: "loading",
+              blink: true,
+            },
+          ];
+          updateAssistant({
+            trace: traceItems,
+            content: "",
+            status: "loading",
+          });
+          return;
+        }
+
+        if (event.type === "error") {
+          updateAssistant({
+            trace: traceItems,
+            content: event.error || "AI 服务暂时不可用。",
+            status: "error",
+          });
+          return;
+        }
+
+        traceItems = traceItems.map((item, index) =>
+          index === traceItems.length - 1
+            ? { ...item, status: event.status === "error" ? "error" : "success", blink: false }
+            : { ...item, status: "success", blink: false },
+        );
+        updateAssistant({
+          trace: traceItems,
+          content: "",
+          status: event.status === "error" ? "error" : "success",
+        });
+        updateAssistant({
+          trace: traceItems,
+          content: event.reply || "已处理所选技能。",
+          status: event.status === "error" ? "error" : "success",
+        });
+        if (event.next_questions?.length) {
+          message.info(event.next_questions[0]);
+        }
       });
-      setMessages((prev) =>
-        prev.map((item) =>
-          item.id === assistantMessage.id
-            ? {
-                ...item,
-                content: data.reply || "已处理所选技能。",
-                status: data.status === "error" ? "error" : "success",
-              }
-            : item,
-        ),
-      );
-      if (data.next_questions?.length) {
-        message.info(data.next_questions[0]);
-      }
     } catch (error) {
       const errorText =
-        error instanceof Error ? error.message : "AI 服务暂时不可用。";
+        error instanceof Error ? error.message : typeof error === "string" ? error : "AI 服务暂时不可用。";
       setMessages((prev) =>
         prev.map((item) =>
           item.id === assistantMessage.id
@@ -472,7 +604,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   };
 
   return (
-    <Drawer
+      <Drawer
       width={600}
       open={open}
       onClose={onClose}
@@ -490,7 +622,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                 role={{
                   assistant: {
                     placement: "start",
-                    typing: true,
+                    typing: false,
                   },
                   user: {
                     placement: "end",

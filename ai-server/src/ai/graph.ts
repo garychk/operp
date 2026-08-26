@@ -52,19 +52,23 @@ const graph = new StateGraph(State)
 
 const compiled = graph.compile();
 
-export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> {
-  const state = {
-    sessionId: input.session_id,
-    userId: input.user_id,
-    text: input.text,
-    skill: input.skill ?? "auto",
-    provider: input.provider,
-    page: input.context?.page,
-    currentFocus: input.context?.current_focus,
-    recentMessages: input.context?.recent_messages ?? [],
-  };
+const buildState = (input: AiChatRequest): AiGraphState => ({
+  sessionId: input.session_id,
+  userId: input.user_id,
+  text: input.text,
+  skill: input.skill ?? "auto",
+  provider: input.provider,
+  page: input.context?.page,
+  currentFocus: input.context?.current_focus,
+  recentMessages: input.context?.recent_messages ?? [],
+});
 
-  const result = (await compiled.invoke(state)) as AiGraphState;
+export type StreamEvent =
+  | { type: "step"; step: string; message: string; data?: unknown }
+  | { type: "final"; result: AiChatResult };
+
+export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> {
+  const result = (await compiled.invoke(buildState(input))) as AiGraphState;
 
   return {
     status: "success",
@@ -79,4 +83,46 @@ export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> 
       toolResults: result.toolResults,
     },
   };
+}
+
+export async function runChatGraphStream(
+  input: AiChatRequest,
+  onEvent: (event: StreamEvent) => void | Promise<void>,
+): Promise<AiChatResult> {
+  let state = buildState(input);
+
+  await onEvent({ type: "step", step: "contextLoader", message: "正在加载上下文..." });
+  state = await contextLoaderNode(state);
+
+  await onEvent({ type: "step", step: "intentRouter", message: "正在识别意图..." });
+  state = await intentRouterNode(state);
+
+  await onEvent({ type: "step", step: "planner", message: "正在拆解任务..." });
+  state = await plannerNode(state);
+
+  await onEvent({ type: "step", step: "toolExecutor", message: "正在执行工具..." });
+  state = await toolExecutorNode(state);
+
+  await onEvent({ type: "step", step: "memoryWriter", message: "正在写入会话记忆..." });
+  state = await memoryWriterNode(state);
+
+  await onEvent({ type: "step", step: "responseComposer", message: "正在整理回复..." });
+  state = await responseComposerNode(state);
+
+  const result: AiChatResult = {
+    status: "success",
+    reply: state.reply || "已处理。",
+    focus: state.focus,
+    need_confirmation: state.needConfirmation,
+    next_questions: state.nextQuestions,
+    data: {
+      intent: state.intent,
+      domain: state.domain,
+      plan: state.plan,
+      toolResults: state.toolResults,
+    },
+  };
+
+  await onEvent({ type: "final", result });
+  return result;
 }

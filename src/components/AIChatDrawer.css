@@ -18,6 +18,38 @@
   padding: 0;
 }
 
+.ai-assistant-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-thought-chain {
+  margin-bottom: 4px;
+  padding: 12px 12px 4px;
+  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(79, 70, 229, 0.06), rgba(79, 70, 229, 0.02));
+}
+
+.ai-thought-chain .ant-thought-chain-item {
+  border-radius: 12px;
+}
+
+.ai-thought-chain .ant-thought-chain-item + .ant-thought-chain-item {
+  margin-top: 8px;
+}
+
+.ai-thought-chain .ant-thought-chain-item-title {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-thought-chain .ant-thought-chain-item-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .ai-chat-footer {
   border-top: 1px solid var(--border);
   padding: 12px 16px 16px;
@@ -50,12 +82,13 @@
 
 .ai-chat-skill-select {
   display: flex;
+  flex-wrap: wrap;
   width: 100%;
   min-width: 0;
-  margin-top: 8px;
+  margin-top: 10px;
   overflow-x: auto;
   padding: 0 0 2px;
-  gap: 6px;
+  gap: 8px;
   scrollbar-width: thin;
 }
 
@@ -63,9 +96,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 64px;
-  height: 28px;
-  padding: 0 8px;
+  min-width: 82px;
+  height: 30px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 9px !important;
   color: var(--text-secondary);
@@ -93,7 +126,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .ai-provider-card {
