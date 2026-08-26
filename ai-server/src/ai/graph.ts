@@ -93,21 +93,72 @@ export async function runChatGraphStream(
 
   await onEvent({ type: "step", step: "contextLoader", message: "正在加载上下文..." });
   state = await contextLoaderNode(state);
+  await onEvent({
+    type: "step",
+    step: "contextLoader",
+    message: "上下文已加载",
+    data: {
+      recentMessages: state.recentMessages.length,
+      page: state.page,
+      hasFocus: Boolean(state.currentFocus),
+    },
+  });
 
   await onEvent({ type: "step", step: "intentRouter", message: "正在识别意图..." });
   state = await intentRouterNode(state);
+  await onEvent({
+    type: "step",
+    step: "intentRouter",
+    message: "意图已识别",
+    data: {
+      intent: state.intent,
+      domain: state.domain,
+    },
+  });
 
   await onEvent({ type: "step", step: "planner", message: "正在拆解任务..." });
   state = await plannerNode(state);
+  await onEvent({
+    type: "step",
+    step: "planner",
+    message: "任务已拆解",
+    data: {
+      plan: state.plan,
+    },
+  });
 
   await onEvent({ type: "step", step: "toolExecutor", message: "正在执行工具..." });
   state = await toolExecutorNode(state);
+  await onEvent({
+    type: "step",
+    step: "toolExecutor",
+    message: "工具执行完成",
+    data: {
+      toolResults: state.toolResults,
+      reply: state.reply,
+      needConfirmation: state.needConfirmation,
+      nextQuestions: state.nextQuestions,
+    },
+  });
 
   await onEvent({ type: "step", step: "memoryWriter", message: "正在写入会话记忆..." });
   state = await memoryWriterNode(state);
+  await onEvent({
+    type: "step",
+    step: "memoryWriter",
+    message: "会话记忆已写入",
+  });
 
   await onEvent({ type: "step", step: "responseComposer", message: "正在整理回复..." });
   state = await responseComposerNode(state);
+  await onEvent({
+    type: "step",
+    step: "responseComposer",
+    message: "回复已整理",
+    data: {
+      reply: state.reply,
+    },
+  });
 
   const result: AiChatResult = {
     status: "success",

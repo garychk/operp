@@ -283,6 +283,22 @@ const renderThoughtTitle = (message: string) => {
   return value;
 };
 
+const formatStepContent = (data: unknown): string => {
+  if (data === null || data === undefined) return "";
+  if (typeof data === "string") return data;
+  if (Array.isArray(data)) return data.map((item) => formatStepContent(item)).filter(Boolean).join("\n");
+  if (typeof data === "object") {
+    try {
+      return JSON.stringify(data, null, 2);
+    } catch {
+      return String(data);
+    }
+  }
+  return String(data);
+};
+
+const isPendingStep = (message: string) => message.startsWith("正在");
+
 const AssistantMessage = ({
   message: chatMessage,
 }: {
@@ -539,17 +555,21 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
 
         if (event.type === "step") {
-          const key = `${event.step}-${traceItems.length}`;
-          traceItems = [
-            ...traceItems,
-            {
-              key,
-              title: renderThoughtTitle(event.step || event.message),
-              description: event.message,
-              status: "loading",
-              blink: true,
-            },
-          ];
+          const existingIndex = traceItems.findIndex((item) => String(item.key || "").startsWith(`${event.step}:`));
+          const key = `${event.step}:${existingIndex >= 0 ? existingIndex : traceItems.length}`;
+          const nextItem: ThoughtChainItemType = {
+            key,
+            title: renderThoughtTitle(event.step || event.message),
+            description: isPendingStep(event.message) ? event.message : undefined,
+            content: isPendingStep(event.message) ? undefined : formatStepContent(event.data) || event.message,
+            status: isPendingStep(event.message) ? "loading" : "success",
+            blink: isPendingStep(event.message),
+          };
+          if (existingIndex >= 0) {
+            traceItems = traceItems.map((item, index) => (index === existingIndex ? nextItem : item));
+          } else {
+            traceItems = [...traceItems, nextItem];
+          }
           updateAssistant({
             trace: traceItems,
             content: "",
@@ -567,9 +587,14 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           return;
         }
 
-        traceItems = traceItems.map((item, index) =>
-          index === traceItems.length - 1
-            ? { ...item, status: event.status === "error" ? "error" : "success", blink: false }
+        traceItems = traceItems.map((item) =>
+          item.status === "loading"
+            ? {
+                ...item,
+                status: event.status === "error" ? "error" : "success",
+                blink: false,
+                content: formatStepContent(event.data) || item.content,
+              }
             : { ...item, status: "success", blink: false },
         );
         updateAssistant({
@@ -577,11 +602,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           content: "",
           status: event.status === "error" ? "error" : "success",
         });
-        updateAssistant({
-          trace: traceItems,
-          content: event.reply || "已处理所选技能。",
-          status: event.status === "error" ? "error" : "success",
-        });
+        updateAssistant({ trace: traceItems, content: event.reply || "已处理所选技能。", status: event.status === "error" ? "error" : "success" });
         if (event.next_questions?.length) {
           message.info(event.next_questions[0]);
         }
