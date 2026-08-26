@@ -12,6 +12,7 @@ const State = Annotation.Root({
   userId: Annotation<number | undefined>,
   text: Annotation<string>,
   skill: Annotation<AiGraphState["skill"]>,
+  provider: Annotation<AiGraphState["provider"]>,
   page: Annotation<string | undefined>,
   currentFocus: Annotation<unknown | undefined>,
   recentMessages: Annotation<unknown[]>({
@@ -57,6 +58,7 @@ export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> 
     userId: input.user_id,
     text: input.text,
     skill: input.skill ?? "auto",
+    provider: input.provider,
     page: input.context?.page,
     currentFocus: input.context?.current_focus,
     recentMessages: input.context?.recent_messages ?? [],

@@ -434,7 +434,10 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         provider: {
           id: activeProvider.id,
           name: activeProvider.name,
+          endpoint: activeProvider.endpoint,
           model: activeProvider.model,
+          apiType: activeProvider.apiType,
+          apiKey: activeProvider.apiKey,
         },
       });
       setMessages((prev) =>

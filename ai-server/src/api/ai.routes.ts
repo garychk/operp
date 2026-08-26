@@ -9,6 +9,17 @@ const chatSchema = z.object({
   user_id: z.number().int().optional(),
   text: z.string().min(1),
   skill: z.enum(["auto", "analysis", "create", "action", "baq", "chat"]).optional(),
+  provider: z
+    .object({
+      id: z.string().optional(),
+      name: z.string().optional(),
+      endpoint: z.string().optional(),
+      model: z.string().optional(),
+      apiType: z.enum(["proxy", "ollama"]).optional(),
+      apiKey: z.string().optional(),
+      temperature: z.number().optional(),
+    })
+    .optional(),
   context: z
     .object({
       page: z.string().optional(),

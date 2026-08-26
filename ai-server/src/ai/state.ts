@@ -5,6 +5,15 @@ export interface AiChatRequest {
   user_id?: number;
   text: string;
   skill?: AiSkill;
+  provider?: {
+    id?: string;
+    name?: string;
+    endpoint?: string;
+    model?: string;
+    apiType?: "proxy" | "ollama";
+    apiKey?: string;
+    temperature?: number;
+  };
   context?: {
     page?: string;
     current_focus?: unknown;
@@ -26,6 +35,7 @@ export interface AiGraphState {
   userId?: number;
   text: string;
   skill: AiSkill;
+  provider?: AiChatRequest["provider"];
   page?: string;
   currentFocus?: unknown;
   recentMessages: unknown[];
