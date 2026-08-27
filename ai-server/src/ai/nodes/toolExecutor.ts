@@ -44,11 +44,13 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
 
   const systemPrompt = [
     "你是 OPERP ERP 助手。",
+    "你正在通过 OPERP AI 服务工作。不要声称自己没有 ERP 写入权限；当计划中存在业务工具时，工具执行由服务端负责。",
     "优先根据用户意图、当前页面和历史上下文回答。",
     `意图：${state.intent || "chat"}`,
     `域：${state.domain || "general"}`,
     state.currentFocus ? `当前焦点：${JSON.stringify(state.currentFocus)}` : "当前焦点：无",
     plan.length ? `计划：${JSON.stringify(plan)}` : "计划：无",
+    "如果当前只是普通咨询，直接回答用户问题；不要编造工具执行结果。",
   ].join("\n");
 
   const { content, raw } = await callChatModel(

@@ -30,7 +30,6 @@ import {
   Typography,
   message,
 } from "antd";
-import type { BubbleListRef } from "@ant-design/x/es/bubble";
 import type { ThoughtChainItemType } from "@ant-design/x/es/thought-chain";
 import { useAuth } from "../contexts/AuthContext";
 import {
@@ -274,6 +273,15 @@ const MarkdownMessage = ({ content }: { content: string }) => (
 const renderThoughtTitle = (message: string) => {
   const value = message.trim();
   if (!value) return "处理中";
+  const nodeLabels: Record<string, string> = {
+    contextLoader: "读取上下文",
+    intentRouter: "判断任务意图",
+    planner: "规划执行任务",
+    toolExecutor: "执行业务操作",
+    memoryWriter: "保存对话上下文",
+    responseComposer: "整理处理结果",
+  };
+  if (nodeLabels[value]) return nodeLabels[value];
   if (value.includes("加载上下文")) return "加载上下文";
   if (value.includes("识别意图")) return "识别意图";
   if (value.includes("拆解任务")) return "任务拆解";
@@ -299,23 +307,60 @@ const formatStepContent = (data: unknown): string => {
 
 const isPendingStep = (message: string) => message.startsWith("正在");
 
-const AssistantMessage = ({
-  message: chatMessage,
-}: {
-  message: ChatMessage;
-}) => (
-  <div className="ai-assistant-block">
-    {chatMessage.trace?.length ? (
-      <ThoughtChain
-        className="ai-thought-chain"
-        items={chatMessage.trace}
-        line="solid"
-        defaultExpandedKeys={chatMessage.trace.map((item) => item.key).filter(Boolean) as string[]}
-      />
-    ) : null}
-    {chatMessage.content ? <MarkdownMessage content={chatMessage.content} /> : null}
-  </div>
-);
+const formatStepResult = (data: unknown, message: string): string => {
+  const value = data && typeof data === "object" ? data as Record<string, unknown> : {};
+
+  if (message.includes("上下文已加载")) {
+    const recentMessages = Number(value.recentMessages || 0);
+    return recentMessages
+      ? `已读取最近 ${recentMessages} 条对话记录${value.hasFocus ? "，并定位到当前业务对象" : ""}。`
+      : "已读取当前页面上下文，暂无历史对话记录。";
+  }
+
+  if (message.includes("意图已识别")) {
+    const intentLabels: Record<string, string> = {
+      baq: "BAQ 查询设计",
+      master_data: "ERP 业务数据维护",
+      finance: "财务数据分析",
+      knowledge: "知识库查询",
+      chat: "普通咨询",
+    };
+    const intent = String(value.intent || "chat");
+    return `判断为「${intentLabels[intent] || intent}」${value.domain ? `，业务领域：${String(value.domain)}` : ""}。`;
+  }
+
+  if (message.includes("任务已拆解")) {
+    const plan = Array.isArray(value.plan) ? value.plan : [];
+    if (!plan.length) return "暂未生成可执行步骤。";
+    const first = plan[0] as Record<string, unknown>;
+    const toolLabels: Record<string, string> = {
+      "baq.upsert": "BAQ 创建或修改",
+      "entity.upsert": "ERP 业务数据创建或修改",
+      "finance.summary": "财务数据汇总分析",
+      "chat.respond": "生成自然语言回复",
+    };
+    return `已规划 ${plan.length} 个动作：${toolLabels[String(first.tool)] || String(first.tool || "智能处理")}。`;
+  }
+
+  if (message.includes("工具执行完成")) {
+    const results = Array.isArray(value.toolResults) ? value.toolResults : [];
+    const result = results[0] as Record<string, unknown> | undefined;
+    if (result?.reply) return String(result.reply);
+    if (result?.status === "needs_more") return "需要补充信息后才能继续。";
+    if (result?.status === "error") return "工具执行失败。";
+    return results.length ? "业务工具已执行完成。" : "本次没有调用业务工具。";
+  }
+
+  if (message.includes("会话记忆已写入")) {
+    return "已保留本次对话上下文，方便继续追问或修改刚才的结果。";
+  }
+
+  if (message.includes("回复已整理")) {
+    return "已整理执行结果，准备展示给你。";
+  }
+
+  return formatStepContent(data) || message;
+};
 
 const streamAIReply = async (
   payload: Record<string, unknown>,
@@ -389,7 +434,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const [aiSettings, setAISettings] =
     useState<AISettingsConfig>(defaultAISettings);
   const [configLoaded, setConfigLoaded] = useState(false);
-  const listRef = useRef<BubbleListRef>(null);
+  const messageListRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<number | null>(null);
   const { user } = useAuth();
   const providers = aiSettings.providers;
@@ -402,22 +447,6 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       providers[0] ||
       defaultAISettings.providers[0],
     [activeProviderId, providers],
-  );
-
-  const bubbleItems = useMemo(
-    () =>
-      messages.map((item) => ({
-        key: item.id,
-        role: item.role,
-        content:
-          item.role === "assistant" ? (
-            <AssistantMessage message={item} />
-          ) : (
-            item.content
-          ),
-        loading: false,
-      })),
-    [messages],
   );
 
   useEffect(() => {
@@ -489,6 +518,15 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     });
   };
 
+  const scrollMessagesToBottom = () => {
+    const container = messageListRef.current;
+    if (!container) return;
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
+  };
+
   const submitMessage = async (value: string) => {
     const prompt = value.trim();
     if (!prompt || loading) {
@@ -517,8 +555,9 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     setMessages((prev) => [...prev, userMessage, assistantMessage]);
     setInputValue("");
     setLoading(true);
-    window.setTimeout(() => listRef.current?.scrollTo({ top: "bottom" }), 0);
+    window.setTimeout(scrollMessagesToBottom, 0);
 
+    let traceItems: ThoughtChainItemType[] = [];
     try {
       const payload = {
         session_id: sessionId,
@@ -544,7 +583,6 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         },
       } as const;
 
-      let traceItems: ThoughtChainItemType[] = [];
       const updateAssistant = (patch: Partial<ChatMessage>) => {
         setMessages((prev) =>
           prev.map((item) => (item.id === assistantMessage.id ? { ...item, ...patch } : item)),
@@ -561,7 +599,9 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             key,
             title: renderThoughtTitle(event.step || event.message),
             description: isPendingStep(event.message) ? event.message : undefined,
-            content: isPendingStep(event.message) ? undefined : formatStepContent(event.data) || event.message,
+            content: isPendingStep(event.message)
+              ? undefined
+              : formatStepResult(event.data, event.message),
             status: isPendingStep(event.message) ? "loading" : "success",
             blink: isPendingStep(event.message),
           };
@@ -575,15 +615,28 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             content: "",
             status: "loading",
           });
+          window.setTimeout(scrollMessagesToBottom, 0);
           return;
         }
 
         if (event.type === "error") {
+          traceItems = traceItems.map((item) =>
+            item.status === "loading"
+              ? {
+                  ...item,
+                  status: "error",
+                  blink: false,
+                  description: "执行失败",
+                  content: event.error || "服务端返回错误。",
+                }
+              : item,
+          );
           updateAssistant({
             trace: traceItems,
             content: event.error || "AI 服务暂时不可用。",
             status: "error",
           });
+          window.setTimeout(scrollMessagesToBottom, 0);
           return;
         }
 
@@ -593,7 +646,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                 ...item,
                 status: event.status === "error" ? "error" : "success",
                 blink: false,
-                content: formatStepContent(event.data) || item.content,
+                content: formatStepResult(event.data, "回复已整理") || item.content,
               }
             : { ...item, status: "success", blink: false },
         );
@@ -603,6 +656,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           status: event.status === "error" ? "error" : "success",
         });
         updateAssistant({ trace: traceItems, content: event.reply || "已处理所选技能。", status: event.status === "error" ? "error" : "success" });
+        window.setTimeout(scrollMessagesToBottom, 0);
         if (event.next_questions?.length) {
           message.info(event.next_questions[0]);
         }
@@ -610,17 +664,28 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     } catch (error) {
       const errorText =
         error instanceof Error ? error.message : typeof error === "string" ? error : "AI 服务暂时不可用。";
+      traceItems = traceItems.map((item) =>
+        item.status === "loading"
+          ? {
+              ...item,
+              status: "error",
+              blink: false,
+              description: "请求失败，未完成该步骤",
+              content: errorText,
+            }
+          : item,
+      );
       setMessages((prev) =>
         prev.map((item) =>
           item.id === assistantMessage.id
-            ? { ...item, content: errorText, status: "error" }
+            ? { ...item, trace: traceItems, content: errorText, status: "error" }
             : item,
         ),
       );
       message.error(errorText);
     } finally {
       setLoading(false);
-      window.setTimeout(() => listRef.current?.scrollTo({ top: "bottom" }), 0);
+      window.setTimeout(scrollMessagesToBottom, 0);
     }
   };
 
@@ -637,19 +702,38 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         <Flex vertical className="ai-chat-panel">
           <Card className="ai-chat-messages" variant="borderless">
             {messages.length > 0 ? (
-              <Bubble.List
-                ref={listRef}
-                items={bubbleItems}
-                role={{
-                  assistant: {
-                    placement: "start",
-                    typing: false,
-                  },
-                  user: {
-                    placement: "end",
-                  },
-                }}
-              />
+              <div ref={messageListRef} className="ai-chat-message-list">
+                {messages.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`ai-chat-message-row ai-chat-message-row-${item.role}`}
+                  >
+                    {item.role === "assistant" ? (
+                      <div className="ai-chat-assistant-wrap">
+                        {item.trace?.length ? (
+                          <ThoughtChain
+                            className="ai-thought-chain"
+                            items={item.trace}
+                            line="solid"
+                            defaultExpandedKeys={item.trace
+                              .map((traceItem) => traceItem.key)
+                              .filter(Boolean) as string[]}
+                          />
+                        ) : null}
+                        {item.content ? (
+                          <Bubble
+                            placement="start"
+                            typing={false}
+                            content={<MarkdownMessage content={item.content} />}
+                          />
+                        ) : null}
+                      </div>
+                    ) : (
+                      <Bubble placement="end" content={item.content} />
+                    )}
+                  </div>
+                ))}
+              </div>
             ) : (
               <Flex vertical gap={18}>
                 <Welcome

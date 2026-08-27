@@ -10,5 +10,7 @@ export async function plannerNode(state: AiGraphState): Promise<AiGraphState> {
           ? [{ step: "finance_summary", tool: "finance.summary", input: { text: state.text } }]
           : [{ step: "draft_reply", tool: "chat.respond", input: { text: state.text } }];
 
+  // Keep the plan explicit so the executor and the streamed trace agree on
+  // the operation that is actually going to be performed.
   return { ...state, plan };
 }
