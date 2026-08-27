@@ -283,6 +283,68 @@ const missingRequiredFields = (entity: EntityDef, record: Record<string, unknown
     return value === undefined || value === null || value === "";
   });
 
+const extractExplicitFields = (entity: EntityDef, text: string): Record<string, unknown> => {
+  const fields: Record<string, unknown> = {};
+  const codeField = entity.codeField || "code";
+  const nameField = entity.nameField || "name";
+
+  const codeMatch = text.match(
+    /(?:物料|产品|客户|供应商|仓库|部门|工作中心|工序|采购订单|销售订单|采购入库单|销售出货单|生产订单)?\s*(?:编码|编号|单号)\s*[:：=]?\s*([A-Za-z0-9_-]+)/i,
+  );
+  const nameMatch = text.match(
+    /(?:物料|产品|客户|供应商|仓库|部门|工作中心|工序)\s*名称\s*[:：=]?\s*([^，,。；;\n]+)/i,
+  );
+
+  if (codeMatch?.[1]) fields[codeField] = codeMatch[1].trim();
+  if (nameMatch?.[1]) fields[nameField] = nameMatch[1].trim();
+
+  return fields;
+};
+
+const normalizeEntityFields = (
+  entity: EntityDef,
+  fields: Record<string, unknown>,
+): Record<string, unknown> => {
+  const aliases: Record<string, string> = {
+    物料编码: "code",
+    物料名称: "name",
+    产品编码: "code",
+    产品名称: "name",
+    客户编码: "code",
+    客户名称: "name",
+    供应商编码: "code",
+    供应商名称: "name",
+    仓库编码: "code",
+    仓库名称: "name",
+    部门编码: "code",
+    部门名称: "name",
+    工作中心编码: "code",
+    工作中心名称: "name",
+    工序编码: "code",
+    工序名称: "name",
+    编码: entity.codeField || "code",
+    编号: entity.codeField || "code",
+    名称: entity.nameField || "name",
+  };
+  const allowedFields = new Set([
+    "code",
+    "name",
+    ...Object.keys(entity.defaults()),
+    entity.codeField || "code",
+    entity.nameField || "name",
+  ]);
+  const normalized: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(fields)) {
+    const targetKey = aliases[key] || key;
+    if (allowedFields.has(targetKey)) {
+      normalized[targetKey] = value;
+    }
+  }
+
+  return normalized;
+};
+
 async function runEntitySearch(entity: EntityDef, text: string) {
   const codeField = entity.codeField || "code";
   const nameField = entity.nameField || "name";
@@ -327,7 +389,9 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
   const mergedDraft = {
     ...entity.defaults(),
     ...(existing || {}),
-    ...extracted.fields,
+    ...normalizeEntityFields(entity, extracted.fields),
+    // Explicit values from the user's message must win over model extraction.
+    ...extractExplicitFields(entity, text),
   };
   const missingRequired = missingRequiredFields(entity, mergedDraft);
   const missingLabels = [
@@ -369,9 +433,31 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
 }
 
 async function loadBaqCatalog(): Promise<BaqTable[]> {
-  const { data, error } = await supabase.rpc("baq_catalog");
-  if (error) throw error;
-  return (data || []) as BaqTable[];
+  const { data: tableRows, error: tableError } = await supabase
+    .from("sys_tables")
+    .select("table_name, table_label, module_name")
+    .eq("is_deleted", "n")
+    .eq("status", "1")
+    .order("module_name")
+    .order("table_name");
+  if (tableError) throw tableError;
+
+  const { data: catalogData, error: catalogError } = await supabase.rpc("baq_catalog");
+  if (catalogError) throw catalogError;
+  const catalog = (catalogData || []) as BaqTable[];
+  const columnsByTable = new Map(catalog.map((item) => [item.table, item.columns]));
+
+  return ((tableRows || []) as Array<Record<string, unknown>>)
+    .filter((row) => String(row.table_name || "").startsWith("erp_"))
+    .map((row) => {
+      const table = String(row.table_name);
+      return {
+        table,
+        label: String(row.table_label || table),
+        columns: columnsByTable.get(table) || [],
+      };
+    })
+    .filter((item) => item.columns.length > 0);
 }
 
 async function findBaqTarget(text: string, focus?: unknown) {
@@ -385,14 +471,82 @@ async function findBaqTarget(text: string, focus?: unknown) {
   return items.find((item) => normalized.includes(normalize(String(item.code || ""))) || normalized.includes(normalize(String(item.name || "")))) || null;
 }
 
+const normalizeBaqDefinition = (definition: unknown) => {
+  if (!definition || typeof definition !== "object") return null;
+  const value = definition as Record<string, unknown>;
+  const source = value.source as Record<string, unknown> | undefined;
+  if (!source?.table) return null;
+
+  return {
+    source: { table: String(source.table), alias: String(source.alias || "t0") },
+    joins: Array.isArray(value.joins) ? value.joins : [],
+    fields: Array.isArray(value.fields) ? value.fields : [],
+    filters: Array.isArray(value.filters) ? value.filters : [],
+    sorts: Array.isArray(value.sorts) ? value.sorts : [],
+  };
+};
+
+const validateBaqDefinition = (definition: Record<string, unknown>, catalog: BaqTable[]) => {
+  const tables = new Map(catalog.map((item) => [item.table, item]));
+  const source = definition.source as { table?: string; alias?: string };
+  if (!source?.table || !tables.has(source.table)) {
+    throw new Error(`BAQ主表不存在：${source?.table || "-"}`);
+  }
+  const aliases = new Map([[source.alias || "t0", source.table]]);
+  for (const join of definition.joins as Array<Record<string, unknown>>) {
+    const table = String(join.table || "");
+    const alias = String(join.alias || "");
+    const leftAlias = String(join.leftAlias || "");
+    const leftField = String(join.leftField || "");
+    const rightField = String(join.rightField || "");
+    const leftTable = tables.get(aliases.get(leftAlias) || "");
+    const rightTable = tables.get(table);
+    if (!rightTable || !alias || aliases.has(alias) || !leftTable) {
+      throw new Error(`BAQ关联配置无效：${table || alias}`);
+    }
+    if (!leftTable.columns.some((column) => column.name === leftField) ||
+        !rightTable.columns.some((column) => column.name === rightField)) {
+      throw new Error(`BAQ关联字段不存在：${leftAlias}.${leftField} = ${table}.${rightField}`);
+    }
+    aliases.set(alias, table);
+  }
+  const fields = definition.fields as Array<Record<string, unknown>>;
+  if (!fields.length) throw new Error("BAQ至少需要一个输出字段");
+  for (const field of fields) {
+    const table = tables.get(aliases.get(String(field.tableAlias || "")) || "");
+    if (!table?.columns.some((column) => column.name === field.field)) {
+      throw new Error(`BAQ输出字段不存在：${field.tableAlias}.${field.field}`);
+    }
+    if (!field.alias) field.alias = field.field;
+    if (!["none", "sum", "count", "avg", "min", "max"].includes(String(field.aggregate || "none"))) {
+      throw new Error(`BAQ聚合方式无效：${field.aggregate}`);
+    }
+  }
+  const fieldAliases = new Set(fields.map((field) => String(field.alias || field.field)));
+  for (const sort of definition.sorts as Array<Record<string, unknown>>) {
+    if (!fieldAliases.has(String(sort.fieldAlias || ""))) {
+      throw new Error(`BAQ排序字段不存在：${sort.fieldAlias}`);
+    }
+  }
+};
+
 export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolResult> {
   const catalog = await loadBaqCatalog();
   const target = await findBaqTarget(state.text, state.currentFocus);
   const current = target || null;
   const prompt = [
-    "你是BAQ设计助手。请根据用户描述输出一个完整的BAQ JSON，只返回JSON。",
-    "必须包含：name, code, description, definition。",
-    "definition 包含：source, joins, fields, filters, sorts。",
+    "你是 OPERP BAQ 设计助手。请根据用户的完整需求设计真正可执行的 BAQ，不要只创建一条空记录。",
+    "请分析应该使用哪张主表、关联哪些表、关联字段、输出字段、分组聚合、筛选条件和排序方式。",
+    "只返回 JSON，不要 Markdown，不要解释。必须包含 name、code、description、definition。",
+    "definition 必须完整包含 source、joins、fields、filters、sorts。",
+    "source 格式为 {table, alias}，主表 alias 固定为 t0。",
+    "join 格式为 {id,type,table,alias,leftAlias,leftField,rightField}，type 只能是 left 或 inner。",
+    "field 格式为 {id,alias,field,groupBy,aggregate,tableAlias}，aggregate 只能是 none、sum、count、avg、min、max。",
+    "filter 格式为 {id,tableAlias,field,operator,value}，operator 只能是 eq、neq、gt、gte、lt、lte、like、is_null、not_null。",
+    "sort 格式为 {id,fieldAlias,direction}，direction 只能是 asc 或 desc。",
+    "如果用户要求统计、数量、金额、合计或平均值，必须正确设置 aggregate 和 groupBy。",
+    "只能从下面数据目录的 table 字段中选择真实表名，不能使用 PartBin、Part、Customer 等 ERP 逻辑表名，也不能使用中文字段名或臆造字段。",
+    "如果需求无法匹配数据目录中的真实表和字段，必须返回 definition 为空，而不是猜测表名。",
     current ? `当前BAQ：${JSON.stringify(current)}` : "当前BAQ：无",
     `数据目录：${JSON.stringify(catalog)}`,
     `用户原话：${state.text}`,
@@ -400,16 +554,18 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
   ].join("\n");
   const { content } = await callChatModel([{ role: "system", content: "只返回JSON。" }, { role: "user", content: prompt }], state.provider);
   const parsed = parseJson<{ name?: string; code?: string; description?: string; definition?: unknown }>(content);
-  if (!parsed?.definition) {
+  const definition = normalizeBaqDefinition(parsed?.definition);
+  if (!definition) {
     return { status: "error", reply: "BAQ 生成失败：模型未返回有效定义。" };
   }
+  validateBaqDefinition(definition, catalog);
   const baq = {
     id: current?.id as number | undefined,
-    code: String(parsed.code || current?.code || `baq_${Date.now()}`),
-    name: String(parsed.name || current?.name || "未命名查询"),
-    description: String(parsed.description || current?.description || ""),
+    code: String(parsed?.code || current?.code || `baq_${Date.now()}`),
+    name: String(parsed?.name || current?.name || "未命名查询"),
+    description: String(parsed?.description || current?.description || ""),
     status: "draft" as const,
-    definition: parsed.definition,
+    definition,
   };
   const payload = {
     code: baq.code,
@@ -424,9 +580,10 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
     : await supabase.from("sys_baq_queries").insert(payload).select().single();
   if (response.error) throw response.error;
   const saved = response.data as Record<string, unknown>;
+  const definitionSummary = `数据源：${String((definition.source as Record<string, unknown>).table || "-")}\n关联表：${Array.isArray(definition.joins) ? definition.joins.length : 0} 张\n输出字段：${Array.isArray(definition.fields) ? definition.fields.length : 0} 个\n筛选条件：${Array.isArray(definition.filters) ? definition.filters.length : 0} 个\n排序条件：${Array.isArray(definition.sorts) ? definition.sorts.length : 0} 个`;
   return {
     status: "success",
-    reply: `${baq.id ? "BAQ 已更新" : "BAQ 已创建"}：${String(saved.name || baq.name)}\n编码：${String(saved.code || baq.code)}`,
+    reply: `${baq.id ? "BAQ 已更新" : "BAQ 已创建"}：${String(saved.name || baq.name)}\n编码：${String(saved.code || baq.code)}\n\n${definitionSummary}`,
     data: saved,
     focus: { type: "baq", id: saved.id, code: saved.code, name: saved.name },
   };
