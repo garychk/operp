@@ -468,8 +468,25 @@ async function findBaqTarget(text: string, focus?: unknown) {
   const byFocus = focus && typeof focus === "object" ? (focus as Record<string, unknown>) : null;
   const focusCandidate = byFocus?.id ? items.find((item) => String(item.id) === String(byFocus.id)) || null : null;
   if (focusCandidate) return focusCandidate;
-  return items.find((item) => normalized.includes(normalize(String(item.code || ""))) || normalized.includes(normalize(String(item.name || "")))) || null;
+  const namedTarget = items.find((item) => normalized.includes(normalize(String(item.code || ""))) || normalized.includes(normalize(String(item.name || ""))));
+  if (namedTarget) return namedTarget;
+  if (/(修改|更新|编辑|调整|优化|补充|继续|刚才|刚刚|这个|它|上一个)/i.test(text)) {
+    return items[0] || null;
+  }
+  return null;
 }
+
+const mergeBaqDefinition = (current: unknown, next: unknown) => {
+  const currentDefinition = current && typeof current === "object" ? current as Record<string, unknown> : {};
+  const nextDefinition = next && typeof next === "object" ? next as Record<string, unknown> : {};
+  return {
+    source: nextDefinition.source || currentDefinition.source,
+    joins: Array.isArray(nextDefinition.joins) ? nextDefinition.joins : (Array.isArray(currentDefinition.joins) ? currentDefinition.joins : []),
+    fields: Array.isArray(nextDefinition.fields) ? nextDefinition.fields : (Array.isArray(currentDefinition.fields) ? currentDefinition.fields : []),
+    filters: Array.isArray(nextDefinition.filters) ? nextDefinition.filters : (Array.isArray(currentDefinition.filters) ? currentDefinition.filters : []),
+    sorts: Array.isArray(nextDefinition.sorts) ? nextDefinition.sorts : (Array.isArray(currentDefinition.sorts) ? currentDefinition.sorts : []),
+  };
+};
 
 const normalizeBaqDefinition = (definition: unknown) => {
   if (!definition || typeof definition !== "object") return null;
@@ -554,9 +571,17 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
   ].join("\n");
   const { content } = await callChatModel([{ role: "system", content: "只返回JSON。" }, { role: "user", content: prompt }], state.provider);
   const parsed = parseJson<{ name?: string; code?: string; description?: string; definition?: unknown }>(content);
-  const definition = normalizeBaqDefinition(parsed?.definition);
+  const isUpdate = Boolean(current?.id);
+  const definition = normalizeBaqDefinition(
+    isUpdate ? mergeBaqDefinition(current?.definition, parsed?.definition) : parsed?.definition,
+  );
   if (!definition) {
-    return { status: "error", reply: "BAQ 生成失败：模型未返回有效定义。" };
+    return {
+      status: "error",
+      reply: isUpdate
+        ? "BAQ 修改失败：没有找到可修改的 BAQ 定义，请先明确 BAQ 名称或编码。"
+        : "BAQ 创建失败：模型未生成有效的查询定义。",
+    };
   }
   validateBaqDefinition(definition, catalog);
   const baq = {

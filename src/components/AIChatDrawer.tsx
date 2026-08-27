@@ -57,6 +57,7 @@ interface ChatMessage {
   content: string;
   status?: "loading" | "success" | "error";
   trace?: ThoughtChainItemType[];
+  focus?: unknown;
 }
 type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
 type AiChatStreamEvent =
@@ -566,7 +567,10 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         skill: selectedSkill,
         context: {
           page: window.location.pathname,
-          current_focus: null,
+          current_focus:
+            [...messages]
+              .reverse()
+              .find((item) => item.role === "assistant" && item.focus)?.focus || null,
           recent_messages: messages.slice(-12).map((item) => ({
             role: item.role,
             content: item.content,
@@ -655,7 +659,12 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           content: "",
           status: event.status === "error" ? "error" : "success",
         });
-        updateAssistant({ trace: traceItems, content: event.reply || "已处理所选技能。", status: event.status === "error" ? "error" : "success" });
+        updateAssistant({
+          trace: traceItems,
+          content: event.reply || "已处理所选技能。",
+          focus: event.focus,
+          status: event.status === "error" ? "error" : "success",
+        });
         window.setTimeout(scrollMessagesToBottom, 0);
         if (event.next_questions?.length) {
           message.info(event.next_questions[0]);
