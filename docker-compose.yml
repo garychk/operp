@@ -2,9 +2,28 @@ services:
   web:
     image: nginx:1.27-alpine
     container_name: operp-web
+    depends_on:
+      - ai-server
     ports:
       - "8080:80"
     volumes:
       - ./dist:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+
+  ai-server:
+    build:
+      context: ./ai-server
+    container_name: operp-ai-server
+    environment:
+      PORT: 3001
+      SUPABASE_URL: ${VITE_SUPABASE_URL}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL:-gpt-5.1}
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:5173,http://127.0.0.1:5173}
+    expose:
+      - "3001"
     restart: unless-stopped

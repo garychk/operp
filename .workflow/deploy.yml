@@ -17,12 +17,17 @@ stages:
     - '# 设置NPM源，提升安装速度'
     - npm config set registry https://registry.npmmirror.com
     - '# 注入生产环境变量（Vite 构建时会读取进程环境中的 VITE_ 变量，优先级最高）'
-    - export VITE_SUPABASE_URL=$SUPABASE_URL && export VITE_SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY
-      && npm install && npm run build
+    - export VITE_SUPABASE_URL=$VITE_SUPABASE_URL && export VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+      && export SUPABASE_URL=$VITE_SUPABASE_URL && npm install && npm run build
+    - cd ai-server && npm install && npm run build
     artifacts:
     - name: BUILD_ARTIFACT
       path:
       - ./dist
+      - ./ai-server/dist
+      - ./ai-server/package.json
+      - ./ai-server/package-lock.json
+      - ./ai-server/Dockerfile
       - ./docker-compose.yml
       - ./nginx.conf
       type: .tar.gz
@@ -96,7 +101,7 @@ stages:
       fi
 
       echo "== 重启 nginx 容器 =="
-      docker compose up -d --force-recreate
+      docker compose up -d --build --force-recreate
       docker ps --filter name=operp-web
       echo "== 部署完成 =="
     hostGroupID:
@@ -118,5 +123,5 @@ notify: []
 strategy:
   blocking: true
 variables:
-  SUPABASE_URL: https://rsycatebzetgjmvkjixy.supabase.co
-  SUPABASE_ANON_KEY: sb_publishable_47vlA1D89JRxpPpD2PjScQ_AY51jtqD
+  VITE_SUPABASE_URL: https://rsycatebzetgjmvkjixy.supabase.co
+  VITE_SUPABASE_ANON_KEY: sb_publishable_47vlA1D89JRxpPpD2PjScQ_AY51jtqD
