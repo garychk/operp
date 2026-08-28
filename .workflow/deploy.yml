@@ -24,10 +24,7 @@ stages:
     - name: BUILD_ARTIFACT
       path:
       - ./dist
-      - ./ai-server/dist
-      - ./ai-server/package.json
-      - ./ai-server/package-lock.json
-      - ./ai-server/Dockerfile
+      - ./ai-server
       - ./docker-compose.yml
       - ./nginx.conf
       type: .tar.gz
@@ -97,6 +94,21 @@ stages:
 
       if [ ! -f nginx.conf ]; then
         echo "错误：未找到 nginx.conf，Nginx 容器将无法加载站点配置。"
+        exit 1
+      fi
+
+      if [ ! -d ai-server ]; then
+        echo "错误：未找到 ai-server 目录。请确认制品已包含整个 ai-server/。"
+        exit 1
+      fi
+
+      if [ ! -f ai-server/Dockerfile ]; then
+        echo "错误：未找到 ai-server/Dockerfile。请确认制品中已包含该文件。"
+        exit 1
+      fi
+
+      if [ ! -f ai-server/package.json ]; then
+        echo "错误：未找到 ai-server/package.json。请确认制品中已包含该文件。"
         exit 1
       fi
 
