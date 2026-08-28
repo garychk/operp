@@ -29,7 +29,7 @@ docker pull nginx:1.27-alpine
 
 echo ""
 echo "初始化完成。后续发布由 Gitee Go 流水线自动完成："
-echo "  推送 master -> 云端构建 -> scp dist 到 $DEPLOY_DIR -> docker compose up -d"
+echo "  推送 master -> 云端构建 -> scp 制品到 $DEPLOY_DIR -> 校验 ai-server -> docker compose up -d"
 echo ""
 echo "请确认部署目录所属用户与流水线 SSH_USER 一致，且该用户有 docker 权限："
 echo "  sudo usermod -aG docker <SSH_USER>"
