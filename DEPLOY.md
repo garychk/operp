@@ -155,7 +155,7 @@ export default defineConfig({
 线上部署 `ai-server` 时，需要提供这些环境变量：
 
 ```bash
-SUPABASE_URL=
+VITE_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 LLM_API_KEY=
 LLM_BASE_URL=
