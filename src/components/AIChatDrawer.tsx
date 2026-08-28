@@ -4,6 +4,7 @@ import {
   BulbOutlined,
   DatabaseOutlined,
   DeleteOutlined,
+  DownOutlined,
   LinkOutlined,
   PlusOutlined,
   SendOutlined,
@@ -21,10 +22,10 @@ import {
   Button,
   Card,
   Drawer,
+  Dropdown,
   Flex,
   Input,
   Modal,
-  Radio,
   Select,
   Space,
   Typography,
@@ -58,8 +59,18 @@ interface ChatMessage {
   status?: "loading" | "success" | "error";
   trace?: ThoughtChainItemType[];
   focus?: unknown;
+  route?: string;
+  routeLabel?: string;
 }
 type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
+const aiSkillOptions: { value: AiSkill; label: string; icon: ReactNode }[] = [
+  { value: "auto", label: "自动", icon: <SendOutlined /> },
+  { value: "analysis", label: "数据分析", icon: <DatabaseOutlined /> },
+  { value: "create", label: "创建业务", icon: <PlusOutlined /> },
+  { value: "action", label: "业务动作", icon: <SendOutlined /> },
+  { value: "baq", label: "创建 BAQ", icon: <DatabaseOutlined /> },
+  { value: "chat", label: "普通对话", icon: <BulbOutlined /> },
+];
 type AiChatStreamEvent =
   | { type: "step"; step: string; message: string; data?: unknown }
   | {
@@ -67,6 +78,8 @@ type AiChatStreamEvent =
       status?: "success" | "error" | "need_confirmation" | "needs_more";
       reply?: string;
       focus?: unknown;
+      route?: string;
+      routeLabel?: string;
       need_confirmation?: boolean;
       next_questions?: string[];
       data?: unknown;
@@ -139,16 +152,10 @@ const renderInlineMarkdown = (text: string) => {
       );
     } else if (token.startsWith("**") || token.startsWith("__")) {
       parts.push(
-        <strong key={`${match.index}-strong`}>
-          {token.slice(2, -2)}
-        </strong>,
+        <strong key={`${match.index}-strong`}>{token.slice(2, -2)}</strong>,
       );
     } else if (token.startsWith("*") || token.startsWith("_")) {
-      parts.push(
-        <em key={`${match.index}-em`}>
-          {token.slice(1, -1)}
-        </em>,
-      );
+      parts.push(<em key={`${match.index}-em`}>{token.slice(1, -1)}</em>);
     } else if (token.startsWith("![")) {
       const parsed = token.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
       if (parsed) {
@@ -218,7 +225,9 @@ const renderMarkdown = (value: string) => {
       nodes.push(
         <ul key={`block-${blockIndex}`} className="ai-markdown-list">
           {lines.map((line, lineIndex) => (
-            <li key={`${blockIndex}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^[-*+]\s+/, ""))}</li>
+            <li key={`${blockIndex}-${lineIndex}`}>
+              {renderInlineMarkdown(line.replace(/^[-*+]\s+/, ""))}
+            </li>
           ))}
         </ul>,
       );
@@ -229,7 +238,9 @@ const renderMarkdown = (value: string) => {
       nodes.push(
         <ol key={`block-${blockIndex}`} className="ai-markdown-list">
           {lines.map((line, lineIndex) => (
-            <li key={`${blockIndex}-${lineIndex}`}>{renderInlineMarkdown(line.replace(/^\d+\.\s+/, ""))}</li>
+            <li key={`${blockIndex}-${lineIndex}`}>
+              {renderInlineMarkdown(line.replace(/^\d+\.\s+/, ""))}
+            </li>
           ))}
         </ol>,
       );
@@ -239,7 +250,9 @@ const renderMarkdown = (value: string) => {
     if (/^>\s?/.test(lines[0])) {
       nodes.push(
         <blockquote key={`block-${blockIndex}`} className="ai-markdown-quote">
-          {renderInlineMarkdown(lines.map((line) => line.replace(/^>\s?/, "")).join("\n"))}
+          {renderInlineMarkdown(
+            lines.map((line) => line.replace(/^>\s?/, "")).join("\n"),
+          )}
         </blockquote>,
       );
       return;
@@ -271,6 +284,12 @@ const MarkdownMessage = ({ content }: { content: string }) => (
   <div className="ai-markdown-body">{renderMarkdown(content)}</div>
 );
 
+const RouteLink = ({ label, href }: { label: string; href: string }) => (
+  <a href={href} className="ai-route-link">
+    {label}
+  </a>
+);
+
 const renderThoughtTitle = (message: string) => {
   const value = message.trim();
   if (!value) return "处理中";
@@ -295,7 +314,11 @@ const renderThoughtTitle = (message: string) => {
 const formatStepContent = (data: unknown): string => {
   if (data === null || data === undefined) return "";
   if (typeof data === "string") return data;
-  if (Array.isArray(data)) return data.map((item) => formatStepContent(item)).filter(Boolean).join("\n");
+  if (Array.isArray(data))
+    return data
+      .map((item) => formatStepContent(item))
+      .filter(Boolean)
+      .join("\n");
   if (typeof data === "object") {
     try {
       return JSON.stringify(data, null, 2);
@@ -309,7 +332,8 @@ const formatStepContent = (data: unknown): string => {
 const isPendingStep = (message: string) => message.startsWith("正在");
 
 const formatStepResult = (data: unknown, message: string): string => {
-  const value = data && typeof data === "object" ? data as Record<string, unknown> : {};
+  const value =
+    data && typeof data === "object" ? (data as Record<string, unknown>) : {};
 
   if (message.includes("上下文已加载")) {
     const recentMessages = Number(value.recentMessages || 0);
@@ -449,6 +473,9 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       defaultAISettings.providers[0],
     [activeProviderId, providers],
   );
+  const activeSkill =
+    aiSkillOptions.find((skill) => skill.value === selectedSkill) ||
+    aiSkillOptions[0];
 
   useEffect(() => {
     if (!open || configLoaded) {
@@ -570,7 +597,8 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           current_focus:
             [...messages]
               .reverse()
-              .find((item) => item.role === "assistant" && item.focus)?.focus || null,
+              .find((item) => item.role === "assistant" && item.focus)?.focus ||
+            null,
           recent_messages: messages.slice(-12).map((item) => ({
             role: item.role,
             content: item.content,
@@ -589,20 +617,28 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
 
       const updateAssistant = (patch: Partial<ChatMessage>) => {
         setMessages((prev) =>
-          prev.map((item) => (item.id === assistantMessage.id ? { ...item, ...patch } : item)),
+          prev.map((item) =>
+            item.id === assistantMessage.id ? { ...item, ...patch } : item,
+          ),
         );
       };
 
       await streamAIReply(payload, async (event) => {
-        await new Promise((resolve) => window.requestAnimationFrame(() => resolve(null)));
+        await new Promise((resolve) =>
+          window.requestAnimationFrame(() => resolve(null)),
+        );
 
         if (event.type === "step") {
-          const existingIndex = traceItems.findIndex((item) => String(item.key || "").startsWith(`${event.step}:`));
+          const existingIndex = traceItems.findIndex((item) =>
+            String(item.key || "").startsWith(`${event.step}:`),
+          );
           const key = `${event.step}:${existingIndex >= 0 ? existingIndex : traceItems.length}`;
           const nextItem: ThoughtChainItemType = {
             key,
             title: renderThoughtTitle(event.step || event.message),
-            description: isPendingStep(event.message) ? event.message : undefined,
+            description: isPendingStep(event.message)
+              ? event.message
+              : undefined,
             content: isPendingStep(event.message)
               ? undefined
               : formatStepResult(event.data, event.message),
@@ -610,7 +646,9 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             blink: isPendingStep(event.message),
           };
           if (existingIndex >= 0) {
-            traceItems = traceItems.map((item, index) => (index === existingIndex ? nextItem : item));
+            traceItems = traceItems.map((item, index) =>
+              index === existingIndex ? nextItem : item,
+            );
           } else {
             traceItems = [...traceItems, nextItem];
           }
@@ -650,7 +688,8 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                 ...item,
                 status: event.status === "error" ? "error" : "success",
                 blink: false,
-                content: formatStepResult(event.data, "回复已整理") || item.content,
+                content:
+                  formatStepResult(event.data, "回复已整理") || item.content,
               }
             : { ...item, status: "success", blink: false },
         );
@@ -663,6 +702,8 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           trace: traceItems,
           content: event.reply || "已处理所选技能。",
           focus: event.focus,
+          route: event.route,
+          routeLabel: event.routeLabel,
           status: event.status === "error" ? "error" : "success",
         });
         window.setTimeout(scrollMessagesToBottom, 0);
@@ -672,7 +713,11 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       });
     } catch (error) {
       const errorText =
-        error instanceof Error ? error.message : typeof error === "string" ? error : "AI 服务暂时不可用。";
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "AI 服务暂时不可用。";
       traceItems = traceItems.map((item) =>
         item.status === "loading"
           ? {
@@ -687,7 +732,12 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       setMessages((prev) =>
         prev.map((item) =>
           item.id === assistantMessage.id
-            ? { ...item, trace: traceItems, content: errorText, status: "error" }
+            ? {
+                ...item,
+                trace: traceItems,
+                content: errorText,
+                status: "error",
+              }
             : item,
         ),
       );
@@ -699,7 +749,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   };
 
   return (
-      <Drawer
+    <Drawer
       width={600}
       open={open}
       onClose={onClose}
@@ -724,16 +774,28 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                             className="ai-thought-chain"
                             items={item.trace}
                             line="solid"
-                            defaultExpandedKeys={item.trace
-                              .map((traceItem) => traceItem.key)
-                              .filter(Boolean) as string[]}
+                            defaultExpandedKeys={
+                              item.trace
+                                .map((traceItem) => traceItem.key)
+                                .filter(Boolean) as string[]
+                            }
                           />
                         ) : null}
                         {item.content ? (
                           <Bubble
                             placement="start"
                             typing={false}
-                            content={<MarkdownMessage content={item.content} />}
+                            content={
+                              <div className="ai-assistant-content">
+                                <MarkdownMessage content={item.content} />
+                                {item.route ? (
+                                  <div className="ai-route-row">
+                                    <span>路由：</span>
+                                    <RouteLink label={item.routeLabel || item.route} href={item.route} />
+                                  </div>
+                                ) : null}
+                              </div>
+                            }
                           />
                         ) : null}
                       </div>
@@ -769,7 +831,31 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             variant="borderless"
             size="small"
             extra={
-              <Flex justify="space-between" align="center" className="ai-chat-footer-controls">
+              <Space size={4}>
+                <Dropdown
+                  trigger={["click"]}
+                  menu={{
+                    items: aiSkillOptions.map((skill) => ({
+                      key: skill.value,
+                      label: (
+                        <span className="ai-skill-option">
+                          {skill.icon}
+                          <span>{skill.label}</span>
+                        </span>
+                      ),
+                    })),
+                    selectedKeys: [selectedSkill],
+                    onClick: ({ key }) => setSelectedSkill(key as AiSkill),
+                  }}
+                >
+                  <Button size="small">
+                    <span className="ai-skill-option">
+                      {activeSkill.icon}
+                      <span>{activeSkill.label}</span>
+                    </span>
+                    <DownOutlined />
+                  </Button>
+                </Dropdown>
                 <Select
                   size="small"
                   value={activeProvider.id}
@@ -782,26 +868,24 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                     setAISettings((prev) => ({ ...prev, activeProviderId }))
                   }
                 />
-                <Space size={4}>
-                  {messages.length > 0 && (
-                    <Button
-                      type="text"
-                      size="small"
-                      onClick={() => {
-                        setMessages([]);
-                      }}
-                    >
-                      清空
-                    </Button>
-                  )}
+                {messages.length > 0 && (
                   <Button
                     type="text"
                     size="small"
-                    icon={<SettingOutlined />}
-                    onClick={() => setConfigOpen(true)}
-                  />
-                </Space>
-              </Flex>
+                    onClick={() => {
+                      setMessages([]);
+                    }}
+                  >
+                    清空
+                  </Button>
+                )}
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<SettingOutlined />}
+                  onClick={() => setConfigOpen(true)}
+                />
+              </Space>
             }
           >
             <Sender
@@ -812,50 +896,6 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
               onSubmit={() => submitMessage(inputValue)}
               placeholder={`使用 ${activeProvider.name} 提问`}
             />
-            <Radio.Group
-              value={selectedSkill}
-              className="ai-chat-skill-select"
-              onChange={(event) => setSelectedSkill(event.target.value)}
-              optionType="button"
-              buttonStyle="solid"
-            >
-              <Radio.Button value="auto">
-                <span className="ai-skill-option">
-                  <SendOutlined />
-                  <span>自动</span>
-                </span>
-              </Radio.Button>
-              <Radio.Button value="analysis">
-                <span className="ai-skill-option">
-                  <DatabaseOutlined />
-                  <span>数据分析</span>
-                </span>
-              </Radio.Button>
-              <Radio.Button value="create">
-                <span className="ai-skill-option">
-                  <PlusOutlined />
-                  <span>创建业务</span>
-                </span>
-              </Radio.Button>
-              <Radio.Button value="action">
-                <span className="ai-skill-option">
-                  <SendOutlined />
-                  <span>业务动作</span>
-                </span>
-              </Radio.Button>
-              <Radio.Button value="baq">
-                <span className="ai-skill-option">
-                  <DatabaseOutlined />
-                  <span>创建 BAQ</span>
-                </span>
-              </Radio.Button>
-              <Radio.Button value="chat">
-                <span className="ai-skill-option">
-                  <BulbOutlined />
-                  <span>普通对话</span>
-                </span>
-              </Radio.Button>
-            </Radio.Group>
           </Card>
         </Flex>
       </XProvider>
@@ -875,7 +915,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           </Typography.Text>
           {providers.map((provider) => (
             <Card className="ai-provider-card" key={provider.id} size="small">
-              <Space vertical style={{ width: '100%' }}>
+              <Space vertical style={{ width: "100%" }}>
                 <Space className="ai-provider-card-header">
                   <Input
                     value={provider.name}
@@ -918,7 +958,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                   value={provider.apiKey}
                   onChange={(event) =>
                     updateProvider(provider.id, { apiKey: event.target.value })
-                  }                  
+                  }
                   placeholder="可选 API Key，Ollama 本地通常不用填"
                 />
               </Space>

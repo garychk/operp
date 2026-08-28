@@ -9,6 +9,8 @@ interface ToolResult {
   reply: string;
   data?: unknown;
   focus?: unknown;
+  route?: string;
+  routeLabel?: string;
   needConfirmation?: boolean;
   nextQuestions?: string[];
 }
@@ -49,6 +51,42 @@ interface EntityDef {
 
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
+
+const entityRouteHints: Record<EntityKey, string[]> = {
+  customer: ["客户管理", "客户"],
+  supplier: ["供应商管理", "供应商"],
+  product: ["物料管理", "物料", "产品"],
+  warehouse: ["仓库管理", "仓库"],
+  department: ["部门管理", "部门"],
+  workCenter: ["工作中心", "工作中心管理"],
+  operation: ["工序", "工序管理"],
+  bom: ["BOM", "BOM管理", "物料清单"],
+  routing: ["工艺路线", "工艺路线管理"],
+  purchaseOrder: ["采购订单", "采购单"],
+  salesOrder: ["销售订单", "销售单"],
+  purchaseReceipt: ["采购入库", "采购入库单"],
+  salesDelivery: ["销售出货", "销售出货单"],
+  productionOrder: ["生产订单", "工单"],
+};
+
+async function findEntityRoute(entity: EntityDef) {
+  const hints = entityRouteHints[entity.key] || [entity.label];
+  for (const hint of hints) {
+    const { data, error } = await supabase
+      .from("sys_menus")
+      .select("menu_name, menu_code, path")
+      .eq("is_deleted", "n")
+      .eq("status", "1")
+      .or(`menu_name.ilike.%${hint}%,menu_code.ilike.%${hint.toLowerCase().replace(/\s+/g, "_")}%,path.ilike.%${hint}%`)
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (data?.path) {
+      return { route: String(data.path), routeLabel: String(data.menu_name || entity.label) };
+    }
+  }
+  return null;
+}
 
 const entityDefs: Record<EntityKey, EntityDef> = {
   customer: {
@@ -424,11 +462,17 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
   if (response.error) throw response.error;
   const row = response.data as Record<string, unknown>;
   const displayName = String(row[entity.nameField || entity.codeField || "id"] || row.id || "-");
+  const routeInfo = await findEntityRoute(entity).catch(() => null);
+  const routeText = routeInfo?.route
+    ? `\n路由：${routeInfo.routeLabel || entity.label} -> [打开页面](${routeInfo.route})`
+    : "";
   return {
     status: "success" as const,
-    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${displayName}${extracted.summary ? `\n${extracted.summary}` : ""}`,
+    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${displayName}${extracted.summary ? `\n${extracted.summary}` : ""}${routeText}`,
     data: row,
-    focus: { type: entity.key, id: row.id, code: row[entity.codeField || "code"], name: row[entity.nameField || entity.codeField || "name"] },
+    route: routeInfo?.route,
+    routeLabel: routeInfo?.routeLabel,
+    focus: { type: entity.key, id: row.id, code: row[entity.codeField || "code"], name: row[entity.nameField || entity.codeField || "name"], route: routeInfo?.route },
   };
 }
 
