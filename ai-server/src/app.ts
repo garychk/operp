@@ -6,10 +6,11 @@ import { aiRouter } from "./api/ai.routes.js";
 
 export function createApp() {
   const app = express();
+  const allowedOrigins = env.ALLOWED_ORIGIN.split(",").map((item) => item.trim());
 
   app.use(
     cors({
-      origin: env.ALLOWED_ORIGIN,
+      origin: allowedOrigins,
       credentials: true,
     }),
   );

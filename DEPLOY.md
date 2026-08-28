@@ -73,9 +73,9 @@ npm run preview
 
 ## 生产部署
 
-### 只部署 dist 的 Docker 方案
+### 前端 + AI 服务 的 Docker 方案
 
-这个方案不需要在服务器上拉取源码，也不需要安装 Node.js。你只需要把 `dist/`、`docker-compose.yml`、`nginx.conf` 上传到服务器，然后用 Nginx 容器直接托管静态文件。
+这个方案会把前端静态站点和 `ai-server` 一起交给 `docker compose` 管理。浏览器侧访问同域 `/api`，由 Nginx 反向代理到 AI 服务容器。
 
 #### 1. 在本地或 CI 构建
 
@@ -89,6 +89,7 @@ npm run build
 
 ```text
 dist/
+ai-server/
 docker-compose.yml
 nginx.conf
 ```
@@ -149,7 +150,22 @@ export default defineConfig({
 })
 ```
 
-### 2. 依赖安装失败
+### 2. AI 服务环境变量
+
+线上部署 `ai-server` 时，需要提供这些环境变量：
+
+```bash
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+LLM_API_KEY=
+LLM_BASE_URL=
+LLM_MODEL=
+ALLOWED_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
+```
+
+如果前端和 AI 服务通过同域 `/api` 访问，浏览器侧不会再直接碰到 `3001` 端口。
+
+### 3. 依赖安装失败
 
 尝试清除缓存后重新安装：
 
@@ -158,11 +174,11 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-### 3. TypeScript 类型错误
+### 4. TypeScript 类型错误
 
 运行 `npm run build` 检查类型错误并修复。
 
-### 4. 样式不生效
+### 5. 样式不生效
 
 确保 `src/index.css` 中正确导入 Tailwind：
 

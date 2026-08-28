@@ -8,7 +8,7 @@ const schema = z.object({
   LLM_API_KEY: z.string().min(1).optional(),
   LLM_BASE_URL: z.string().url().optional(),
   LLM_MODEL: z.string().default("gpt-5.1"),
-  ALLOWED_ORIGIN: z.string().default("http://localhost:5173"),
+  ALLOWED_ORIGIN: z.string().default("http://localhost:5173,http://127.0.0.1:5173"),
 });
 
 export const env = schema.parse(process.env);

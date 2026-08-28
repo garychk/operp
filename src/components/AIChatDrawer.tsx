@@ -91,8 +91,20 @@ type AiChatStreamErrorEvent = {
   error?: string;
 };
 type AiChatStreamPacket = AiChatStreamEvent | AiChatStreamErrorEvent;
-const AI_SERVER_URL =
-  import.meta.env.VITE_AI_SERVER_URL || "http://localhost:3001";
+const resolveAIBaseUrl = () => {
+  const explicitUrl = import.meta.env.VITE_AI_SERVER_URL;
+  if (explicitUrl) {
+    return explicitUrl.replace(/\/$/, "");
+  }
+
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return "http://localhost:3001/api/ai";
+  }
+
+  return "/api/ai";
+};
+
+const AI_SERVER_URL = resolveAIBaseUrl();
 const quickPrompts = [
   {
     key: "erp",
@@ -386,7 +398,7 @@ const streamAIReply = async (
   payload: Record<string, unknown>,
   onEvent: (event: AiChatStreamPacket) => void | Promise<void>,
 ) => {
-  const response = await fetch(`${AI_SERVER_URL}/api/ai/chat`, {
+  const response = await fetch(`${AI_SERVER_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
