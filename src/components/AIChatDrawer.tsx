@@ -32,6 +32,7 @@ import {
   message,
 } from "antd";
 import type { ThoughtChainItemType } from "@ant-design/x/es/thought-chain";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import {
   createId,
@@ -284,12 +285,6 @@ const MarkdownMessage = ({ content }: { content: string }) => (
   <div className="ai-markdown-body">{renderMarkdown(content)}</div>
 );
 
-const RouteLink = ({ label, href }: { label: string; href: string }) => (
-  <a href={href} className="ai-route-link">
-    {label}
-  </a>
-);
-
 const renderThoughtTitle = (message: string) => {
   const value = message.trim();
   if (!value) return "处理中";
@@ -462,6 +457,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const messageListRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<number | null>(null);
   const { user } = useAuth();
+  const navigate = useNavigate();
   const providers = aiSettings.providers;
   const activeProviderId = aiSettings.activeProviderId;
   const sessionId = useMemo(() => readSessionId(), []);
@@ -790,8 +786,16 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                                 <MarkdownMessage content={item.content} />
                                 {item.route ? (
                                   <div className="ai-route-row">
-                                    <span>路由：</span>
-                                    <RouteLink label={item.routeLabel || item.route} href={item.route} />
+                                    <Button 
+                                      type="link"
+                                      icon={<LinkOutlined />}
+                                      onClick={() => {
+                                        navigate(item.route!);
+                                        onClose();
+                                      }}
+                                    >
+                                      {item.routeLabel || item.route}
+                                    </Button>
                                   </div>
                                 ) : null}
                               </div>

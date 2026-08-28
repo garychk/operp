@@ -463,12 +463,9 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
   const row = response.data as Record<string, unknown>;
   const displayName = String(row[entity.nameField || entity.codeField || "id"] || row.id || "-");
   const routeInfo = await findEntityRoute(entity).catch(() => null);
-  const routeText = routeInfo?.route
-    ? `\n路由：${routeInfo.routeLabel || entity.label} -> [打开页面](${routeInfo.route})`
-    : "";
   return {
     status: "success" as const,
-    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${displayName}${extracted.summary ? `\n${extracted.summary}` : ""}${routeText}`,
+    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${displayName}${extracted.summary ? `\n${extracted.summary}` : ""}`,
     data: row,
     route: routeInfo?.route,
     routeLabel: routeInfo?.routeLabel,

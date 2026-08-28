@@ -25,6 +25,8 @@ export interface AiChatResult {
   status: "success" | "error" | "need_confirmation" | "needs_more";
   reply: string;
   focus?: unknown;
+  route?: string;
+  routeLabel?: string;
   need_confirmation?: boolean;
   next_questions?: string[];
   data?: unknown;
@@ -45,6 +47,8 @@ export interface AiGraphState {
   toolResults?: unknown[];
   reply?: string;
   focus?: unknown;
+  route?: string;
+  routeLabel?: string;
   needConfirmation?: boolean;
   nextQuestions?: string[];
 }

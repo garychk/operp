@@ -266,8 +266,3 @@
   color: var(--text-secondary);
 }
 
-.ai-route-link {
-  color: var(--accent);
-  text-decoration: underline;
-  font-weight: 600;
-}

@@ -13,6 +13,8 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
       toolResults: [result],
       reply: result.reply,
       focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
       needConfirmation: result.needConfirmation,
       nextQuestions: result.nextQuestions,
     };
@@ -25,6 +27,8 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
       toolResults: [result],
       reply: result.reply,
       focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
       needConfirmation: result.needConfirmation,
       nextQuestions: result.nextQuestions,
     };
@@ -37,6 +41,8 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
       toolResults: [result],
       reply: result.reply,
       focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
       needConfirmation: result.needConfirmation,
       nextQuestions: result.nextQuestions,
     };

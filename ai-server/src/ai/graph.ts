@@ -74,6 +74,8 @@ export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> 
     status: "success",
     reply: result.reply || "已处理。",
     focus: result.focus,
+    route: result.route,
+    routeLabel: result.routeLabel,
     need_confirmation: result.needConfirmation,
     next_questions: result.nextQuestions,
     data: {
@@ -164,6 +166,8 @@ export async function runChatGraphStream(
     status: "success",
     reply: state.reply || "已处理。",
     focus: state.focus,
+    route: state.route,
+    routeLabel: state.routeLabel,
     need_confirmation: state.needConfirmation,
     next_questions: state.nextQuestions,
     data: {
