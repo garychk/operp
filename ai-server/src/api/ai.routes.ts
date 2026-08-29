@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { supabase } from "../config/supabase.js";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
 
 export const aiRouter = Router();
@@ -13,11 +14,6 @@ const chatSchema = z.object({
     .object({
       id: z.string().optional(),
       name: z.string().optional(),
-      endpoint: z.string().optional(),
-      model: z.string().optional(),
-      apiType: z.enum(["proxy", "ollama"]).optional(),
-      apiKey: z.string().optional(),
-      temperature: z.number().optional(),
     })
     .optional(),
   context: z
@@ -28,6 +24,50 @@ const chatSchema = z.object({
     })
     .optional(),
 });
+
+const providerSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  endpoint: z.string().optional(),
+  model: z.string().optional(),
+  apiType: z.enum(["proxy", "ollama"]).optional(),
+  apiKey: z.string().optional(),
+  temperature: z.number().optional(),
+});
+
+const aiSettingsSchema = z.object({
+  enabled: z.boolean().optional(),
+  providers: z.array(providerSchema).default([]),
+  activeProviderId: z.string().optional(),
+  temperature: z.number().optional(),
+  redactSensitiveData: z.boolean().optional(),
+  maxContextMessages: z.number().optional(),
+});
+
+async function resolveProviderConfig(provider?: { id?: string; name?: string }) {
+  const { data, error } = await supabase
+    .from("sys_config")
+    .select("config_json")
+    .eq("category_code", "ai")
+    .eq("is_deleted", "n")
+    .maybeSingle();
+
+  if (error) throw error;
+
+  const settings = aiSettingsSchema.parse(data?.config_json || {});
+  const matched = settings.providers.find((item) => {
+    if (!provider?.id) return false;
+    if (item.id === provider.id) return true;
+    if (provider.name && item.name === provider.name) return true;
+    return false;
+  });
+
+  if (!matched) {
+    throw new Error(`未找到对应的 AI provider：${provider?.id || provider?.name || "unknown"}`);
+  }
+
+  return matched;
+}
 
 const wantsStream = (req: { body?: { stream?: unknown }; headers: Record<string, unknown> }) => {
   const accept = String(req.headers.accept || "");
@@ -59,6 +99,25 @@ aiRouter.post("/chat", async (req, res) => {
   }
 
   try {
+    const resolvedProvider = parsed.data.provider
+      ? await resolveProviderConfig(parsed.data.provider)
+      : undefined;
+
+    const requestBody = {
+      ...parsed.data,
+      provider: resolvedProvider
+        ? {
+            id: resolvedProvider.id,
+            name: resolvedProvider.name,
+            endpoint: resolvedProvider.endpoint,
+            model: resolvedProvider.model,
+            apiType: resolvedProvider.apiType,
+            apiKey: resolvedProvider.apiKey,
+            temperature: resolvedProvider.temperature,
+          }
+        : undefined,
+    };
+
     if (wantsStream(req)) {
       res.status(200);
       res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -71,7 +130,7 @@ aiRouter.post("/chat", async (req, res) => {
         res.write(`data: ${JSON.stringify(data)}\n\n`);
       };
 
-      await runChatGraphStream(parsed.data, async (event) => {
+      await runChatGraphStream(requestBody, async (event) => {
         if (event.type === "step") {
           send("step", event);
           return;
@@ -83,7 +142,7 @@ aiRouter.post("/chat", async (req, res) => {
       return;
     }
 
-    const result = await runChatGraph(parsed.data);
+    const result = await runChatGraph(requestBody);
     res.json({ ok: true, ...result });
   } catch (error) {
     if (!res.headersSent) {
