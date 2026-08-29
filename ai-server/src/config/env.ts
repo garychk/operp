@@ -1,3 +1,4 @@
+import "./loadEnv.js";
 import { z } from "zod";
 
 const schema = z.object({
