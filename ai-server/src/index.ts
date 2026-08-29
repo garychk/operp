@@ -1,5 +1,6 @@
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
+import { probeSupabaseConnection } from "./config/supabaseProbe.js";
 
 const maskSecret = (value: string, visible = 4) => {
   const trimmed = value.trim();
@@ -17,6 +18,14 @@ console.log("[ai-server] env check:", {
 
 const app = createApp();
 
-app.listen(env.PORT, () => {
-  console.log(`[ai-server] listening on port ${env.PORT}`);
-});
+try {
+  await probeSupabaseConnection();
+  console.log("[ai-server] supabase probe: OK");
+  app.listen(env.PORT, () => {
+    console.log(`[ai-server] listening on port ${env.PORT}`);
+  });
+} catch (error) {
+  console.error("[ai-server] supabase probe: FAILED");
+  console.error(error);
+  process.exit(1);
+}
