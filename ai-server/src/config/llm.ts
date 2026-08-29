@@ -1,5 +1,3 @@
-import { env } from "./env.js";
-
 export interface LlmProviderConfig {
   endpoint?: string;
   apiKey?: string;
@@ -20,9 +18,7 @@ export async function callChatModel(
   messages: ChatMessage[],
   provider?: LlmProviderConfig,
 ) {
-  const endpoint =
-    provider?.endpoint ||
-    (env.LLM_BASE_URL ? toResponseUrl(env.LLM_BASE_URL) : undefined);
+  const endpoint = provider?.endpoint;
   if (!endpoint) {
     throw new Error("No model endpoint configured");
   }
@@ -31,12 +27,10 @@ export async function callChatModel(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(provider?.apiKey || env.LLM_API_KEY
-        ? { Authorization: `Bearer ${provider?.apiKey || env.LLM_API_KEY}` }
-        : {}),
+      ...(provider?.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
     },
     body: JSON.stringify({
-      model: provider?.model || env.LLM_MODEL,
+      model: provider?.model,
       messages,
       stream: false,
       temperature: provider?.temperature ?? 0.3,
