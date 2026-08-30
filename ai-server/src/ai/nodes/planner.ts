@@ -8,8 +8,10 @@ export async function plannerNode(state: AiGraphState): Promise<AiGraphState> {
         ? [{ step: "create_entity", tool: "entity.create", input: { text: state.text } }]
         : state.intent === "update"
           ? [{ step: "update_entity", tool: "entity.update", input: { text: state.text, currentFocus: state.currentFocus } }]
-          : state.intent === "analysis"
-            ? [{ step: "finance_summary", tool: "finance.summary", input: { text: state.text } }]
+      : state.intent === "analysis"
+            ? state.domain === "master_data"
+              ? [{ step: "master_data_count", tool: "master_data.count", input: { text: state.text } }]
+              : [{ step: "finance_summary", tool: "finance.summary", input: { text: state.text } }]
             : state.intent === "knowledge"
               ? [{ step: "knowledge_lookup", tool: "knowledge.search", input: { text: state.text } }]
               : [{ step: "draft_reply", tool: "chat.respond", input: { text: state.text } }];

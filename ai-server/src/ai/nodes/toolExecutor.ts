@@ -1,6 +1,6 @@
 import type { AiGraphState } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
-import { createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
+import { countMasterDataTool, createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
 
 export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphState> {
   const plan = Array.isArray(state.plan) ? state.plan : [];
@@ -81,6 +81,20 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
       ...state,
       toolResults: [{ step: "knowledge_search", ok: true, output: "knowledge_stub" }],
       reply: "已识别为知识库查询意图，但当前知识库检索节点还未接入，先按已有上下文继续回答。",
+    };
+  }
+
+  if (tool?.tool === "master_data.count") {
+    const result = await countMasterDataTool(state);
+    return {
+      ...state,
+      toolResults: [result],
+      reply: result.reply,
+      focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
+      needConfirmation: result.needConfirmation,
+      nextQuestions: result.nextQuestions,
     };
   }
 

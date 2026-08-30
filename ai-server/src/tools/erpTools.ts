@@ -691,6 +691,40 @@ export async function createOrUpdateEntityTool(
   return upsertEntity(entity, state.text, state.currentFocus, state.provider, action);
 }
 
+export async function countMasterDataTool(state: AiGraphState): Promise<ToolResult> {
+  const text = state.text;
+  const detected = entityFromText(text);
+  const entity = detected ? entityDefs[detected] : null;
+  if (!entity) {
+    return {
+      status: "needs_more",
+      reply: "请明确要统计哪类主数据，比如客户、物料、供应商、仓库。",
+      nextQuestions: ["客户", "物料", "供应商", "仓库"],
+    };
+  }
+
+  const { count, error } = await supabase
+    .from(entity.tableName)
+    .select("*", { count: "exact", head: true })
+    .eq("is_deleted", "n");
+
+  if (error) throw error;
+
+  return {
+    status: "success",
+    reply: `当前系统中${entity.label}共有 ${count || 0} 条。`,
+    data: {
+      entity: entity.key,
+      label: entity.label,
+      count: count || 0,
+    },
+    focus: {
+      type: entity.key,
+      count: count || 0,
+    },
+  };
+}
+
 export async function financeSummaryTool(state: AiGraphState): Promise<ToolResult> {
   const [receivablesRes, payablesRes, vouchersRes, assetsRes] = await Promise.all([
     supabase.from("erp_receivables_s_539dcf81_b").select("*").eq("is_deleted", "n"),
