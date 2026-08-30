@@ -1,4 +1,17 @@
 export type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
+export type AiIntent = "chat" | "knowledge" | "create" | "update" | "baq" | "analysis";
+export type AiAction = "create" | "update" | "chat";
+export type AiQueryMode =
+  | "count"
+  | "list"
+  | "summary"
+  | "detail"
+  | "trend"
+  | "compare"
+  | "exception"
+  | "definition"
+  | "answer";
+export type AiResponseMode = "text" | "table" | "card" | "link" | "follow_up";
 
 export interface AiChatRequest {
   session_id: string;
@@ -41,9 +54,13 @@ export interface AiGraphState {
   page?: string;
   currentFocus?: unknown;
   recentMessages: unknown[];
-  intent?: string;
-  action?: "create" | "update" | "chat";
+  intent?: AiIntent;
+  action?: AiAction;
   domain?: string;
+  target?: string;
+  queryMode?: AiQueryMode;
+  responseMode?: AiResponseMode;
+  confidence?: number;
   plan?: unknown;
   toolResults?: unknown[];
   reply?: string;

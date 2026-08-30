@@ -76,6 +76,30 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
     };
   }
 
+  if (tool?.tool === "business.analysis" || tool?.tool === "production.analysis" || tool?.tool === "inventory.summary") {
+    const systemPrompt = [
+      "你是 OPERP 的通用业务分析助手。",
+      "请根据用户问题、上下文和已知焦点，判断用户到底想查什么、应该如何分析、答案应该用什么形式展现。",
+      "如果对象不明确，先给出最合理的默认判断，并明确说明依据；实在不够信息时，主动追问最少必要字段。",
+      `意图：${state.intent || "analysis"}`,
+      `目标：${state.target || "unknown"}`,
+      `查询模式：${state.queryMode || "summary"}`,
+      `响应模式：${state.responseMode || "text"}`,
+      state.currentFocus ? `当前焦点：${JSON.stringify(state.currentFocus)}` : "当前焦点：无",
+      `用户原话：${state.text}`,
+    ].join("\n");
+
+    const { content } = await callChatModel(
+      [{ role: "system", content: systemPrompt }],
+      state.provider,
+    );
+    return {
+      ...state,
+      toolResults: [{ step: "business_analysis", ok: true, output: "model_response" }],
+      reply: content || "已完成业务分析。",
+    };
+  }
+
   if (tool?.tool === "knowledge.search") {
     return {
       ...state,

@@ -352,13 +352,17 @@ const formatStepResult = (data: unknown, message: string): string => {
   if (message.includes("意图已识别")) {
     const intentLabels: Record<string, string> = {
       baq: "BAQ 查询设计",
-      master_data: "ERP 业务数据维护",
-      finance: "财务数据分析",
+      create: "创建业务",
+      update: "修改业务",
+      analysis: "分析/统计",
       knowledge: "知识库查询",
       chat: "普通咨询",
     };
     const intent = String(value.intent || "chat");
-    return `判断为「${intentLabels[intent] || intent}」${value.domain ? `，业务领域：${String(value.domain)}` : ""}。`;
+    const target = value.target ? `，对象：${String(value.target)}` : "";
+    const queryMode = value.queryMode ? `，查询方式：${String(value.queryMode)}` : "";
+    const responseMode = value.responseMode ? `，展示方式：${String(value.responseMode)}` : "";
+    return `判断为「${intentLabels[intent] || intent}」${value.domain ? `，业务领域：${String(value.domain)}` : ""}${target}${queryMode}${responseMode}。`;
   }
 
   if (message.includes("任务已拆解")) {
