@@ -13,6 +13,7 @@ const State = Annotation.Root({
   text: Annotation<string>,
   skill: Annotation<AiGraphState["skill"]>,
   provider: Annotation<AiGraphState["provider"]>,
+  action: Annotation<AiGraphState["action"]>,
   page: Annotation<string | undefined>,
   currentFocus: Annotation<unknown | undefined>,
   recentMessages: Annotation<unknown[]>({

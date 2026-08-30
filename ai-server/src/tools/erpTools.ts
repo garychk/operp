@@ -425,9 +425,22 @@ async function extractEntityPayload(
   };
 }
 
-async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unknown, provider?: AiChatRequest["provider"]) {
+async function upsertEntity(
+  entity: EntityDef,
+  text: string,
+  currentFocus?: unknown,
+  provider?: AiChatRequest["provider"],
+  action: "create" | "update" = "create",
+) {
   const current = currentFocus && typeof currentFocus === "object" ? currentFocus as Record<string, unknown> : null;
-  const existing = current?.id ? current : (hasPronounReference(text) ? current : await runEntitySearch(entity, text));
+  const existing =
+    action === "update"
+      ? current?.id
+        ? current
+        : hasPronounReference(text)
+          ? current
+          : await runEntitySearch(entity, text)
+      : null;
   const extracted = await extractEntityPayload(entity, text, existing, provider);
   const mergedDraft = {
     ...entity.defaults(),
@@ -447,7 +460,7 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
   if (missingLabels.length > 0 && !existing) {
     return {
       status: "needs_more" as const,
-      reply: `创建${entity.label}还缺少这些信息：${missingLabels.join("、")}`,
+      reply: `${action === "update" ? "修改" : "创建"}${entity.label}还缺少这些信息：${missingLabels.join("、")}`,
       nextQuestions: missingLabels,
     };
   }
@@ -461,6 +474,13 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
   delete (payload as Record<string, unknown>).created_at;
 
   const isUpdate = !!existing?.id;
+  if (action === "update" && !isUpdate) {
+    return {
+      status: "needs_more" as const,
+      reply: `没有找到可修改的${entity.label}，请先明确要修改哪一条记录。`,
+      nextQuestions: [`请提供要修改的${entity.label}名称或编码`],
+    };
+  }
   const response = isUpdate
     ? await supabase.from(entity.tableName).update(payload).eq("id", existing.id).select().single()
     : await supabase.from(entity.tableName).insert(payload).select().single();
@@ -660,11 +680,15 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
   };
 }
 
-export async function createOrUpdateEntityTool(state: AiGraphState, entityKey?: EntityKey): Promise<ToolResult> {
+export async function createOrUpdateEntityTool(
+  state: AiGraphState,
+  entityKey?: EntityKey,
+  action: "create" | "update" = "create",
+): Promise<ToolResult> {
   const detected = entityFromText(state.text);
   const entity = entityKey ? entityDefs[entityKey] : (detected ? entityDefs[detected] : null);
   if (!entity) return { status: "error", reply: "未识别出要处理的业务对象。" };
-  return upsertEntity(entity, state.text, state.currentFocus, state.provider);
+  return upsertEntity(entity, state.text, state.currentFocus, state.provider, action);
 }
 
 export async function financeSummaryTool(state: AiGraphState): Promise<ToolResult> {

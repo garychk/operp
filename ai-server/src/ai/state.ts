@@ -42,6 +42,7 @@ export interface AiGraphState {
   currentFocus?: unknown;
   recentMessages: unknown[];
   intent?: string;
+  action?: "create" | "update" | "chat";
   domain?: string;
   plan?: unknown;
   toolResults?: unknown[];

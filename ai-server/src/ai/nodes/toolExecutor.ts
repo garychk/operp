@@ -21,7 +21,35 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
   }
 
   if (tool?.tool === "entity.upsert") {
-    const result = await createOrUpdateEntityTool(state);
+    const result = await createOrUpdateEntityTool(state, undefined, state.action === "update" ? "update" : "create");
+    return {
+      ...state,
+      toolResults: [result],
+      reply: result.reply,
+      focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
+      needConfirmation: result.needConfirmation,
+      nextQuestions: result.nextQuestions,
+    };
+  }
+
+  if (tool?.tool === "entity.create") {
+    const result = await createOrUpdateEntityTool(state, undefined, "create");
+    return {
+      ...state,
+      toolResults: [result],
+      reply: result.reply,
+      focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
+      needConfirmation: result.needConfirmation,
+      nextQuestions: result.nextQuestions,
+    };
+  }
+
+  if (tool?.tool === "entity.update") {
+    const result = await createOrUpdateEntityTool(state, undefined, "update");
     return {
       ...state,
       toolResults: [result],
@@ -45,6 +73,14 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
       routeLabel: result.routeLabel,
       needConfirmation: result.needConfirmation,
       nextQuestions: result.nextQuestions,
+    };
+  }
+
+  if (tool?.tool === "knowledge.search") {
+    return {
+      ...state,
+      toolResults: [{ step: "knowledge_search", ok: true, output: "knowledge_stub" }],
+      reply: "已识别为知识库查询意图，但当前知识库检索节点还未接入，先按已有上下文继续回答。",
     };
   }
 
