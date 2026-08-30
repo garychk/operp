@@ -19,6 +19,13 @@ export async function callChatModel(
   provider?: LlmProviderConfig,
 ) {
   const endpoint = provider?.endpoint;
+  console.log("[ai-server] callChatModel provider:", {
+    endpoint: provider?.endpoint,
+    model: provider?.model,
+    apiType: provider?.apiType,
+    hasApiKey: Boolean(provider?.apiKey),
+    temperature: provider?.temperature,
+  });
   if (!endpoint) {
     throw new Error("No model endpoint configured");
   }

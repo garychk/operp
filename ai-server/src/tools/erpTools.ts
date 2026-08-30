@@ -398,7 +398,12 @@ async function runEntitySearch(entity: EntityDef, text: string) {
   return data?.[0] || null;
 }
 
-async function extractEntityPayload(entity: EntityDef, text: string, current?: Record<string, unknown> | null) {
+async function extractEntityPayload(
+  entity: EntityDef,
+  text: string,
+  current?: Record<string, unknown> | null,
+  provider?: AiChatRequest["provider"],
+) {
   const prompt = [
     `你是ERP数据录入助手。请从用户描述中提取${entity.label}的字段值，只返回JSON，不要解释。`,
     `实体表：${entity.tableName}`,
@@ -411,7 +416,7 @@ async function extractEntityPayload(entity: EntityDef, text: string, current?: R
   const { content } = await callChatModel([
     { role: "system", content: "你只返回JSON。" },
     { role: "user", content: prompt },
-  ]);
+  ], provider);
   const parsed = parseJson<{ fields?: Record<string, unknown>; need_more?: string[]; summary?: string }>(content);
   return {
     fields: parsed?.fields || {},
@@ -423,7 +428,7 @@ async function extractEntityPayload(entity: EntityDef, text: string, current?: R
 async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unknown, provider?: AiChatRequest["provider"]) {
   const current = currentFocus && typeof currentFocus === "object" ? currentFocus as Record<string, unknown> : null;
   const existing = current?.id ? current : (hasPronounReference(text) ? current : await runEntitySearch(entity, text));
-  const extracted = await extractEntityPayload(entity, text, existing);
+  const extracted = await extractEntityPayload(entity, text, existing, provider);
   const mergedDraft = {
     ...entity.defaults(),
     ...(existing || {}),
