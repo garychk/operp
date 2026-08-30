@@ -13,6 +13,20 @@ export type AiQueryMode =
   | "answer";
 export type AiResponseMode = "text" | "table" | "card" | "link" | "follow_up";
 
+export interface AiSessionMemory {
+  session_id: string;
+  user_id?: number;
+  recent_messages: unknown[];
+  last_intent?: string;
+  last_target?: string;
+  last_query_mode?: string;
+  last_response_mode?: string;
+  last_route?: string;
+  last_route_label?: string;
+  last_focus?: unknown;
+  updated_at?: string;
+}
+
 export interface AiChatRequest {
   session_id: string;
   user_id?: number;
@@ -54,6 +68,7 @@ export interface AiGraphState {
   page?: string;
   currentFocus?: unknown;
   recentMessages: unknown[];
+  memory?: AiSessionMemory | null;
   intent?: AiIntent;
   action?: AiAction;
   domain?: string;

@@ -20,6 +20,7 @@ const State = Annotation.Root({
   queryMode: Annotation<AiGraphState["queryMode"]>,
   responseMode: Annotation<AiGraphState["responseMode"]>,
   confidence: Annotation<number | undefined>,
+  memory: Annotation<AiGraphState["memory"]>,
   recentMessages: Annotation<unknown[]>({
     reducer: (_prev, next) => next ?? [],
     default: () => [],
@@ -69,6 +70,7 @@ const buildState = (input: AiChatRequest): AiGraphState => ({
   queryMode: undefined,
   responseMode: undefined,
   confidence: undefined,
+  memory: undefined,
   recentMessages: input.context?.recent_messages ?? [],
 });
 

@@ -1,6 +1,7 @@
 import type { AiGraphState } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
 import { countMasterDataTool, createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
+import { searchKnowledgeDocs } from "../../services/knowledgeBase.js";
 
 export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphState> {
   const plan = Array.isArray(state.plan) ? state.plan : [];
@@ -80,7 +81,9 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
     const systemPrompt = [
       "你是 OPERP 的通用业务分析助手。",
       "请根据用户问题、上下文和已知焦点，判断用户到底想查什么、应该如何分析、答案应该用什么形式展现。",
+      "分析时必须先给出：目标对象、要查的指标、建议的数据范围/时间范围、展示形式。",
       "如果对象不明确，先给出最合理的默认判断，并明确说明依据；实在不够信息时，主动追问最少必要字段。",
+      "如果用户是在问数量、趋势、明细、异常，请明确选择相应的默认 query mode，不要一律输出财务分析。",
       `意图：${state.intent || "analysis"}`,
       `目标：${state.target || "unknown"}`,
       `查询模式：${state.queryMode || "summary"}`,
@@ -101,10 +104,31 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
   }
 
   if (tool?.tool === "knowledge.search") {
+    const docs = await searchKnowledgeDocs(state.text, 5).catch(() => []);
+    if (!docs.length) {
+      return {
+        ...state,
+        toolResults: [{ step: "knowledge_search", ok: true, output: [] }],
+        reply: "暂未检索到相关知识库内容。我可以继续按当前业务上下文给你建议，或者你补充更具体的关键词。",
+      };
+    }
+
+    const knowledgePrompt = [
+      "你是 ERP 知识库问答助手，只能基于给定知识回答，不要编造。",
+      "如果知识不足，明确说知识库里没有找到足够信息，并给出下一步建议。",
+      `用户问题：${state.text}`,
+      `知识库内容：${JSON.stringify(docs, null, 2)}`,
+      "请输出适合用户阅读的简洁答案，必要时给出条目式总结。",
+    ].join("\n");
+
+    const { content } = await callChatModel(
+      [{ role: "system", content: knowledgePrompt }],
+      state.provider,
+    );
     return {
       ...state,
-      toolResults: [{ step: "knowledge_search", ok: true, output: "knowledge_stub" }],
-      reply: "已识别为知识库查询意图，但当前知识库检索节点还未接入，先按已有上下文继续回答。",
+      toolResults: [{ step: "knowledge_search", ok: true, output: docs }],
+      reply: content || docs.map((doc) => `${doc.title}: ${String(doc.content).slice(0, 120)}`).join("\n"),
     };
   }
 
