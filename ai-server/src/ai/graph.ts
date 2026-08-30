@@ -13,8 +13,14 @@ const State = Annotation.Root({
   text: Annotation<string>,
   skill: Annotation<AiGraphState["skill"]>,
   provider: Annotation<AiGraphState["provider"]>,
+  action: Annotation<AiGraphState["action"]>,
   page: Annotation<string | undefined>,
   currentFocus: Annotation<unknown | undefined>,
+  target: Annotation<string | undefined>,
+  queryMode: Annotation<AiGraphState["queryMode"]>,
+  responseMode: Annotation<AiGraphState["responseMode"]>,
+  confidence: Annotation<number | undefined>,
+  memory: Annotation<AiGraphState["memory"]>,
   recentMessages: Annotation<unknown[]>({
     reducer: (_prev, next) => next ?? [],
     default: () => [],
@@ -60,6 +66,11 @@ const buildState = (input: AiChatRequest): AiGraphState => ({
   provider: input.provider,
   page: input.context?.page,
   currentFocus: input.context?.current_focus,
+  target: undefined,
+  queryMode: undefined,
+  responseMode: undefined,
+  confidence: undefined,
+  memory: undefined,
   recentMessages: input.context?.recent_messages ?? [],
 });
 
@@ -81,6 +92,10 @@ export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> 
     data: {
       intent: result.intent,
       domain: result.domain,
+      target: result.target,
+      queryMode: result.queryMode,
+      responseMode: result.responseMode,
+      confidence: result.confidence,
       plan: result.plan,
       toolResults: result.toolResults,
     },
@@ -173,6 +188,10 @@ export async function runChatGraphStream(
     data: {
       intent: state.intent,
       domain: state.domain,
+      target: state.target,
+      queryMode: state.queryMode,
+      responseMode: state.responseMode,
+      confidence: state.confidence,
       plan: state.plan,
       toolResults: state.toolResults,
     },

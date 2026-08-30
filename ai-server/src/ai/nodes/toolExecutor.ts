@@ -1,6 +1,7 @@
 import type { AiGraphState } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
-import { createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
+import { businessAnalysisTool, countMasterDataTool, createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
+import { searchKnowledgeDocs } from "../../services/knowledgeBase.js";
 
 export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphState> {
   const plan = Array.isArray(state.plan) ? state.plan : [];
@@ -21,7 +22,35 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
   }
 
   if (tool?.tool === "entity.upsert") {
-    const result = await createOrUpdateEntityTool(state);
+    const result = await createOrUpdateEntityTool(state, undefined, state.action === "update" ? "update" : "create");
+    return {
+      ...state,
+      toolResults: [result],
+      reply: result.reply,
+      focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
+      needConfirmation: result.needConfirmation,
+      nextQuestions: result.nextQuestions,
+    };
+  }
+
+  if (tool?.tool === "entity.create") {
+    const result = await createOrUpdateEntityTool(state, undefined, "create");
+    return {
+      ...state,
+      toolResults: [result],
+      reply: result.reply,
+      focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
+      needConfirmation: result.needConfirmation,
+      nextQuestions: result.nextQuestions,
+    };
+  }
+
+  if (tool?.tool === "entity.update") {
+    const result = await createOrUpdateEntityTool(state, undefined, "update");
     return {
       ...state,
       toolResults: [result],
@@ -36,6 +65,63 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
 
   if (tool?.tool === "finance.summary") {
     const result = await financeSummaryTool(state);
+    return {
+      ...state,
+      toolResults: [result],
+      reply: result.reply,
+      focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
+      needConfirmation: result.needConfirmation,
+      nextQuestions: result.nextQuestions,
+    };
+  }
+
+  if (tool?.tool === "business.analysis") {
+    const result = await businessAnalysisTool(state);
+    return {
+      ...state,
+      toolResults: [result],
+      reply: result.reply,
+      focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
+      needConfirmation: result.needConfirmation,
+      nextQuestions: result.nextQuestions,
+    };
+  }
+
+  if (tool?.tool === "knowledge.search") {
+    const docs = await searchKnowledgeDocs(state.text, 5).catch(() => []);
+    if (!docs.length) {
+      return {
+        ...state,
+        toolResults: [{ step: "knowledge_search", ok: true, output: [] }],
+        reply: "暂未检索到相关知识库内容。我可以继续按当前业务上下文给你建议，或者你补充更具体的关键词。",
+      };
+    }
+
+    const knowledgePrompt = [
+      "你是 ERP 知识库问答助手，只能基于给定知识回答，不要编造。",
+      "如果知识不足，明确说知识库里没有找到足够信息，并给出下一步建议。",
+      `用户问题：${state.text}`,
+      `知识库内容：${JSON.stringify(docs, null, 2)}`,
+      "请输出适合用户阅读的简洁答案，必要时给出条目式总结。",
+    ].join("\n");
+
+    const { content } = await callChatModel(
+      [{ role: "system", content: knowledgePrompt }],
+      state.provider,
+    );
+    return {
+      ...state,
+      toolResults: [{ step: "knowledge_search", ok: true, output: docs }],
+      reply: content || docs.map((doc) => `${doc.title}: ${String(doc.content).slice(0, 120)}`).join("\n"),
+    };
+  }
+
+  if (tool?.tool === "master_data.count") {
+    const result = await countMasterDataTool(state);
     return {
       ...state,
       toolResults: [result],

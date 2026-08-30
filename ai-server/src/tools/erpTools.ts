@@ -21,6 +21,15 @@ interface BaqTable {
   columns: Array<{ name: string; type: string }>;
 }
 
+interface AnalysisPlan {
+  title?: string;
+  sql?: string;
+  explanation?: string;
+  responseMode?: "text" | "table" | "card";
+  target?: string;
+  queryMode?: string;
+}
+
 type EntityKey =
   | "customer"
   | "supplier"
@@ -425,9 +434,22 @@ async function extractEntityPayload(
   };
 }
 
-async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unknown, provider?: AiChatRequest["provider"]) {
+async function upsertEntity(
+  entity: EntityDef,
+  text: string,
+  currentFocus?: unknown,
+  provider?: AiChatRequest["provider"],
+  action: "create" | "update" = "create",
+) {
   const current = currentFocus && typeof currentFocus === "object" ? currentFocus as Record<string, unknown> : null;
-  const existing = current?.id ? current : (hasPronounReference(text) ? current : await runEntitySearch(entity, text));
+  const existing =
+    action === "update"
+      ? current?.id
+        ? current
+        : hasPronounReference(text)
+          ? current
+          : await runEntitySearch(entity, text)
+      : null;
   const extracted = await extractEntityPayload(entity, text, existing, provider);
   const mergedDraft = {
     ...entity.defaults(),
@@ -447,7 +469,7 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
   if (missingLabels.length > 0 && !existing) {
     return {
       status: "needs_more" as const,
-      reply: `创建${entity.label}还缺少这些信息：${missingLabels.join("、")}`,
+      reply: `${action === "update" ? "修改" : "创建"}${entity.label}还缺少这些信息：${missingLabels.join("、")}`,
       nextQuestions: missingLabels,
     };
   }
@@ -461,6 +483,13 @@ async function upsertEntity(entity: EntityDef, text: string, currentFocus?: unkn
   delete (payload as Record<string, unknown>).created_at;
 
   const isUpdate = !!existing?.id;
+  if (action === "update" && !isUpdate) {
+    return {
+      status: "needs_more" as const,
+      reply: `没有找到可修改的${entity.label}，请先明确要修改哪一条记录。`,
+      nextQuestions: [`请提供要修改的${entity.label}名称或编码`],
+    };
+  }
   const response = isUpdate
     ? await supabase.from(entity.tableName).update(payload).eq("id", existing.id).select().single()
     : await supabase.from(entity.tableName).insert(payload).select().single();
@@ -505,6 +534,120 @@ async function loadBaqCatalog(): Promise<BaqTable[]> {
     })
     .filter((item) => item.columns.length > 0);
 }
+
+const normalizeText = (value: string) => value.toLowerCase().replace(/\s+/g, "");
+
+const ANALYSIS_TARGET_HINTS: Record<string, string[]> = {
+  customer: ["客户", "客商", "customer"],
+  supplier: ["供应商", "supplier"],
+  product: ["物料", "产品", "商品", "material", "item", "product"],
+  warehouse: ["仓库", "库位", "warehouse", "bin"],
+  department: ["部门", "department"],
+  workCenter: ["工作中心", "work center", "workcenter"],
+  operation: ["工序", "operation"],
+  bom: ["bom", "物料清单"],
+  routing: ["工艺路线", "routing"],
+  purchaseOrder: ["采购订单", "采购单", "purchase order", "po"],
+  purchaseReceipt: ["采购入库", "入库单", "receipt"],
+  salesOrder: ["销售订单", "销售单", "sales order", "so"],
+  salesDelivery: ["销售出货", "出货单", "delivery"],
+  productionOrder: ["生产订单", "工单", "production order", "mo"],
+  inventory: ["库存", "现存量", "存货", "inventory"],
+  finance: ["财务", "凭证", "应收", "应付", "profit", "voucher"],
+  production: ["生产", "mrp", "产能", "缺料"],
+  business: ["业务", "经营", "分析", "统计"],
+};
+
+const pickAnalysisCatalog = (catalog: BaqTable[], state: AiGraphState) => {
+  const terms = new Set<string>();
+  const target = String(state.target || "");
+  const query = String(state.text || "");
+  const domain = String(state.domain || "");
+  const queryMode = String(state.queryMode || "");
+  [target, domain, queryMode].forEach((value) => {
+    if (value) terms.add(normalizeText(value));
+  });
+  Object.values(ANALYSIS_TARGET_HINTS).flat().forEach((hint) => {
+    if (normalizeText(query).includes(normalizeText(hint))) {
+      terms.add(normalizeText(hint));
+    }
+  });
+
+  const scored = catalog.map((item) => {
+    const haystack = normalizeText(
+      `${item.table} ${item.label} ${item.columns.map((c) => c.name).join(" ")}`,
+    );
+    let score = 0;
+    for (const hintGroup of Object.values(ANALYSIS_TARGET_HINTS)) {
+      for (const hint of hintGroup) {
+        if (haystack.includes(normalizeText(hint))) {
+          score += 1;
+        }
+      }
+    }
+    if (terms.size) {
+      for (const term of terms) {
+        if (haystack.includes(term)) score += 3;
+      }
+    }
+    return { item, score };
+  });
+
+  return scored
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 20)
+    .map(({ item }) => item);
+};
+
+const stripMarkdownFence = (value: string) => {
+  const trimmed = value.trim();
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return (fenced ? fenced[1] : trimmed).trim();
+};
+
+const normalizeAnalysisSql = (sql: string) => {
+  const cleaned = stripMarkdownFence(sql);
+  const lower = cleaned.toLowerCase();
+  const selectIndex = lower.indexOf("select");
+  const withIndex = lower.indexOf("with");
+  const startIndex =
+    selectIndex >= 0 && withIndex >= 0
+      ? Math.min(selectIndex, withIndex)
+      : Math.max(selectIndex, withIndex);
+  const sliced = startIndex >= 0 ? cleaned.slice(startIndex) : cleaned;
+  return sliced.replace(/;\s*$/, "").trim();
+};
+
+const parseAnalysisPlan = (value: string): AnalysisPlan | null => {
+  try {
+    return JSON.parse(stripMarkdownFence(value)) as AnalysisPlan;
+  } catch {
+    return null;
+  }
+};
+
+const validateAnalysisSql = (sql: string, catalog: BaqTable[]) => {
+  const text = normalizeAnalysisSql(sql);
+  if (!text) throw new Error("分析 SQL 不能为空");
+  if (!/^\s*(select|with)\b/i.test(text)) throw new Error("分析 SQL 只能是 SELECT/WITH");
+  if (text.includes(";")) throw new Error("分析 SQL 不能包含分号");
+  if (/\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|comment|commit|rollback)\b/i.test(text)) {
+    throw new Error("分析 SQL 只能是只读查询");
+  }
+
+  const tableNames = catalog.map((item) => item.table);
+  if (!tableNames.some((table) => new RegExp(`\\b${table.replace(/_/g, "_")}\\b`, "i").test(text))) {
+    throw new Error("分析 SQL 必须引用 sys_tables/baq_catalog 中的真实业务表");
+  }
+};
+
+const executeAiAnalysisSql = async (sql: string) => {
+  console.log("[ai-server] execute AI analysis SQL:", sql);
+  const { data, error } = await supabase.rpc("execute_ai_analysis", { sql_text: sql });
+  if (error) throw error;
+  return data as { rows?: Array<Record<string, unknown>>; rowCount?: number } | null;
+};
 
 async function findBaqTarget(text: string, focus?: unknown) {
   const { data, error } = await supabase.from("sys_baq_queries").select("*").eq("is_deleted", "n").order("updated_at", { ascending: false });
@@ -660,11 +803,149 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
   };
 }
 
-export async function createOrUpdateEntityTool(state: AiGraphState, entityKey?: EntityKey): Promise<ToolResult> {
+export async function createOrUpdateEntityTool(
+  state: AiGraphState,
+  entityKey?: EntityKey,
+  action: "create" | "update" = "create",
+): Promise<ToolResult> {
   const detected = entityFromText(state.text);
   const entity = entityKey ? entityDefs[entityKey] : (detected ? entityDefs[detected] : null);
   if (!entity) return { status: "error", reply: "未识别出要处理的业务对象。" };
-  return upsertEntity(entity, state.text, state.currentFocus, state.provider);
+  return upsertEntity(entity, state.text, state.currentFocus, state.provider, action);
+}
+
+export async function businessAnalysisTool(state: AiGraphState): Promise<ToolResult> {
+  const catalog = await loadBaqCatalog();
+  const selectedCatalog = pickAnalysisCatalog(catalog, state);
+  const prompt = [
+    "你是 OPERP 业务分析 SQL 生成器。",
+    "目标：根据用户问题，自动判断要分析什么业务，挑选合适的表和字段，生成只读 SQL，然后用于统计分析。",
+    "你必须先理解用户要查的对象、指标、时间范围、分组维度、排序方式，再决定 SQL。",
+    "如果用户问题不完整，请先给出一个最合理的默认决策，不要直接拒绝。",
+    "只返回 JSON，不要 Markdown，不要解释。",
+    "输出格式：{\"title\":\"...\",\"sql\":\"...\",\"explanation\":\"...\",\"responseMode\":\"text|table|card\",\"target\":\"...\",\"queryMode\":\"count|list|summary|detail|trend|compare|exception|answer\"}",
+    "sql 必须是单条 SELECT 或 WITH 查询，只读，不允许 INSERT/UPDATE/DELETE。",
+    "你可以使用下面的数据目录来选择真实业务表和字段。",
+    `用户原话：${state.text}`,
+    state.target ? `路由目标：${state.target}` : "路由目标：无",
+    state.queryMode ? `路由模式：${state.queryMode}` : "路由模式：无",
+    state.responseMode ? `路由展示：${state.responseMode}` : "路由展示：无",
+    state.currentFocus ? `当前焦点：${JSON.stringify(state.currentFocus)}` : "当前焦点：无",
+    `数据目录：${JSON.stringify(selectedCatalog.length ? selectedCatalog : catalog.slice(0, 20))}`,
+    "优先生成能直接执行的 SQL；如果需要关联，请根据字段语义推断主外键关系，如 xxx_id -> id、code/name 等。",
+    "如果问题是数量，优先用 COUNT(*) 或分组 count；如果问题是明细，用列表查询；如果问题是趋势/对比，用分组统计或时间序列。",
+  ].join("\n");
+
+  const { content } = await callChatModel(
+    [
+      { role: "system", content: "你只输出 JSON。" },
+      { role: "user", content: prompt },
+    ],
+    state.provider,
+  );
+
+  const plan = parseAnalysisPlan(content);
+  if (!plan?.sql) {
+    return {
+      status: "error",
+      reply: "业务分析失败：模型未生成有效的 SQL。",
+    };
+  }
+
+  console.log("[ai-server] analysis plan raw:", {
+    title: plan.title,
+    target: plan.target,
+    queryMode: plan.queryMode,
+    responseMode: plan.responseMode,
+    sql: plan.sql,
+  });
+  plan.sql = normalizeAnalysisSql(plan.sql);
+  console.log("[ai-server] analysis plan normalized SQL:", plan.sql);
+  validateAnalysisSql(plan.sql, selectedCatalog.length ? selectedCatalog : catalog);
+  const executed = await executeAiAnalysisSql(plan.sql);
+  const rows = Array.isArray(executed?.rows) ? executed!.rows! : [];
+
+  const previewRows = rows.slice(0, 20);
+  const columns = previewRows.length
+    ? Object.keys(previewRows[0])
+    : [];
+  const isSingleValue =
+    previewRows.length === 1 && columns.length === 1 && typeof previewRows[0][columns[0]] !== "object";
+
+  const renderTable = (dataRows: Array<Record<string, unknown>>) => {
+    if (!dataRows.length) return "暂无数据。";
+    const headers = Object.keys(dataRows[0]);
+    const headerLine = `| ${headers.join(" | ")} |`;
+    const separator = `| ${headers.map(() => "---").join(" | ")} |`;
+    const body = dataRows
+      .map((row) => `| ${headers.map((header) => String(row[header] ?? "")).join(" | ")} |`)
+      .join("\n");
+    return `${headerLine}\n${separator}\n${body}`;
+  };
+
+  const reply = isSingleValue
+    ? `${plan.title || "分析结果"}：${String(previewRows[0][columns[0]])}`
+    : [
+        plan.title ? `# ${plan.title}` : "# 业务分析结果",
+        plan.explanation ? `\n${plan.explanation}` : "",
+        "\n" + renderTable(previewRows),
+        rows.length > previewRows.length ? `\n\n已显示前 ${previewRows.length} 条，共 ${rows.length} 条。` : "",
+      ].join("\n");
+
+  return {
+    status: "success",
+    reply,
+    data: {
+      sql: plan.sql,
+      target: plan.target || state.target,
+      queryMode: plan.queryMode || state.queryMode,
+      responseMode: plan.responseMode || state.responseMode,
+      rowCount: rows.length,
+      rows: previewRows,
+      catalog: selectedCatalog.map((item) => ({ table: item.table, label: item.label })),
+    },
+    focus: {
+      type: "business_analysis",
+      target: plan.target || state.target,
+      queryMode: plan.queryMode || state.queryMode,
+      responseMode: plan.responseMode || state.responseMode,
+      sql: plan.sql,
+    },
+  };
+}
+
+export async function countMasterDataTool(state: AiGraphState): Promise<ToolResult> {
+  const text = state.text;
+  const detected = entityFromText(text);
+  const entity = detected ? entityDefs[detected] : null;
+  if (!entity) {
+    return {
+      status: "needs_more",
+      reply: "请明确要统计哪类主数据，比如客户、物料、供应商、仓库。",
+      nextQuestions: ["客户", "物料", "供应商", "仓库"],
+    };
+  }
+
+  const { count, error } = await supabase
+    .from(entity.tableName)
+    .select("*", { count: "exact", head: true })
+    .eq("is_deleted", "n");
+
+  if (error) throw error;
+
+  return {
+    status: "success",
+    reply: `当前系统中${entity.label}共有 ${count || 0} 条。`,
+    data: {
+      entity: entity.key,
+      label: entity.label,
+      count: count || 0,
+    },
+    focus: {
+      type: entity.key,
+      count: count || 0,
+    },
+  };
 }
 
 export async function financeSummaryTool(state: AiGraphState): Promise<ToolResult> {
