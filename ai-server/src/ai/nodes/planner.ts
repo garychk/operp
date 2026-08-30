@@ -11,13 +11,7 @@ export async function plannerNode(state: AiGraphState): Promise<AiGraphState> {
       : state.intent === "analysis"
             ? state.domain === "master_data"
               ? [{ step: "master_data_count", tool: "master_data.count", input: { text: state.text, target: state.target, queryMode: state.queryMode } }]
-              : state.target === "inventory"
-                ? [{ step: "inventory_summary", tool: "inventory.summary", input: { text: state.text, target: state.target, queryMode: state.queryMode } }]
-                : state.target === "production" || state.target === "mrp"
-                  ? [{ step: "production_analysis", tool: "production.analysis", input: { text: state.text, target: state.target, queryMode: state.queryMode } }]
-                  : state.target === "finance"
-                    ? [{ step: "finance_summary", tool: "finance.summary", input: { text: state.text, target: state.target, queryMode: state.queryMode } }]
-                    : [{ step: "business_analysis", tool: "business.analysis", input: { text: state.text, target: state.target, queryMode: state.queryMode } }]
+              : [{ step: "business_analysis", tool: "business.analysis", input: { text: state.text, target: state.target, queryMode: state.queryMode, responseMode: state.responseMode } }]
             : state.intent === "knowledge"
               ? [{ step: "knowledge_lookup", tool: "knowledge.search", input: { text: state.text } }]
               : [{ step: "draft_reply", tool: "chat.respond", input: { text: state.text } }];

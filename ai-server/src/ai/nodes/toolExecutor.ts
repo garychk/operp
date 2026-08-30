@@ -1,6 +1,6 @@
 import type { AiGraphState } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
-import { countMasterDataTool, createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
+import { businessAnalysisTool, countMasterDataTool, createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
 import { searchKnowledgeDocs } from "../../services/knowledgeBase.js";
 
 export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphState> {
@@ -77,29 +77,17 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
     };
   }
 
-  if (tool?.tool === "business.analysis" || tool?.tool === "production.analysis" || tool?.tool === "inventory.summary") {
-    const systemPrompt = [
-      "你是 OPERP 的通用业务分析助手。",
-      "请根据用户问题、上下文和已知焦点，判断用户到底想查什么、应该如何分析、答案应该用什么形式展现。",
-      "分析时必须先给出：目标对象、要查的指标、建议的数据范围/时间范围、展示形式。",
-      "如果对象不明确，先给出最合理的默认判断，并明确说明依据；实在不够信息时，主动追问最少必要字段。",
-      "如果用户是在问数量、趋势、明细、异常，请明确选择相应的默认 query mode，不要一律输出财务分析。",
-      `意图：${state.intent || "analysis"}`,
-      `目标：${state.target || "unknown"}`,
-      `查询模式：${state.queryMode || "summary"}`,
-      `响应模式：${state.responseMode || "text"}`,
-      state.currentFocus ? `当前焦点：${JSON.stringify(state.currentFocus)}` : "当前焦点：无",
-      `用户原话：${state.text}`,
-    ].join("\n");
-
-    const { content } = await callChatModel(
-      [{ role: "system", content: systemPrompt }],
-      state.provider,
-    );
+  if (tool?.tool === "business.analysis") {
+    const result = await businessAnalysisTool(state);
     return {
       ...state,
-      toolResults: [{ step: "business_analysis", ok: true, output: "model_response" }],
-      reply: content || "已完成业务分析。",
+      toolResults: [result],
+      reply: result.reply,
+      focus: result.focus,
+      route: result.route,
+      routeLabel: result.routeLabel,
+      needConfirmation: result.needConfirmation,
+      nextQuestions: result.nextQuestions,
     };
   }
 

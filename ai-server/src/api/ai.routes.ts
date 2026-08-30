@@ -66,10 +66,10 @@ async function resolveProviderConfig(provider?: { id?: string; name?: string }) 
     throw new Error(`未找到对应的 AI provider：${provider?.id || provider?.name || "unknown"}`);
   }
 
-  console.log("[ai-server] resolved provider:", {
-    requestProvider: provider,
-    matchedProvider: matched,
-  });
+  // console.log("[ai-server] resolved provider:", {
+  //   requestProvider: provider,
+  //   matchedProvider: matched,
+  // });
 
   return matched;
 }
