@@ -5,6 +5,7 @@ import {
   DatabaseOutlined,
   DeleteOutlined,
   DownOutlined,
+  MoreOutlined,
   LinkOutlined,
   PlusOutlined,
   SendOutlined,
@@ -12,6 +13,7 @@ import {
 } from "@ant-design/icons";
 import {
   Bubble,
+  Conversations,
   Prompts,
   Sender,
   ThoughtChain,
@@ -46,6 +48,16 @@ import {
   type AIProviderConfig,
   type AISettingsConfig,
 } from "../utils/aiConfig";
+import {
+  createChatSession,
+  deleteChatSession,
+  fetchChatMessages,
+  fetchChatSessions,
+  saveChatMessage,
+  summarizeMessagePreview,
+  updateChatSession,
+  type AIChatSessionRecord,
+} from "../utils/aiChatSessions";
 import "./AIChatDrawer.css";
 import chatIcon from "../assets/fmt.webp";
 
@@ -63,6 +75,13 @@ interface ChatMessage {
   focus?: unknown;
   route?: string;
   routeLabel?: string;
+}
+
+interface ConversationListItem {
+  id: string;
+  title: string;
+  lastMessage: string;
+  updatedAt: string;
 }
 type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
 const aiSkillOptions: { value: AiSkill; label: string; icon: ReactNode }[] = [
@@ -471,35 +490,15 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const [aiSettings, setAISettings] =
     useState<AISettingsConfig>(defaultAISettings);
   const [configLoaded, setConfigLoaded] = useState(false);
-  const [activeConversationId, setActiveConversationId] = useState("conv-1");
-  const [conversationTitleDraft, setConversationTitleDraft] = useState("新对话");
-  const [conversationItems] = useState([
-    {
-      id: "conv-1",
-      title: "当前对话",
-      lastMessage: "创建物料档案",
-      updatedAt: "刚刚",
-    },
-    {
-      id: "conv-2",
-      title: "客户统计",
-      lastMessage: "查询客户总数",
-      updatedAt: "10 分钟前",
-    },
-    {
-      id: "conv-3",
-      title: "供应商修改",
-      lastMessage: "修改供应商名称",
-      updatedAt: "昨天",
-    },
-  ]);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState("");
+  const [conversationItems, setConversationItems] = useState<ConversationListItem[]>([]);
   const messageListRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<number | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
   const providers = aiSettings.providers;
   const activeProviderId = aiSettings.activeProviderId;
-  const sessionId = useMemo(() => readSessionId(), []);
 
   const activeProvider = useMemo(
     () =>
@@ -550,6 +549,119 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     };
   }, [aiSettings, configLoaded]);
 
+  const syncSessionId = (sessionId: string) => {
+    try {
+      localStorage.setItem("operp-ai-chat-session-id", sessionId);
+    } catch {
+      // ignore local storage errors
+    }
+  };
+
+  const formatConversationTime = (value?: string | null) => {
+    if (!value) return "刚刚";
+    const time = new Date(value).getTime();
+    if (Number.isNaN(time)) return "刚刚";
+    const diff = Date.now() - time;
+    if (diff < 60_000) return "刚刚";
+    if (diff < 3_600_000) return `${Math.max(1, Math.floor(diff / 60_000))} 分钟前`;
+    if (diff < 86_400_000) return `${Math.max(1, Math.floor(diff / 3_600_000))} 小时前`;
+    return `${Math.max(1, Math.floor(diff / 86_400_000))} 天前`;
+  };
+
+  const mapSessionToListItem = (session: AIChatSessionRecord): ConversationListItem => ({
+    id: session.id,
+    title: session.title || "新对话",
+    lastMessage: session.last_message_preview || "暂无消息",
+    updatedAt: formatConversationTime(session.last_message_at || session.updated_at),
+  });
+
+  const replaceConversationItem = (session: AIChatSessionRecord) => {
+    setConversationItems((prev) => {
+      const nextItem = mapSessionToListItem(session);
+      const filtered = prev.filter((item) => item.id !== session.id);
+      return [nextItem, ...filtered];
+    });
+  };
+
+  const loadConversationMessages = async (conversationId: string) => {
+    const rows = await fetchChatMessages(conversationId);
+    setMessages(
+      rows.map((row) => ({
+        id: row.id,
+        role: row.role,
+        content: row.content,
+        status: row.status || "success",
+        trace: row.trace_json || undefined,
+        focus: row.focus_json || undefined,
+        route: row.route || undefined,
+        routeLabel: row.route_label || undefined,
+      })),
+    );
+  };
+
+  const ensureSession = async (preferredTitle?: string) => {
+    if (activeConversationId) {
+      return activeConversationId;
+    }
+
+    const sessionId = readSessionId();
+    const session = await createChatSession({
+      id: sessionId,
+      user_id: user?.profile.id ?? null,
+      title: preferredTitle?.trim() || "新对话",
+    });
+    syncSessionId(session.id);
+    setActiveConversationId(session.id);
+    replaceConversationItem(session);
+    setMessages([]);
+    return session.id;
+  };
+
+  useEffect(() => {
+    if (!open || sessionsLoaded) {
+      return;
+    }
+
+    const loadSessions = async () => {
+      try {
+        const sessions = await fetchChatSessions(user?.profile.id ?? null);
+        const localSessionId = readSessionId();
+        const items = sessions.map(mapSessionToListItem);
+        setConversationItems(items);
+
+        let activeId = sessions.find((session) => session.id === localSessionId)?.id || sessions[0]?.id || "";
+
+        if (!activeId) {
+          const created = await createChatSession({
+            id: localSessionId,
+            user_id: user?.profile.id ?? null,
+            title: "新对话",
+          });
+          activeId = created.id;
+          setConversationItems([mapSessionToListItem(created)]);
+        }
+
+        syncSessionId(activeId);
+        setActiveConversationId(activeId);
+        await loadConversationMessages(activeId);
+      } catch (error) {
+        console.error("加载 AI 对话历史失败", error);
+        message.error("加载历史对话失败");
+      } finally {
+        setSessionsLoaded(true);
+      }
+    };
+
+    void loadSessions();
+  }, [open, sessionsLoaded, user?.profile.id]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    window.setTimeout(scrollMessagesToBottom, 0);
+  }, [messages, open]);
+
   const updateProvider = (id: string, patch: Partial<AIProviderConfig>) => {
     setAISettings((prev) => ({
       ...prev,
@@ -590,17 +702,57 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     });
   };
 
-  const handleCreateConversation = () => {
-    console.log("TODO: create new conversation");
+  const handleCreateConversation = async () => {
+    try {
+      const session = await createChatSession({
+        id: createId(),
+        user_id: user?.profile.id ?? null,
+        title: "新对话",
+      });
+      syncSessionId(session.id);
+      setActiveConversationId(session.id);
+      setMessages([]);
+      replaceConversationItem(session);
+      message.success("已新建对话");
+    } catch (error) {
+      console.error("新建 AI 对话失败", error);
+      message.error("新建对话失败");
+    }
   };
 
-  const handleSelectConversation = (conversationId: string) => {
+  const handleSelectConversation = async (conversationId: string) => {
     setActiveConversationId(conversationId);
-    console.log("TODO: load conversation history", conversationId);
+    syncSessionId(conversationId);
+    try {
+      await loadConversationMessages(conversationId);
+    } catch (error) {
+      console.error("读取 AI 对话消息失败", error);
+      message.error("读取对话失败");
+    }
   };
 
-  const handleDeleteConversation = (conversationId: string) => {
-    console.log("TODO: delete conversation", conversationId);
+  const handleDeleteConversation = async (conversationId: string) => {
+    try {
+      await deleteChatSession(conversationId);
+      const nextItems = conversationItems.filter((item) => item.id !== conversationId);
+      setConversationItems(nextItems);
+
+      if (activeConversationId === conversationId) {
+        const nextId = nextItems[0]?.id || "";
+        setActiveConversationId(nextId);
+        syncSessionId(nextId || createId());
+        if (nextId) {
+          await loadConversationMessages(nextId);
+        } else {
+          setMessages([]);
+        }
+      }
+
+      message.success("已删除对话");
+    } catch (error) {
+      console.error("删除 AI 对话失败", error);
+      message.error("删除对话失败");
+    }
   };
 
   const submitMessage = async (value: string) => {
@@ -613,6 +765,15 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       message.warning("AI助手已在系统设置中停用");
       return;
     }
+
+    const conversationId = await ensureSession("新对话");
+    const currentConversation = conversationItems.find(
+      (item) => item.id === conversationId,
+    );
+    const shouldRenameFromFirstMessage =
+      (!currentConversation || currentConversation.title === "新对话") &&
+      messages.filter((item) => item.role === "user").length === 0;
+    const nextConversationTitle = summarizeMessagePreview(prompt) || "新对话";
 
     const userMessage: ChatMessage = {
       id: createId(),
@@ -635,8 +796,26 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
 
     let traceItems: ThoughtChainItemType[] = [];
     try {
+      await saveChatMessage({
+        id: userMessage.id,
+        session_id: conversationId,
+        user_id: user?.profile.id ?? null,
+        role: "user",
+        content: userMessage.content,
+        status: "success",
+      });
+
+      const sessionMeta = await updateChatSession(conversationId, {
+        title: shouldRenameFromFirstMessage
+          ? nextConversationTitle
+          : undefined,
+        last_message_preview: summarizeMessagePreview(prompt),
+        last_message_at: new Date().toISOString(),
+      });
+      replaceConversationItem(sessionMeta);
+
       const payload = {
-        session_id: sessionId,
+        session_id: conversationId,
         user_id: user?.profile.id,
         text: prompt,
         skill: selectedSkill,
@@ -722,6 +901,15 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             content: event.error || "AI 服务暂时不可用。",
             status: "error",
           });
+          await saveChatMessage({
+            id: assistantMessage.id,
+            session_id: conversationId,
+            user_id: user?.profile.id ?? null,
+            role: "assistant",
+            content: event.error || "AI 服务暂时不可用。",
+            status: "error",
+            trace_json: traceItems,
+          });
           window.setTimeout(scrollMessagesToBottom, 0);
           return;
         }
@@ -750,6 +938,23 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           routeLabel: event.routeLabel,
           status: event.status === "error" ? "error" : "success",
         });
+        await saveChatMessage({
+          id: assistantMessage.id,
+          session_id: conversationId,
+          user_id: user?.profile.id ?? null,
+          role: "assistant",
+          content: event.reply || "已处理所选技能。",
+          status: event.status === "error" ? "error" : "success",
+          trace_json: traceItems,
+          focus_json: event.focus,
+          route: event.route,
+          route_label: event.routeLabel,
+        });
+        const updatedSession = await updateChatSession(conversationId, {
+          last_message_preview: summarizeMessagePreview(event.reply || "已处理所选技能。"),
+          last_message_at: new Date().toISOString(),
+        });
+        replaceConversationItem(updatedSession);
         window.setTimeout(scrollMessagesToBottom, 0);
         if (event.next_questions?.length) {
           message.info(event.next_questions[0]);
@@ -785,6 +990,17 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             : item,
         ),
       );
+      await saveChatMessage({
+        id: assistantMessage.id,
+        session_id: conversationId,
+        user_id: user?.profile.id ?? null,
+        role: "assistant",
+        content: errorText,
+        status: "error",
+        trace_json: traceItems,
+      }).catch((saveError) => {
+        console.error("保存 AI 错误消息失败", saveError);
+      });
       message.error(errorText);
     } finally {
       setLoading(false);
@@ -820,51 +1036,48 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                 <Flex vertical gap={12} className="ai-chat-session-inner">
                   <Flex align="center" justify="space-between" gap={8}>
                     <Typography.Text strong>对话列表</Typography.Text>
-                    <Button size="small" type="primary" onClick={handleCreateConversation}>
+                    <Button size="small" type="text" onClick={handleCreateConversation} icon={<PlusOutlined />}>
                       新建对话
                     </Button>
                   </Flex>
-                  <Input
-                    size="small"
-                    value={conversationTitleDraft}
-                    onChange={(event) => setConversationTitleDraft(event.target.value)}
-                    placeholder="对话标题"
+                  <Conversations
+                    className="ai-chat-session-list"
+                    activeKey={activeConversationId}
+                    onActiveChange={(value) => void handleSelectConversation(String(value))}
+                    items={conversationItems.map((item) => ({
+                      key: item.id,
+                      label: (
+                        <Typography.Text className="ai-chat-session-title">
+                          {item.title}
+                        </Typography.Text>
+                      ),
+                    }))}
+                    menu={(conversation) => ({
+                      items: [
+                        {
+                          key: "delete",
+                          label: "删除",
+                          danger: true,
+                          icon: <DeleteOutlined />,
+                        },
+                      ],
+                      onClick: ({ key, domEvent }) => {
+                        domEvent.stopPropagation();
+                        if (key === "delete") {
+                          void handleDeleteConversation(String(conversation.key));
+                        }
+                      },
+                      trigger: (
+                        <Button
+                          type="text"
+                          size="small"
+                          className="ai-chat-session-more"
+                          icon={<MoreOutlined />}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      ),
+                    })}
                   />
-                  <div className="ai-chat-session-list">
-                    {conversationItems.map((item) => (
-                      <Card
-                        key={item.id}
-                        size="small"
-                        className={`ai-chat-session-item ${
-                          activeConversationId === item.id ? "ai-chat-session-item-active" : ""
-                        }`}
-                        onClick={() => handleSelectConversation(item.id)}
-                      >
-                        <Flex vertical gap={4}>
-                          <Flex align="center" justify="space-between" gap={8}>
-                            <Typography.Text strong>{item.title}</Typography.Text>
-                            <Button
-                              type="text"
-                              size="small"
-                              danger
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                handleDeleteConversation(item.id);
-                              }}
-                            >
-                              删除
-                            </Button>
-                          </Flex>
-                          <Typography.Text type="secondary" className="ai-chat-session-preview">
-                            {item.lastMessage}
-                          </Typography.Text>
-                          <Typography.Text type="secondary" className="ai-chat-session-time">
-                            {item.updatedAt}
-                          </Typography.Text>
-                        </Flex>
-                      </Card>
-                    ))}
-                  </div>
                 </Flex>
               </div>
             </Splitter.Panel>

@@ -24,7 +24,7 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  padding: 16px;
+  padding: 12px 8px 12px 12px;
   border-right: 1px solid var(--border);
 }
 
@@ -34,12 +34,60 @@
 }
 
 .ai-chat-session-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.ai-chat-session-list .ant-conversations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-chat-session-list .ant-conversations-item {
+  padding: 6px 4px 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.ai-chat-session-list .ant-conversations-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  transform: none;
+}
+
+.ai-chat-session-list .ant-conversations-item-active {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.ai-chat-session-list .ant-conversations-label {
+  width: 100%;
+  min-width: 0;
+  margin-inline-end: 4px;
+}
+
+.ai-chat-session-label {
+  min-width: 0;
+}
+
+.ai-chat-session-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ai-chat-session-more {
+  min-width: 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--text-secondary);
 }
 
 .ai-chat-session-item {
