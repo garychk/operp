@@ -28,6 +28,7 @@ import {
   Modal,
   Select,
   Space,
+  Splitter,
   Typography,
   message,
 } from "antd";
@@ -470,6 +471,28 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const [aiSettings, setAISettings] =
     useState<AISettingsConfig>(defaultAISettings);
   const [configLoaded, setConfigLoaded] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState("conv-1");
+  const [conversationTitleDraft, setConversationTitleDraft] = useState("新对话");
+  const [conversationItems] = useState([
+    {
+      id: "conv-1",
+      title: "当前对话",
+      lastMessage: "创建物料档案",
+      updatedAt: "刚刚",
+    },
+    {
+      id: "conv-2",
+      title: "客户统计",
+      lastMessage: "查询客户总数",
+      updatedAt: "10 分钟前",
+    },
+    {
+      id: "conv-3",
+      title: "供应商修改",
+      lastMessage: "修改供应商名称",
+      updatedAt: "昨天",
+    },
+  ]);
   const messageListRef = useRef<HTMLDivElement>(null);
   const saveTimerRef = useRef<number | null>(null);
   const { user } = useAuth();
@@ -565,6 +588,19 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       top: container.scrollHeight,
       behavior: "smooth",
     });
+  };
+
+  const handleCreateConversation = () => {
+    console.log("TODO: create new conversation");
+  };
+
+  const handleSelectConversation = (conversationId: string) => {
+    setActiveConversationId(conversationId);
+    console.log("TODO: load conversation history", conversationId);
+  };
+
+  const handleDeleteConversation = (conversationId: string) => {
+    console.log("TODO: delete conversation", conversationId);
   };
 
   const submitMessage = async (value: string) => {
@@ -758,7 +794,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
 
   return (
     <Drawer
-      width={600}
+      width={860}
       open={open}
       onClose={onClose}
       title="AI 智能对话"
@@ -767,79 +803,148 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     >
       <XProvider>
         <Flex vertical className="ai-chat-panel">
-          <Card className="ai-chat-messages" variant="borderless">
-            {messages.length > 0 ? (
-              <div ref={messageListRef} className="ai-chat-message-list">
-                {messages.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`ai-chat-message-row ai-chat-message-row-${item.role}`}
-                  >
-                    {item.role === "assistant" ? (
-                      <div className="ai-chat-assistant-wrap">
-                        {item.trace?.length ? (
-                          <ThoughtChain
-                            className="ai-thought-chain"
-                            items={item.trace}
-                            line="solid"
-                            defaultExpandedKeys={
-                              item.trace
-                                .map((traceItem) => traceItem.key)
-                                .filter(Boolean) as string[]
-                            }
-                          />
-                        ) : null}
-                        {item.content ? (
-                          <Bubble
-                            placement="start"
-                            typing={false}
-                            content={
-                              <div className="ai-assistant-content">
-                                <MarkdownMessage content={item.content} />
-                                {item.route ? (
-                                  <div className="ai-route-row">
-                                    <Button 
-                                      type="link"
-                                      icon={<LinkOutlined />}
-                                      onClick={() => {
-                                        navigate(item.route!);
-                                        onClose();
-                                      }}
-                                    >
-                                      {item.routeLabel || item.route}
-                                    </Button>
-                                  </div>
-                                ) : null}
-                              </div>
-                            }
-                          />
-                        ) : null}
-                      </div>
-                    ) : (
-                      <Bubble placement="end" content={item.content} />
-                    )}
+          <Splitter
+            className="ai-chat-workbench"
+            style={{ minHeight: 0, flex: 1, width: "100%", overflow: "hidden" }}
+          >
+            <Splitter.Panel
+              defaultSize="30%"
+              min="240px"
+              max="380px"
+               collapsible={true}
+               resizable={true}
+            >
+              <div
+                className="ai-chat-session-panel"
+              >
+                <Flex vertical gap={12} className="ai-chat-session-inner">
+                  <Flex align="center" justify="space-between" gap={8}>
+                    <Typography.Text strong>对话列表</Typography.Text>
+                    <Button size="small" type="primary" onClick={handleCreateConversation}>
+                      新建对话
+                    </Button>
+                  </Flex>
+                  <Input
+                    size="small"
+                    value={conversationTitleDraft}
+                    onChange={(event) => setConversationTitleDraft(event.target.value)}
+                    placeholder="对话标题"
+                  />
+                  <div className="ai-chat-session-list">
+                    {conversationItems.map((item) => (
+                      <Card
+                        key={item.id}
+                        size="small"
+                        className={`ai-chat-session-item ${
+                          activeConversationId === item.id ? "ai-chat-session-item-active" : ""
+                        }`}
+                        onClick={() => handleSelectConversation(item.id)}
+                      >
+                        <Flex vertical gap={4}>
+                          <Flex align="center" justify="space-between" gap={8}>
+                            <Typography.Text strong>{item.title}</Typography.Text>
+                            <Button
+                              type="text"
+                              size="small"
+                              danger
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleDeleteConversation(item.id);
+                              }}
+                            >
+                              删除
+                            </Button>
+                          </Flex>
+                          <Typography.Text type="secondary" className="ai-chat-session-preview">
+                            {item.lastMessage}
+                          </Typography.Text>
+                          <Typography.Text type="secondary" className="ai-chat-session-time">
+                            {item.updatedAt}
+                          </Typography.Text>
+                        </Flex>
+                      </Card>
+                    ))}
                   </div>
-                ))}
+                </Flex>
               </div>
-            ) : (
-              <Flex vertical gap={18}>
-                <Welcome
-                  icon={<img src={chatIcon} alt="Chat Icon" />}
-                  variant="borderless"
-                  title="你好，我是 OPERP 助手"
-                  description="可以帮你梳理业务流程、生成检查清单，也可以在配置大模型接口后回答更具体的经营和系统问题。"
-                />
-                <Prompts
-                  title="试试这些问题"
-                  items={quickPrompts}
-                  vertical={true}
-                  onItemClick={(info: { data: { description?: unknown } }) =>
-                    submitMessage(String(info.data.description || ""))
-                  }
-                />
-              </Flex>
-            )}
-          </Card>
+            </Splitter.Panel>
+
+            <Splitter.Panel defaultSize="70%" min="70%">
+              <Card className="ai-chat-messages" variant="borderless">
+              {messages.length > 0 ? (
+                <div ref={messageListRef} className="ai-chat-message-list">
+                  {messages.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`ai-chat-message-row ai-chat-message-row-${item.role}`}
+                    >
+                      {item.role === "assistant" ? (
+                        <div className="ai-chat-assistant-wrap">
+                          {item.trace?.length ? (
+                            <ThoughtChain
+                              className="ai-thought-chain"
+                              items={item.trace}
+                              line="solid"
+                              defaultExpandedKeys={
+                                item.trace
+                                  .map((traceItem) => traceItem.key)
+                                  .filter(Boolean) as string[]
+                              }
+                            />
+                          ) : null}
+                          {item.content ? (
+                            <Bubble
+                              placement="start"
+                              typing={false}
+                              content={
+                                <div className="ai-assistant-content">
+                                  <MarkdownMessage content={item.content} />
+                                  {item.route ? (
+                                    <div className="ai-route-row">
+                                      <Button
+                                        type="link"
+                                        icon={<LinkOutlined />}
+                                        onClick={() => {
+                                          navigate(item.route!);
+                                          onClose();
+                                        }}
+                                      >
+                                        {item.routeLabel || item.route}
+                                      </Button>
+                                    </div>
+                                  ) : null}
+                                </div>
+                              }
+                            />
+                          ) : null}
+                        </div>
+                      ) : (
+                        <Bubble placement="end" content={item.content} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Flex vertical gap={18}>
+                  <Welcome
+                    icon={<img src={chatIcon} alt="Chat Icon" />}
+                    variant="borderless"
+                    title="你好，我是 OPERP 助手"
+                    description="可以帮你梳理业务流程、生成检查清单，也可以在配置大模型接口后回答更具体的经营和系统问题。"
+                  />
+                  <Prompts
+                    title="试试这些问题"
+                    items={quickPrompts}
+                    vertical={true}
+                    onItemClick={(info: { data: { description?: unknown } }) =>
+                      submitMessage(String(info.data.description || ""))
+                    }
+                  />
+                </Flex>
+              )}
+              </Card>
+            </Splitter.Panel>
+          </Splitter>
 
           <Card
             title={false}
