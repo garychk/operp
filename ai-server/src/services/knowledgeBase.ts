@@ -22,6 +22,18 @@ export interface KnowledgeChunkHit {
   similarity?: number;
 }
 
+export interface KnowledgeReindexResult {
+  total: number;
+  success: number;
+  failed: number;
+  details: Array<{
+    docId: number;
+    title: string;
+    chunkCount?: number;
+    error?: string;
+  }>;
+}
+
 const escapeLike = (value: string) => value.replace(/[%_\\]/g, "\\$&");
 
 const normalizeTerms = (query: string) =>
@@ -175,4 +187,51 @@ export async function indexKnowledgeDocument(
   const { error } = await supabase.from("sys_ai_knowledge_chunks").insert(payload);
   if (error) throw error;
   return { docId: doc.id, chunkCount: payload.length };
+}
+
+export async function fetchKnowledgeDocuments(docId?: number) {
+  let query = supabase
+    .from("sys_ai_knowledge_docs")
+    .select("id, title, content, tags, source_type, source_ref, category")
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false });
+
+  if (Number.isFinite(docId)) {
+    query = query.eq("id", docId as number);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data || []) as KnowledgeDoc[];
+}
+
+export async function reindexKnowledgeDocuments(provider: LlmProviderConfig, docId?: number) {
+  const docs = await fetchKnowledgeDocuments(docId);
+  const result: KnowledgeReindexResult = {
+    total: docs.length,
+    success: 0,
+    failed: 0,
+    details: [],
+  };
+
+  for (const doc of docs) {
+    try {
+      const indexed = await indexKnowledgeDocument(doc, provider);
+      result.success += 1;
+      result.details.push({
+        docId: doc.id,
+        title: doc.title,
+        chunkCount: indexed.chunkCount,
+      });
+    } catch (error) {
+      result.failed += 1;
+      result.details.push({
+        docId: doc.id,
+        title: doc.title,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return result;
 }

@@ -19,6 +19,19 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SyncOutline
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 
+const resolveAIBaseUrl = () => {
+  const explicitUrl = import.meta.env.VITE_AI_SERVER_URL;
+  if (explicitUrl) {
+    return explicitUrl.replace(/\/$/, "");
+  }
+  if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    return "http://localhost:3001/api/ai";
+  }
+  return "/api/ai";
+};
+
+const AI_SERVER_URL = resolveAIBaseUrl();
+
 type KnowledgeDoc = {
   id: number;
   category: string | null;
@@ -77,6 +90,7 @@ export function KnowledgeBase() {
   const [editing, setEditing] = useState<KnowledgeDoc | null>(null);
   const [importText, setImportText] = useState(defaultImportText);
   const [importing, setImporting] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
   const [form] = Form.useForm<KnowledgeDocFormValues>();
 
   const fetchRows = async () => {
@@ -225,6 +239,39 @@ export function KnowledgeBase() {
     }
   };
 
+  const handleReindex = async (docId?: number) => {
+    setReindexing(true);
+    try {
+      const response = await fetch(`${AI_SERVER_URL}/knowledge/reindex`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          Number.isFinite(docId) ? { doc_id: docId } : {},
+        ),
+      });
+      const result = (await response.json()) as {
+        ok?: boolean;
+        total?: number;
+        success?: number;
+        failed?: number;
+        error?: string;
+      };
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || `索引请求失败：${response.status}`);
+      }
+      message.success(
+        `索引完成，共 ${result.total || 0} 条，成功 ${result.success || 0} 条，失败 ${result.failed || 0} 条`,
+      );
+    } catch (error) {
+      console.error(error);
+      message.error(error instanceof Error ? error.message : "重新索引失败");
+    } finally {
+      setReindexing(false);
+    }
+  };
+
   const handleReindexHint = useMemo(
     () =>
       "保存或导入文档后，请在 ai-server 侧运行批量索引脚本生成 chunks 和 embeddings。",
@@ -270,10 +317,13 @@ export function KnowledgeBase() {
     {
       title: "操作",
       key: "action",
-      width: 160,
+      width: 220,
       fixed: "right",
       render: (_, record) => (
         <Space>
+          <Button type="text" icon={<SyncOutlined />} onClick={() => void handleReindex(record.id)}>
+            索引
+          </Button>
           <Button type="text" icon={<EditOutlined />} onClick={() => openEdit(record)} />
           <Popconfirm title="确定删除这条文档吗？" onConfirm={() => void handleDelete(record.id)}>
             <Button type="text" danger icon={<DeleteOutlined />} />
@@ -290,6 +340,9 @@ export function KnowledgeBase() {
         <Space>
           <Button icon={<SyncOutlined />} onClick={() => void fetchRows()}>
             刷新
+          </Button>
+          <Button loading={reindexing} icon={<SyncOutlined />} onClick={() => void handleReindex()}>
+            重新索引
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
             新建文档
