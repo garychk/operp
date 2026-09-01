@@ -64,6 +64,7 @@ const enUS = {
       logs: "System Logs",
       pageDesigner: "Page Designer",
       baq: "BAQ Designer",
+      knowledgeBase: "Knowledge Base",
       workflow: "Workflow",
       documentTypes: "DocType Builder",
     },
@@ -759,5 +760,4 @@ const enUS = {
   },
 };
 export default enUS;
-
 

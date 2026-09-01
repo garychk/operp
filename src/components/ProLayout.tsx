@@ -398,6 +398,7 @@ export const menuData: MenuRoute[] = [
         icon: <AppstoreOutlined />,
       },
       { path: "/system/baq", name: "BAQ管理", icon: <ProfileOutlined /> },
+      { path: "/system/knowledge-base", name: "知识库管理", icon: <BookOutlined /> },
     ],
   },
 ];
@@ -443,6 +444,7 @@ const pathToNameMap: Record<string, string> = {
   "/system/logs": "系统日志",
   "/system/page-designer": "页面设计器",
   "/system/baq": "BAQ管理",
+  "/system/knowledge-base": "知识库管理",
 };
 
 const pathToTranslationKey: Record<string, string> = {
@@ -488,6 +490,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/system/logs": "menu.logs",
   "/system/page-designer": "menu.pageDesigner",
   "/system/baq": "menu.baq",
+  "/system/knowledge-base": "menu.knowledgeBase",
 };
 export function ProLayout() {
   const location = useLocation();

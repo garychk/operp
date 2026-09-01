@@ -484,13 +484,14 @@ export function Roles() {
       render: (_, record) => (
         <Space>
           <Button
-            type="primary"
+            type="text"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            
           </Button>
           <Button
+            type="text"
             icon={<SafetyOutlined />}
             onClick={() => handlePermission(record)}
           >
@@ -500,8 +501,11 @@ export function Roles() {
             title="确定删除吗？"
             onConfirm={() => handleDelete(record.id)}
           >
-            <Button danger icon={<DeleteOutlined />}>
-              删除
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}>
+              
             </Button>
           </Popconfirm>
         </Space>

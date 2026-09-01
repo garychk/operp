@@ -35,6 +35,38 @@ const normalizeTerms = (query: string) =>
 const toVectorLiteral = (values: number[]) =>
   `[${values.map((value) => (Number.isFinite(value) ? value : 0)).join(",")}]`;
 
+const isEmbeddingCapableProvider = (provider?: LlmProviderConfig | null) => {
+  if (!provider?.endpoint) return false;
+  const endpoint = provider.endpoint.toLowerCase();
+  return (
+    provider.apiType === "ollama" ||
+    endpoint.includes("/embeddings") ||
+    /embed/i.test(String(provider.model || "")) ||
+    /embed/i.test(endpoint)
+  );
+};
+
+export async function resolveEmbeddingProvider(preferred?: LlmProviderConfig | null) {
+  if (isEmbeddingCapableProvider(preferred)) {
+    return preferred as LlmProviderConfig;
+  }
+
+  const { data, error } = await supabase
+    .from("sys_config")
+    .select("config_json")
+    .eq("category_code", "ai")
+    .eq("is_deleted", "n")
+    .maybeSingle();
+  if (error) throw error;
+
+  const config = (data?.config_json || {}) as {
+    providers?: LlmProviderConfig[];
+  };
+  const providers = Array.isArray(config.providers) ? config.providers : [];
+  const found = providers.find((item) => isEmbeddingCapableProvider(item));
+  return found || null;
+}
+
 export async function searchKnowledgeDocs(query: string, limit = 8) {
   const terms = normalizeTerms(query);
   const orExpr =
@@ -64,7 +96,12 @@ export async function searchKnowledgeRag(
   limit = 8,
 ) {
   try {
-    const embedding = await callEmbeddingModel(query, provider);
+    const embeddingProvider = await resolveEmbeddingProvider(provider);
+    if (!embeddingProvider) {
+      throw new Error("No embedding provider configured");
+    }
+
+    const embedding = await callEmbeddingModel(query, embeddingProvider);
     if (embedding.length) {
       const { data, error } = await supabase.rpc("match_ai_knowledge_chunks", {
         query_embedding: toVectorLiteral(embedding),
@@ -105,6 +142,13 @@ export async function indexKnowledgeDocument(
   doc: KnowledgeDoc,
   provider: LlmProviderConfig,
 ) {
+  const embeddingProvider = await resolveEmbeddingProvider(provider);
+  if (!embeddingProvider) {
+    throw new Error(
+      "未找到可用于向量化的 embedding provider。请在 AI 设置里增加一个 Ollama / OpenAI 兼容的 embeddings provider。",
+    );
+  }
+
   const chunks = doc.content
     .split(/\n{2,}|(?<=[。！？.!?])\s+/)
     .map((item) => item.trim())
@@ -112,7 +156,7 @@ export async function indexKnowledgeDocument(
   const payload = [];
 
   for (let index = 0; index < chunks.length; index += 1) {
-    const embedding = await callEmbeddingModel(chunks[index], provider);
+    const embedding = await callEmbeddingModel(chunks[index], embeddingProvider);
     payload.push({
       doc_id: doc.id,
       chunk_index: index,

@@ -64,6 +64,7 @@ const zhCN = {
       logs: "系统日志",
       pageDesigner: "页面设计器",
       baq: "BAQ管理",
+      knowledgeBase: "知识库管理",
       workflow: "流程配置",
       documentTypes: "DocType构建",
     },
