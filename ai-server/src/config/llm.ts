@@ -109,6 +109,13 @@ export async function callEmbeddingModel(
     : Array.isArray(data.embedding)
       ? (data.embedding as unknown[])
       : [];
+  const vector = embedding.map((value) => Number(value)).filter((value) => Number.isFinite(value));
 
-  return embedding.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+  if (!vector.length) {
+    throw new Error(
+      `Embedding model returned empty vector. endpoint=${embeddingEndpoint}, model=${provider?.model || "unknown"}`,
+    );
+  }
+
+  return vector;
 }

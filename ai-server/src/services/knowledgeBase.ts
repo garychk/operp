@@ -47,13 +47,26 @@ const normalizeTerms = (query: string) =>
 const toVectorLiteral = (values: number[]) =>
   `[${values.map((value) => (Number.isFinite(value) ? value : 0)).join(",")}]`;
 
+const formatErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return String(error);
+  }
+};
+
+const EMBEDDING_MODEL_PATTERN =
+  /(embed|embedding|nomic-embed|bge-|mxbai-embed|text-embedding|gte-|e5-)/i;
+
 const isEmbeddingCapableProvider = (provider?: LlmProviderConfig | null) => {
   if (!provider?.endpoint) return false;
   const endpoint = provider.endpoint.toLowerCase();
+  const model = String(provider.model || "");
   return (
-    provider.apiType === "ollama" ||
     endpoint.includes("/embeddings") ||
-    /embed/i.test(String(provider.model || "")) ||
+    EMBEDDING_MODEL_PATTERN.test(model) ||
     /embed/i.test(endpoint)
   );
 };
@@ -228,7 +241,7 @@ export async function reindexKnowledgeDocuments(provider: LlmProviderConfig, doc
       result.details.push({
         docId: doc.id,
         title: doc.title,
-        error: error instanceof Error ? error.message : String(error),
+        error: formatErrorMessage(error),
       });
     }
   }
