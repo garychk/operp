@@ -1,7 +1,7 @@
 import type { AiGraphState } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
 import { businessAnalysisTool, countMasterDataTool, createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
-import { searchKnowledgeDocs } from "../../services/knowledgeBase.js";
+import { searchKnowledgeRag } from "../../services/knowledgeBase.js";
 
 export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphState> {
   const plan = Array.isArray(state.plan) ? state.plan : [];
@@ -92,12 +92,13 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
   }
 
   if (tool?.tool === "knowledge.search") {
-    const docs = await searchKnowledgeDocs(state.text, 5).catch(() => []);
+    const docs = await searchKnowledgeRag(state.text, state.provider, 5).catch(() => []);
     if (!docs.length) {
       return {
         ...state,
         toolResults: [{ step: "knowledge_search", ok: true, output: [] }],
         reply: "暂未检索到相关知识库内容。我可以继续按当前业务上下文给你建议，或者你补充更具体的关键词。",
+        sources: [],
       };
     }
 
@@ -116,7 +117,20 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
     return {
       ...state,
       toolResults: [{ step: "knowledge_search", ok: true, output: docs }],
-      reply: content || docs.map((doc) => `${doc.title}: ${String(doc.content).slice(0, 120)}`).join("\n"),
+      reply:
+        content ||
+        docs
+          .map((doc) => `${doc.title}: ${String(doc.content).slice(0, 120)}`)
+          .join("\n"),
+      sources: docs.map((doc) => ({
+        title: doc.title,
+        category: doc.category,
+        sourceType: doc.sourceType,
+        sourceRef: doc.sourceRef,
+        docId: doc.docId,
+        chunkId: doc.chunkId,
+        similarity: doc.similarity,
+      })),
     };
   }
 

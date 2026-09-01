@@ -75,6 +75,15 @@ interface ChatMessage {
   focus?: unknown;
   route?: string;
   routeLabel?: string;
+  sources?: Array<{
+    title?: string;
+    category?: string | null;
+    sourceType?: string | null;
+    sourceRef?: string | null;
+    docId?: number;
+    chunkId?: number;
+    similarity?: number;
+  }>;
 }
 
 interface ConversationListItem {
@@ -101,6 +110,15 @@ type AiChatStreamEvent =
       focus?: unknown;
       route?: string;
       routeLabel?: string;
+      sources?: Array<{
+        title?: string;
+        category?: string | null;
+        sourceType?: string | null;
+        sourceRef?: string | null;
+        docId?: number;
+        chunkId?: number;
+        similarity?: number;
+      }>;
       need_confirmation?: boolean;
       next_questions?: string[];
       data?: unknown;
@@ -595,6 +613,9 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         focus: row.focus_json || undefined,
         route: row.route || undefined,
         routeLabel: row.route_label || undefined,
+        sources: Array.isArray((row as { sources_json?: unknown }).sources_json)
+          ? ((row as { sources_json?: unknown[] }).sources_json as ChatMessage["sources"])
+          : undefined,
       })),
     );
   };
@@ -900,6 +921,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             trace: traceItems,
             content: event.error || "AI 服务暂时不可用。",
             status: "error",
+            sources: [],
           });
           await saveChatMessage({
             id: assistantMessage.id,
@@ -909,6 +931,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             content: event.error || "AI 服务暂时不可用。",
             status: "error",
             trace_json: traceItems,
+            sources_json: [],
           });
           window.setTimeout(scrollMessagesToBottom, 0);
           return;
@@ -936,6 +959,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           focus: event.focus,
           route: event.route,
           routeLabel: event.routeLabel,
+          sources: event.sources,
           status: event.status === "error" ? "error" : "success",
         });
         await saveChatMessage({
@@ -947,6 +971,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           status: event.status === "error" ? "error" : "success",
           trace_json: traceItems,
           focus_json: event.focus,
+          sources_json: event.sources,
           route: event.route,
           route_label: event.routeLabel,
         });
@@ -998,6 +1023,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         content: errorText,
         status: "error",
         trace_json: traceItems,
+        sources_json: [],
       }).catch((saveError) => {
         console.error("保存 AI 错误消息失败", saveError);
       });
@@ -1112,6 +1138,56 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                               content={
                                 <div className="ai-assistant-content">
                                   <MarkdownMessage content={item.content} />
+                                  {item.sources?.length ? (
+                                    <div className="ai-source-list">
+                                      <Typography.Text type="secondary" className="ai-source-title">
+                                        引用来源
+                                      </Typography.Text>
+                                      {item.sources.map((source, index) => {
+                                        const label =
+                                          source.title ||
+                                          source.sourceType ||
+                                          `来源 ${index + 1}`;
+                                        const link = source.sourceRef || "";
+                                        return (
+                                          <div key={`${label}-${index}`} className="ai-source-item">
+                                            <Typography.Text className="ai-source-name">
+                                              {label}
+                                            </Typography.Text>
+                                            <Space size={8} wrap>
+                                              {source.category ? (
+                                                <Typography.Text type="secondary">
+                                                  {source.category}
+                                                </Typography.Text>
+                                              ) : null}
+                                              {source.similarity !== undefined ? (
+                                                <Typography.Text type="secondary">
+                                                  相似度 {Math.round(source.similarity * 100)}%
+                                                </Typography.Text>
+                                              ) : null}
+                                              {link ? (
+                                                <Button
+                                                  type="link"
+                                                  size="small"
+                                                  icon={<LinkOutlined />}
+                                                  onClick={() => {
+                                                    if (/^https?:\/\//i.test(link)) {
+                                                      window.open(link, "_blank", "noopener,noreferrer");
+                                                    } else {
+                                                      navigate(link);
+                                                      onClose();
+                                                    }
+                                                  }}
+                                                >
+                                                  查看来源
+                                                </Button>
+                                              ) : null}
+                                            </Space>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : null}
                                   {item.route ? (
                                     <div className="ai-route-row">
                                       <Button

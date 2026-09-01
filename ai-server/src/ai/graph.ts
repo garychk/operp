@@ -87,6 +87,7 @@ export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> 
     focus: result.focus,
     route: result.route,
     routeLabel: result.routeLabel,
+    sources: result.sources,
     need_confirmation: result.needConfirmation,
     next_questions: result.nextQuestions,
     data: {
@@ -98,6 +99,7 @@ export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> 
       confidence: result.confidence,
       plan: result.plan,
       toolResults: result.toolResults,
+      sources: result.sources,
     },
   };
 }
@@ -153,6 +155,7 @@ export async function runChatGraphStream(
     data: {
       toolResults: state.toolResults,
       reply: state.reply,
+      sources: state.sources,
       needConfirmation: state.needConfirmation,
       nextQuestions: state.nextQuestions,
     },
@@ -183,6 +186,7 @@ export async function runChatGraphStream(
     focus: state.focus,
     route: state.route,
     routeLabel: state.routeLabel,
+    sources: state.sources,
     need_confirmation: state.needConfirmation,
     next_questions: state.nextQuestions,
     data: {
@@ -194,6 +198,7 @@ export async function runChatGraphStream(
       confidence: state.confidence,
       plan: state.plan,
       toolResults: state.toolResults,
+      sources: state.sources,
     },
   };
 
