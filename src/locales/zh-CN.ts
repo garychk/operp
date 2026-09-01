@@ -731,9 +731,9 @@ const zhCN = {
       aboutTitle: "关于软件",
       aboutDescription:
         "这是一个功能完整、架构清晰的现代化 ERP 前端系统，适合作为制造企业的信息化管理平台。系统不仅提供传统 ERP 的财务、库存、采购、销售和生产制造功能，还集成了 AI 智能对话能力，可基于真实 opelix 数据进行分析，并通过自然语言创建常用业务数据。",
-      version: "当前版本：1.0.0",
-      author: "开发作者：garychk",
-      email: "联系邮箱：garychk@163.com",
+      version: "当前版本: 1.0.0",
+      author: "开发作者: chenkuan",
+      email: "联系邮箱: garychk@163.com",
     },
     modal: {
       headerPanelTitle: "单据头",
