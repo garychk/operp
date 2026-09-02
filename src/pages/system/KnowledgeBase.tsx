@@ -274,7 +274,7 @@ export function KnowledgeBase() {
 
   const handleReindexHint = useMemo(
     () =>
-      "保存或导入文档后，请在 ai-server 侧运行批量索引脚本生成 chunks 和 embeddings。",
+      "保存或导入文档后，请运行重新索引生成分片和向量。",
     [],
   );
 
@@ -313,7 +313,13 @@ export function KnowledgeBase() {
       width: 100,
       render: (value: boolean) => <Tag color={value ? "green" : "default"}>{value ? "启用" : "停用"}</Tag>,
     },
-    { title: "更新时间", dataIndex: "updated_at", key: "updated_at", width: 180 },
+    {
+      title: "更新时间",
+      dataIndex: "updated_at",
+      key: "updated_at",
+      width: 180,
+      render: (value) => (value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"),
+    },
     {
       title: "操作",
       key: "action",
@@ -376,7 +382,7 @@ export function KnowledgeBase() {
               <Space direction="vertical" style={{ width: "100%" }} size="large">
                 <Card size="small" title="导入说明">
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    直接粘贴 JSON 数组，每个对象代表一篇文档。保存后再用 ai-server 批量索引脚本生成分片和向量。
+                    直接粘贴 JSON 数组，每个对象代表一篇文档。保存后再运行重新索引生成分片和向量。
                   </Typography.Paragraph>
                 </Card>
                 <Input.TextArea
