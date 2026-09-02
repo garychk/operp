@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { supabase } from "../config/supabase.js";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
+import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
 
 export const aiRouter = Router();
 
@@ -42,6 +43,10 @@ const aiSettingsSchema = z.object({
   temperature: z.number().optional(),
   redactSensitiveData: z.boolean().optional(),
   maxContextMessages: z.number().optional(),
+});
+
+const reindexSchema = z.object({
+  doc_id: z.number().int().optional(),
 });
 
 async function resolveProviderConfig(provider?: { id?: string; name?: string }) {
@@ -168,5 +173,50 @@ aiRouter.post("/chat", async (req, res) => {
     } finally {
       res.end();
     }
+  }
+});
+
+aiRouter.post("/knowledge/reindex", async (req, res) => {
+  const parsed = reindexSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: "Invalid request",
+      issues: parsed.error.issues,
+    });
+  }
+
+  try {
+    const resolvedProvider = await resolveProviderConfig({ id: "ollama" }).catch(async () => {
+      const { data, error } = await supabase
+        .from("sys_config")
+        .select("config_json")
+        .eq("category_code", "ai")
+        .eq("is_deleted", "n")
+        .maybeSingle();
+      if (error) throw error;
+      const settings = aiSettingsSchema.parse(data?.config_json || {});
+      const candidates = settings.providers.filter(
+        (item) =>
+          item.apiType === "ollama" ||
+          /embed/i.test(String(item.model || "")) ||
+          /embeddings/i.test(String(item.endpoint || "")),
+      );
+      if (!candidates.length) {
+        throw new Error("未找到可用于知识库向量化的 embedding provider");
+      }
+      return candidates[0];
+    });
+
+    const result = await reindexKnowledgeDocuments(
+      resolvedProvider,
+      parsed.data.doc_id,
+    );
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: errorToMessage(error),
+    });
   }
 });

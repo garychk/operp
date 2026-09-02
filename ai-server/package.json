@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "index:knowledge": "tsx src/scripts/indexKnowledgeDocs.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js"
   },

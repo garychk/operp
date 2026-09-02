@@ -166,6 +166,30 @@
   max-width: min(100%, 520px);
 }
 
+.ai-source-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.ai-source-title {
+  font-size: 12px;
+}
+
+.ai-source-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-source-name {
+  font-weight: 600;
+}
+
 .ai-assistant-block {
   display: flex;
   flex-direction: column;

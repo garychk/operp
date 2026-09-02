@@ -64,6 +64,7 @@ const enUS = {
       logs: "System Logs",
       pageDesigner: "Page Designer",
       baq: "BAQ Designer",
+      knowledgeBase: "Knowledge Base",
       workflow: "Workflow",
       documentTypes: "DocType Builder",
     },
@@ -737,7 +738,7 @@ const enUS = {
       aboutDescription:
         "A modern ERP frontend for manufacturing businesses. It covers finance, inventory, purchasing, sales, and manufacturing, and includes an AI assistant that can analyze real opelix data and create common business records using natural language.",
       version: "Version: 1.0.0",
-      author: "Developer: garychk",
+      author: "Developer: chenkuan",
       email: "Email: garychk@163.com",
     },
     modal: {
@@ -759,5 +760,4 @@ const enUS = {
   },
 };
 export default enUS;
-
 

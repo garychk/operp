@@ -30,3 +30,10 @@
 \i supabase/tables/deploy_21_finance_required_subjects.sql
 \i supabase/tables/deploy_22_accounting_period_generation.sql
 \i supabase/tables/deploy_23_fix_voucher_posting_rls.sql
+\i supabase/tables/deploy_24_inventory_document_ops.sql
+\i supabase/tables/deploy_25_ai_memory_and_knowledge.sql
+\i supabase/tables/deploy_25_baq_catalog_for_ai.sql
+\i supabase/tables/deploy_26_ai_analysis_executor.sql
+\i supabase/tables/deploy_27_ai_chat_sessions_and_messages.sql
+\i supabase/tables/deploy_28_ai_rag.sql
+\i supabase/tables/deploy_29_ai_chat_message_sources.sql

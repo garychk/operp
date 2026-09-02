@@ -21,6 +21,7 @@ export interface AIChatMessageRecord {
   status: "loading" | "success" | "error" | null;
   trace_json: ThoughtChainItemType[] | null;
   focus_json: unknown;
+  sources_json: unknown[] | null;
   route: string | null;
   route_label: string | null;
   created_at: string;
@@ -36,6 +37,7 @@ export interface SaveChatMessageInput {
   status?: "loading" | "success" | "error";
   trace_json?: ThoughtChainItemType[];
   focus_json?: unknown;
+  sources_json?: unknown[];
   route?: string | null;
   route_label?: string | null;
 }
@@ -138,6 +140,7 @@ export async function saveChatMessage(input: SaveChatMessageInput) {
     status: input.status ?? "success",
     trace_json: input.trace_json ?? null,
     focus_json: input.focus_json ?? null,
+    sources_json: input.sources_json ?? null,
     route: input.route ?? null,
     route_label: input.route_label ?? null,
     updated_at: now,
@@ -147,7 +150,7 @@ export async function saveChatMessage(input: SaveChatMessageInput) {
     .from("sys_ai_chat_messages")
     .upsert(payload, { onConflict: "id" })
     .select(
-      "id, session_id, user_id, role, content, status, trace_json, focus_json, route, route_label, created_at, updated_at",
+      "id, session_id, user_id, role, content, status, trace_json, focus_json, sources_json, route, route_label, created_at, updated_at",
     )
     .single();
 

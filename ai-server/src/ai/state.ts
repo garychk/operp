@@ -54,6 +54,7 @@ export interface AiChatResult {
   focus?: unknown;
   route?: string;
   routeLabel?: string;
+  sources?: unknown[];
   need_confirmation?: boolean;
   next_questions?: string[];
   data?: unknown;
@@ -78,6 +79,7 @@ export interface AiGraphState {
   confidence?: number;
   plan?: unknown;
   toolResults?: unknown[];
+  sources?: unknown[];
   reply?: string;
   focus?: unknown;
   route?: string;

@@ -440,15 +440,13 @@ const columns: ColumnsType<User> = [
       width: 320,
       render: (_, record) => (
         <Space>
-          <Button type="primary" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Button onClick={() => handleResetPassword(record)}>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />          
+          <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>
+            <Button type="text" danger icon={<DeleteOutlined />} />
+          </Popconfirm>
+          <Button type="text"  onClick={() => handleResetPassword(record)}>
             重置密码
           </Button>
-          <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>
-            <Button danger icon={<DeleteOutlined />}>删除</Button>
-          </Popconfirm>
         </Space>
       ),
     },
