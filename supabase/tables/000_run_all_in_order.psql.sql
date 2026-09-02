@@ -37,3 +37,4 @@
 \i supabase/tables/deploy_27_ai_chat_sessions_and_messages.sql
 \i supabase/tables/deploy_28_ai_rag.sql
 \i supabase/tables/deploy_29_ai_chat_message_sources.sql
+\i supabase/tables/deploy_30_fix_rag_dimension_nomic.sql

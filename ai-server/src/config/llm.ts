@@ -75,8 +75,16 @@ export async function callEmbeddingModel(
   }
 
   const normalizedEndpoint = endpoint.replace(/\/$/, "");
-  const embeddingEndpoint = normalizedEndpoint.endsWith("/embeddings")
-    ? normalizedEndpoint
+  const embeddingEndpoint = provider?.apiType === "ollama"
+    ? normalizedEndpoint.endsWith("/embed")
+      ? normalizedEndpoint
+      : normalizedEndpoint.endsWith("/embeddings")
+        ? normalizedEndpoint.replace(/\/embeddings$/, "/embed")
+        : normalizedEndpoint.endsWith("/chat")
+          ? normalizedEndpoint.replace(/\/chat$/, "/embed")
+          : `${normalizedEndpoint}/embed`
+    : normalizedEndpoint.endsWith("/embeddings")
+      ? normalizedEndpoint
     : normalizedEndpoint.endsWith("/chat/completions")
       ? normalizedEndpoint.replace(/\/chat\/completions$/, "/embeddings")
       : normalizedEndpoint.endsWith("/chat")
@@ -92,6 +100,7 @@ export async function callEmbeddingModel(
     body: JSON.stringify({
       model: provider?.model,
       input,
+      ...(provider?.apiType === "ollama" ? { truncate: true } : {}),
     }),
   });
 
@@ -103,12 +112,16 @@ export async function callEmbeddingModel(
   }
 
   const data = (await response.json()) as Record<string, unknown>;
-  const first = Array.isArray(data.data) ? (data.data[0] as Record<string, unknown> | undefined) : undefined;
-  const embedding = Array.isArray(first?.embedding)
-    ? (first?.embedding as unknown[])
-    : Array.isArray(data.embedding)
-      ? (data.embedding as unknown[])
-      : [];
+  const first = Array.isArray(data.data)
+    ? (data.data[0] as Record<string, unknown> | undefined)
+    : undefined;
+  const embedding = Array.isArray(data.embeddings)
+    ? ((data.embeddings[0] as unknown[]) || [])
+    : Array.isArray(first?.embedding)
+      ? (first.embedding as unknown[])
+      : Array.isArray(data.embedding)
+        ? (data.embedding as unknown[])
+        : [];
   const vector = embedding.map((value) => Number(value)).filter((value) => Number.isFinite(value));
 
   if (!vector.length) {
