@@ -4,6 +4,7 @@ import {
   BarChartOutlined,
   DeleteOutlined,
   EyeOutlined,
+  MinusOutlined,
   LineChartOutlined,
   PieChartOutlined,
   PlusOutlined,
@@ -50,6 +51,7 @@ const palette: Array<{
   { type: "line", label: "折线图", icon: <LineChartOutlined /> },
   { type: "column", label: "柱状图", icon: <BarChartOutlined /> },
   { type: "pie", label: "饼图", icon: <PieChartOutlined /> },
+  { type: "divider", label: "分割线", icon: <MinusOutlined /> },
 ];
 
 const emptyPage = (): CustomPage => ({
@@ -269,15 +271,87 @@ export function PageDesigner() {
                     }
                   />
                 </Form.Item>
-                {(selected.type === "text" || selected.type === "button") && (
+                {(selected.type === "text" || selected.type === "button" || selected.type === "divider") && (
                   <Form.Item label="内容">
                     <Input.TextArea
-                      value={selected.content}
+                      value={selected.type === "divider" ? (selected.dividerText || "") : (selected.content || "")}
                       onChange={(event) =>
-                        patchWidget({ content: event.target.value })
+                        selected.type === "divider"
+                          ? patchWidget({ dividerText: event.target.value })
+                          : patchWidget({ content: event.target.value })
                       }
                     />
                   </Form.Item>
+                )}
+                {selected.type === "divider" && (
+                  <>
+                    <Form.Item label="虚线">
+                      <Segmented
+                        block
+                        value={selected.dashed ? "yes" : "no"}
+                        options={[
+                          { label: "是", value: "yes" },
+                          { label: "否", value: "no" },
+                        ]}
+                        onChange={(value) => patchWidget({ dashed: value === "yes" })}
+                      />
+                    </Form.Item>
+                    <Form.Item label="文字位置">
+                      <Select
+                        value={selected.titlePlacement || "center"}
+                        onChange={(value) => patchWidget({ titlePlacement: value })}
+                        options={[
+                          { value: "start", label: "开始" },
+                          { value: "center", label: "居中" },
+                          { value: "end", label: "结束" },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item label="方向">
+                      <Select
+                        value={selected.orientation || "horizontal"}
+                        onChange={(value) =>
+                          patchWidget({
+                            orientation: value,
+                            titlePlacement:
+                              value === "vertical"
+                                ? undefined
+                                : selected.titlePlacement || "center",
+                          })
+                        }
+                        options={[
+                          { value: "horizontal", label: "水平" },
+                          { value: "vertical", label: "垂直" },
+                        ]}
+                      />
+                    </Form.Item>
+                    {selected.orientation !== "vertical" && (
+                      <Form.Item label="文字位置">
+                        <Select
+                          value={selected.titlePlacement || "center"}
+                          onChange={(value) =>
+                            patchWidget({ titlePlacement: value })
+                          }
+                          options={[
+                            { value: "start", label: "开始" },
+                            { value: "center", label: "居中" },
+                            { value: "end", label: "结束" },
+                          ]}
+                        />
+                      </Form.Item>
+                    )}
+                    <Form.Item label="样式">
+                      <Select
+                        value={selected.variant || "solid"}
+                        onChange={(value) => patchWidget({ variant: value })}
+                        options={[
+                          { value: "solid", label: "实线" },
+                          { value: "dashed", label: "虚线" },
+                          { value: "dotted", label: "点线" },
+                        ]}
+                      />
+                    </Form.Item>
+                  </>
                 )}
                 <Space>
                   <Form.Item label="列坐标 X">

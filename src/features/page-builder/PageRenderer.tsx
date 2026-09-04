@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Empty, Skeleton, Statistic, Table, Typography } from 'antd';
+import { Alert, Button, Card, Divider, Empty, Skeleton, Statistic, Table, Typography } from 'antd';
 import { Column, Line, Pie } from '@ant-design/charts';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
 import { useParams } from 'react-router-dom';
@@ -85,12 +85,25 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
   if (error) return <Alert type="error" showIcon message="数据加载失败" description={error} />;
   if (widget.type === 'text') return <Typography.Paragraph>{widget.content}</Typography.Paragraph>;
   if (widget.type === 'button') return <Button type="primary">{widget.content || widget.title}</Button>;
+  if (widget.type === 'divider') return (
+    widget.orientation === 'vertical' ? (
+      <Divider type="vertical" dashed={widget.dashed} variant={widget.variant} />
+    ) : (
+      <Divider
+        dashed={widget.dashed}
+        titlePlacement={widget.titlePlacement || 'center'}
+        variant={widget.variant}
+      >
+        {widget.dividerText || widget.content || ''}
+      </Divider>
+    )
+  );
   if (widget.type === 'statistic') return <Statistic title={String(data[0]?.[widget.xField || 'label'] || widget.title)} value={Number(data[0]?.[widget.yField || 'value'] || 0)} />;
   if (!data.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   if (widget.type === 'table') return <Table size="small" rowKey={(_, index) => String(index)} columns={columns} dataSource={data} pagination={{ pageSize: widget.pageSize || 10, hideOnSinglePage: true, showSizeChanger: false }} scroll={{ x: true }} />;
-  if (widget.type === 'line') return <Line data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit />;
-  if (widget.type === 'column') return <Column data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit />;
-  return <Pie data={data} angleField={widget.yField || 'value'} colorField={widget.colorField || widget.xField || 'name'} innerRadius={0.55} autoFit />;
+  if (widget.type === 'line') return <div className="chart-widget"><Line data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit /></div>;
+  if (widget.type === 'column') return <div className="chart-widget"><Column data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit /></div>;
+  return <div className="chart-widget"><Pie data={data} angleField={widget.yField || 'value'} colorField={widget.colorField || widget.xField || 'name'} innerRadius={0.55} autoFit /></div>;
 }
 
 export function PageCanvas({ page, editable = false, selectedId, onSelect, onLayoutChange }: { page: CustomPage; editable?: boolean; selectedId?: string; onSelect?: (id: string) => void; onLayoutChange?: (layout: GridLayout.Layout[]) => void }) {
@@ -98,7 +111,7 @@ export function PageCanvas({ page, editable = false, selectedId, onSelect, onLay
   return (
     <ResponsiveGrid className={`custom-page-grid${editable ? ' is-editing' : ''}`} layout={layout} cols={12} rowHeight={editable ? 48 : 48} margin={[12, 12]} isDraggable={editable} isResizable={editable} onLayoutChange={onLayoutChange} draggableHandle=".widget-drag-handle">
       {page.config.widgets.map(widget => {
-        const plain = !editable && (widget.type === 'text' || widget.type === 'button');
+        const plain = !editable && (widget.type === 'text' || widget.type === 'button' || widget.type === 'divider');
         return (
           <div key={widget.id} onClick={() => onSelect?.(widget.id)}>
             <Card
