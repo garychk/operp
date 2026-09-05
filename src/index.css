@@ -84,29 +84,6 @@ body {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-/* 如果需要覆盖其他 Input 变体 */
-/* .ant-input-number {
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-}
-
-.ant-input-number:focus-within {
-  border-color: var(--accent);
-  box-shadow: none;
-}
-
-.ant-input-password {
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-}
-
-.ant-input-password:focus {
-  border-color: var(--accent);
-  box-shadow: none;
-} */
-
 .mainContent{
   border-radius: 0;
   height: 90vh;

@@ -83,37 +83,202 @@ export function StockCounts() {
       <Button danger icon={<DeleteOutlined />} onClick={async () => { await supabase.from(tableName).update({ is_deleted: 'y' }).eq('id', record.id); await fetchAll(); }}>删除</Button>
     </Space>},
   ];
-  return <>
-    <SuperTable columns={columns} dataSource={rows} loading={loading} rowKey="id" storageKey="stock-counts" headerTitle="库存盘点" rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} queryBar={<Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.setFieldsValue({ count_no: `SC${Date.now().toString().slice(-8)}`, count_date: dayjs(), status: 'draft' }); setOpen(true); }}>新增盘点</Button>} />
-    <Modal title={editing ? '编辑盘点' : '新增盘点'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} onOk={() => form.submit()} destroyOnClose>
-      <Form form={form} layout="vertical" onFinish={async (values) => { const payload = { ...values, count_date: values.count_date?.format?.('YYYY-MM-DD') ?? values.count_date }; if (editing) await supabase.from(tableName).update(payload).eq('id', editing.id); else await supabase.from(tableName).insert([payload]); setOpen(false); await fetchAll(); }}>
-        <Form.Item name="count_no" label="盘点单号" rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="count_date" label="盘点日期" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="warehouse_id" label="仓库" rules={[{ required: true }]}><Select options={warehouses.map(w => ({ value: w.id, label: w.name }))} /></Form.Item>
-        <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
-      </Form>
-    </Modal>
-    <Modal title={`盘点明细 ${selected?.count_no ?? ''}`} open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={900}>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => { setDetailEditing(null); detailForm.setFieldsValue({ count_id: selected?.id, line_no: details.length + 1, system_quantity: 0, counted_quantity: 0, difference_quantity: 0, unit_cost: 0 }); setDetailEditing({} as Detail); }}>新增明细</Button>
-      <Table style={{ marginTop: 16 }} rowKey="id" dataSource={details} columns={[
-        { title: '行号', dataIndex: 'line_no' },
-        { title: '物料', dataIndex: 'product_id', render: (v: number) => products.find(p => p.id === v)?.name || '-' },
-        { title: '系统数量', dataIndex: 'system_quantity' },
-        { title: '盘点数量', dataIndex: 'counted_quantity' },
-        { title: '差异', dataIndex: 'difference_quantity' },
-      ]} pagination={false} />
-    </Modal>
-    <Modal title="盘点明细" open={!!detailEditing} onCancel={() => setDetailEditing(null)} onOk={() => detailForm.submit()} destroyOnClose>
-      <Form form={detailForm} layout="vertical" onFinish={async (values) => { const payload = { ...values, batch_no: values.batch_no || null, difference_quantity: (values.counted_quantity || 0) - (values.system_quantity || 0) }; const { error } = await supabase.from(detailTable).insert([payload]); if (error) throw error; setDetailEditing(null); if (selected) await fetchDetails(selected.id); }}>
-        <Form.Item name="count_id" hidden><Input /></Form.Item>
-        <Form.Item name="line_no" label="行号"><InputNumber style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="product_id" label="物料" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={products.map(p => ({ value: p.id, label: `${p.code} ${p.name}` }))} /></Form.Item>
-        <Form.Item name="system_quantity" label="账面数量"><InputNumber style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="counted_quantity" label="盘点数量" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="unit_cost" label="单价"><InputNumber style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="batch_no" label="批次"><Input /></Form.Item>
-        <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
-      </Form>
-    </Modal>
-  </>;
+  return (
+    <>
+      <SuperTable
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        rowKey="id"
+        storageKey="stock-counts"
+        headerTitle="库存盘点"
+        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+        queryBar={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditing(null);
+              form.setFieldsValue({
+                count_no: `SC${Date.now().toString().slice(-8)}`,
+                count_date: dayjs(),
+                status: "draft",
+              });
+              setOpen(true);
+            }}
+          >
+            新增盘点
+          </Button>
+        }
+      />
+      <Modal
+        title={editing ? "编辑盘点" : "新增盘点"}
+        open={open}
+        onCancel={() => {
+          setOpen(false);
+          form.resetFields();
+        }}
+        onOk={() => form.submit()}
+        destroyOnClose
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={async (values) => {
+            const payload = {
+              ...values,
+              count_date:
+                values.count_date?.format?.("YYYY-MM-DD") ?? values.count_date,
+            };
+            if (editing)
+              await supabase
+                .from(tableName)
+                .update(payload)
+                .eq("id", editing.id);
+            else await supabase.from(tableName).insert([payload]);
+            setOpen(false);
+            await fetchAll();
+          }}
+        >
+          <Form.Item
+            name="count_no"
+            label="盘点单号"
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="count_date"
+            label="盘点日期"
+            rules={[{ required: true }]}
+          >
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="warehouse_id"
+            label="仓库"
+            rules={[{ required: true }]}
+          >
+            <Select
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea />
+          </Form.Item>
+        </Form>
+      </Modal>
+      <Modal
+        title={`盘点明细 ${selected?.count_no ?? ""}`}
+        open={detailOpen}
+        onCancel={() => setDetailOpen(false)}
+        width={900}
+        footer={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setDetailEditing(null);
+              detailForm.setFieldsValue({
+                count_id: selected?.id,
+                line_no: details.length + 1,
+                system_quantity: 0,
+                counted_quantity: 0,
+                difference_quantity: 0,
+                unit_cost: 0,
+              });
+              setDetailEditing({} as Detail);
+            }}
+          >
+            新增明细
+          </Button>
+        }
+      >
+        <Table
+          style={{ marginTop: 16 }}
+          rowKey="id"
+          dataSource={details}
+          columns={[
+            { title: "行号", dataIndex: "line_no" },
+            {
+              title: "物料",
+              dataIndex: "product_id",
+              render: (v: number) =>
+                products.find((p) => p.id === v)?.name || "-",
+            },
+            { title: "系统数量", dataIndex: "system_quantity" },
+            { title: "盘点数量", dataIndex: "counted_quantity" },
+            { title: "差异", dataIndex: "difference_quantity" },
+          ]}
+          pagination={false}
+        />
+      </Modal>
+      <Modal
+        title="盘点明细"
+        open={!!detailEditing}
+        onCancel={() => setDetailEditing(null)}
+        onOk={() => detailForm.submit()}
+        destroyOnClose
+      >
+        <Form
+          form={detailForm}
+          layout="vertical"
+          onFinish={async (values) => {
+            const payload = {
+              ...values,
+              batch_no: values.batch_no || null,
+              difference_quantity:
+                (values.counted_quantity || 0) - (values.system_quantity || 0),
+            };
+            const { error } = await supabase
+              .from(detailTable)
+              .insert([payload]);
+            if (error) throw error;
+            setDetailEditing(null);
+            if (selected) await fetchDetails(selected.id);
+          }}
+        >
+          <Form.Item name="count_id" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="line_no" label="行号">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="product_id"
+            label="物料"
+            rules={[{ required: true }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={products.map((p) => ({
+                value: p.id,
+                label: `${p.code} ${p.name}`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="system_quantity" label="账面数量">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="counted_quantity"
+            label="盘点数量"
+            rules={[{ required: true }]}
+          >
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="unit_cost" label="单价">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="batch_no" label="批次">
+            <Input />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  );
 }

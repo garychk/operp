@@ -84,38 +84,205 @@ export function StockAdjustments() {
       <Button danger icon={<DeleteOutlined />} onClick={async () => { await supabase.from(tableName).update({ is_deleted: 'y' }).eq('id', record.id); await fetchAll(); }}>删除</Button>
     </Space>},
   ];
-  return <>
-    <SuperTable columns={columns} dataSource={rows} loading={loading} rowKey="id" storageKey="stock-adjustments" headerTitle="库存调整" rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }} queryBar={<Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.setFieldsValue({ adjust_no: `SA${Date.now().toString().slice(-8)}`, adjust_date: dayjs(), status: 'draft' }); setOpen(true); }}>新增调整</Button>} />
-    <Modal title={editing ? '编辑调整' : '新增调整'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} onOk={() => form.submit()} destroyOnClose>
-      <Form form={form} layout="vertical" onFinish={async (values) => { const payload = { ...values, adjust_date: values.adjust_date?.format?.('YYYY-MM-DD') ?? values.adjust_date }; if (editing) await supabase.from(tableName).update(payload).eq('id', editing.id); else await supabase.from(tableName).insert([payload]); setOpen(false); await fetchAll(); }}>
-        <Form.Item name="adjust_no" label="调整单号" rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="adjust_date" label="调整日期" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="warehouse_id" label="仓库" rules={[{ required: true }]}><Select options={warehouses.map(w => ({ value: w.id, label: w.name }))} /></Form.Item>
-        <Form.Item name="reason" label="调整原因"><Input /></Form.Item>
-        <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
-      </Form>
-    </Modal>
-    <Modal title={`调整明细 ${selected?.adjust_no ?? ''}`} open={detailOpen} onCancel={() => setDetailOpen(false)} footer={null} width={900}>
-      <Button type="primary" icon={<PlusOutlined />} onClick={() => { setDetailEditing(null); detailForm.setFieldsValue({ adjust_id: selected?.id, line_no: details.length + 1, direction: 'in', quantity: 1, unit_cost: 0 }); setDetailEditing({} as Detail); }}>新增明细</Button>
-      <Table style={{ marginTop: 16 }} rowKey="id" dataSource={details} columns={[
-        { title: '行号', dataIndex: 'line_no' },
-        { title: '物料', dataIndex: 'product_id', render: (v: number) => products.find(p => p.id === v)?.name || '-' },
-        { title: '方向', dataIndex: 'direction' },
-        { title: '数量', dataIndex: 'quantity' },
-        { title: '批次', dataIndex: 'batch_no' },
-      ]} pagination={false} />
-    </Modal>
-    <Modal title="调整明细" open={!!detailEditing} onCancel={() => setDetailEditing(null)} onOk={() => detailForm.submit()} destroyOnClose>
-      <Form form={detailForm} layout="vertical" onFinish={async (values) => { const payload = { ...values, batch_no: values.batch_no || null, direction: values.direction || 'in' }; const { error } = await supabase.from(detailTable).insert([payload]); if (error) throw error; setDetailEditing(null); if (selected) await fetchDetails(selected.id); }}>
-        <Form.Item name="adjust_id" hidden><Input /></Form.Item>
-        <Form.Item name="line_no" label="行号"><InputNumber style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="product_id" label="物料" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={products.map(p => ({ value: p.id, label: `${p.code} ${p.name}` }))} /></Form.Item>
-        <Form.Item name="direction" label="方向" rules={[{ required: true }]}><Select options={[{ value: 'in', label: '入库增加' }, { value: 'out', label: '出库减少' }]} /></Form.Item>
-        <Form.Item name="quantity" label="数量" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0.0001} /></Form.Item>
-        <Form.Item name="unit_cost" label="单价"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item>
-        <Form.Item name="batch_no" label="批次"><Input /></Form.Item>
-        <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
-      </Form>
-    </Modal>
-  </>;
+  return (
+    <>
+      <SuperTable
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        rowKey="id"
+        storageKey="stock-adjustments"
+        headerTitle="库存调整"
+        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+        queryBar={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setEditing(null);
+              form.setFieldsValue({
+                adjust_no: `SA${Date.now().toString().slice(-8)}`,
+                adjust_date: dayjs(),
+                status: "draft",
+              });
+              setOpen(true);
+            }}
+          >
+            新增调整
+          </Button>
+        }
+      />
+      <Modal
+        title={editing ? "编辑调整" : "新增调整"}
+        open={open}
+        onCancel={() => {
+          setOpen(false);
+          form.resetFields();
+        }}
+        onOk={() => form.submit()}
+        destroyOnClose
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={async (values) => {
+            const payload = {
+              ...values,
+              adjust_date:
+                values.adjust_date?.format?.("YYYY-MM-DD") ??
+                values.adjust_date,
+            };
+            if (editing)
+              await supabase
+                .from(tableName)
+                .update(payload)
+                .eq("id", editing.id);
+            else await supabase.from(tableName).insert([payload]);
+            setOpen(false);
+            await fetchAll();
+          }}
+        >
+          <Form.Item
+            name="adjust_no"
+            label="调整单号"
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="adjust_date"
+            label="调整日期"
+            rules={[{ required: true }]}
+          >
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="warehouse_id"
+            label="仓库"
+            rules={[{ required: true }]}
+          >
+            <Select
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
+          </Form.Item>
+          <Form.Item name="reason" label="调整原因">
+            <Input />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea />
+          </Form.Item>
+        </Form>
+      </Modal>
+      <Modal
+        title={`调整明细 ${selected?.adjust_no ?? ""}`}
+        open={detailOpen}
+        onCancel={() => setDetailOpen(false)}
+        footer={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => {
+              setDetailEditing(null);
+              detailForm.setFieldsValue({
+                adjust_id: selected?.id,
+                line_no: details.length + 1,
+                direction: "in",
+                quantity: 1,
+                unit_cost: 0,
+              });
+              setDetailEditing({} as Detail);
+            }}
+          >
+            新增明细
+          </Button>
+        }
+        width={900}
+      >
+        <Table
+          style={{ marginTop: 16 }}
+          rowKey="id"
+          dataSource={details}
+          columns={[
+            { title: "行号", dataIndex: "line_no" },
+            {
+              title: "物料",
+              dataIndex: "product_id",
+              render: (v: number) =>
+                products.find((p) => p.id === v)?.name || "-",
+            },
+            { title: "方向", dataIndex: "direction" },
+            { title: "数量", dataIndex: "quantity" },
+            { title: "批次", dataIndex: "batch_no" },
+          ]}
+          pagination={false}
+        />
+      </Modal>
+      <Modal
+        title="调整明细"
+        open={!!detailEditing}
+        onCancel={() => setDetailEditing(null)}
+        onOk={() => detailForm.submit()}
+        destroyOnClose
+      >
+        <Form
+          form={detailForm}
+          layout="vertical"
+          onFinish={async (values) => {
+            const payload = {
+              ...values,
+              batch_no: values.batch_no || null,
+              direction: values.direction || "in",
+            };
+            const { error } = await supabase
+              .from(detailTable)
+              .insert([payload]);
+            if (error) throw error;
+            setDetailEditing(null);
+            if (selected) await fetchDetails(selected.id);
+          }}
+        >
+          <Form.Item name="adjust_id" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="line_no" label="行号">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="product_id"
+            label="物料"
+            rules={[{ required: true }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={products.map((p) => ({
+                value: p.id,
+                label: `${p.code} ${p.name}`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="direction" label="方向" rules={[{ required: true }]}>
+            <Select
+              options={[
+                { value: "in", label: "入库增加" },
+                { value: "out", label: "出库减少" },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item name="quantity" label="数量" rules={[{ required: true }]}>
+            <InputNumber style={{ width: "100%" }} min={0.0001} />
+          </Form.Item>
+          <Form.Item name="unit_cost" label="单价">
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+          <Form.Item name="batch_no" label="批次">
+            <Input />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea />
+          </Form.Item>
+        </Form>
+      </Modal>
+    </>
+  );
 }

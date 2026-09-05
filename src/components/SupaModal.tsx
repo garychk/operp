@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ConfigProvider,
   Modal,
   Space,
   Button,
@@ -308,7 +309,7 @@ export function SupaModal({
   }));
 
   return (
-    <>
+    <ConfigProvider variant="underlined">
       <Modal
         title={
           <Space>
@@ -357,7 +358,7 @@ export function SupaModal({
         style={{ top: isExpand ? 16 : 100 }}
         keyboard
       >
-        <div>
+        <div className="supamodal-content">
           {children || (
             <Collapse
               defaultActiveKey={["1", "2"]}
@@ -442,7 +443,7 @@ export function SupaModal({
           )}
         </Spin>
       </Modal>
-    </>
+    </ConfigProvider>
   );
 }
 
