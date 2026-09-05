@@ -67,6 +67,9 @@ const enUS = {
       knowledgeBase: "Knowledge Base",
       workflow: "Workflow",
       documentTypes: "DocType Builder",
+      transfers: "Inventory Transfers",
+      stockCounts: "Inventory Counts",
+      stockAdjustments: "Inventory Adjustments",
     },
     settings: {
       title: "System Settings",

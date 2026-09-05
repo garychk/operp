@@ -491,6 +491,9 @@ const pathToTranslationKey: Record<string, string> = {
   "/system/page-designer": "menu.pageDesigner",
   "/system/baq": "menu.baq",
   "/system/knowledge-base": "menu.knowledgeBase",
+  "/inventory/transfers": "menu.transfers",
+  "/inventory/stock-counts": "menu.stockCounts",
+  "/inventory/stock-adjustments": "menu.stockAdjustments",
 };
 export function ProLayout() {
   const location = useLocation();

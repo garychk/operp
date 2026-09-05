@@ -67,6 +67,9 @@ const zhCN = {
       knowledgeBase: "知识库管理",
       workflow: "流程配置",
       documentTypes: "DocType构建",
+      transfers: "库存转移",
+      stockCounts: "库存盘点",
+      stockAdjustments: "库存调整",
     },
     settings: {
       title: "系统设置",
