@@ -4,6 +4,8 @@ const enUS = {
       login: "Sign in",
       logout: "Sign out",
       unnamed: "Untitled",
+      refresh: "Refresh",
+      reset: "Reset",
       confirmDelete: "Confirm Delete",
       cancel: "Cancel",
       save: "Save",
@@ -46,6 +48,7 @@ const enUS = {
       purchaseReceipts: "Purchase Receipts",
       sales: "Sales Orders",
       salesDeliveries: "Sales Deliveries",
+      transactions: "Inventory Transactions",
       mrp: "Manufacturing",
       departments: "Departments",
       boms: "BOMs",
@@ -70,6 +73,35 @@ const enUS = {
       transfers: "Inventory Transfers",
       stockCounts: "Inventory Counts",
       stockAdjustments: "Inventory Adjustments",
+    },
+    inventoryTransactions: {
+      title: "Inventory Transaction Query",
+      subtitle:
+        "Quickly filter inventory movement records by document, material, warehouse, date range, and transaction type.",
+      searchPlaceholder: "Search number, remark, material, or warehouse...",
+      typePlaceholder: "Transaction Type",
+      productPlaceholder: "Material",
+      warehousePlaceholder: "Warehouse",
+      columns: {
+        transactionNo: "Transaction No.",
+        date: "Date",
+        type: "Transaction Type",
+        product: "Material",
+        warehouse: "Warehouse",
+        batchNo: "Batch No.",
+        quantity: "Quantity",
+        unitCost: "Unit Cost",
+        totalCost: "Total Cost",
+        remark: "Remark",
+      },
+      stats: {
+        totalRows: "Rows",
+        totalQty: "Total Qty",
+        totalCost: "Total Cost",
+      },
+      messages: {
+        fetchFailed: "Failed to load inventory transactions",
+      },
     },
     settings: {
       title: "System Settings",
@@ -763,4 +795,3 @@ const enUS = {
   },
 };
 export default enUS;
-

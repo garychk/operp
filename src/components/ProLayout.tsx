@@ -328,6 +328,11 @@ export const menuData: MenuRoute[] = [
         icon: <ShoppingOutlined />,
       },
       {
+        path: "/inventory/transactions",
+        name: "库存流水",
+        icon: <TableOutlined />,
+      },
+      {
         path: "/inventory/purchase",
         name: "采购订单",
         icon: <ShoppingCartOutlined />,
@@ -419,6 +424,7 @@ const pathToNameMap: Record<string, string> = {
   "/inventory/products": "物料管理",
   "/inventory/warehouses": "仓库管理",
   "/inventory/stock": "库存查询",
+  "/inventory/transactions": "库存流水",
   "/inventory/purchase": "采购订单",
   "/inventory/purchase-receipts": "采购入库",
   "/inventory/sales": "销售订单",
@@ -466,6 +472,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/inventory/products": "menu.products",
   "/inventory/warehouses": "menu.warehouses",
   "/inventory/stock": "menu.stock",
+  "/inventory/transactions": "menu.transactions",
   "/inventory/purchase": "menu.purchase",
   "/inventory/purchase-receipts": "menu.purchaseReceipts",
   "/inventory/sales": "menu.sales",
