@@ -16,11 +16,12 @@ import {
   DeleteOutlined,
   EditOutlined,
 } from "@ant-design/icons";
-import { supabase } from "../../utils/supabase";
-import { logWithTiming } from "../../utils/logger";
-import type { Tables } from "../../utils/supabase";
-import { SuperTable } from "../../components/SuperTable";
-import type { SuperTableColumn } from "../../components/SuperTable";
+import { supabase } from "@/utils/supabase";
+import { logWithTiming } from "@/utils/logger";
+import type { Tables } from "@/utils/supabase";
+import { SuperTable } from "@/components/SuperTable";
+import type { SuperTableColumn } from "@/components/SuperTable";
+import SimpleModal from "@/components/SimpleModal";
 
 type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
 
@@ -234,7 +235,7 @@ export function Departments() {
         }
       />
 
-      <Modal
+      <SimpleModal
         title={editingDepartment ? "编辑部门" : "新增部门"}
         open={isModalOpen}
         onCancel={() => {
@@ -252,12 +253,9 @@ export function Departments() {
         }
         width={400}
       >
-        <Card size="small">
           <Form
             form={form}
-            layout="horizontal"
-            labelCol={{ span: 6 }}
-            wrapperCol={{ span: 18 }}
+            layout="vertical"
             onFinish={handleSubmit}
           >
             <Form.Item
@@ -295,8 +293,7 @@ export function Departments() {
               </Select>
             </Form.Item>
           </Form>
-        </Card>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

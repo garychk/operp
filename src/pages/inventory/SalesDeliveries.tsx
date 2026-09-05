@@ -10,6 +10,7 @@ import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
+import SimpleModal from '@/components/SimpleModal';
 
 type SalesDelivery = Tables['erp_sales_deliveries_s_539dcf81_b']['Row'];
 type SalesDeliveryDetail = Tables['erp_sales_delivery_details_s_539dcf81_b']['Row'];
@@ -834,7 +835,7 @@ export function SalesDeliveries() {
         height={680}
       />
 
-      <Modal
+      <SimpleModal  
         title={editingDetail ? '编辑销售出货明细' : '新增销售出货明细'}
         open={isDetailModalOpen}
         onCancel={() => {
@@ -918,7 +919,7 @@ export function SalesDeliveries() {
             <Input placeholder="请输入备注" disabled={isDisabled} />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

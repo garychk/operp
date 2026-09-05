@@ -21,12 +21,13 @@ import {
   EditOutlined,
   ShoppingCartOutlined,
 } from "@ant-design/icons";
-import { supabase } from "../../utils/supabase";
-import { logWithTiming } from "../../utils/logger";
-import type { Tables } from "../../utils/supabase";
-import { SupaModal } from "../../components/SupaModal";
-import { SuperTable } from "../../components/SuperTable";
+import { supabase } from "@/utils/supabase";
+import { logWithTiming } from "@/utils/logger";
+import type { Tables } from "@/utils/supabase";
+import { SupaModal } from "@/components/SupaModal";
+import { SuperTable } from "@/components/SuperTable";
 import dayjs from "dayjs";
+import SimpleModal from "@/components/SimpleModal";
 
 type PurchaseOrder = Tables["erp_purchase_orders_s_539dcf81_b"]["Row"];
 type PurchaseOrderDetail =
@@ -808,7 +809,7 @@ export function PurchaseOrders() {
         }
         height={680}
       />
-      <Modal
+      <SimpleModal
         title={editingDetail ? "编辑采购订单明细" : "新增采购订单明细"}
         open={isDetailModalOpen}
         onCancel={() => {
@@ -904,7 +905,7 @@ export function PurchaseOrders() {
             <Input placeholder="请输入备注" />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

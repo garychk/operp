@@ -15,13 +15,13 @@ import {
   message,
   Card,
   Switch,
+  Tabs,
 } from "antd";
 import {
   CompressOutlined,
   FullscreenOutlined,
   LeftOutlined,
   RightOutlined,
-  CaretRightOutlined,
   PrinterOutlined,
 } from "@ant-design/icons";
 import type { FormInstance } from "antd/es/form";
@@ -360,61 +360,75 @@ export function SupaModal({
       >
         <div className="supamodal-content">
           {children || (
-            <Collapse
-              defaultActiveKey={["1", "2"]}
-              expandIcon={({ isActive }) => (
-                <CaretRightOutlined rotate={isActive ? 90 : 0} />
-              )}
+            <Tabs
               size="small"
-            >
-              <Collapse.Panel
-                header={headerPanelTitle || t("modal.headerPanelTitle")}
-                key="1"
-                extra={headerExtra}
-              >
-                <Splitter>
-                  <Splitter.Panel defaultSize="70%" min="20%" max="70%">
-                    {formEle}
-                  </Splitter.Panel>
-                  <Splitter.Panel>
-                    <Card
-                      title={t("modal.documentHistory")}
-                      size="small"
-                      variant="borderless"
-                      style={{ borderRadius: 0 }}
-                    >
-                      <Spin spinning={historyLoading}>
-                        {historyItems.length > 0 ? (
-                          <Timeline
-                            items={historyItems}
-                            style={{ height: "300px", overflowY: "auto" }}
-                          />
-                        ) : (
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={t("modal.noHistoryRecords")}
-                          />
-                        )}
-                      </Spin>
-                    </Card>
-                    <WorkflowHistoryCard
-                      open={open}
-                      documentType={workflowDocumentType}
-                      documentId={historyRecordId}
-                    />
-                  </Splitter.Panel>
-                </Splitter>
-              </Collapse.Panel>
-              {tableEle && (
-                <Collapse.Panel
-                  header={detailPanelTitle || t("modal.detailPanelTitle")}
-                  key="2"
-                  extra={detailExtra}
-                >
-                  {tableEle}
-                </Collapse.Panel>
-              )}
-            </Collapse>
+              defaultActiveKey="1"
+              tabBarExtraContent={headerExtra}
+              items={[
+                {
+                  key: "1",
+                  label: headerPanelTitle || t("modal.headerPanelTitle"),
+                  children: (
+                    <Splitter>
+                      <Splitter.Panel defaultSize="70%" min="20%" max="70%">
+                        {formEle}
+                      </Splitter.Panel>
+                      <Splitter.Panel>
+                        <Card
+                          title={t("modal.documentHistory")}
+                          size="small"
+                          variant="borderless"
+                          style={{ borderRadius: 0 }}
+                        >
+                          <Spin spinning={historyLoading}>
+                            {historyItems.length > 0 ? (
+                              <Timeline
+                                items={historyItems}
+                                style={{ height: "300px", overflowY: "auto" }}
+                              />
+                            ) : (
+                              <Empty
+                                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                description={t("modal.noHistoryRecords")}
+                              />
+                            )}
+                          </Spin>
+                        </Card>
+                        <WorkflowHistoryCard
+                          open={open}
+                          documentType={workflowDocumentType}
+                          documentId={historyRecordId}
+                        />
+                      </Splitter.Panel>
+                    </Splitter>
+                  ),
+                },
+                ...(tableEle
+                  ? [
+                      {
+                        key: "2",
+                        label: detailPanelTitle || t("modal.detailPanelTitle"),
+                        children: (
+                          <>
+                            {detailExtra && (
+                              <div
+                                style={{
+                                  display: "flex",
+                                  justifyContent: "flex-end",
+                                  marginBottom: 8,
+                                }}
+                              >
+                                {detailExtra}
+                              </div>
+                            )}
+                            {tableEle}
+                          </>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+            />
           )}
         </div>
       </Modal>

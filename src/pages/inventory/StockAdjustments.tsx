@@ -3,9 +3,10 @@ import type { Key } from 'react';
 import { Button, Form, Input, InputNumber, Modal, Select, Space, message, DatePicker, Table } from 'antd';
 import { PlusOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { supabase } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
-import type { Tables } from '../../utils/supabase';
+import { supabase } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
+import type { Tables } from '@/utils/supabase';
+import SimpleModal from '@/components/SimpleModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
@@ -112,7 +113,7 @@ export function StockAdjustments() {
           </Button>
         }
       />
-      <Modal
+      <SimpleModal
         title={editing ? "编辑调整" : "新增调整"}
         open={open}
         onCancel={() => {
@@ -172,8 +173,8 @@ export function StockAdjustments() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </Modal>
-      <Modal
+      </SimpleModal>
+      <SimpleModal
         title={`调整明细 ${selected?.adjust_no ?? ""}`}
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
@@ -216,8 +217,8 @@ export function StockAdjustments() {
           ]}
           pagination={false}
         />
-      </Modal>
-      <Modal
+      </SimpleModal>
+      <SimpleModal
         title="调整明细"
         open={!!detailEditing}
         onCancel={() => setDetailEditing(null)}
@@ -282,7 +283,7 @@ export function StockAdjustments() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </>
   );
 }

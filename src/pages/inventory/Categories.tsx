@@ -15,6 +15,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import SimpleModal from "@/components/SimpleModal";
 
 const { Option } = Select;
 
@@ -199,7 +200,7 @@ export function Categories() {
         pagination={{ pageSize: 10 }}
       />
 
-      <Modal
+      <SimpleModal
         title={editingCategory ? "编辑类别" : "新增类别"}
         open={isModalOpen}
         onCancel={() => {
@@ -260,7 +261,7 @@ export function Categories() {
             </Select>
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </Card>
   );
 }

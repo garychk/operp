@@ -15,8 +15,10 @@ import {
 } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { supabase } from "../../utils/supabase";
-import { logWithTiming } from "../../utils/logger";
+import { supabase } from "@/utils/supabase";
+import { logWithTiming } from "@/utils/logger";
+import SimpleModal from "@/components/SimpleModal";
+
 interface DictType {
   id: number;
   code: string;
@@ -247,7 +249,7 @@ export function Dictionaries() {
           pagination={{ pageSize: 8 }}
         />
       </Card>
-      <Modal
+      <SimpleModal
         title={editingType ? "编辑字典类型" : "新增字典类型"}
         open={typeModal}
         onCancel={() => setTypeModal(false)}
@@ -256,9 +258,7 @@ export function Dictionaries() {
         <Card size="small">
           <Form
             form={typeForm}
-            layout="horizontal"
-            labelCol={{ span: 6 }}
-            wrapperCol={{ span: 18 }}
+            layout="vertical"
             onFinish={(v) => {
               setTypeModal(false);
               save("sys_dict_types", v, editingType?.id);
@@ -294,8 +294,8 @@ export function Dictionaries() {
             </Form.Item>
           </Form>
         </Card>
-      </Modal>
-      <Modal
+      </SimpleModal>
+      <SimpleModal
         title={editingItem ? "编辑字典项" : "新增字典项"}
         open={itemModal}
         onCancel={() => setItemModal(false)}
@@ -304,9 +304,7 @@ export function Dictionaries() {
         <Card size="small">
           <Form
             form={itemForm}
-            layout="horizontal"
-            labelCol={{ span: 6 }}
-            wrapperCol={{ span: 18 }}
+            layout="vertical"
             onFinish={(v) => {
               setItemModal(false);
               save(
@@ -342,7 +340,7 @@ export function Dictionaries() {
             </Form.Item>
           </Form>
         </Card>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

@@ -20,13 +20,14 @@ import {
   EditOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { supabase } from "../../utils/supabase";
-import type { Tables } from "../../utils/supabase";
-import { logWithTiming } from "../../utils/logger";
+import { supabase } from "@/utils/supabase";
+import type { Tables } from "@/utils/supabase";
+import { logWithTiming } from "@/utils/logger";
 import { Categories } from "./Categories";
-import { SupaModal } from "../../components/SupaModal";
-import { SuperTable } from "../../components/SuperTable";
-import DictSelect from "../../components/DictSelect";
+import { SupaModal } from "@/components/SupaModal";
+import { SuperTable } from "@/components/SuperTable";
+import DictSelect from "@/components/DictSelect";
+import SimpleModal from "@/components/SimpleModal";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
@@ -464,7 +465,7 @@ export function Products() {
         width={"70%"}
         height={650}
       />
-      <Modal
+      <SimpleModal
         title="物料类别管理"
         open={isCategoryModalOpen}
         onCancel={() => setIsCategoryModalOpen(false)}
@@ -473,7 +474,7 @@ export function Products() {
         destroyOnClose
       >
         <Categories />
-      </Modal>
+      </SimpleModal>  
     </div>
   );
 }

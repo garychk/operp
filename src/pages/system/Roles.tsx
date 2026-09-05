@@ -27,6 +27,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import SimpleModal from "@/components/SimpleModal";
 
 interface Role {
   id: number;
@@ -531,7 +532,7 @@ export function Roles() {
         rowKey="id"
         scroll={{ x: 1000 }}
       />
-      <Modal
+      <SimpleModal
         title={editingRole ? "编辑角色" : "新增角色"}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
@@ -541,9 +542,7 @@ export function Roles() {
         <Card size="small">
           <Form
             form={form}
-            layout="horizontal"
-            labelCol={{ span: 6 }}
-            wrapperCol={{ span: 18 }}
+            layout="vertical"
             onFinish={handleSave}            
           >
             <Form.Item
@@ -574,7 +573,7 @@ export function Roles() {
             </Form.Item>
           </Form>
         </Card>
-      </Modal>
+      </SimpleModal>
       <Modal
         title="设置权限"
         open={permissionModalVisible}

@@ -5,6 +5,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { RcFile } from 'antd/es/upload/interface';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import SimpleModal from '@/components/SimpleModal';
 
 interface User {
   id: number;
@@ -461,7 +462,7 @@ const columns: ColumnsType<User> = [
         rowKey="id"
         scroll={{ x: 1200 }}
       />
-      <Modal
+      <SimpleModal
         title={editingUser ? '编辑用户' : '新增用户'}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
@@ -536,8 +537,8 @@ const columns: ColumnsType<User> = [
             </Col>
           </Row>
         </Form>
-      </Modal>
-      <Modal
+      </SimpleModal>
+      <SimpleModal
         title={`重置密码 - ${resettingUser?.username || ''}`}
         open={resetModalVisible}
         onCancel={() => {
@@ -580,7 +581,7 @@ const columns: ColumnsType<User> = [
             <Input.Password placeholder="请再次输入新密码" autoComplete="new-password" />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </Card>
   );
 }

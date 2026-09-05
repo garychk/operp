@@ -3,10 +3,11 @@ import type { Key } from 'react';
 import { Button, Form, Input, InputNumber, Modal, Select, Space, message, DatePicker, Table } from 'antd';
 import { PlusOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { supabase } from '../../utils/supabase';
-import { logWithTiming } from '../../utils/logger';
-import { SuperTable } from '../../components/SuperTable';
-import type { Tables } from '../../utils/supabase';
+import { supabase } from '@/utils/supabase';
+import { logWithTiming } from '@/utils/logger';
+import { SuperTable } from '@/components/SuperTable';
+import type { Tables } from '@/utils/supabase';
+import SimpleModal from '@/components/SimpleModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
@@ -152,7 +153,7 @@ export function InventoryTransfers() {
       rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
       queryBar={<Space><Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.setFieldsValue({ transfer_no: `TR${Date.now().toString().slice(-8)}`, transfer_date: dayjs(), status: 'draft' }); setOpen(true); }}>新增调拨</Button></Space>}
     />
-    <Modal title={editing ? '编辑调拨' : '新增调拨'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} onOk={() => form.submit()} destroyOnClose>
+    <SimpleModal title={editing ? '编辑调拨' : '新增调拨'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} onOk={() => form.submit()} destroyOnClose>
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
         <Form.Item name="transfer_no" label="调拨单号" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="transfer_date" label="调拨日期" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
@@ -160,8 +161,8 @@ export function InventoryTransfers() {
         <Form.Item name="to_warehouse_id" label="调入仓库" rules={[{ required: true }]}><Select options={warehouses.map(w => ({ value: w.id, label: w.name }))} /></Form.Item>
         <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
       </Form>
-    </Modal>
-    <Modal title={`调拨明细 ${selected?.transfer_no ?? ''}`} open={detailOpen} onCancel={() => { setDetailOpen(false); setDetailFormOpen(false); }} footer={null} width={900}>
+    </SimpleModal>
+    <SimpleModal title={`调拨明细 ${selected?.transfer_no ?? ''}`} open={detailOpen} onCancel={() => { setDetailOpen(false); setDetailFormOpen(false); }} footer={null} width={900}>
       <Button
         type="primary"
         icon={<PlusOutlined />}
@@ -190,8 +191,8 @@ export function InventoryTransfers() {
         { title: '批次', dataIndex: 'batch_no' },
         { title: '成本', dataIndex: 'unit_cost' },
       ]} pagination={false} />
-    </Modal>
-    <Modal
+    </SimpleModal>
+    <SimpleModal
       title="调拨明细"
       open={detailFormOpen}
       onCancel={() => { setDetailFormOpen(false); }}
@@ -213,6 +214,6 @@ export function InventoryTransfers() {
         <Form.Item name="batch_no" label="批次"><Input /></Form.Item>
         <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
       </Form>
-    </Modal>
+    </SimpleModal>
   </>;
 }

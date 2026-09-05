@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Input, Tag, Modal, Form, Select, Space, message, Checkbox } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import { logWithTiming } from '../../utils/logger';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
+import { supabase } from '@/utils/supabase';
+import { logWithTiming } from '@/utils/logger';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
+import SimpleModal from '@/components/SimpleModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Employee = Tables['erp_employees_s_539dcf81_b']['Row'];
@@ -247,7 +248,7 @@ export function Warehouses() {
         }
       />
 
-      <Modal
+      <SimpleModal  
         title={editingWarehouse ? '编辑仓库' : '新增仓库'}
         open={isModalOpen}
         onCancel={() => {
@@ -310,7 +311,7 @@ export function Warehouses() {
             </Space>
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

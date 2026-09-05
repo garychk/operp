@@ -6,6 +6,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { menuData } from '../../components/ProLayout';
+import SimpleModal from '@/components/SimpleModal';
 
 interface Menu {
   id: number;
@@ -373,7 +374,7 @@ export function Menus() {
         scroll={{ x: 1200, y: 600 }}
         pagination={false}
       />
-      <Modal
+      <SimpleModal
         title={editingMenu ? '编辑菜单' : '新增菜单'}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
@@ -433,7 +434,7 @@ export function Menus() {
 
 
         </Form>
-      </Modal>
+      </SimpleModal>
     </Card>
   );
 }

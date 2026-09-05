@@ -21,6 +21,7 @@ import { supabase } from "../../utils/supabase";
 import { SuperTable } from "../../components/SuperTable";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
+import SimpleModal from "@/components/SimpleModal";
 
 type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
@@ -283,7 +284,7 @@ export function WorkCenters() {
         }
       />
 
-      <Modal
+      <SimpleModal
         title={editingWorkCenter ? "编辑工作中心" : "新增工作中心"}
         open={isModalOpen}
         onCancel={() => {
@@ -367,7 +368,7 @@ export function WorkCenters() {
           </Form.Item>
         </Form>
         </Card>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

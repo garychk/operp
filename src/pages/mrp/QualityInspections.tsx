@@ -25,6 +25,7 @@ import {
 import dayjs from "dayjs";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import SimpleModal from "@/components/SimpleModal";
 
 type SourceType = "purchase_receipt" | "sales_return" | "production_operation";
 type Inspection = {
@@ -471,7 +472,7 @@ export function QualityInspections() {
           scroll={{ x: 1150 }}
         />
       </Card>
-      <Modal
+      <SimpleModal
         title="创建检验任务"
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
@@ -532,8 +533,8 @@ export function QualityInspections() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </Modal>
-      <Modal
+      </SimpleModal>
+      <SimpleModal
         title={`${current?.inspection_no || ""} - 检验记录`}
         width={760}
         open={inspectOpen}
@@ -609,7 +610,7 @@ export function QualityInspections() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </Card>
   );
 }

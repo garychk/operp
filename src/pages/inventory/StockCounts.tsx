@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { supabase } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
+import SimpleModal from '@/components/SimpleModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
@@ -111,7 +112,7 @@ export function StockCounts() {
           </Button>
         }
       />
-      <Modal
+      <SimpleModal
         title={editing ? "编辑盘点" : "新增盘点"}
         open={open}
         onCancel={() => {
@@ -167,8 +168,8 @@ export function StockCounts() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </Modal>
-      <Modal
+      </SimpleModal>
+      <SimpleModal
         title={`盘点明细 ${selected?.count_no ?? ""}`}
         open={detailOpen}
         onCancel={() => setDetailOpen(false)}
@@ -212,8 +213,8 @@ export function StockCounts() {
           ]}
           pagination={false}
         />
-      </Modal>
-      <Modal
+      </SimpleModal>
+      <SimpleModal
         title="盘点明细"
         open={!!detailEditing}
         onCancel={() => setDetailEditing(null)}
@@ -278,7 +279,7 @@ export function StockCounts() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </>
   );
 }

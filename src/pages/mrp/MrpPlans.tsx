@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker } from 'antd';
 import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
+import { supabase } from '@/utils/supabase';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
 import dayjs from 'dayjs';
+import SimpleModal from '@/components/SimpleModal';
 
 type MrpPlan = Tables['erp_mrp_plans_s_539dcf81_b']['Row'];
 
@@ -223,7 +224,7 @@ export function MrpPlans() {
         }
       />
 
-      <Modal
+      <SimpleModal
         title="新增MRP计划"
         open={isModalOpen}
         onCancel={() => {
@@ -273,7 +274,7 @@ export function MrpPlans() {
             </Select>
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

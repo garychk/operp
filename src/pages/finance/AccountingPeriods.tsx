@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Button, Input, InputNumber, Modal, Space, Tag, message } from 'antd';
 import { CheckOutlined, LockOutlined, UnlockOutlined, ReloadOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import { generateIdempotencyKey } from '../../utils/uuid';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
+import { supabase } from '@/utils/supabase';
+import { generateIdempotencyKey } from '@/utils/uuid';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
 import { useTranslation } from 'react-i18next';
 
 type Period = Tables['erp_accounting_periods_s_539dcf81_b']['Row'];

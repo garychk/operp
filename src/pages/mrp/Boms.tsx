@@ -30,6 +30,7 @@ import dayjs from 'dayjs';
 import { SupaModal } from "../../components/SupaModal";
 import DictSelect from "../../components/DictSelect";
 import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
+import SimpleModal from "@/components/SimpleModal";
 
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
@@ -669,7 +670,7 @@ export function Boms() {
         height={680}
       />
 
-      <Modal
+      <SimpleModal
         title={editingDetail ? "编辑BOM子项" : "新增BOM子项"}
         open={isDetailModalOpen}
         onCancel={() => {
@@ -764,7 +765,7 @@ export function Boms() {
             </Col>
           </Row>
         </Form>
-      </Modal>
+      </SimpleModal>
 
       <Drawer
         title="BOM结构图"

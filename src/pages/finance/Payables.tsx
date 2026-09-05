@@ -3,12 +3,12 @@ import type { Key } from 'react';
 import { Button, Input, Tag, Modal, Form, Select, Space, message, InputNumber, DatePicker, Row, Col } from 'antd';
 import dayjs from 'dayjs';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import { logWithTiming } from '../../utils/logger';
-import { generateIdempotencyKey } from '../../utils/uuid';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
-import { SupaModal } from '../../components/SupaModal';
+import { supabase } from '@/utils/supabase';
+import { logWithTiming } from '@/utils/logger';
+import { generateIdempotencyKey } from '@/utils/uuid';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
+import { SupaModal } from '@/components/SupaModal';
 import { useTranslation } from 'react-i18next';
 
 type Payable = Tables['erp_payables_s_539dcf81_b']['Row'];

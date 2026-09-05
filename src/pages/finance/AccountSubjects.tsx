@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Input, Tag, Modal, Form, Select, Space, message } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
+import { supabase } from '@/utils/supabase';
 import { useTranslation } from 'react-i18next';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
+import SimpleModal from '@/components/SimpleModal';
 
 type AccountSubject = Tables['erp_account_subjects_s_539dcf81_b']['Row'];
 
@@ -204,7 +205,7 @@ export function AccountSubjects() {
         }
       />
 
-      <Modal
+      <SimpleModal
         title={editingSubject ? t('accountSubjects.editSubject') : t('accountSubjects.addSubject')}
         open={isModalOpen}
         onCancel={() => {
@@ -254,7 +255,7 @@ export function AccountSubjects() {
             </Select>
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

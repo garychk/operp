@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Input, Modal, Form, Select, Space, message, InputNumber } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
+import { supabase } from '@/utils/supabase';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
 import { useTranslation } from 'react-i18next';
+import SimpleModal from '@/components/SimpleModal';
 
 type AssetCategory = Tables['erp_asset_categories_s_539dcf81_b']['Row'];
 
@@ -212,7 +213,7 @@ export function AssetCategories() {
         }
       />
 
-      <Modal
+      <SimpleModal
         title={editingCategory ? t('assetCategories.editCategory') : t('assetCategories.addCategory')}
         open={isModalOpen}
         onCancel={() => {
@@ -264,7 +265,7 @@ export function AssetCategories() {
             <InputNumber style={{ width: '100%' }} placeholder={t('assetCategories.residualRatePlaceholder')} />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

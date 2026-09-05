@@ -10,6 +10,7 @@ import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
+import SimpleModal from '@/components/SimpleModal';
 
 type PurchaseReceipt = Tables['erp_purchase_receipts_s_539dcf81_b']['Row'];
 type PurchaseReceiptDetail = Tables['erp_purchase_receipt_details_s_539dcf81_b']['Row'];
@@ -814,7 +815,7 @@ export function PurchaseReceipts() {
         height={600}
       />
 
-      <Modal
+      <SimpleModal  
         title={editingDetail ? '编辑采购入库明细' : '新增采购入库明细'}
         open={isDetailModalOpen}
         onCancel={() => {
@@ -905,7 +906,7 @@ export function PurchaseReceipts() {
             <Input placeholder="请输入备注" />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }
