@@ -7,11 +7,13 @@ import { supabase } from '@/utils/supabase';
 import { SuperTable } from '@/components/SuperTable';
 import type { Tables } from '@/utils/supabase';
 import SimpleModal from '@/components/SimpleModal';
+import { SupaModal } from '@/components/SupaModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
+type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
-type Header = { id: number; adjust_no: string; adjust_date: string; warehouse_id: number | null; reason: string | null; remark: string | null; status: string | null; };
-type Detail = { id: number; adjust_id: number; line_no: number; product_id: number | null; batch_no: string | null; direction: string | null; quantity: number | null; unit_cost: number | null; remark: string | null; };
+type Header = { id: number; adjust_no: string; adjust_date: string; warehouse_id: number | null; location_id: number | null; reason: string | null; remark: string | null; status: string | null; };
+type Detail = { id: number; adjust_id: number; line_no: number; product_id: number | null; location_id: number | null; batch_no: string | null; direction: string | null; quantity: number | null; unit_cost: number | null; remark: string | null; };
 
 const tableName = 'erp_stock_adjustments_s_539dcf81_b';
 const detailTable = 'erp_stock_adjustment_details_s_539dcf81_b';
@@ -20,6 +22,7 @@ export function StockAdjustments() {
   const [rows, setRows] = useState<Header[]>([]);
   const [details, setDetails] = useState<Detail[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [bins, setBins] = useState<Bin[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Header | null>(null);
   const [editing, setEditing] = useState<Header | null>(null);
@@ -34,12 +37,13 @@ export function StockAdjustments() {
   useEffect(() => { void fetchAll(); }, []);
   const fetchAll = async () => {
     setLoading(true);
-    const [{ data: h }, { data: w }, { data: p }] = await Promise.all([
+    const [{ data: h }, { data: w }, { data: b }, { data: p }] = await Promise.all([
       supabase.from(tableName).select('*').eq('is_deleted', 'n').order('adjust_date', { ascending: false }),
       supabase.from('erp_warehouses_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
+      supabase.from('erp_bins_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
       supabase.from('erp_products_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
     ]);
-    setRows((h || []) as Header[]); setWarehouses((w || []) as Warehouse[]); setProducts((p || []) as Product[]); setLoading(false);
+    setRows((h || []) as Header[]); setWarehouses((w || []) as Warehouse[]); setBins((b || []) as Bin[]); setProducts((p || []) as Product[]); setLoading(false);
   };
   const fetchDetails = async (id: number) => { const { data } = await supabase.from(detailTable).select('*').eq('is_deleted', 'n').eq('adjust_id', id).order('line_no'); setDetails((data || []) as Detail[]); };
   const handlePost = async (id: number) => {
@@ -76,6 +80,7 @@ export function StockAdjustments() {
     { title: '调整单号', key: 'adjust_no', dataIndex: 'adjust_no' },
     { title: '日期', key: 'adjust_date', dataIndex: 'adjust_date' },
     { title: '仓库', key: 'warehouse_id', dataIndex: 'warehouse_id', render: (v: number) => warehouses.find(w => w.id === v)?.name || '-' },
+    { title: '库位', key: 'location_id', dataIndex: 'location_id', render: (v: number) => bins.find(b => b.id === v)?.name || '-' },
     { title: '原因', key: 'reason', dataIndex: 'reason' },
     { title: '状态', key: 'status', dataIndex: 'status' },
     { title: '操作', key: 'action', render: (_: any, record: Header) => <Space>
@@ -104,6 +109,7 @@ export function StockAdjustments() {
               form.setFieldsValue({
                 adjust_no: `SA${Date.now().toString().slice(-8)}`,
                 adjust_date: dayjs(),
+                location_id: undefined,
                 status: "draft",
               });
               setOpen(true);
@@ -113,15 +119,14 @@ export function StockAdjustments() {
           </Button>
         }
       />
-      <SimpleModal
+      <SupaModal
         title={editing ? "编辑调整" : "新增调整"}
         open={open}
         onCancel={() => {
           setOpen(false);
           form.resetFields();
         }}
-        onOk={() => form.submit()}
-        destroyOnClose
+        footer={null}
       >
         <Form
           form={form}
@@ -164,6 +169,13 @@ export function StockAdjustments() {
           >
             <Select
               options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+              onChange={() => form.setFieldsValue({ location_id: undefined })}
+            />
+          </Form.Item>
+          <Form.Item name="location_id" label="库位">
+            <Select
+              allowClear
+              options={bins.filter((b) => b.warehouse_id === form.getFieldValue('warehouse_id')).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
             />
           </Form.Item>
           <Form.Item name="reason" label="调整原因">
@@ -173,7 +185,7 @@ export function StockAdjustments() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </SimpleModal>
+      </SupaModal>
       <SimpleModal
         title={`调整明细 ${selected?.adjust_no ?? ""}`}
         open={detailOpen}
@@ -187,6 +199,7 @@ export function StockAdjustments() {
               detailForm.setFieldsValue({
                 adjust_id: selected?.id,
                 line_no: details.length + 1,
+                location_id: selected?.location_id || undefined,
                 direction: "in",
                 quantity: 1,
                 unit_cost: 0,
@@ -211,6 +224,7 @@ export function StockAdjustments() {
               render: (v: number) =>
                 products.find((p) => p.id === v)?.name || "-",
             },
+            { title: "库位", dataIndex: "location_id", render: (v: number) => bins.find((b) => b.id === v)?.name || "-" },
             { title: "方向", dataIndex: "direction" },
             { title: "数量", dataIndex: "quantity" },
             { title: "批次", dataIndex: "batch_no" },
@@ -269,6 +283,9 @@ export function StockAdjustments() {
                 { value: "out", label: "出库减少" },
               ]}
             />
+          </Form.Item>
+          <Form.Item name="location_id" label="库位">
+            <Select allowClear options={bins.filter((b) => b.warehouse_id === selected?.warehouse_id).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))} />
           </Form.Item>
           <Form.Item name="quantity" label="数量" rules={[{ required: true }]}>
             <InputNumber style={{ width: "100%" }} min={0.0001} />

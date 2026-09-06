@@ -11,10 +11,12 @@ import {
   normalizeInventoryTransactionType,
   type InventoryTransactionType,
 } from '@/constants/inventoryTransactionTypes';
+import { SuperTable } from '@/components/SuperTable';
 
 type InventoryTransaction = Tables['erp_inventory_transactions_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
+type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];
 
 const { RangePicker } = DatePicker;
 
@@ -23,11 +25,13 @@ export function InventoryTransactions() {
   const [rows, setRows] = useState<InventoryTransaction[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [bins, setBins] = useState<Bin[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState<string | undefined>();
   const [selectedProduct, setSelectedProduct] = useState<number | undefined>();
   const [selectedWarehouse, setSelectedWarehouse] = useState<number | undefined>();
+  const [selectedBin, setSelectedBin] = useState<number | undefined>();
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
 
   useEffect(() => {
@@ -37,7 +41,7 @@ export function InventoryTransactions() {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      const [txRes, productRes, warehouseRes] = await Promise.all([
+      const [txRes, productRes, warehouseRes, binRes] = await Promise.all([
         supabase
           .from('erp_inventory_transactions_s_539dcf81_b')
           .select('*')
@@ -52,15 +56,21 @@ export function InventoryTransactions() {
           .from('erp_warehouses_s_539dcf81_b')
           .select('*')
           .eq('is_deleted', 'n'),
+        supabase
+          .from('erp_bins_s_539dcf81_b')
+          .select('*')
+          .eq('is_deleted', 'n'),
       ]);
 
       if (txRes.error) throw txRes.error;
       if (productRes.error) throw productRes.error;
       if (warehouseRes.error) throw warehouseRes.error;
+      if (binRes.error) throw binRes.error;
 
       setRows((txRes.data || []) as InventoryTransaction[]);
       setProducts((productRes.data || []) as Product[]);
       setWarehouses((warehouseRes.data || []) as Warehouse[]);
+      setBins((binRes.data || []) as Bin[]);
     } catch (error) {
       console.error('Error fetching inventory transactions:', error);
       message.error(t('inventoryTransactions.messages.fetchFailed'));
@@ -74,6 +84,7 @@ export function InventoryTransactions() {
 
   const getWarehouse = (warehouseId: number | null) =>
     warehouses.find((w) => w.id === warehouseId);
+  const getBin = (binId: number | null) => bins.find((b) => b.id === binId);
 
   const getTransactionTypeLabel = (value: string | null) => {
     if (!value) return '-';
@@ -88,25 +99,29 @@ export function InventoryTransactions() {
       const normalizedType = normalizeInventoryTransactionType(row.transaction_type) as string;
       const product = getProduct(row.product_id);
       const warehouse = getWarehouse(row.warehouse_id);
+      const bin = getBin(row.location_id);
       const productText = `${product?.code || ''} ${product?.name || ''}`.trim();
       const warehouseText = `${warehouse?.code || ''} ${warehouse?.name || ''}`.trim();
+      const binText = `${bin?.code || ''} ${bin?.name || ''}`.trim();
       const matchesSearch =
         productText.toLowerCase().includes(searchTerm.toLowerCase()) ||
         warehouseText.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        binText.toLowerCase().includes(searchTerm.toLowerCase()) ||
         String(row.transaction_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         String(row.remark || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesType = selectedType ? normalizedType === selectedType : true;
       const matchesProduct = selectedProduct ? row.product_id === selectedProduct : true;
       const matchesWarehouse = selectedWarehouse ? row.warehouse_id === selectedWarehouse : true;
+      const matchesBin = selectedBin ? row.location_id === selectedBin : true;
       const matchesDate =
         !dateRange?.[0] ||
         !dateRange?.[1] ||
         !row.transaction_date ||
         (dayjs(row.transaction_date).isAfter(dateRange[0].startOf('day').subtract(1, 'millisecond')) &&
           dayjs(row.transaction_date).isBefore(dateRange[1].endOf('day').add(1, 'millisecond')));
-      return matchesSearch && matchesType && matchesProduct && matchesWarehouse && matchesDate;
+      return matchesSearch && matchesType && matchesProduct && matchesWarehouse && matchesBin && matchesDate;
     });
-  }, [dateRange, getProduct, getWarehouse, rows, searchTerm, selectedProduct, selectedType, selectedWarehouse]);
+  }, [dateRange, getBin, getProduct, getWarehouse, rows, searchTerm, selectedBin, selectedProduct, selectedType, selectedWarehouse]);
 
   const totalQty = filteredRows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
   const totalCost = filteredRows.reduce((sum, row) => sum + (Number(row.total_cost) || 0), 0);
@@ -116,6 +131,7 @@ export function InventoryTransactions() {
       title: t('inventoryTransactions.columns.transactionNo'),
       dataIndex: 'transaction_no',
       key: 'transaction_no',
+      ellipsis: true,
       width: 180,
     },
     {
@@ -153,10 +169,19 @@ export function InventoryTransactions() {
       },
     },
     {
+      title: t('inventoryTransactions.columns.bin'),
+      key: 'bin',
+      width: 180,
+      render: (_: unknown, record: InventoryTransaction) => {
+        const bin = getBin(record.location_id);
+        return bin ? `${bin.code} ${bin.name}` : '-';
+      },
+    },
+    {
       title: t('inventoryTransactions.columns.batchNo'),
       dataIndex: 'batch_no',
       key: 'batch_no',
-      width: 120,
+      width: 100,
       render: (value: string | null) => value || '-',
     },
     {
@@ -187,8 +212,8 @@ export function InventoryTransactions() {
       title: t('inventoryTransactions.columns.remark'),
       dataIndex: 'remark',
       key: 'remark',
-      width: 260,
       ellipsis: true,
+      width: 120,
       render: (value: string | null) => value || '-',
     },
   ];
@@ -197,98 +222,135 @@ export function InventoryTransactions() {
     <Card
       className="mainContent"
       variant="borderless"
-      title={t('inventoryTransactions.title')}
-      extra={<Button icon={<ReloadOutlined />} onClick={() => void fetchAll()}>{t('common.refresh')}</Button>}
+      title={t("inventoryTransactions.title")}
+      extra={
+        <Button icon={<ReloadOutlined />} onClick={() => void fetchAll()}>
+          {t("common.refresh")}
+        </Button>
+      }
     >
       <div style={{ marginBottom: 16 }}>
         <Typography.Text type="secondary">
-          {t('inventoryTransactions.subtitle')}
+          {t("inventoryTransactions.subtitle")}
         </Typography.Text>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
-        <Input
-          allowClear
-          prefix={<SearchOutlined />}
-          placeholder={t('inventoryTransactions.searchPlaceholder')}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          style={{ width: 280 }}
-        />
-        <Select
-          allowClear
-          placeholder={t('inventoryTransactions.typePlaceholder')}
-          value={selectedType}
-          onChange={(value) => setSelectedType(value)}
-          options={INVENTORY_TRANSACTION_TYPE_OPTIONS.map((item) => ({
-            value: item.value,
-            label: item.label,
-          }))}
-          style={{ width: 220 }}
-        />
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder={t('inventoryTransactions.productPlaceholder')}
-          value={selectedProduct}
-          onChange={(value) => setSelectedProduct(value)}
-          options={products.map((p) => ({
-            value: p.id,
-            label: `${p.code} ${p.name}`,
-          }))}
-          style={{ width: 260 }}
-        />
-        <Select
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder={t('inventoryTransactions.warehousePlaceholder')}
-          value={selectedWarehouse}
-          onChange={(value) => setSelectedWarehouse(value)}
-          options={warehouses.map((w) => ({
-            value: w.id,
-            label: `${w.code} ${w.name}`,
-          }))}
-          style={{ width: 260 }}
-        />
-        <RangePicker
-          value={dateRange as [Dayjs, Dayjs] | null}
-          onChange={(value) => setDateRange(value || null)}
-        />
-        <Button onClick={() => {
-          setSearchTerm('');
-          setSelectedType(undefined);
-          setSelectedProduct(undefined);
-          setSelectedWarehouse(undefined);
-          setDateRange(null);
-        }}>
-          {t('common.reset')}
-        </Button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+      <div
+        style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}
+      >
         <Card size="small" style={{ minWidth: 200 }}>
-          <Typography.Text type="secondary">{t('inventoryTransactions.stats.totalRows')}</Typography.Text>
-          <Typography.Title level={4} style={{ margin: '4px 0 0' }}>{filteredRows.length}</Typography.Title>
+          <Typography.Text type="secondary">
+            {t("inventoryTransactions.stats.totalRows")}
+          </Typography.Text>
+          <Typography.Title level={4} style={{ margin: "4px 0 0" }}>
+            {filteredRows.length}
+          </Typography.Title>
         </Card>
         <Card size="small" style={{ minWidth: 200 }}>
-          <Typography.Text type="secondary">{t('inventoryTransactions.stats.totalQty')}</Typography.Text>
-          <Typography.Title level={4} style={{ margin: '4px 0 0' }}>{totalQty.toLocaleString()}</Typography.Title>
+          <Typography.Text type="secondary">
+            {t("inventoryTransactions.stats.totalQty")}
+          </Typography.Text>
+          <Typography.Title level={4} style={{ margin: "4px 0 0" }}>
+            {totalQty.toLocaleString()}
+          </Typography.Title>
         </Card>
         <Card size="small" style={{ minWidth: 220 }}>
-          <Typography.Text type="secondary">{t('inventoryTransactions.stats.totalCost')}</Typography.Text>
-          <Typography.Title level={4} style={{ margin: '4px 0 0' }}>¥{totalCost.toLocaleString()}</Typography.Title>
+          <Typography.Text type="secondary">
+            {t("inventoryTransactions.stats.totalCost")}
+          </Typography.Text>
+          <Typography.Title level={4} style={{ margin: "4px 0 0" }}>
+            ¥{totalCost.toLocaleString()}
+          </Typography.Title>
         </Card>
       </div>
 
-      <Table
+      <SuperTable
         columns={columns}
         dataSource={filteredRows}
+        toolbarActions={['export']}
         rowKey="id"
+        storageKey="inventoryTransactions"
         loading={loading}
         pagination={{ pageSize: 20 }}
         scroll={{ x: 1500 }}
+        queryBar={
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            <Input
+              allowClear
+              prefix={<SearchOutlined />}
+              placeholder={t("inventoryTransactions.searchPlaceholder")}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ width: 160 }}
+            />
+            <Select
+              allowClear
+              placeholder={t("inventoryTransactions.typePlaceholder")}
+              value={selectedType}
+              onChange={(value) => setSelectedType(value)}
+              options={INVENTORY_TRANSACTION_TYPE_OPTIONS.map((item) => ({
+                value: item.value,
+                label: item.label,
+              }))}
+              style={{ width: 220 }}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t("inventoryTransactions.productPlaceholder")}
+              value={selectedProduct}
+              onChange={(value) => setSelectedProduct(value)}
+              options={products.map((p) => ({
+                value: p.id,
+                label: `${p.code} ${p.name}`,
+              }))}
+              style={{ width: 160 }}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t("inventoryTransactions.warehousePlaceholder")}
+              value={selectedWarehouse}
+              onChange={(value) => setSelectedWarehouse(value)}
+              options={warehouses.map((w) => ({
+                value: w.id,
+                label: `${w.code} ${w.name}`,
+              }))}
+              style={{ width: 160 }}
+            />
+            <Select
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder={t("inventoryTransactions.binPlaceholder")}
+              value={selectedBin}
+              onChange={(value) => setSelectedBin(value)}
+              options={bins.map((b) => ({
+                value: b.id,
+                label: `${b.code} ${b.name}`,
+              }))}
+              style={{ width: 160 }}
+            />
+            <RangePicker
+              value={dateRange as [Dayjs, Dayjs] | null}
+              onChange={(value) => setDateRange(value || null)}
+            />
+            <Button
+              onClick={() => {
+                setSearchTerm("");
+                setSelectedType(undefined);
+                setSelectedProduct(undefined);
+                setSelectedWarehouse(undefined);
+                setSelectedBin(undefined);
+                setDateRange(null);
+              }}
+            >
+              {t("common.reset")}
+            </Button>
+          </div>
+        }
       />
     </Card>
   );

@@ -8,6 +8,7 @@ import type {
   ErpProductCategoriesS539Dcf81BRow,
   ErpProductsS539Dcf81BRow,
   ErpWarehousesS539Dcf81BRow,
+  ErpBinsS539Dcf81BRow,
   ErpInventoryS539Dcf81BRow,
   ErpInventoryTransactionsS539Dcf81BRow,
   ErpPurchaseOrdersS539Dcf81BRow,
@@ -135,6 +136,7 @@ export type Tables = {
   erp_product_categories_s_539dcf81_b: { Row: ErpProductCategoriesS539Dcf81BRow };
   erp_products_s_539dcf81_b: { Row: ErpProductsS539Dcf81BRow };
   erp_warehouses_s_539dcf81_b: { Row: ErpWarehousesS539Dcf81BRow };
+  erp_bins_s_539dcf81_b: { Row: ErpBinsS539Dcf81BRow };
   erp_inventory_s_539dcf81_b: { Row: ErpInventoryS539Dcf81BRow };
   erp_inventory_transactions_s_539dcf81_b: { Row: ErpInventoryTransactionsS539Dcf81BRow };
   erp_purchase_orders_s_539dcf81_b: { Row: ErpPurchaseOrdersS539Dcf81BRow };

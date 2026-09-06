@@ -7,11 +7,13 @@ import { supabase } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
 import SimpleModal from '@/components/SimpleModal';
+import { SupaModal } from '@/components/SupaModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
+type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
-type Header = { id: number; count_no: string; count_date: string; warehouse_id: number | null; remark: string | null; status: string | null; };
-type Detail = { id: number; count_id: number; line_no: number; product_id: number | null; batch_no: string | null; system_quantity: number | null; counted_quantity: number | null; difference_quantity: number | null; unit_cost: number | null; remark: string | null; };
+type Header = { id: number; count_no: string; count_date: string; warehouse_id: number | null; location_id: number | null; remark: string | null; status: string | null; };
+type Detail = { id: number; count_id: number; line_no: number; product_id: number | null; location_id: number | null; batch_no: string | null; system_quantity: number | null; counted_quantity: number | null; difference_quantity: number | null; unit_cost: number | null; remark: string | null; };
 
 const tableName = 'erp_stock_counts_s_539dcf81_b';
 const detailTable = 'erp_stock_count_details_s_539dcf81_b';
@@ -20,6 +22,7 @@ export function StockCounts() {
   const [rows, setRows] = useState<Header[]>([]);
   const [details, setDetails] = useState<Detail[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [bins, setBins] = useState<Bin[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Header | null>(null);
   const [editing, setEditing] = useState<Header | null>(null);
@@ -34,12 +37,17 @@ export function StockCounts() {
   useEffect(() => { void fetchAll(); }, []);
   const fetchAll = async () => {
     setLoading(true);
-    const [{ data: h }, { data: w }, { data: p }] = await Promise.all([
+    const [{ data: h }, { data: w }, { data: b }, { data: p }] = await Promise.all([
       supabase.from(tableName).select('*').eq('is_deleted', 'n').order('count_date', { ascending: false }),
       supabase.from('erp_warehouses_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
+      supabase.from('erp_bins_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
       supabase.from('erp_products_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
     ]);
-    setRows((h || []) as Header[]); setWarehouses((w || []) as Warehouse[]); setProducts((p || []) as Product[]); setLoading(false);
+    setRows((h || []) as Header[]);
+    setWarehouses((w || []) as Warehouse[]);
+    setBins((b || []) as Bin[]);
+    setProducts((p || []) as Product[]);
+    setLoading(false);
   };
   const fetchDetails = async (id: number) => { const { data } = await supabase.from(detailTable).select('*').eq('is_deleted', 'n').eq('count_id', id).order('line_no'); setDetails((data || []) as Detail[]); };
   const handlePost = async (id: number) => {
@@ -76,6 +84,7 @@ export function StockCounts() {
     { title: '盘点单号', key: 'count_no', dataIndex: 'count_no' },
     { title: '盘点日期', key: 'count_date', dataIndex: 'count_date' },
     { title: '仓库', key: 'warehouse_id', dataIndex: 'warehouse_id', render: (v: number) => warehouses.find(w => w.id === v)?.name || '-' },
+    { title: '库位', key: 'location_id', dataIndex: 'location_id', render: (v: number) => bins.find(b => b.id === v)?.name || '-' },
     { title: '状态', key: 'status', dataIndex: 'status' },
     { title: '操作', key: 'action', render: (_: any, record: Header) => <Space>
       <Button onClick={async () => { setSelected(record); await fetchDetails(record.id); setDetailOpen(true); }}>明细</Button>
@@ -103,6 +112,7 @@ export function StockCounts() {
               form.setFieldsValue({
                 count_no: `SC${Date.now().toString().slice(-8)}`,
                 count_date: dayjs(),
+                location_id: undefined,
                 status: "draft",
               });
               setOpen(true);
@@ -112,15 +122,14 @@ export function StockCounts() {
           </Button>
         }
       />
-      <SimpleModal
+      <SupaModal
         title={editing ? "编辑盘点" : "新增盘点"}
         open={open}
         onCancel={() => {
           setOpen(false);
           form.resetFields();
         }}
-        onOk={() => form.submit()}
-        destroyOnClose
+        footer={null}
       >
         <Form
           form={form}
@@ -162,13 +171,22 @@ export function StockCounts() {
           >
             <Select
               options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+              onChange={() => form.setFieldsValue({ location_id: undefined })}
+            />
+          </Form.Item>
+          <Form.Item name="location_id" label="库位">
+            <Select
+              allowClear
+              options={bins
+                .filter((b) => b.warehouse_id === form.getFieldValue('warehouse_id'))
+                .map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
             />
           </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </SimpleModal>
+      </SupaModal>
       <SimpleModal
         title={`盘点明细 ${selected?.count_no ?? ""}`}
         open={detailOpen}
@@ -183,6 +201,7 @@ export function StockCounts() {
               detailForm.setFieldsValue({
                 count_id: selected?.id,
                 line_no: details.length + 1,
+                location_id: selected?.location_id || undefined,
                 system_quantity: 0,
                 counted_quantity: 0,
                 difference_quantity: 0,
@@ -207,6 +226,7 @@ export function StockCounts() {
               render: (v: number) =>
                 products.find((p) => p.id === v)?.name || "-",
             },
+            { title: "库位", dataIndex: "location_id", render: (v: number) => bins.find((b) => b.id === v)?.name || "-" },
             { title: "系统数量", dataIndex: "system_quantity" },
             { title: "盘点数量", dataIndex: "counted_quantity" },
             { title: "差异", dataIndex: "difference_quantity" },
@@ -261,6 +281,9 @@ export function StockCounts() {
           </Form.Item>
           <Form.Item name="system_quantity" label="账面数量">
             <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item name="location_id" label="库位">
+            <Select allowClear options={bins.filter((b) => b.warehouse_id === selected?.warehouse_id).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))} />
           </Form.Item>
           <Form.Item
             name="counted_quantity"

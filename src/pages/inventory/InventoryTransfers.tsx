@@ -8,14 +8,18 @@ import { logWithTiming } from '@/utils/logger';
 import { SuperTable } from '@/components/SuperTable';
 import type { Tables } from '@/utils/supabase';
 import SimpleModal from '@/components/SimpleModal';
+import { SupaModal } from '@/components/SupaModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
+type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
 type Row = {
   id: number;
   transfer_id: number;
   line_no: number;
   product_id: number | null;
+  from_location_id: number | null;
+  to_location_id: number | null;
   quantity: number | null;
   unit_cost: number | null;
   batch_no: string | null;
@@ -38,6 +42,7 @@ export function InventoryTransfers() {
   const [rows, setRows] = useState<Header[]>([]);
   const [details, setDetails] = useState<Row[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [bins, setBins] = useState<Bin[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [selected, setSelected] = useState<Header | null>(null);
   const [editing, setEditing] = useState<Header | null>(null);
@@ -53,13 +58,15 @@ export function InventoryTransfers() {
 
   const fetchAll = async () => {
     setLoading(true);
-    const [{ data: h }, { data: w }, { data: p }] = await Promise.all([
+    const [{ data: h }, { data: w }, { data: b }, { data: p }] = await Promise.all([
       supabase.from(tableName).select('*').eq('is_deleted', 'n').order('transfer_date', { ascending: false }),
       supabase.from('erp_warehouses_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
+      supabase.from('erp_bins_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
       supabase.from('erp_products_s_539dcf81_b').select('*').eq('is_deleted', 'n').eq('status', 'active'),
     ]);
     setRows((h || []) as Header[]);
     setWarehouses((w || []) as Warehouse[]);
+    setBins((b || []) as Bin[]);
     setProducts((p || []) as Product[]);
     setLoading(false);
   };
@@ -153,7 +160,7 @@ export function InventoryTransfers() {
       rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
       queryBar={<Space><Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.setFieldsValue({ transfer_no: `TR${Date.now().toString().slice(-8)}`, transfer_date: dayjs(), status: 'draft' }); setOpen(true); }}>新增调拨</Button></Space>}
     />
-    <SimpleModal title={editing ? '编辑调拨' : '新增调拨'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} onOk={() => form.submit()} destroyOnClose>
+    <SupaModal title={editing ? '编辑调拨' : '新增调拨'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} footer={null}>
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
         <Form.Item name="transfer_no" label="调拨单号" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="transfer_date" label="调拨日期" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
@@ -161,7 +168,7 @@ export function InventoryTransfers() {
         <Form.Item name="to_warehouse_id" label="调入仓库" rules={[{ required: true }]}><Select options={warehouses.map(w => ({ value: w.id, label: w.name }))} /></Form.Item>
         <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
       </Form>
-    </SimpleModal>
+    </SupaModal>
     <SimpleModal title={`调拨明细 ${selected?.transfer_no ?? ''}`} open={detailOpen} onCancel={() => { setDetailOpen(false); setDetailFormOpen(false); }} footer={null} width={900}>
       <Button
         type="primary"
@@ -184,13 +191,15 @@ export function InventoryTransfers() {
       >
         新增明细
       </Button>
-      <Table style={{ marginTop: 16 }} rowKey="id" dataSource={details} columns={[
-        { title: '行号', dataIndex: 'line_no' },
-        { title: '物料', dataIndex: 'product_id', render: (v: number) => products.find(p => p.id === v)?.name || '-' },
-        { title: '数量', dataIndex: 'quantity' },
-        { title: '批次', dataIndex: 'batch_no' },
-        { title: '成本', dataIndex: 'unit_cost' },
-      ]} pagination={false} />
+        <Table style={{ marginTop: 16 }} rowKey="id" dataSource={details} columns={[
+          { title: '行号', dataIndex: 'line_no' },
+          { title: '物料', dataIndex: 'product_id', render: (v: number) => products.find(p => p.id === v)?.name || '-' },
+          { title: '调出库位', dataIndex: 'from_location_id', render: (v: number) => bins.find(b => b.id === v)?.name || '-' },
+          { title: '调入库位', dataIndex: 'to_location_id', render: (v: number) => bins.find(b => b.id === v)?.name || '-' },
+          { title: '数量', dataIndex: 'quantity' },
+          { title: '批次', dataIndex: 'batch_no' },
+          { title: '成本', dataIndex: 'unit_cost' },
+        ]} pagination={false} />
     </SimpleModal>
     <SimpleModal
       title="调拨明细"
@@ -209,6 +218,12 @@ export function InventoryTransfers() {
         <Form.Item name="transfer_id" hidden><Input /></Form.Item>
         <Form.Item name="line_no" label="行号"><InputNumber style={{ width: '100%' }} /></Form.Item>
         <Form.Item name="product_id" label="物料" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={products.map(p => ({ value: p.id, label: `${p.code} ${p.name}` }))} /></Form.Item>
+        <Form.Item name="from_location_id" label="调出库位">
+          <Select allowClear options={bins.filter((b) => b.warehouse_id === selected?.from_warehouse_id).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))} />
+        </Form.Item>
+        <Form.Item name="to_location_id" label="调入库位">
+          <Select allowClear options={bins.filter((b) => b.warehouse_id === selected?.to_warehouse_id).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))} />
+        </Form.Item>
         <Form.Item name="quantity" label="数量" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0.0001} /></Form.Item>
         <Form.Item name="unit_cost" label="单价"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item>
         <Form.Item name="batch_no" label="批次"><Input /></Form.Item>
