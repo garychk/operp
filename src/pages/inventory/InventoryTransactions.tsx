@@ -94,6 +94,14 @@ export function InventoryTransactions() {
     ] || value;
   };
 
+  const availableBins = useMemo(
+    () =>
+      selectedWarehouse
+        ? bins.filter((bin) => bin.warehouse_id === selectedWarehouse)
+        : bins,
+    [bins, selectedWarehouse],
+  );
+
   const filteredRows = useMemo(() => {
     return rows.filter((row) => {
       const normalizedType = normalizeInventoryTransactionType(row.transaction_type) as string;
@@ -313,7 +321,10 @@ export function InventoryTransactions() {
               optionFilterProp="label"
               placeholder={t("inventoryTransactions.warehousePlaceholder")}
               value={selectedWarehouse}
-              onChange={(value) => setSelectedWarehouse(value)}
+              onChange={(value) => {
+                setSelectedWarehouse(value);
+                setSelectedBin(undefined);
+              }}
               options={warehouses.map((w) => ({
                 value: w.id,
                 label: `${w.code} ${w.name}`,
@@ -327,7 +338,7 @@ export function InventoryTransactions() {
               placeholder={t("inventoryTransactions.binPlaceholder")}
               value={selectedBin}
               onChange={(value) => setSelectedBin(value)}
-              options={bins.map((b) => ({
+              options={availableBins.map((b) => ({
                 value: b.id,
                 label: `${b.code} ${b.name}`,
               }))}

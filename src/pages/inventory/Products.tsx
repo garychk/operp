@@ -471,7 +471,7 @@ export function Products() {
         onCancel={() => setIsCategoryModalOpen(false)}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         <Categories />
       </SimpleModal>  

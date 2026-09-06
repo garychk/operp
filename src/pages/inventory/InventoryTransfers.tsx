@@ -149,86 +149,215 @@ export function InventoryTransfers() {
     )},
   ];
 
-  return <>
-    <SuperTable
-      columns={columns}
-      dataSource={rows}
-      loading={loading}
-      rowKey="id"
-      storageKey="inventory-transfers"
-      headerTitle="库存调拨"
-      rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
-      queryBar={<Space><Button type="primary" icon={<PlusOutlined />} onClick={() => { setEditing(null); form.setFieldsValue({ transfer_no: `TR${Date.now().toString().slice(-8)}`, transfer_date: dayjs(), status: 'draft' }); setOpen(true); }}>新增调拨</Button></Space>}
-    />
-    <SupaModal title={editing ? '编辑调拨' : '新增调拨'} open={open} onCancel={() => { setOpen(false); form.resetFields(); }} footer={null}>
-      <Form form={form} layout="vertical" onFinish={handleSubmit}>
-        <Form.Item name="transfer_no" label="调拨单号" rules={[{ required: true }]}><Input /></Form.Item>
-        <Form.Item name="transfer_date" label="调拨日期" rules={[{ required: true }]}><DatePicker style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="from_warehouse_id" label="调出仓库" rules={[{ required: true }]}><Select options={warehouses.map(w => ({ value: w.id, label: w.name }))} /></Form.Item>
-        <Form.Item name="to_warehouse_id" label="调入仓库" rules={[{ required: true }]}><Select options={warehouses.map(w => ({ value: w.id, label: w.name }))} /></Form.Item>
-        <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
-      </Form>
-    </SupaModal>
-    <SimpleModal title={`调拨明细 ${selected?.transfer_no ?? ''}`} open={detailOpen} onCancel={() => { setDetailOpen(false); setDetailFormOpen(false); }} footer={null} width={900}>
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={() => {
-          if (!selected) {
-            message.warning('请先选择调拨单');
-            return;
-          }
-          detailForm.setFieldsValue({
-            transfer_id: selected.id,
-            line_no: details.length + 1,
-            quantity: 1,
-            unit_cost: 0,
-            batch_no: '',
-            remark: '',
-          });
-          setDetailFormOpen(true);
+  return (
+    <>
+      <SuperTable
+        columns={columns}
+        dataSource={rows}
+        loading={loading}
+        rowKey="id"
+        storageKey="inventory-transfers"
+        headerTitle="库存调拨"
+        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+        queryBar={
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setEditing(null);
+                form.setFieldsValue({
+                  transfer_no: `TR${Date.now().toString().slice(-8)}`,
+                  transfer_date: dayjs(),
+                  status: "draft",
+                });
+                setOpen(true);
+              }}
+            >
+              新增调拨
+            </Button>
+          </Space>
+        }
+      />
+      <SimpleModal
+        title={editing ? "编辑调拨" : "新增调拨"}
+        open={open}
+        onCancel={() => {
+          setOpen(false);
+          form.resetFields();
         }}
+        onOk={() => form.submit()}
       >
-        新增明细
-      </Button>
-        <Table style={{ marginTop: 16 }} rowKey="id" dataSource={details} columns={[
-          { title: '行号', dataIndex: 'line_no' },
-          { title: '物料', dataIndex: 'product_id', render: (v: number) => products.find(p => p.id === v)?.name || '-' },
-          { title: '调出库位', dataIndex: 'from_location_id', render: (v: number) => bins.find(b => b.id === v)?.name || '-' },
-          { title: '调入库位', dataIndex: 'to_location_id', render: (v: number) => bins.find(b => b.id === v)?.name || '-' },
-          { title: '数量', dataIndex: 'quantity' },
-          { title: '批次', dataIndex: 'batch_no' },
-          { title: '成本', dataIndex: 'unit_cost' },
-        ]} pagination={false} />
-    </SimpleModal>
-    <SimpleModal
-      title="调拨明细"
-      open={detailFormOpen}
-      onCancel={() => { setDetailFormOpen(false); }}
-      onOk={() => detailForm.submit()}
-      destroyOnClose
-    >
-      <Form form={detailForm} layout="vertical" onFinish={async (values) => {
-        const payload = { ...values, batch_no: values.batch_no || null };
-        const { error } = await supabase.from(detailTable).insert([payload]);
-        if (error) throw error;
-        setDetailFormOpen(false);
-        if (selected) await fetchDetails(selected.id);
-      }}>
-        <Form.Item name="transfer_id" hidden><Input /></Form.Item>
-        <Form.Item name="line_no" label="行号"><InputNumber style={{ width: '100%' }} /></Form.Item>
-        <Form.Item name="product_id" label="物料" rules={[{ required: true }]}><Select showSearch optionFilterProp="label" options={products.map(p => ({ value: p.id, label: `${p.code} ${p.name}` }))} /></Form.Item>
-        <Form.Item name="from_location_id" label="调出库位">
-          <Select allowClear options={bins.filter((b) => b.warehouse_id === selected?.from_warehouse_id).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))} />
-        </Form.Item>
-        <Form.Item name="to_location_id" label="调入库位">
-          <Select allowClear options={bins.filter((b) => b.warehouse_id === selected?.to_warehouse_id).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))} />
-        </Form.Item>
-        <Form.Item name="quantity" label="数量" rules={[{ required: true }]}><InputNumber style={{ width: '100%' }} min={0.0001} /></Form.Item>
-        <Form.Item name="unit_cost" label="单价"><InputNumber style={{ width: '100%' }} min={0} /></Form.Item>
-        <Form.Item name="batch_no" label="批次"><Input /></Form.Item>
-        <Form.Item name="remark" label="备注"><Input.TextArea /></Form.Item>
-      </Form>
-    </SimpleModal>
-  </>;
+        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          <Form.Item
+            name="transfer_no"
+            label="调拨单号"
+            rules={[{ required: true }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="transfer_date"
+            label="调拨日期"
+            rules={[{ required: true }]}
+          >
+            <DatePicker style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="from_warehouse_id"
+            label="调出仓库"
+            rules={[{ required: true }]}
+          >
+            <Select
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
+          </Form.Item>
+          <Form.Item
+            name="to_warehouse_id"
+            label="调入仓库"
+            rules={[{ required: true }]}
+          >
+            <Select
+              options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
+            />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea />
+          </Form.Item>
+        </Form>
+      </SimpleModal>
+      <SimpleModal
+        title={`调拨明细 ${selected?.transfer_no ?? ""}`}
+        open={detailOpen}
+        onCancel={() => {
+          setDetailOpen(false);
+          setDetailFormOpen(false);
+        }}
+        footer={<Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            if (!selected) {
+              message.warning("请先选择调拨单");
+              return;
+            }
+            detailForm.setFieldsValue({
+              transfer_id: selected.id,
+              line_no: details.length + 1,
+              quantity: 1,
+              unit_cost: 0,
+              batch_no: "",
+              remark: "",
+            });
+            setDetailFormOpen(true);
+          }}
+        >
+          新增明细
+        </Button>}
+        width={900}
+      >
+        
+        <Table
+          style={{ marginTop: 16 }}
+          rowKey="id"
+          dataSource={details}
+          columns={[
+            { title: "行号", dataIndex: "line_no" },
+            {
+              title: "物料",
+              dataIndex: "product_id",
+              render: (v: number) =>
+                products.find((p) => p.id === v)?.name || "-",
+            },
+            {
+              title: "调出库位",
+              dataIndex: "from_location_id",
+              render: (v: number) => bins.find((b) => b.id === v)?.name || "-",
+            },
+            {
+              title: "调入库位",
+              dataIndex: "to_location_id",
+              render: (v: number) => bins.find((b) => b.id === v)?.name || "-",
+            },
+            { title: "数量", dataIndex: "quantity" },
+            { title: "批次", dataIndex: "batch_no" },
+            { title: "成本", dataIndex: "unit_cost" },
+          ]}
+          pagination={false}
+        />
+      </SimpleModal>
+      <SimpleModal
+        title="调拨明细"
+        open={detailFormOpen}
+        onCancel={() => {
+          setDetailFormOpen(false);
+        }}
+        onOk={() => detailForm.submit()}
+        destroyOnHidden
+      >
+        <Form
+          form={detailForm}
+          layout="vertical"
+          onFinish={async (values) => {
+            const payload = { ...values, batch_no: values.batch_no || null };
+            const { error } = await supabase
+              .from(detailTable)
+              .insert([payload]);
+            if (error) throw error;
+            setDetailFormOpen(false);
+            if (selected) await fetchDetails(selected.id);
+          }}
+        >
+          <Form.Item name="transfer_id" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item name="line_no" label="行号">
+            <InputNumber style={{ width: "100%" }} />
+          </Form.Item>
+          <Form.Item
+            name="product_id"
+            label="物料"
+            rules={[{ required: true }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              options={products.map((p) => ({
+                value: p.id,
+                label: `${p.code} ${p.name}`,
+              }))}
+            />
+          </Form.Item>
+          <Form.Item name="from_location_id" label="调出库位">
+            <Select
+              allowClear
+              options={bins
+                .filter((b) => b.warehouse_id === selected?.from_warehouse_id)
+                .map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
+            />
+          </Form.Item>
+          <Form.Item name="to_location_id" label="调入库位">
+            <Select
+              allowClear
+              options={bins
+                .filter((b) => b.warehouse_id === selected?.to_warehouse_id)
+                .map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
+            />
+          </Form.Item>
+          <Form.Item name="quantity" label="数量" rules={[{ required: true }]}>
+            <InputNumber style={{ width: "100%" }} min={0.0001} />
+          </Form.Item>
+          <Form.Item name="unit_cost" label="单价">
+            <InputNumber style={{ width: "100%" }} min={0} />
+          </Form.Item>
+          <Form.Item name="batch_no" label="批次">
+            <Input />
+          </Form.Item>
+          <Form.Item name="remark" label="备注">
+            <Input.TextArea />
+          </Form.Item>
+        </Form>
+      </SimpleModal>
+    </>
+  );
 }

@@ -119,14 +119,14 @@ export function StockAdjustments() {
           </Button>
         }
       />
-      <SupaModal
+      <SimpleModal
         title={editing ? "编辑调整" : "新增调整"}
         open={open}
         onCancel={() => {
           setOpen(false);
           form.resetFields();
         }}
-        footer={null}
+        onOk={() => form.submit()}
       >
         <Form
           form={form}
@@ -185,7 +185,7 @@ export function StockAdjustments() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </SupaModal>
+      </SimpleModal>
       <SimpleModal
         title={`调整明细 ${selected?.adjust_no ?? ""}`}
         open={detailOpen}
@@ -237,7 +237,7 @@ export function StockAdjustments() {
         open={!!detailEditing}
         onCancel={() => setDetailEditing(null)}
         onOk={() => detailForm.submit()}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={detailForm}

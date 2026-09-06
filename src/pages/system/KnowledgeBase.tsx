@@ -408,7 +408,7 @@ export function KnowledgeBase() {
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={720}
-        destroyOnClose
+        destroyOnHidden
         footer={
           <Space style={{ justifyContent: "flex-end", width: "100%" }}>
             <Button onClick={() => setDrawerOpen(false)}>取消</Button>

@@ -33,6 +33,7 @@ export function StockCounts() {
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const watchedWarehouseId = Form.useWatch('warehouse_id', form);
 
   useEffect(() => { void fetchAll(); }, []);
   const fetchAll = async () => {
@@ -89,7 +90,11 @@ export function StockCounts() {
     { title: '操作', key: 'action', render: (_: any, record: Header) => <Space>
       <Button onClick={async () => { setSelected(record); await fetchDetails(record.id); setDetailOpen(true); }}>明细</Button>
       {record.status !== 'posted' && <Button type="primary" icon={<ThunderboltOutlined />} onClick={() => void handlePost(record.id)}>{record.status === 'draft' ? '审核并过账' : '过账'}</Button>}
-      <Button onClick={() => { setEditing(record); form.setFieldsValue({ ...record, count_date: dayjs(record.count_date) }); setOpen(true); }}>编辑</Button>
+      {record.status !== 'posted' ? (
+        <Button onClick={() => { setEditing(record); form.setFieldsValue({ ...record, count_date: dayjs(record.count_date) }); setOpen(true); }}>编辑</Button>
+      ) : (
+        <Button disabled>已过账</Button>
+      )}
       <Button danger icon={<DeleteOutlined />} onClick={async () => { await supabase.from(tableName).update({ is_deleted: 'y' }).eq('id', record.id); await fetchAll(); }}>删除</Button>
     </Space>},
   ];
@@ -122,19 +127,23 @@ export function StockCounts() {
           </Button>
         }
       />
-      <SupaModal
+      <SimpleModal
         title={editing ? "编辑盘点" : "新增盘点"}
         open={open}
         onCancel={() => {
           setOpen(false);
           form.resetFields();
         }}
-        footer={null}
+        onOk={() => form.submit()}          
       >
         <Form
           form={form}
           layout="vertical"
           onFinish={async (values) => {
+            if (editing?.status === 'posted') {
+              message.warning('已过账的盘点单不能再编辑');
+              return;
+            }
             const payload = {
               ...values,
               count_date:
@@ -178,7 +187,7 @@ export function StockCounts() {
             <Select
               allowClear
               options={bins
-                .filter((b) => b.warehouse_id === form.getFieldValue('warehouse_id'))
+                .filter((b) => b.warehouse_id === watchedWarehouseId)
                 .map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
             />
           </Form.Item>
@@ -186,7 +195,7 @@ export function StockCounts() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </SupaModal>
+      </SimpleModal>
       <SimpleModal
         title={`盘点明细 ${selected?.count_no ?? ""}`}
         open={detailOpen}
@@ -239,7 +248,7 @@ export function StockCounts() {
         open={!!detailEditing}
         onCancel={() => setDetailEditing(null)}
         onOk={() => detailForm.submit()}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form
           form={detailForm}

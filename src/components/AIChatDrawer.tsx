@@ -1041,7 +1041,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       onClose={onClose}
       title="AI 智能对话"
       className="ai-chat-drawer"
-      destroyOnClose={false}
+      destroyOnHidden={false}
     >
       <XProvider>
         <Flex vertical className="ai-chat-panel">

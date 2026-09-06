@@ -105,6 +105,7 @@ const zhCN = {
         other: "其他",
       },
       binManagementTitle: "库位管理",
+      binCurrentWarehouse: "当前仓库：{{warehouse}}",
       binSelectWarehouseFirst: "请先选择仓库",
       binEmpty: "当前仓库暂无库位",
       binWarehousePlaceholder: "请选择仓库",

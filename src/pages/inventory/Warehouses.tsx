@@ -198,14 +198,9 @@ export function Warehouses() {
     [searchTerm, warehouses],
   );
 
-  const filteredBins = useMemo(
-    () =>
-      bins.filter(
-        (bin) =>
-          bin.name.toLowerCase().includes(binSearchTerm.toLowerCase()) ||
-          bin.code.toLowerCase().includes(binSearchTerm.toLowerCase()),
-      ),
-    [binSearchTerm, bins],
+  const currentWarehouseBins = useMemo(
+    () => bins.filter((bin) => bin.warehouse_id === selectedWarehouseId),
+    [bins, selectedWarehouseId],
   );
 
   const typeLabels: Record<string, string> = {
@@ -404,27 +399,20 @@ export function Warehouses() {
         />
       </Card>
 
-      <Card
-        bordered={false}
-        title={t('inventory.binManagementTitle')}
-        extra={
-          <Space>
-            <Select
-              value={selectedWarehouseId}
-              onChange={setSelectedWarehouseId}
-              style={{ width: 240 }}
-              options={warehouses.map((w) => ({ value: w.id, label: `${w.code} ${w.name}` }))}
-              placeholder={t('inventory.binWarehousePlaceholder')}
-              allowClear
-            />
-          </Space>
-        }
-      >
+      <Card>
         <div style={{ marginBottom: 12 }}>
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAddBin} disabled={!selectedWarehouseId}>
               {t('inventory.addBin')}
             </Button>
+            <Select
+              value={selectedWarehouseId}
+              onChange={setSelectedWarehouseId}
+              style={{ width: 160 }}
+              options={warehouses.map((w) => ({ value: w.id, label: `${w.code} ${w.name}` }))}
+              placeholder={t('inventory.binWarehousePlaceholder')}
+              allowClear
+            />
             <Input.Search
               allowClear
               placeholder={t('inventory.binSearchPlaceholder')}
@@ -433,11 +421,21 @@ export function Warehouses() {
               onSearch={() => selectedWarehouseId && void fetchBins(selectedWarehouseId)}
               style={{ width: 240 }}
             />
+            {selectedWarehouse && (
+          <Tag >
+            {t('inventory.binCurrentWarehouse', { warehouse: `${selectedWarehouse.code} ${selectedWarehouse.name}` })}
+          </Tag>
+        )}
           </Space>
         </div>
+        
         <Table
           rowKey="id"
-          dataSource={filteredBins}
+          dataSource={currentWarehouseBins.filter(
+            (bin) =>
+              bin.name.toLowerCase().includes(binSearchTerm.toLowerCase()) ||
+              bin.code.toLowerCase().includes(binSearchTerm.toLowerCase()),
+          )}
           columns={binColumns}
           pagination={{ pageSize: 10 }}
           locale={{ emptyText: selectedWarehouse ? t('inventory.binEmpty') : t('inventory.binSelectWarehouseFirst') }}
@@ -520,11 +518,14 @@ export function Warehouses() {
           setEditingBin(null);
         }}
         onOk={() => binForm.submit()}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={binForm} layout="vertical" onFinish={handleBinSubmit} style={{ marginTop: 16 }}>
           <Form.Item name="warehouse_id" hidden>
             <Input />
+          </Form.Item>
+          <Form.Item label={t('inventory.binWarehousePlaceholder')}>
+            <Input value={selectedWarehouse ? `${selectedWarehouse.code} ${selectedWarehouse.name}` : ''} disabled />
           </Form.Item>
           <Form.Item
             label={t('common.code')}

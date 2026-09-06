@@ -477,7 +477,7 @@ export function QualityInspections() {
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => createForm.submit()}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={createForm} layout="vertical" onFinish={create}>
           <Row gutter={12}>

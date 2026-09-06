@@ -24,6 +24,18 @@ ALTER TABLE public.erp_inventory_transactions_s_539dcf81_b
   ADD COLUMN IF NOT EXISTS to_location_id INTEGER REFERENCES public.erp_bins_s_539dcf81_b(id),
   ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES public.erp_bins_s_539dcf81_b(id);
 
+ALTER TABLE public.erp_stock_counts_s_539dcf81_b
+  ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES public.erp_bins_s_539dcf81_b(id);
+
+ALTER TABLE public.erp_stock_count_details_s_539dcf81_b
+  ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES public.erp_bins_s_539dcf81_b(id);
+
+ALTER TABLE public.erp_stock_adjustments_s_539dcf81_b
+  ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES public.erp_bins_s_539dcf81_b(id);
+
+ALTER TABLE public.erp_stock_adjustment_details_s_539dcf81_b
+  ADD COLUMN IF NOT EXISTS location_id INTEGER REFERENCES public.erp_bins_s_539dcf81_b(id);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_erp_inventory_active_stock_key_v2
   ON public.erp_inventory_s_539dcf81_b (
     product_id, warehouse_id, COALESCE(location_id, 0),

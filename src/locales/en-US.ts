@@ -105,6 +105,7 @@ const enUS = {
         other: "Other",
       },
       binManagementTitle: "Bin Management",
+      binCurrentWarehouse: "Current warehouse: {{warehouse}}",
       binSelectWarehouseFirst: "Please select a warehouse first",
       binEmpty: "No bins in the selected warehouse",
       binWarehousePlaceholder: "Select warehouse",
