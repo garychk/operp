@@ -2,21 +2,23 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, Card } from 'antd';
 import { TeamOutlined, SafetyOutlined, MenuOutlined, FileTextOutlined, SettingOutlined, BookOutlined, BranchesOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
-
-const menuItems: MenuProps['items'] = [
-  { key: 'users', label: '用户管理', icon: <TeamOutlined /> },
-  { key: 'roles', label: '角色管理', icon: <SafetyOutlined /> },
-  { key: 'menus', label: '菜单管理', icon: <MenuOutlined /> },
-  { key: 'settings', label: '系统设置', icon: <SettingOutlined /> },
-  { key: 'dictionaries', label: '数据字典', icon: <BookOutlined /> },
-  { key: 'workflow', label: '流程配置', icon: <BranchesOutlined /> },
-  { key: 'logs', label: '系统日志', icon: <FileTextOutlined /> },
-];
+import { useTranslation } from 'react-i18next';
 
 export function SystemModule() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname.split('/').pop() || 'users';
+
+  const menuItems: MenuProps['items'] = [
+    { key: 'users', label: t('systemModule.users'), icon: <TeamOutlined /> },
+    { key: 'roles', label: t('systemModule.roles'), icon: <SafetyOutlined /> },
+    { key: 'menus', label: t('systemModule.menus'), icon: <MenuOutlined /> },
+    { key: 'settings', label: t('systemModule.settings'), icon: <SettingOutlined /> },
+    { key: 'dictionaries', label: t('systemModule.dictionaries'), icon: <BookOutlined /> },
+    { key: 'workflow', label: t('systemModule.workflow'), icon: <BranchesOutlined /> },
+    { key: 'logs', label: t('systemModule.logs'), icon: <FileTextOutlined /> },
+  ];
 
   const handleMenuClick = (key: string) => {
     navigate(key);
@@ -31,10 +33,10 @@ export function SystemModule() {
         >
           <div style={{ textAlign: 'center', padding: '8px 0' }}>
             <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: '#262626' }}>
-              系统管理
+              {t('systemModule.title')}
             </h2>
             <p style={{ fontSize: 12, color: '#8c8c8c', margin: '4px 0 0 0' }}>
-              用户、角色、权限、设置、日志
+              {t('systemModule.subtitle')}
             </p>
           </div>
         </Card>

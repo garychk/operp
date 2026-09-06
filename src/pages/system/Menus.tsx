@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Key } from 'react';
 import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, Popconfirm, message, Tag, Card, Row, Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
@@ -35,6 +36,7 @@ const excludedStaticMenuPaths = new Set(['/', '/system']);
 const getIconName = (icon: any) => icon?.type?.displayName || icon?.type?.name || 'MenuOutlined';
 
 export function Menus() {
+  const { t } = useTranslation();
   const [menus, setMenus] = useState<Menu[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -55,7 +57,7 @@ export function Menus() {
       setMenus(data || []);
       window.dispatchEvent(new Event('menus-changed'));
     } catch (error) {
-      message.error('获取菜单列表失败');
+      message.error(t('menus.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -79,17 +81,17 @@ export function Menus() {
 
   const handleDelete = async (id: number) => {
     try {
-      await logWithTiming('删除菜单', 'DELETE', async () => {
+      await logWithTiming(t('menus.logDelete'), 'DELETE', async () => {
         const { error } = await supabase
           .from('sys_menus')
           .update({ is_deleted: 'y' })
           .eq('id', id);
         if (error) throw error;
       });
-      message.success('删除成功');
+      message.success(t('common.deleteSuccess'));
       fetchMenus();
     } catch (error) {
-      message.error('删除失败');
+      message.error(t('common.deleteFailed'));
     }
   };
 
@@ -121,7 +123,7 @@ export function Menus() {
 
       fetchMenus();
     } catch {
-      message.error('排序失败');
+      message.error(t('menus.sortFailed'));
     }
   };
 
@@ -181,44 +183,44 @@ export function Menus() {
         await importRoute(route, 0);
       }
 
-      message.success(insertedCount > 0 ? '导入完成，新增 ' + insertedCount + ' 条菜单' : '没有需要导入的菜单');
+      message.success(insertedCount > 0 ? t('menus.importCompleted', { count: insertedCount }) : t('menus.importEmpty'));
       fetchMenus();
     } catch (error) {
-      message.error('导入静态菜单失败');
+      message.error(t('menus.importStaticFailed'));
     }
   };
 
   const handleSave = async (values: any) => {
     try {
       if (editingMenu) {
-        await logWithTiming('更新菜单', 'UPDATE', async () => {
+        await logWithTiming(t('menus.logUpdate'), 'UPDATE', async () => {
           const { error } = await supabase
             .from('sys_menus')
             .update(values)
             .eq('id', editingMenu.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
-        await logWithTiming('创建菜单', 'INSERT', async () => {
+        await logWithTiming(t('menus.logCreate'), 'INSERT', async () => {
           const { error } = await supabase
             .from('sys_menus')
             .insert([values]);
           if (error) throw error;
         });
-        message.success('创建成功');
+        message.success(t('menus.createSuccess'));
       }
       setModalVisible(false);
       fetchMenus();
     } catch (error) {
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
   const getParentName = (parentId: number) => {
-    if (parentId === 0) return '根菜单';
+    if (parentId === 0) return t('menus.rootMenu');
     const parent = menus.find(m => m.id === parentId);
-    return parent ? parent.menu_name : '未知';
+    return parent ? parent.menu_name : t('menus.unknown');
   };
 
   const menuTree = useMemo(() => {
@@ -269,49 +271,49 @@ export function Menus() {
 
   const columns: ColumnsType<Menu> = [
     {
-      title: '菜单名称',
+      title: t('menus.menuName'),
       dataIndex: 'menu_name',
       width: 240,
     },
     {
-      title: '菜单编码',
+      title: t('menus.menuCode'),
       dataIndex: 'menu_code',
       width: 200,
     },
     {
-      title: '类型',
+      title: t('common.type'),
       dataIndex: 'menu_type',
       width: 80,
       render: (type) => (
         <Tag color={type === 'M' ? 'blue' : 'green'}>
-          {type === 'M' ? '目录' : '菜单'}
+          {type === 'M' ? t('menus.directory') : t('menus.menu')}
         </Tag>
       ),
     },
     {
-      title: '上级菜单',
+      title: t('menus.parentMenu'),
       dataIndex: 'parent_id',
       width: 120,
       render: (id) => getParentName(id),
     },
     {
-      title: '路径',
+      title: t('menus.path'),
       dataIndex: 'path',
       ellipsis: true,
     },
     {
-      title: '组件',
+      title: t('menus.component'),
       dataIndex: 'component',
       ellipsis: true,
     },
     {
-      title: '图标',
+      title: t('menus.icon'),
       dataIndex: 'icon',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '排序',
+      title: t('menus.sortOrder'),
       dataIndex: 'sort_order',
       width: 120,
       render: (sortOrder, record) => (
@@ -335,24 +337,24 @@ export function Menus() {
       ),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       width: 80,
       render: (status) => (
         <Tag color={status === '1' ? 'success' : 'error'}>
-          {status === '1' ? '启用' : '禁用'}
+          {status === '1' ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       fixed: 'right',
       width: 120,
       render: (_, record) => (
         <Space>
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />
-          <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>
+          <Popconfirm title={t('menus.deleteConfirm')} onConfirm={() => handleDelete(record.id)}>
             <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -361,7 +363,7 @@ export function Menus() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title="菜单管理" extra={<Space><Button onClick={handleImportStaticMenus}>导入静态菜单</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增菜单</Button></Space>}>
+    <Card className='mainContent' variant="borderless" title={t('menus.title')} extra={<Space><Button onClick={handleImportStaticMenus}>{t('menus.importStaticMenus')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('menus.addMenu')}</Button></Space>}>
       <Table
         columns={columns}
         dataSource={menuTree}
@@ -375,7 +377,7 @@ export function Menus() {
         pagination={false}
       />
       <SimpleModal
-        title={editingMenu ? '编辑菜单' : '新增菜单'}
+        title={editingMenu ? t('menus.editMenu') : t('menus.addMenu')}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         onOk={() => form.submit()}
@@ -384,48 +386,48 @@ export function Menus() {
         <Form form={form} layout="vertical" onFinish={handleSave}>
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item name="parent_id" label="上级菜单" initialValue={0}>
+              <Form.Item name="parent_id" label={t('menus.parentMenu')} initialValue={0}>
                 <Select>
-                  <Select.Option value={0}>根菜单</Select.Option>
+                  <Select.Option value={0}>{t('menus.rootMenu')}</Select.Option>
                   {menus.filter(m => m.menu_type === 'M').map(m => (
                     <Select.Option key={m.id} value={m.id}>{m.menu_name}</Select.Option>
                   ))}
                 </Select>
               </Form.Item>
-              <Form.Item name="menu_name" label="菜单名称" rules={[{ required: true }]}>
+              <Form.Item name="menu_name" label={t('menus.menuName')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
-              <Form.Item name="menu_code" label="菜单编码" rules={[{ required: true }]}>
+              <Form.Item name="menu_code" label={t('menus.menuCode')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
-              <Form.Item name="menu_type" label="菜单类型" initialValue="M">
+              <Form.Item name="menu_type" label={t('menus.menuType')} initialValue="M">
                 <Select>
-                  <Select.Option value="M">目录</Select.Option>
-                  <Select.Option value="C">菜单</Select.Option>
+                  <Select.Option value="M">{t('menus.directory')}</Select.Option>
+                  <Select.Option value="C">{t('menus.menu')}</Select.Option>
                 </Select>
               </Form.Item>
-              <Form.Item name="status" label="状态" initialValue="1">
+              <Form.Item name="status" label={t('common.status')} initialValue="1">
                 <Select>
-                  <Select.Option value="1">启用</Select.Option>
-                  <Select.Option value="0">禁用</Select.Option>
+                  <Select.Option value="1">{t('common.enabled')}</Select.Option>
+                  <Select.Option value="0">{t('common.disabled')}</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="icon" label="图标">
-                <Select placeholder="请选择图标">
+              <Form.Item name="icon" label={t('menus.icon')}>
+                <Select placeholder={t('menus.iconPlaceholder')}>
                   {iconOptions.map(icon => (
                     <Select.Option key={icon} value={icon}>{icon}</Select.Option>
                   ))}
                 </Select>
               </Form.Item>
-              <Form.Item name="path" label="路由路径">
-                <Input placeholder="如: /system/users" />
+              <Form.Item name="path" label={t('menus.routePath')}>
+                <Input placeholder={t('menus.pathPlaceholder')} />
               </Form.Item>
-              <Form.Item name="component" label="组件路径">
-                <Input placeholder="如: ./pages/system/Users" />
+              <Form.Item name="component" label={t('menus.componentPath')}>
+                <Input placeholder={t('menus.componentPlaceholder')} />
               </Form.Item>
-              <Form.Item name="sort_order" label="排序" initialValue={0}>
+              <Form.Item name="sort_order" label={t('menus.sortOrder')} initialValue={0}>
                 <InputNumber min={0} />
               </Form.Item>
               

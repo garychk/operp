@@ -3,6 +3,7 @@ import { Button, Card, Col, Drawer, Form, Input, InputNumber, Row, Select, Space
 import { DeleteOutlined, EditOutlined, PlusOutlined, SaveOutlined, ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
+import { useTranslation } from 'react-i18next';
 
 type DocumentType = {
   id: number;
@@ -56,6 +57,7 @@ const FIELD_TYPES = ['Data', 'Text', 'LongText', 'Int', 'Float', 'Currency', 'Da
 const emptyDocument = (): Partial<DocumentType> => ({ document_type: '', document_name: '', module_code: '', route_path: '', table_name: '', primary_key_field: 'id', naming_rule: '', is_submittable: true, is_single: false, is_child: false, is_tree: false, quick_entry: false, track_changes: true, status: '1', sort_order: 0 });
 
 export function DocumentTypeBuilder() {
+  const { t } = useTranslation();
   const [documents, setDocuments] = useState<DocumentType[]>([]);
   const [selected, setSelected] = useState<DocumentType | null>(null);
   const [fields, setFields] = useState<DocumentField[]>([]);
@@ -96,14 +98,14 @@ export function DocumentTypeBuilder() {
     setSelected(saved);
     documentForm.setFieldsValue(saved);
     await loadDocuments();
-    message.success('单据类型已保存');
+    message.success(t('documentTypes.documentSaved'));
   };
   const syncDatabaseFields = async () => {
     if (!selected) return;
     const { data, error } = await supabase.rpc("sync_document_type_fields", { p_document_type_id: selected.id });
     if (error) { message.error(error.message); return; }
     await loadFields(selected.id);
-    message.success(`已同步 ${Number(data || 0)} 个数据库字段`);
+    message.success(t('documentTypes.syncedDbFieldCount', { count: Number(data || 0) }));
   };
 
   const saveField = async () => {
@@ -117,7 +119,7 @@ export function DocumentTypeBuilder() {
     setFieldOpen(false);
     setEditingField(null);
     await loadFields(selected.id);
-    message.success('字段已保存');
+    message.success(t('documentTypes.fieldSaved'));
   };
   const removeField = async (field: DocumentField) => {
     const { error } = await supabase.from('sys_document_type_fields').update({ is_deleted: 'y', updated_at: new Date().toISOString() }).eq('id', field.id);
@@ -132,53 +134,53 @@ export function DocumentTypeBuilder() {
     await Promise.all(next.map((field, order) => supabase.from('sys_document_type_fields').update({ sort_order: order + 1 }).eq('id', field.id)));
   };
   const fieldColumns: ColumnsType<DocumentField> = useMemo(() => [
-    { title: '顺序', width: 70, render: (_: unknown, _field: DocumentField, index: number) => <Space><Button type="text" size="small" icon={<ArrowUpOutlined />} disabled={!index} onClick={() => void moveField(index, -1)} /><Button type="text" size="small" icon={<ArrowDownOutlined />} disabled={index === fields.length - 1} onClick={() => void moveField(index, 1)} /></Space> },
-    { title: '字段名', dataIndex: 'field_name', width: 150 },
-    { title: '标签', dataIndex: 'label', width: 140 },
-    { title: '类型', dataIndex: 'field_type', width: 110, render: (value: string) => <Tag>{value}</Tag> },
-    { title: '属性', render: (_: unknown, field: DocumentField) => <Space>{field.is_required && <Tag color="red">必填</Tag>}{field.is_read_only && <Tag>只读</Tag>}{field.in_list_view && <Tag color="blue">列表</Tag>}</Space> },
-    { title: '操作', width: 130, render: (_: unknown, field: DocumentField) => <Space><Button type="link" icon={<EditOutlined />} onClick={() => { setEditingField(field); fieldForm.setFieldsValue(field); setFieldOpen(true); }}>编辑</Button><Button type="link" danger icon={<DeleteOutlined />} onClick={() => void removeField(field)} /></Space> },
-  ], [fields, fieldForm]);
+    { title: t('documentTypes.order'), width: 70, render: (_: unknown, _field: DocumentField, index: number) => <Space><Button type="text" size="small" icon={<ArrowUpOutlined />} disabled={!index} onClick={() => void moveField(index, -1)} /><Button type="text" size="small" icon={<ArrowDownOutlined />} disabled={index === fields.length - 1} onClick={() => void moveField(index, 1)} /></Space> },
+    { title: t('documentTypes.fieldName'), dataIndex: 'field_name', width: 150 },
+    { title: t('documentTypes.label'), dataIndex: 'label', width: 140 },
+    { title: t('common.type'), dataIndex: 'field_type', width: 110, render: (value: string) => <Tag>{value}</Tag> },
+    { title: t('documentTypes.attributes'), render: (_: unknown, field: DocumentField) => <Space>{field.is_required && <Tag color="red">{t('documentTypes.required')}</Tag>}{field.is_read_only && <Tag>{t('documentTypes.readOnly')}</Tag>}{field.in_list_view && <Tag color="blue">{t('documentTypes.list')}</Tag>}</Space> },
+    { title: t('common.actions'), width: 130, render: (_: unknown, field: DocumentField) => <Space><Button type="link" icon={<EditOutlined />} onClick={() => { setEditingField(field); fieldForm.setFieldsValue(field); setFieldOpen(true); }}>{t('common.edit')}</Button><Button type="link" danger icon={<DeleteOutlined />} onClick={() => void removeField(field)} /></Space> },
+  ], [fields, fieldForm, t]);
 
   return (
-    <Card className="mainContent" variant="borderless" title="DocType Builder" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => openDocument()}>新建 DocType</Button>}>
+    <Card className="mainContent" variant="borderless" title="DocType Builder" extra={<Button type="primary" icon={<PlusOutlined />} onClick={() => openDocument()}>{t('documentTypes.newDocType')}</Button>}>
       <Table rowKey="id" loading={loading} dataSource={documents} onRow={(record) => ({ onClick: () => openDocument(record) })} columns={[
-        { title: "单据类型", dataIndex: "document_type" },
-        { title: "名称", dataIndex: "document_name" },
-        { title: "模块", dataIndex: "module_code" },
-        { title: "业务表", dataIndex: "table_name" },
-        { title: "状态", dataIndex: "status", render: (value: string) => <Tag color={value === "1" ? "green" : "default"}>{value === "1" ? "启用" : "停用"}</Tag> },
+        { title: t('documentTypes.documentType'), dataIndex: "document_type" },
+        { title: t('common.name'), dataIndex: "document_name" },
+        { title: t('documentTypes.module'), dataIndex: "module_code" },
+        { title: t('documentTypes.businessTable'), dataIndex: "table_name" },
+        { title: t('common.status'), dataIndex: "status", render: (value: string) => <Tag color={value === "1" ? "green" : "default"}>{value === "1" ? t('common.enabled') : t('documentTypes.inactive')}</Tag> },
       ] as ColumnsType<DocumentType>} />
-      <Drawer title={selected ? `编辑 DocType：${selected.document_name}` : "新建 DocType"} width="94%" open={drawerOpen} onClose={() => setDrawerOpen(false)} extra={<Button type="primary" icon={<SaveOutlined />} onClick={() => void saveDocument()}>保存</Button>}>
+      <Drawer title={selected ? t('documentTypes.editDocType', { name: selected.document_name }) : t('documentTypes.newDocType')} width="94%" open={drawerOpen} onClose={() => setDrawerOpen(false)} extra={<Button type="primary" icon={<SaveOutlined />} onClick={() => void saveDocument()}>{t('common.save')}</Button>}>
         <Splitter style={{ height: "calc(100vh - 150px)" }}>
           <Splitter.Panel defaultSize="34%" min="28%">
-            <Card size="small" title="DocType 属性">
+            <Card size="small" title={t('documentTypes.docTypeAttributes')}>
               <Form form={documentForm} layout="vertical">
-                <Row gutter={12}><Col span={12}><Form.Item name="document_type" label="类型编码" rules={[{ required: true }]}><Input disabled={!!selected} /></Form.Item></Col><Col span={12}><Form.Item name="document_name" label="名称" rules={[{ required: true }]}><Input /></Form.Item></Col></Row>
-                <Row gutter={12}><Col span={12}><Form.Item name="module_code" label="模块"><Input /></Form.Item></Col><Col span={12}><Form.Item name="table_name" label="业务表"><Input /></Form.Item></Col></Row>
-                <Form.Item name="route_path" label="路由"><Input /></Form.Item>
-                <Form.Item name="primary_key_field" label="主键字段"><Input /></Form.Item>
-                <Form.Item name="naming_rule" label="编号规则"><Input placeholder="PO{YYYY}{####}" /></Form.Item>
-                <Row gutter={12}><Col span={12}><Form.Item name="is_submittable" label="可提交" valuePropName="checked"><Switch /></Form.Item></Col><Col span={12}><Form.Item name="quick_entry" label="快速录入" valuePropName="checked"><Switch /></Form.Item></Col></Row>
-                <Row gutter={12}><Col span={12}><Form.Item name="track_changes" label="跟踪变更" valuePropName="checked"><Switch /></Form.Item></Col><Col span={12}><Form.Item name="status" label="状态"><Select options={[{ label: "启用", value: "1" }, { label: "停用", value: "0" }]} /></Form.Item></Col></Row>
+                <Row gutter={12}><Col span={12}><Form.Item name="document_type" label={t('documentTypes.typeCode')} rules={[{ required: true }]}><Input disabled={!!selected} /></Form.Item></Col><Col span={12}><Form.Item name="document_name" label={t('common.name')} rules={[{ required: true }]}><Input /></Form.Item></Col></Row>
+                <Row gutter={12}><Col span={12}><Form.Item name="module_code" label={t('documentTypes.module')}><Input /></Form.Item></Col><Col span={12}><Form.Item name="table_name" label={t('documentTypes.businessTable')}><Input /></Form.Item></Col></Row>
+                <Form.Item name="route_path" label={t('documentTypes.route')}><Input /></Form.Item>
+                <Form.Item name="primary_key_field" label={t('documentTypes.primaryKeyField')}><Input /></Form.Item>
+                <Form.Item name="naming_rule" label={t('documentTypes.namingRule')}><Input placeholder="PO{YYYY}{####}" /></Form.Item>
+                <Row gutter={12}><Col span={12}><Form.Item name="is_submittable" label={t('documentTypes.submittable')} valuePropName="checked"><Switch /></Form.Item></Col><Col span={12}><Form.Item name="quick_entry" label={t('documentTypes.quickEntry')} valuePropName="checked"><Switch /></Form.Item></Col></Row>
+                <Row gutter={12}><Col span={12}><Form.Item name="track_changes" label={t('documentTypes.trackChanges')} valuePropName="checked"><Switch /></Form.Item></Col><Col span={12}><Form.Item name="status" label={t('common.status')}><Select options={[{ label: t('common.enabled'), value: "1" }, { label: t('documentTypes.inactive'), value: "0" }]} /></Form.Item></Col></Row>
               </Form>
             </Card>
           </Splitter.Panel>
           <Splitter.Panel>
-            <Card size="small" title="字段定义" extra={<Space><Button icon={<SaveOutlined />} disabled={!selected} onClick={() => void syncDatabaseFields()}>同步数据库字段</Button><Button type="primary" icon={<PlusOutlined />} disabled={!selected} onClick={() => { setEditingField(null); fieldForm.resetFields(); fieldForm.setFieldsValue({ field_type: "Data", column_index: 1, sort_order: fields.length + 1 }); setFieldOpen(true); }}>新增字段</Button></Space>}>
+            <Card size="small" title={t('documentTypes.fieldDefinitions')} extra={<Space><Button icon={<SaveOutlined />} disabled={!selected} onClick={() => void syncDatabaseFields()}>{t('documentTypes.syncDatabaseFields')}</Button><Button type="primary" icon={<PlusOutlined />} disabled={!selected} onClick={() => { setEditingField(null); fieldForm.resetFields(); fieldForm.setFieldsValue({ field_type: "Data", column_index: 1, sort_order: fields.length + 1 }); setFieldOpen(true); }}>{t('documentTypes.newField')}</Button></Space>}>
               <Table size="small" rowKey="id" dataSource={fields} columns={fieldColumns} pagination={false} />
             </Card>
           </Splitter.Panel>
         </Splitter>
-        <Drawer title={editingField ? "编辑字段" : "新增字段"} width={560} open={fieldOpen} onClose={() => setFieldOpen(false)} extra={<Button type="primary" onClick={() => void saveField()}>保存字段</Button>}>
+        <Drawer title={editingField ? t('documentTypes.editField') : t('documentTypes.newField')} width={560} open={fieldOpen} onClose={() => setFieldOpen(false)} extra={<Button type="primary" onClick={() => void saveField()}>{t('documentTypes.saveField')}</Button>}>
           <Form form={fieldForm} layout="vertical">
-            <Row gutter={12}><Col span={12}><Form.Item name="field_name" label="字段名" rules={[{ required: true }]}><Input /></Form.Item></Col><Col span={12}><Form.Item name="label" label="标签" rules={[{ required: true }]}><Input /></Form.Item></Col></Row>
-            <Row gutter={12}><Col span={12}><Form.Item name="field_type" label="字段类型" rules={[{ required: true }]}><Select options={FIELD_TYPES.map((value) => ({ label: value, value }))} /></Form.Item></Col><Col span={12}><Form.Item name="options" label="选项"><Input /></Form.Item></Col></Row>
-            <Form.Item name="default_value" label="默认值"><Input /></Form.Item>
-            <Row gutter={12}><Col span={8}><Form.Item name="is_required" label="必填" valuePropName="checked"><Switch /></Form.Item></Col><Col span={8}><Form.Item name="is_read_only" label="只读" valuePropName="checked"><Switch /></Form.Item></Col><Col span={8}><Form.Item name="is_hidden" label="隐藏" valuePropName="checked"><Switch /></Form.Item></Col></Row>
-            <Row gutter={12}><Col span={8}><Form.Item name="in_list_view" label="列表显示" valuePropName="checked"><Switch /></Form.Item></Col><Col span={8}><Form.Item name="in_standard_filter" label="标准筛选" valuePropName="checked"><Switch /></Form.Item></Col><Col span={8}><Form.Item name="in_global_search" label="全局搜索" valuePropName="checked"><Switch /></Form.Item></Col></Row>
-            <Row gutter={12}><Col span={8}><Form.Item name="length" label="长度"><InputNumber min={1} style={{ width: "100%" }} /></Form.Item></Col><Col span={8}><Form.Item name="precision" label="精度"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col><Col span={8}><Form.Item name="scale" label="小数位"><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col></Row>
-            <Form.Item name="description" label="说明"><Input.TextArea rows={3} /></Form.Item>
+            <Row gutter={12}><Col span={12}><Form.Item name="field_name" label={t('documentTypes.fieldName')} rules={[{ required: true }]}><Input /></Form.Item></Col><Col span={12}><Form.Item name="label" label={t('documentTypes.label')} rules={[{ required: true }]}><Input /></Form.Item></Col></Row>
+            <Row gutter={12}><Col span={12}><Form.Item name="field_type" label={t('documentTypes.fieldType')} rules={[{ required: true }]}><Select options={FIELD_TYPES.map((value) => ({ label: value, value }))} /></Form.Item></Col><Col span={12}><Form.Item name="options" label={t('documentTypes.options')}><Input /></Form.Item></Col></Row>
+            <Form.Item name="default_value" label={t('documentTypes.defaultValue')}><Input /></Form.Item>
+            <Row gutter={12}><Col span={8}><Form.Item name="is_required" label={t('documentTypes.required')} valuePropName="checked"><Switch /></Form.Item></Col><Col span={8}><Form.Item name="is_read_only" label={t('documentTypes.readOnly')} valuePropName="checked"><Switch /></Form.Item></Col><Col span={8}><Form.Item name="is_hidden" label={t('documentTypes.hidden')} valuePropName="checked"><Switch /></Form.Item></Col></Row>
+            <Row gutter={12}><Col span={8}><Form.Item name="in_list_view" label={t('documentTypes.listDisplay')} valuePropName="checked"><Switch /></Form.Item></Col><Col span={8}><Form.Item name="in_standard_filter" label={t('documentTypes.standardFilter')} valuePropName="checked"><Switch /></Form.Item></Col><Col span={8}><Form.Item name="in_global_search" label={t('documentTypes.globalSearch')} valuePropName="checked"><Switch /></Form.Item></Col></Row>
+            <Row gutter={12}><Col span={8}><Form.Item name="length" label={t('documentTypes.length')}><InputNumber min={1} style={{ width: "100%" }} /></Form.Item></Col><Col span={8}><Form.Item name="precision" label={t('documentTypes.precision')}><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col><Col span={8}><Form.Item name="scale" label={t('documentTypes.decimalPlaces')}><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col></Row>
+            <Form.Item name="description" label={t('documentTypes.description')}><Input.TextArea rows={3} /></Form.Item>
           </Form>
         </Drawer>
       </Drawer>

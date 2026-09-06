@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Table,
   Button,
@@ -68,6 +69,7 @@ type PermissionAction =
   | "can_delete";
 
 export function Roles() {
+  const { t } = useTranslation();
   const [roles, setRoles] = useState<Role[]>([]);
   const [menus, setMenus] = useState<Menu[]>([]);
   const [sysTables, setSysTables] = useState<SysTable[]>([]);
@@ -95,7 +97,7 @@ export function Roles() {
       if (error) throw error;
       setRoles(data || []);
     } catch (error) {
-      message.error("获取角色列表失败");
+      message.error(t('roles.fetchRolesFailed'));
     } finally {
       setLoading(false);
     }
@@ -113,7 +115,7 @@ export function Roles() {
       if (error) throw error;
       setMenus(data || []);
     } catch (error) {
-      message.error("获取菜单列表失败");
+      message.error(t('roles.fetchMenusFailed'));
     }
   };
 
@@ -127,7 +129,7 @@ export function Roles() {
       if (error) throw error;
       setSelectedMenus(data?.map((item: any) => item.menu_id) || []);
     } catch (error) {
-      message.error("获取角色权限失败");
+      message.error(t('roles.fetchRolePermissionsFailed'));
     }
   };
 
@@ -144,7 +146,7 @@ export function Roles() {
       if (error) throw error;
       setSysTables(data || []);
     } catch (error) {
-      message.error("获取数据表列表失败");
+      message.error(t('roles.fetchTablesFailed'));
     }
   };
 
@@ -159,7 +161,7 @@ export function Roles() {
       if (error) throw error;
       setTablePermissions((data || []) as TablePermission[]);
     } catch (error) {
-      message.error("获取表权限失败");
+      message.error(t('roles.fetchTablePermissionsFailed'));
     }
   };
 
@@ -183,17 +185,17 @@ export function Roles() {
 
   const handleDelete = async (id: number) => {
     try {
-      await logWithTiming("删除角色", "DELETE", async () => {
+      await logWithTiming(t('roles.logDelete'), "DELETE", async () => {
         const { error } = await supabase
           .from("sys_roles")
           .update({ is_deleted: "y" })
           .eq("id", id);
         if (error) throw error;
       });
-      message.success("删除成功");
+      message.success(t('common.deleteSuccess'));
       fetchRoles();
     } catch (error) {
-      message.error("删除失败");
+      message.error(t('common.deleteFailed'));
     }
   };
 
@@ -252,10 +254,10 @@ export function Roles() {
         if (error) throw error;
       }
 
-      message.success("权限设置成功");
+      message.success(t('roles.permissionSaveSuccess'));
       setPermissionModalVisible(false);
     } catch (error) {
-      message.error("权限设置失败");
+      message.error(t('roles.permissionSaveFailed'));
     }
   };
 
@@ -267,16 +269,16 @@ export function Roles() {
           .update(values)
           .eq("id", editingRole.id);
         if (error) throw error;
-        message.success("更新成功");
+        message.success(t('common.updateSuccess'));
       } else {
         const { error } = await supabase.from("sys_roles").insert([values]);
         if (error) throw error;
-        message.success("创建成功");
+        message.success(t('roles.createSuccess'));
       }
       setModalVisible(false);
       fetchRoles();
     } catch (error) {
-      message.error("保存失败");
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -370,13 +372,13 @@ export function Roles() {
 
   const tablePermissionColumns: ColumnsType<SysTable> = [
     {
-      title: "模块",
+      title: t('roles.module'),
       dataIndex: "module_name",
       width: 120,
       render: (moduleName) => <Tag>{moduleName}</Tag>,
     },
     {
-      title: "数据表",
+      title: t('roles.dataTable'),
       dataIndex: "table_label",
       render: (_, record) => (
         <Space direction="vertical" size={0}>
@@ -388,7 +390,7 @@ export function Roles() {
       ),
     },
     {
-      title: "查询",
+      title: t('roles.query'),
       width: 70,
       align: "center",
       render: (_, record) => (
@@ -401,7 +403,7 @@ export function Roles() {
       ),
     },
     {
-      title: "新增",
+      title: t('roles.insert'),
       width: 70,
       align: "center",
       render: (_, record) => (
@@ -414,7 +416,7 @@ export function Roles() {
       ),
     },
     {
-      title: "修改",
+      title: t('roles.update'),
       width: 70,
       align: "center",
       render: (_, record) => (
@@ -427,7 +429,7 @@ export function Roles() {
       ),
     },
     {
-      title: "删除",
+      title: t('common.delete'),
       width: 70,
       align: "center",
       render: (_, record) => (
@@ -443,43 +445,43 @@ export function Roles() {
 
   const columns: ColumnsType<Role> = [
     {
-      title: "角色编码",
+      title: t('roles.roleCode'),
       dataIndex: "role_code",
       width: 200,
     },
     {
-      title: "角色名称",
+      title: t('roles.roleName'),
       dataIndex: "role_name",
       width: 150,
     },
     {
-      title: "描述",
+      title: t('roles.description'),
       dataIndex: "description",
       ellipsis: true,
     },
     {
-      title: "排序",
+      title: t('roles.sort'),
       dataIndex: "sort_order",
       width: 80,
     },
     {
-      title: "状态",
+      title: t('common.status'),
       dataIndex: "status",
       width: 100,
       render: (status) => (
         <Tag color={status === "1" ? "success" : "error"}>
-          {status === "1" ? "启用" : "禁用"}
+          {status === "1" ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: "创建时间",
+      title: t('roles.createdAt'),
       dataIndex: "created_at",
       width: 180,
       render: (date) => new Date(date).toLocaleString(),
     },
     {
-      title: "操作",
+      title: t('common.actions'),
       key: "action",
       fixed: "right",
       render: (_, record) => (
@@ -496,10 +498,10 @@ export function Roles() {
             icon={<SafetyOutlined />}
             onClick={() => handlePermission(record)}
           >
-            权限
+            {t('roles.permission')}
           </Button>
           <Popconfirm
-            title="确定删除吗？"
+            title={t('roles.deleteConfirm')}
             onConfirm={() => handleDelete(record.id)}
           >
             <Button
@@ -518,10 +520,10 @@ export function Roles() {
     <Card
       className="mainContent"
       variant="borderless"
-      title="角色管理"
+      title={t('roles.title')}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增角色
+          {t('roles.addRole')}
         </Button>
       }
     >
@@ -533,7 +535,7 @@ export function Roles() {
         scroll={{ x: 1000 }}
       />
       <SimpleModal
-        title={editingRole ? "编辑角色" : "新增角色"}
+        title={editingRole ? t('roles.editRole') : t('roles.addRole')}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         onOk={() => form.submit()}
@@ -547,35 +549,35 @@ export function Roles() {
           >
             <Form.Item
               name="role_code"
-              label="角色编码"
+              label={t('roles.roleCode')}
               rules={[{ required: true }]}
             >
               <Input disabled={!!editingRole} />
             </Form.Item>
             <Form.Item
               name="role_name"
-              label="角色名称"
+              label={t('roles.roleName')}
               rules={[{ required: true }]}
             >
               <Input />
             </Form.Item>
-            <Form.Item name="description" label="描述">
+            <Form.Item name="description" label={t('roles.description')}>
               <Input.TextArea rows={2} />
             </Form.Item>
-            <Form.Item name="sort_order" label="排序" initialValue={0}>
+            <Form.Item name="sort_order" label={t('roles.sort')} initialValue={0}>
               <InputNumber />
             </Form.Item>
-            <Form.Item name="status" label="状态" initialValue="1">
+            <Form.Item name="status" label={t('common.status')} initialValue="1">
               <Select>
-                <Select.Option value="1">启用</Select.Option>
-                <Select.Option value="0">禁用</Select.Option>
+                <Select.Option value="1">{t('common.enabled')}</Select.Option>
+                <Select.Option value="0">{t('common.disabled')}</Select.Option>
               </Select>
             </Form.Item>
           </Form>
         </Card>
       </SimpleModal>
       <Modal
-        title="设置权限"
+        title={t('roles.setPermission')}
         open={permissionModalVisible}
         onCancel={() => setPermissionModalVisible(false)}
         onOk={handleSavePermission}
@@ -585,7 +587,7 @@ export function Roles() {
           items={[
             {
               key: "menus",
-              label: "菜单权限",
+              label: t('roles.menuPermission'),
               children: (
                 <Tree
                   treeData={buildMenuTree(menus)}
@@ -604,13 +606,13 @@ export function Roles() {
             },
             {
               key: "tables",
-              label: "表权限",
+              label: t('roles.tablePermission'),
               children: (
                 <Space direction="vertical" size={12} style={{ width: "100%" }}>
                   <Space wrap>
                     <Input.Search
                       allowClear
-                      placeholder="根据表名、别名搜索"
+                      placeholder={t('roles.tableSearchPlaceholder')}
                       value={tablePermissionSearch}
                       onChange={(event) =>
                         setTablePermissionSearch(event.target.value)
@@ -624,7 +626,7 @@ export function Roles() {
                           updateVisibleTablePermissions("can_select", checked)
                         }
                       />
-                      <span>全部查询</span>
+                      <span>{t('roles.allQuery')}</span>
                     </Space>
                     <Space>
                       <Switch
@@ -633,7 +635,7 @@ export function Roles() {
                           updateVisibleTablePermissions("can_insert", checked)
                         }
                       />
-                      <span>全部新增</span>
+                      <span>{t('roles.allInsert')}</span>
                     </Space>
                     <Space>
                       <Switch
@@ -642,7 +644,7 @@ export function Roles() {
                           updateVisibleTablePermissions("can_update", checked)
                         }
                       />
-                      <span>全部修改</span>
+                      <span>{t('roles.allUpdate')}</span>
                     </Space>
                     <Space>
                       <Switch
@@ -651,7 +653,7 @@ export function Roles() {
                           updateVisibleTablePermissions("can_delete", checked)
                         }
                       />
-                      <span>全部删除</span>
+                      <span>{t('roles.allDelete')}</span>
                     </Space>
                   </Space>
 
@@ -664,7 +666,7 @@ export function Roles() {
                     scroll={{ y: 360 }}
                     locale={{
                       emptyText: (
-                        <Empty description="暂无可配置表，请先执行 007_create_role_table_permissions.sql 初始化 sys_tables" />
+                        <Empty description={t('roles.emptyTables')} />
                       ),
                     }}
                   />
