@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Input, Tag, Modal, Form, Select, Space, message, Row, Col, InputNumber } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import { logWithTiming } from '../../utils/logger';
+import { supabase } from '@/utils/supabase';
+import { logWithTiming } from '@/utils/logger';
 import { useTranslation } from 'react-i18next';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
+import SimpleModal from '@/components/SimpleModal';
 
 type Customer = Tables['erp_customers_s_539dcf81_b']['Row'];
 
@@ -230,7 +231,7 @@ export function Customers() {
         }
       />
 
-      <Modal
+      <SimpleModal
         title={editingCustomer ? t('customers.editCustomer') : t('customers.addCustomer')}
         open={isModalOpen}
         onCancel={() => {
@@ -309,7 +310,7 @@ export function Customers() {
             </Col>
           </Row>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

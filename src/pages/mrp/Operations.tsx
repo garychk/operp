@@ -18,10 +18,11 @@ import {
   DeleteOutlined,
   EditOutlined,
 } from "@ant-design/icons";
-import { supabase } from "../../utils/supabase";
-import { SuperTable } from "../../components/SuperTable";
-import { logWithTiming } from "../../utils/logger";
-import type { Tables } from "../../utils/supabase";
+import { supabase } from "@/utils/supabase";
+import { SuperTable } from "@/components/SuperTable";
+import { logWithTiming } from "@/utils/logger";
+import type { Tables } from "@/utils/supabase";
+import SimpleModal from "@/components/SimpleModal";
 
 type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
 type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
@@ -273,7 +274,7 @@ export function Operations() {
         }
       />
 
-      <Modal
+      <SimpleModal
         title={editingOperation ? "编辑工序" : "新增工序"}
         open={isModalOpen}
         onCancel={() => {
@@ -371,7 +372,7 @@ export function Operations() {
             </Col>
           </Row>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

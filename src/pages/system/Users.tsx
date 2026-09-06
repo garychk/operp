@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Table, Button, Modal, Form, Input, Select, Space, Popconfirm, message, Avatar, Tag, Card, Upload,Row,Col } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { RcFile } from 'antd/es/upload/interface';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import SimpleModal from '@/components/SimpleModal';
 
 interface User {
   id: number;
@@ -37,6 +39,7 @@ interface AvatarUploadRequest {
 const AVATAR_BUCKET = 'avatars';
 
 export function Users() {
+  const { t } = useTranslation();
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,12 +66,12 @@ export function Users() {
 
   const beforeAvatarUpload = (file: RcFile) => {
     if (!file.type.startsWith('image/')) {
-      message.error('只能上传图片文件');
+      message.error(t('users.onlyImagesAllowed'));
       return Upload.LIST_IGNORE;
     }
 
     if (file.size > 2 * 1024 * 1024) {
-      message.error('头像大小不能超过 2MB');
+      message.error(t('users.avatarSizeLimit'));
       return Upload.LIST_IGNORE;
     }
 
@@ -80,8 +83,8 @@ export function Users() {
     const username = form.getFieldValue('username');
 
     if (!username) {
-      message.warning('请先填写用户名');
-      onError?.(new Error('请先填写用户名'));
+      message.warning(t('users.enterUsernameFirst'));
+      onError?.(new Error(t('users.enterUsernameFirst')));
       return;
     }
 
@@ -106,10 +109,10 @@ export function Users() {
 
       const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(filePath);
       form.setFieldValue('avatar_url', data.publicUrl);
-      message.success('头像上传成功');
+      message.success(t('users.avatarUploadSuccess'));
       onSuccess?.(data, uploadFile);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '头像上传失败';
+      const errorMessage = error instanceof Error ? error.message : t('users.avatarUploadFailed');
       message.error(errorMessage);
       onError?.(error instanceof Error ? error : new Error(errorMessage));
     } finally {
@@ -161,7 +164,7 @@ export function Users() {
         };
       }));
     } catch (error) {
-      message.error('获取用户列表失败');
+      message.error(t('users.fetchUsersFailed'));
     } finally {
       setLoading(false);
     }
@@ -179,7 +182,7 @@ export function Users() {
       if (error) throw error;
       setRoles(data || []);
     } catch (error) {
-      message.error('获取角色列表失败');
+      message.error(t('users.fetchRolesFailed'));
     }
   };
 
@@ -202,17 +205,17 @@ export function Users() {
 
   const handleDelete = async (id: number) => {
     try {
-      await logWithTiming('删除用户', 'DELETE', async () => {
+      await logWithTiming(t('users.logDeleteUser'), 'DELETE', async () => {
         const { error } = await supabase
           .from('sys_users')
           .update({ is_deleted: 'y' })
           .eq('id', id);
         if (error) throw error;
       });
-      message.success('删除成功');
+      message.success(t('common.deleteSuccess'));
       fetchUsers();
     } catch (error) {
-      message.error('删除失败');
+      message.error(t('common.deleteFailed'));
     }
   };
 
@@ -226,13 +229,13 @@ export function Users() {
     if (!resettingUser) return;
     const authId = resettingUser.auth_id;
     if (!authId) {
-      message.error('该用户未绑定 Auth 账号，无法重置密码');
+      message.error(t('users.authAccountNotBound'));
       return;
     }
     try {
       setResetLoading(true);
-      // 通过 Edge Function（service_role）重置密码，避免浏览器端 not_admin 报错
-      await logWithTiming('重置用户密码', 'UPDATE', async () => {
+      // Reset password via Edge Function (service_role) to avoid the browser-side "not_admin" error
+      await logWithTiming(t('users.logResetPassword'), 'UPDATE', async () => {
         const { data, error } = await supabase.functions.invoke(
           'reset-user-password',
           {
@@ -241,15 +244,15 @@ export function Users() {
         );
         if (error) throw error;
         if (data && data.success === false) {
-          throw new Error(data.error || '重置密码失败');
+          throw new Error(data.error || t('users.resetPasswordFailed'));
         }
       });
-      message.success(`已重置 ${resettingUser.username} 的密码`);
+      message.success(t('users.passwordResetSuccess', { username: resettingUser.username }));
       setResetModalVisible(false);
       resetForm.resetFields();
       setResettingUser(null);
     } catch (error: any) {
-      const msg = error?.message || '重置密码失败';
+      const msg = error?.message || t('users.resetPasswordFailed');
       message.error(msg);
     } finally {
       setResetLoading(false);
@@ -262,14 +265,14 @@ export function Users() {
       let savedUserId = editingUser?.id;
 
       if (editingUser) {
-        await logWithTiming('更新用户', 'UPDATE', async () => {
+        await logWithTiming(t('users.logUpdateUser'), 'UPDATE', async () => {
           const { error } = await supabase
             .from('sys_users')
             .update(userValues)
             .eq('id', editingUser.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         const { data: currentSessionData } = await supabase.auth.getSession();
         const currentSession = currentSessionData.session;
@@ -280,11 +283,11 @@ export function Users() {
         });
 
         if (signUpError) {
-          message.error('创建Auth用户失败: ' + signUpError.message);
+          message.error(`${t('users.createAuthUserFailed')}: ${signUpError.message}`);
           return;
         }
 
-        await logWithTiming('创建用户', 'INSERT', async () => {
+        await logWithTiming(t('users.logCreateUser'), 'INSERT', async () => {
           const { data: insertedUser, error } = await supabase
             .from('sys_users')
             .insert([{ 
@@ -305,11 +308,11 @@ export function Users() {
           });
 
           if (restoreSessionError) {
-            message.warning('用户已创建，但恢复当前登录会话失败，请刷新页面重新登录');
+            message.warning(t('users.sessionRestoreFailed'));
           }
         }
 
-        message.success('创建成功！默认密码: admin123');
+        message.success(t('users.createSuccessDefaultPassword'));
       }
 
       if (savedUserId) {
@@ -369,39 +372,39 @@ export function Users() {
       setModalVisible(false);
       fetchUsers();
     } catch (error) {
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 const columns: ColumnsType<User> = [
     {
-      title: '头像',
+      title: t('users.avatar'),
       dataIndex: 'avatar_url',
       width: 80,
       render: (url) => <Avatar src={url} size="large" />,
     },
     {
-      title: '用户名',
+      title: t('users.username'),
       dataIndex: 'username',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '真实姓名',
+      title: t('users.realName'),
       dataIndex: 'real_name',
       width: 120,
     },
     {
-      title: '邮箱',
+      title: t('users.email'),
       dataIndex: 'email',
       width: 200,
     },
     {
-      title: '手机号',
+      title: t('users.phone'),
       dataIndex: 'phone',
       width: 120,
     },
     {
-      title: '角色',
+      title: t('users.role'),
       dataIndex: 'roles',
       render: (userRoles: Role[] = []) => (
         <Space size={[0, 4]} wrap>
@@ -412,47 +415,47 @@ const columns: ColumnsType<User> = [
       ),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
       render: (status) => (
         <Tag color={status === '1' ? 'success' : 'error'}>
-          {status === '1' ? '启用' : '禁用'}
+          {status === '1' ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '最后登录',
+      title: t('users.lastLogin'),
       dataIndex: 'last_login_at',
       width: 180,
       render: (date) => date ? new Date(date).toLocaleString() : '-',
     },
     {
-      title: '创建时间',
+      title: t('users.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       render: (date) => new Date(date).toLocaleString(),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       fixed: 'right',
       width: 320,
       render: (_, record) => (
         <Space>
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />          
-          <Popconfirm title="确定删除吗？" onConfirm={() => handleDelete(record.id)}>
+          <Popconfirm title={t('users.deleteConfirm')} onConfirm={() => handleDelete(record.id)}>
             <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>
           <Button type="text"  onClick={() => handleResetPassword(record)}>
-            重置密码
+            {t('users.resetPassword')}
           </Button>
         </Space>
       ),
     },
   ];
   return (
-    <Card className='mainContent' variant="borderless" title="用户管理" extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增用户</Button>}>      
+    <Card className='mainContent' variant="borderless" title={t('users.title')} extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('users.addUser')}</Button>}>      
       
       <Table
         columns={columns}
@@ -461,8 +464,8 @@ const columns: ColumnsType<User> = [
         rowKey="id"
         scroll={{ x: 1200 }}
       />
-      <Modal
-        title={editingUser ? '编辑用户' : '新增用户'}
+      <SimpleModal
+        title={editingUser ? t('users.editUser') : t('users.addUser')}
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
         onOk={() => form.submit()}
@@ -471,38 +474,38 @@ const columns: ColumnsType<User> = [
         <Form form={form} layout="vertical" onFinish={handleSave}>
           <Row gutter={16}>
             <Col span={18}>
-              <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
+              <Form.Item name="username" label={t('users.username')} rules={[{ required: true }]}>
                 <Input disabled={!!editingUser} />
               </Form.Item>
-              <Form.Item name="real_name" label="真实姓名" rules={[{ required: true }]}>
+              <Form.Item name="real_name" label={t('users.realName')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
-              <Form.Item name="email" label="邮箱" rules={[{ required: true, type: 'email' }]}>
+              <Form.Item name="email" label={t('users.email')} rules={[{ required: true, type: 'email' }]}>
                 <Input />
               </Form.Item>
-              <Form.Item name="phone" label="手机号" rules={[{ required: true }]}>
+              <Form.Item name="phone" label={t('users.phone')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
-              <Form.Item name="role_ids" label="角色">
+              <Form.Item name="role_ids" label={t('users.role')}>
                 <Select
                   mode="multiple"
                   allowClear
-                  placeholder="请选择角色"
+                  placeholder={t('users.selectRolePlaceholder')}
                   options={roles.map((role) => ({
                     label: role.role_name,
                     value: role.id,
                   }))}
                 />
               </Form.Item>
-              <Form.Item name="status" label="状态" initialValue="1">
+              <Form.Item name="status" label={t('common.status')} initialValue="1">
                 <Select>
-                  <Select.Option value="1">启用</Select.Option>
-                  <Select.Option value="0">禁用</Select.Option>
+                  <Select.Option value="1">{t('common.enabled')}</Select.Option>
+                  <Select.Option value="0">{t('common.disabled')}</Select.Option>
                 </Select>
               </Form.Item>
             </Col>
             <Col span={6}>
-              <Form.Item label="头像">
+              <Form.Item label={t('users.avatar')}>
                 <Space direction="vertical" size="small">
                   <Upload
                     accept="image/*"
@@ -518,14 +521,14 @@ const columns: ColumnsType<User> = [
                       <div>
                         <PlusOutlined />
                         <div style={{ marginTop: 8 }}>
-                          {avatarUploading ? '上传中' : '上传头像'}
+                          {avatarUploading ? t('users.uploading') : t('users.uploadAvatar')}
                         </div>
                       </div>
                     )}
                   </Upload>
                   {avatarUrl && (
                     <Button type="link" danger size="small" onClick={() => form.setFieldValue('avatar_url', '')}>
-                      移除头像
+                      {t('users.removeAvatar')}
                     </Button>
                   )}
                 </Space>
@@ -536,9 +539,9 @@ const columns: ColumnsType<User> = [
             </Col>
           </Row>
         </Form>
-      </Modal>
-      <Modal
-        title={`重置密码 - ${resettingUser?.username || ''}`}
+      </SimpleModal>
+      <SimpleModal
+        title={`${t('users.resetPassword')} - ${resettingUser?.username || ''}`}
         open={resetModalVisible}
         onCancel={() => {
           setResetModalVisible(false);
@@ -553,34 +556,34 @@ const columns: ColumnsType<User> = [
         <Form form={resetForm} layout="vertical" onFinish={handleResetSubmit}>
           <Form.Item
             name="password"
-            label="新密码"
+            label={t('users.newPassword')}
             rules={[
-              { required: true, message: '请输入新密码' },
-              { min: 6, message: '密码至少 6 位' },
+              { required: true, message: t('users.enterNewPassword') },
+              { min: 6, message: t('users.passwordMinLength') },
             ]}
           >
-            <Input.Password placeholder="请输入新密码" autoComplete="new-password" />
+            <Input.Password placeholder={t('users.enterNewPassword')} autoComplete="new-password" />
           </Form.Item>
           <Form.Item
             name="confirmPassword"
-            label="确认密码"
+            label={t('users.confirmPassword')}
             dependencies={['password']}
             rules={[
-              { required: true, message: '请再次输入新密码' },
+              { required: true, message: t('users.reEnterNewPassword') },
               ({ getFieldValue }) => ({
                 validator(_, value) {
                   if (!value || getFieldValue('password') === value) {
                     return Promise.resolve();
                   }
-                  return Promise.reject(new Error('两次输入的密码不一致'));
+                  return Promise.reject(new Error(t('users.passwordMismatch')));
                 },
               }),
             ]}
           >
-            <Input.Password placeholder="请再次输入新密码" autoComplete="new-password" />
+            <Input.Password placeholder={t('users.reEnterNewPassword')} autoComplete="new-password" />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </Card>
   );
 }

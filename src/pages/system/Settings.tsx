@@ -4,6 +4,7 @@ import {
   Button,
   Card,
   Col,
+  ConfigProvider,
   Divider,
   Form,
   Input,
@@ -416,6 +417,7 @@ export function Settings() {
   }));
 
   return (
+    <ConfigProvider variant="underlined">
     <Card
       className='mainContent'
       variant="borderless"
@@ -504,5 +506,6 @@ export function Settings() {
         </Spin>
       </div>
     </Card>
+    </ConfigProvider>
   );
 }

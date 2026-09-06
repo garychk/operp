@@ -1,32 +1,61 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Key } from 'react';
-import { Button, Input, Tag, Modal, Form, Select, Space, message, Checkbox } from 'antd';
+import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, message, Checkbox } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { supabase } from '../../utils/supabase';
-import { logWithTiming } from '../../utils/logger';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
+import { supabase } from '@/utils/supabase';
+import { logWithTiming } from '@/utils/logger';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
+import { SupaModal } from '@/components/SupaModal';
+import SimpleModal from '@/components/SimpleModal';
+import { useTranslation } from 'react-i18next';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Employee = Tables['erp_employees_s_539dcf81_b']['Row'];
+type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];
 
-const { Option } = Select;
 const warehouseTable = 'erp_warehouses_s_539dcf81_b';
+const binTable = 'erp_bins_s_539dcf81_b';
 
 export function Warehouses() {
+  const { t } = useTranslation();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [bins, setBins] = useState<Bin[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingWarehouse, setEditingWarehouse] = useState<Warehouse | null>(null);
-  const [form] = Form.useForm();
+  const [warehouseForm] = Form.useForm();
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<number | null>(null);
+  const [selectedWarehouse, setSelectedWarehouse] = useState<Warehouse | null>(null);
+  const [binModalOpen, setBinModalOpen] = useState(false);
+  const [editingBin, setEditingBin] = useState<Bin | null>(null);
+  const [binForm] = Form.useForm();
+  const [binSearchTerm, setBinSearchTerm] = useState('');
 
   useEffect(() => {
-    fetchWarehouses();
-    fetchEmployees();
+    void fetchWarehouses();
+    void fetchEmployees();
   }, []);
+
+  useEffect(() => {
+    if (warehouses.length && selectedWarehouseId === null) {
+      setSelectedWarehouseId(warehouses[0].id);
+      setSelectedWarehouse(warehouses[0]);
+    }
+  }, [warehouses, selectedWarehouseId]);
+
+  useEffect(() => {
+    if (selectedWarehouseId) {
+      void fetchBins(selectedWarehouseId);
+      setSelectedWarehouse(warehouses.find((w) => w.id === selectedWarehouseId) || null);
+    } else {
+      setBins([]);
+      setSelectedWarehouse(null);
+    }
+  }, [selectedWarehouseId, warehouses]);
 
   const fetchWarehouses = async () => {
     try {
@@ -41,9 +70,26 @@ export function Warehouses() {
       setWarehouses(data || []);
     } catch (error) {
       console.error('Error fetching warehouses:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBins = async (warehouseId: number) => {
+    try {
+      const { data, error } = await supabase
+        .from(binTable)
+        .select('*')
+        .eq('is_deleted', 'n')
+        .eq('warehouse_id', warehouseId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      setBins(data || []);
+    } catch (error) {
+      console.error('Error fetching bins:', error);
+      message.error(t('common.fetchFailed'));
     }
   };
 
@@ -61,6 +107,11 @@ export function Warehouses() {
     }
   };
 
+  const getManagerName = (managerId: number | null) => {
+    const employee = employees.find((e) => e.id === managerId);
+    return employee?.name || '-';
+  };
+
   const handleSubmit = async (values: any) => {
     try {
       if (editingWarehouse) {
@@ -71,7 +122,7 @@ export function Warehouses() {
             .eq('id', editingWarehouse.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         await logWithTiming('新增仓库', 'INSERT', async () => {
           const { error } = await supabase
@@ -79,21 +130,21 @@ export function Warehouses() {
             .insert([values]);
           if (error) throw error;
         });
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
-      form.resetFields();
+      warehouseForm.resetFields();
       setEditingWarehouse(null);
-      fetchWarehouses();
+      await fetchWarehouses();
     } catch (error) {
       console.error('Error saving warehouse:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
   const handleEdit = (record: Warehouse) => {
     setEditingWarehouse(record);
-    form.setFieldsValue({
+    warehouseForm.setFieldsValue({
       ...record,
       is_negative_stock_allowed: record.is_negative_stock_allowed ?? false,
     });
@@ -102,30 +153,30 @@ export function Warehouses() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该仓库吗？',
+      title: t('common.confirmDelete'),
+      content: t('inventory.warehouseDeleteConfirm'),
       onOk: async () => {
         try {
           await logWithTiming('删除仓库', 'DELETE', async () => {
             const { error } = await supabase
               .from(warehouseTable)
-            .update({ is_deleted: 'y' })
+              .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
-          message.success('删除成功');
-          fetchWarehouses();
+          message.success(t('common.deleteSuccess'));
+          await fetchWarehouses();
         } catch (error) {
           console.error('Error deleting warehouse:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
   };
 
-  const handleAdd = () => {
+  const handleAddWarehouse = () => {
     setEditingWarehouse(null);
-    form.setFieldsValue({
+    warehouseForm.setFieldsValue({
       code: '',
       name: '',
       type: 'raw_material',
@@ -137,180 +188,373 @@ export function Warehouses() {
     setIsModalOpen(true);
   };
 
-  const getManagerName = (managerId: number | null) => {
-    const employee = employees.find((e) => e.id === managerId);
-    return employee?.name || '-';
-  };
+  const filteredWarehouses = useMemo(
+    () =>
+      warehouses.filter(
+        (w) =>
+          w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          w.code.toLowerCase().includes(searchTerm.toLowerCase()),
+      ),
+    [searchTerm, warehouses],
+  );
 
-  const filteredWarehouses = warehouses.filter(
-    (w) =>
-      w.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      w.code.toLowerCase().includes(searchTerm.toLowerCase())
+  const currentWarehouseBins = useMemo(
+    () => bins.filter((bin) => bin.warehouse_id === selectedWarehouseId),
+    [bins, selectedWarehouseId],
   );
 
   const typeLabels: Record<string, string> = {
-    raw_material: '原材料仓',
-    finished: '成品仓',
-    semi_finished: '半成品仓',
-    return: '退货仓',
-    scrap: '废料仓',
-    other: '其他',
+    raw_material: t('inventory.warehouseTypes.rawMaterial'),
+    finished: t('inventory.warehouseTypes.finished'),
+    semi_finished: t('inventory.warehouseTypes.semiFinished'),
+    return: t('inventory.warehouseTypes.return'),
+    scrap: t('inventory.warehouseTypes.scrap'),
+    other: t('inventory.warehouseTypes.other'),
   };
 
-  const columns = [
+  const warehouseColumns = [
+    { title: t('common.code'), dataIndex: 'code', key: 'code' },
+    { title: t('common.name'), dataIndex: 'name', key: 'name' },
     {
-      title: '仓库编码',
-      dataIndex: 'code',
-      key: 'code',
-    },
-    {
-      title: '仓库名称',
-      dataIndex: 'name',
-      key: 'name',
-    },
-    {
-      title: '类型',
+      title: t('common.type'),
       dataIndex: 'type',
       key: 'type',
       render: (type: string) => typeLabels[type] || type,
     },
     {
-      title: '位置',
+      title: t('common.location'),
       dataIndex: 'location',
       key: 'location',
       render: (text: string) => text || '-',
     },
     {
-      title: '负责人',
+      title: t('common.manager'),
       dataIndex: 'manager_id',
       key: 'manager_id',
       render: (managerId: number) => getManagerName(managerId),
     },
     {
-      title: '允许负库存',
+      title: t('common.allowNegativeStock'),
       dataIndex: 'is_negative_stock_allowed',
       key: 'is_negative_stock_allowed',
-      render: (allowed: boolean) => (allowed ? '是' : '否'),
+      render: (allowed: boolean) => (allowed ? t('common.yes') : t('common.no')),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
         <Tag color={status === 'active' ? 'success' : 'default'}>
-          {status === 'active' ? '启用' : '停用'}
+          {status === 'active' ? t('common.enabled') : t('common.disabled')}
         </Tag>
       ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: Warehouse) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
     },
   ];
 
+  const binColumns = [
+    { title: t('common.code'), dataIndex: 'code', key: 'code' },
+    { title: t('common.name'), dataIndex: 'name', key: 'name' },
+    { title: t('common.location'), dataIndex: 'location', key: 'location', render: (value: string | null) => value || '-' },
+    { title: t('common.sortOrder'), dataIndex: 'sort_order', key: 'sort_order' },
+    {
+      title: t('common.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: string) => (
+        <Tag color={status === 'active' ? 'success' : 'default'}>
+          {status === 'active' ? t('common.enabled') : t('common.disabled')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('common.actions'),
+      key: 'action',
+      render: (_: any, record: Bin) => (
+        <Space size="middle">
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditBin(record)}>
+            {t('common.edit')}
+          </Button>
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteBin(record.id)}>
+            {t('common.delete')}
+          </Button>
+        </Space>
+      ),
+    },
+  ];
+
+  const handleAddBin = () => {
+    if (!selectedWarehouse) {
+      message.warning(t('inventory.binSelectWarehouseFirst'));
+      return;
+    }
+    setEditingBin(null);
+    binForm.setFieldsValue({
+      code: '',
+      name: '',
+      warehouse_id: selectedWarehouse.id,
+      location: '',
+      sort_order: 0,
+      status: 'active',
+    });
+    setBinModalOpen(true);
+  };
+
+  const handleEditBin = (record: Bin) => {
+    setEditingBin(record);
+    binForm.setFieldsValue(record);
+    setBinModalOpen(true);
+  };
+
+  const handleDeleteBin = async (id: number) => {
+    Modal.confirm({
+      title: t('common.confirmDelete'),
+      content: t('inventory.binDeleteConfirm'),
+      onOk: async () => {
+        try {
+          const { error } = await supabase
+            .from(binTable)
+            .update({ is_deleted: 'y' })
+            .eq('id', id);
+          if (error) throw error;
+          message.success(t('common.deleteSuccess'));
+          if (selectedWarehouseId) await fetchBins(selectedWarehouseId);
+        } catch (error) {
+          console.error('Error deleting bin:', error);
+          message.error(t('common.deleteFailed'));
+        }
+      },
+    });
+  };
+
+  const handleBinSubmit = async (values: any) => {
+    try {
+      const payload = {
+        ...values,
+        warehouse_id: selectedWarehouseId,
+        sort_order: Number(values.sort_order || 0),
+      };
+      if (editingBin) {
+        const { error } = await supabase.from(binTable).update(payload).eq('id', editingBin.id);
+        if (error) throw error;
+        message.success(t('common.updateSuccess'));
+      } else {
+        const { error } = await supabase.from(binTable).insert([payload]);
+        if (error) throw error;
+        message.success(t('common.createSuccess'));
+      }
+      setBinModalOpen(false);
+      setEditingBin(null);
+      binForm.resetFields();
+      if (selectedWarehouseId) await fetchBins(selectedWarehouseId);
+    } catch (error) {
+      console.error('Error saving bin:', error);
+      message.error(t('common.saveFailed'));
+    }
+  };
+
   return (
     <div className="mainContent">
-      <SuperTable
-        columns={columns}
-        dataSource={filteredWarehouses}
-        rowKey="id"
-        loading={loading}
-        pagination={{ pageSize: 10 }}
-        storageKey="warehouses"
-        headerTitle="仓库管理"
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
-        queryBar={
+      <Card bordered={false} title={t('inventory.warehouseTitle')} style={{ marginBottom: 16 }}>
+        <SuperTable
+          columns={warehouseColumns}
+          dataSource={filteredWarehouses}
+          rowKey="id"
+          loading={loading}
+          pagination={{ pageSize: 10 }}
+          storageKey="warehouses"
+          headerTitle={t('inventory.warehouseTitle')}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+          }}
+          queryBar={
+            <Space wrap>
+              <Button type="primary" icon={<PlusOutlined />} onClick={handleAddWarehouse}>
+                {t('inventory.addWarehouse')}
+              </Button>
+              <Input.Search
+                allowClear
+                placeholder={t('inventory.warehouseSearchPlaceholder')}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onSearch={() => void fetchWarehouses()}
+                style={{ width: 240 }}
+              />
+            </Space>
+          }
+        />
+      </Card>
+
+      <Card>
+        <div style={{ marginBottom: 12 }}>
           <Space wrap>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增仓库</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAddBin} disabled={!selectedWarehouseId}>
+              {t('inventory.addBin')}
+            </Button>
+            <Select
+              value={selectedWarehouseId}
+              onChange={setSelectedWarehouseId}
+              style={{ width: 160 }}
+              options={warehouses.map((w) => ({ value: w.id, label: `${w.code} ${w.name}` }))}
+              placeholder={t('inventory.binWarehousePlaceholder')}
+              allowClear
+            />
             <Input.Search
               allowClear
-              placeholder="搜索仓库名称或编码..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              onSearch={fetchWarehouses}
+              placeholder={t('inventory.binSearchPlaceholder')}
+              value={binSearchTerm}
+              onChange={(e) => setBinSearchTerm(e.target.value)}
+              onSearch={() => selectedWarehouseId && void fetchBins(selectedWarehouseId)}
               style={{ width: 240 }}
             />
+            {selectedWarehouse && (
+          <Tag >
+            {t('inventory.binCurrentWarehouse', { warehouse: `${selectedWarehouse.code} ${selectedWarehouse.name}` })}
+          </Tag>
+        )}
           </Space>
-        }
-      />
+        </div>
+        
+        <Table
+          rowKey="id"
+          dataSource={currentWarehouseBins.filter(
+            (bin) =>
+              bin.name.toLowerCase().includes(binSearchTerm.toLowerCase()) ||
+              bin.code.toLowerCase().includes(binSearchTerm.toLowerCase()),
+          )}
+          columns={binColumns}
+          pagination={{ pageSize: 10 }}
+          locale={{ emptyText: selectedWarehouse ? t('inventory.binEmpty') : t('inventory.binSelectWarehouseFirst') }}
+        />
+      </Card>
 
-      <Modal
-        title={editingWarehouse ? '编辑仓库' : '新增仓库'}
+      <SimpleModal
+        title={editingWarehouse ? t('inventory.editWarehouse') : t('inventory.addWarehouse')}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
-          form.resetFields();
+          warehouseForm.resetFields();
           setEditingWarehouse(null);
         }}
         footer={null}
+        width={600}
+        height={600}
       >
-        <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
+        <Form form={warehouseForm} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item
-            label="仓库编码"
+            label={t('common.code')}
             name="code"
-            rules={[{ required: true, message: '请输入仓库编码' }]}
+            rules={[{ required: true, message: t('inventory.warehouseCodeRequired') }]}
           >
-            <Input placeholder="请输入仓库编码" disabled={!!editingWarehouse} />
+            <Input placeholder={t('inventory.warehouseCodePlaceholder')} disabled={!!editingWarehouse} />
           </Form.Item>
           <Form.Item
-            label="仓库名称"
+            label={t('common.name')}
             name="name"
-            rules={[{ required: true, message: '请输入仓库名称' }]}
+            rules={[{ required: true, message: t('inventory.warehouseNameRequired') }]}
           >
-            <Input placeholder="请输入仓库名称" />
+            <Input placeholder={t('inventory.warehouseNamePlaceholder')} />
           </Form.Item>
-          <Form.Item label="类型" name="type" initialValue="raw_material">
+          <Form.Item label={t('common.type')} name="type" initialValue="raw_material">
             <Select>
-              <Option value="raw_material">原材料仓</Option>
-              <Option value="finished">成品仓</Option>
-              <Option value="semi_finished">半成品仓</Option>
-              <Option value="return">退货仓</Option>
-              <Option value="scrap">废料仓</Option>
-              <Option value="other">其他</Option>
+              <Select.Option value="raw_material">{t('inventory.warehouseTypes.rawMaterial')}</Select.Option>
+              <Select.Option value="finished">{t('inventory.warehouseTypes.finished')}</Select.Option>
+              <Select.Option value="semi_finished">{t('inventory.warehouseTypes.semiFinished')}</Select.Option>
+              <Select.Option value="return">{t('inventory.warehouseTypes.return')}</Select.Option>
+              <Select.Option value="scrap">{t('inventory.warehouseTypes.scrap')}</Select.Option>
+              <Select.Option value="other">{t('inventory.warehouseTypes.other')}</Select.Option>
             </Select>
           </Form.Item>
-          <Form.Item label="位置" name="location">
-            <Input placeholder="请输入位置" />
+          <Form.Item label={t('common.location')} name="location">
+            <Input placeholder={t('inventory.warehouseLocationPlaceholder')} />
           </Form.Item>
-          <Form.Item label="负责人" name="manager_id">
-            <Select placeholder="请选择负责人">
+          <Form.Item label={t('common.manager')} name="manager_id">
+            <Select placeholder={t('inventory.managerPlaceholder')}>
               {employees.map((e) => (
-                <Option key={e.id} value={e.id}>{e.name}</Option>
+                <Select.Option key={e.id} value={e.id}>{e.name}</Select.Option>
               ))}
             </Select>
           </Form.Item>
-          <Form.Item label="允许负库存" name="is_negative_stock_allowed" valuePropName="checked" initialValue={false}>
+          <Form.Item label={t('common.allowNegativeStock')} name="is_negative_stock_allowed" valuePropName="checked" initialValue={false}>
             <Checkbox />
           </Form.Item>
-          <Form.Item label="状态" name="status" initialValue="active">
+          <Form.Item label={t('common.status')} name="status" initialValue="active">
             <Select>
-              <Option value="active">启用</Option>
-              <Option value="inactive">停用</Option>
+              <Select.Option value="active">{t('common.enabled')}</Select.Option>
+              <Select.Option value="inactive">{t('common.disabled')}</Select.Option>
             </Select>
           </Form.Item>
           <Form.Item style={{ textAlign: 'right' }}>
             <Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+              <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
               <Button type="primary" htmlType="submit">
-                保存
+                {t('common.save')}
               </Button>
             </Space>
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
+
+      <SimpleModal
+        title={editingBin ? t('inventory.editBin') : t('inventory.addBin')}
+        open={binModalOpen}
+        onCancel={() => {
+          setBinModalOpen(false);
+          binForm.resetFields();
+          setEditingBin(null);
+        }}
+        onOk={() => binForm.submit()}
+        destroyOnHidden
+      >
+        <Form form={binForm} layout="vertical" onFinish={handleBinSubmit} style={{ marginTop: 16 }}>
+          <Form.Item name="warehouse_id" hidden>
+            <Input />
+          </Form.Item>
+          <Form.Item label={t('inventory.binWarehousePlaceholder')}>
+            <Input value={selectedWarehouse ? `${selectedWarehouse.code} ${selectedWarehouse.name}` : ''} disabled />
+          </Form.Item>
+          <Form.Item
+            label={t('common.code')}
+            name="code"
+            rules={[{ required: true, message: t('inventory.binCodeRequired') }]}
+          >
+            <Input placeholder={t('inventory.binCodePlaceholder')} />
+          </Form.Item>
+          <Form.Item
+            label={t('common.name')}
+            name="name"
+            rules={[{ required: true, message: t('inventory.binNameRequired') }]}
+          >
+            <Input placeholder={t('inventory.binNamePlaceholder')} />
+          </Form.Item>
+          <Form.Item label={t('common.location')} name="location">
+            <Input placeholder={t('inventory.binLocationPlaceholder')} />
+          </Form.Item>
+          <Form.Item label={t('common.sortOrder')} name="sort_order" initialValue={0}>
+            <Input />
+          </Form.Item>
+          <Form.Item label={t('common.status')} name="status" initialValue="active">
+            <Select>
+              <Select.Option value="active">{t('common.enabled')}</Select.Option>
+              <Select.Option value="inactive">{t('common.disabled')}</Select.Option>
+            </Select>
+          </Form.Item>
+        </Form>
+      </SimpleModal>
     </div>
   );
 }

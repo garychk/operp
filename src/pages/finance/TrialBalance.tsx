@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Select, Space, Tag, message } from 'antd';
-import { supabase } from '../../utils/supabase';
-import type { Tables } from '../../utils/supabase';
-import { SuperTable } from '../../components/SuperTable';
+import { useTranslation } from 'react-i18next';
+import { supabase } from '@/utils/supabase';
+import type { Tables } from '@/utils/supabase';
+import { SuperTable } from '@/components/SuperTable';
 
 
 type Period = Tables['erp_accounting_periods_s_539dcf81_b']['Row'];
@@ -14,6 +15,7 @@ type TrialRow = {
 };
 
 export function TrialBalance() {
+  const { t } = useTranslation();
   const [periods, setPeriods] = useState<Period[]>([]);
   const [rows, setRows] = useState<TrialRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,7 +42,7 @@ export function TrialBalance() {
       setRows((data as TrialRow[]) || []);
     } catch (error) {
       console.error(error);
-      message.error('获取试算平衡失败');
+      message.error(t('trialBalance.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -49,7 +51,7 @@ export function TrialBalance() {
   useEffect(() => {
     fetchPeriods().catch((error) => {
       console.error(error);
-      message.error('加载会计期间失败');
+      message.error(t('trialBalance.periodsFailed'));
     });
     fetchRows();
   }, []);
@@ -57,10 +59,10 @@ export function TrialBalance() {
   const periodMap = useMemo(() => new Map(periods.map((item) => [item.id, item])), [periods]);
 
   const columns = [
-    { title: '会计期间', dataIndex: 'period_id', key: 'period_id', render: (value: number) => periodMap.get(value)?.year && periodMap.get(value)?.month ? `${periodMap.get(value)?.year}-${String(periodMap.get(value)?.month).padStart(2, '0')}` : value || '-' },
-    { title: '借方合计', dataIndex: 'total_debit', key: 'total_debit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: '贷方合计', dataIndex: 'total_credit', key: 'total_credit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: '差额', dataIndex: 'balance_diff', key: 'balance_diff', render: (value: number) => <Tag color={Math.abs(value ?? 0) < 0.005 ? 'success' : 'error'}>{`¥${(value ?? 0).toFixed(2)}`}</Tag> },
+    { title: t('trialBalance.period'), dataIndex: 'period_id', key: 'period_id', render: (value: number) => periodMap.get(value)?.year && periodMap.get(value)?.month ? `${periodMap.get(value)?.year}-${String(periodMap.get(value)?.month).padStart(2, '0')}` : value || '-' },
+    { title: t('trialBalance.totalDebit'), dataIndex: 'total_debit', key: 'total_debit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
+    { title: t('trialBalance.totalCredit'), dataIndex: 'total_credit', key: 'total_credit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
+    { title: t('trialBalance.difference'), dataIndex: 'balance_diff', key: 'balance_diff', render: (value: number) => <Tag color={Math.abs(value ?? 0) < 0.005 ? 'success' : 'error'}>{`¥${(value ?? 0).toFixed(2)}`}</Tag> },
   ];
 
   return (
@@ -72,12 +74,12 @@ export function TrialBalance() {
         loading={loading}
         pagination={{ pageSize: 20 }}
         storageKey="finance-trial-balance"
-        headerTitle="试算平衡"
+        headerTitle={t('trialBalance.title')}
         queryBar={
           <Space wrap>
             <Select
               allowClear
-              placeholder="选择期间"
+              placeholder={t('trialBalance.selectPeriod')}
               style={{ width: 180 }}
               value={periodId}
               onChange={(value) => {
@@ -88,11 +90,11 @@ export function TrialBalance() {
             />
             <Select
               allowClear
-              placeholder="只看借贷不平"
+              placeholder={t('trialBalance.unbalancedOnly')}
               style={{ width: 180 }}
               options={[
-                { value: 'all', label: '全部' },
-                { value: 'diff', label: '差异项' },
+                { value: 'all', label: t('trialBalance.all') },
+                { value: 'diff', label: t('trialBalance.diffItems') },
               ]}
               onChange={(value) => {
                 if (value === 'diff') {

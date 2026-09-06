@@ -1,4 +1,4 @@
-export type WidgetType = 'text' | 'statistic' | 'button' | 'table' | 'line' | 'column' | 'pie';
+export type WidgetType = 'text' | 'statistic' | 'button' | 'table' | 'line' | 'column' | 'pie' | 'divider';
 
 export interface DataSourceConfig {
   mode: 'static' | 'supabase' | 'baq';
@@ -18,6 +18,11 @@ export interface PageWidget {
   w: number;
   h: number;
   content?: string;
+  dividerText?: string;
+  dashed?: boolean;
+  titlePlacement?: 'center' | 'start' | 'end';
+  orientation?: 'horizontal' | 'vertical';
+  variant?: 'dashed' | 'dotted' | 'solid';
   xField?: string;
   yField?: string;
   colorField?: string;
@@ -45,4 +50,5 @@ export const widgetDefaults: Record<WidgetType, Omit<PageWidget, 'id' | 'type' |
   line: { title: '趋势折线图', xField: 'name', yField: 'value', w: 6, h: 4, dataSource: { mode: 'static', staticData: [{ name: '一月', value: 30 }, { name: '二月', value: 52 }, { name: '三月', value: 45 }] } },
   column: { title: '分类柱状图', xField: 'name', yField: 'value', w: 6, h: 4, dataSource: { mode: 'static', staticData: [{ name: '华东', value: 68 }, { name: '华南', value: 46 }, { name: '华北', value: 55 }] } },
   pie: { title: '占比饼图', colorField: 'name', yField: 'value', w: 5, h: 4, dataSource: { mode: 'static', staticData: [{ name: '已完成', value: 72 }, { name: '进行中', value: 20 }, { name: '待处理', value: 8 }] } },
+  divider: { title: '分割线', dividerText: '分割线文字', dashed: false, titlePlacement: 'center', orientation: 'horizontal', variant: 'solid', w: 6, h: 1, dataSource: { mode: 'static', staticData: [] } },
 };

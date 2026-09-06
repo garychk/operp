@@ -39,16 +39,24 @@
 
 .palette-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-top: 12px;
 }
 
 .palette-grid .ant-btn {
+    min-width: 0;
+    width: 100%;
     height: 64px;
+    padding-inline: 4px;
+    font-size: 12px;
+    line-height: 1.3;
     display: flex;
     flex-direction: column;
     justify-content: center;
+    text-align: center;
+    white-space: normal;
+    word-break: break-word;
 }
 
 .component-palette .ant-input {
@@ -83,6 +91,9 @@
 
 .custom-page-grid:not(.is-editing) .page-widget .ant-card-body {
     height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 .custom-page-grid:not(.is-editing) .page-widget {
@@ -93,6 +104,27 @@
     height: 100%;
     display: flex;
     align-items: center;
+}
+
+.page-widget .chart-widget {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    align-items: stretch;
+}
+
+.page-widget .chart-widget > * {
+    flex: 1 1 auto;
+    min-height: 180px;
+    width: 100%;
+}
+
+.custom-page-grid:not(.is-editing) .page-widget .chart-widget {
+    align-items: stretch;
+}
+
+.custom-page-grid:not(.is-editing) .page-widget .chart-widget > * {
+    min-height: 180px;
 }
 
 .page-widget.selected {
@@ -113,7 +145,8 @@
 
 .published-page {
     padding: 4px 8px 20px;
-    height: 90vh;
+    min-height: 90vh;
+    height: auto;
 }
 
 .published-page-heading {

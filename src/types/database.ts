@@ -300,6 +300,7 @@ export interface ErpInventoryS539Dcf81BRow {
   updated_at: string | null;
   product_id: number | null;  // FK -> erp_products_s_539dcf81_b.id
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
   quantity: number | null;
   available_quantity: number | null;
   locked_quantity: number | null;
@@ -323,6 +324,9 @@ export interface ErpInventoryTransactionsS539Dcf81BRow {
   transaction_date: string;
   product_id: number | null;  // FK -> erp_products_s_539dcf81_b.id
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
+  from_location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
+  to_location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
   batch_no: string | null;
   quantity: number | null;
   unit_cost: number | null;
@@ -337,6 +341,23 @@ export interface ErpInventoryTransactionsS539Dcf81BRow {
 }
 export type ErpInventoryTransactionsS539Dcf81BInsert = Omit<ErpInventoryTransactionsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpInventoryTransactionsS539Dcf81BUpdate = Partial<ErpInventoryTransactionsS539Dcf81BInsert>;
+
+export interface ErpBinsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  code: string;
+  name: string;
+  warehouse_id: number;
+  location: string | null;
+  sort_order: number | null;
+  status: string | null;
+}
+export type ErpBinsS539Dcf81BInsert = Omit<ErpBinsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpBinsS539Dcf81BUpdate = Partial<ErpBinsS539Dcf81BInsert>;
 
 export interface ErpMaterialIssueDetailsS539Dcf81BRow {
   id: number;

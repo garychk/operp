@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Key } from 'react';
 import { Button, Input, Table, Tag, Modal, Form, Select, Space, message, InputNumber, Row, Col, DatePicker } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
@@ -10,6 +11,7 @@ import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
+import SimpleModal from '@/components/SimpleModal';
 
 type SalesDelivery = Tables['erp_sales_deliveries_s_539dcf81_b']['Row'];
 type SalesDeliveryDetail = Tables['erp_sales_delivery_details_s_539dcf81_b']['Row'];
@@ -25,6 +27,7 @@ const salesDeliveryTable = 'erp_sales_deliveries_s_539dcf81_b';
 const salesDeliveryDetailTable = 'erp_sales_delivery_details_s_539dcf81_b';
 
 export function SalesDeliveries() {
+  const { t } = useTranslation();
   const [deliveries, setDeliveries] = useState<SalesDelivery[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -67,7 +70,7 @@ export function SalesDeliveries() {
       setDeliveries(data || []);
     } catch (error) {
       console.error('Error fetching deliveries:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -155,26 +158,26 @@ export function SalesDeliveries() {
       setDetails(data || []);
     } catch (error) {
       console.error('Error fetching details:', error);
-      message.error('获取明细失败');
+      message.error(t('salesDeliveries.fetchDetailFailed'));
     }
   };
 
   const handleSubmit = async (values: any) => {
     try {
       if (editingDelivery) {
-        await logWithTiming('更新销售出货单', 'UPDATE', async () => {
+        await logWithTiming(t('salesDeliveries.logUpdate'), 'UPDATE', async () => {
           const { error } = await supabase
             .from(salesDeliveryTable)
             .update(values)
             .eq('id', editingDelivery.id);
           if (error) throw error;
         }, { table: salesDeliveryTable, recordId: editingDelivery.id });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: salesDeliveryTable,
         };
-        const data = await logWithTiming('新增销售出货单', 'INSERT', async () => {
+        const data = await logWithTiming(t('salesDeliveries.logCreate'), 'INSERT', async () => {
           const { data, error } = await supabase
             .from(salesDeliveryTable)
             .insert([values])
@@ -185,7 +188,7 @@ export function SalesDeliveries() {
           return data;
         }, logParams);
         setSelectedDelivery(data);
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -194,7 +197,7 @@ export function SalesDeliveries() {
       fetchDeliveries();
     } catch (error) {
       console.error('Error saving delivery:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -209,7 +212,7 @@ export function SalesDeliveries() {
           .from('erp_sales_delivery_details_s_539dcf81_b')
           .update(values)
           .eq('id', editingDetail.id);
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         const maxLineNo = details.length > 0 ? Math.max(...details.map(d => d.line_no)) : 0;
         values.line_no = maxLineNo + 1;
@@ -222,7 +225,7 @@ export function SalesDeliveries() {
           .insert([values]);
         console.log('SalesDeliveries: Insert result:', data, error);
         if (error) throw error;
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
 
         if (values.order_detail_id) {
           await updateOrderDetailDeliveredQuantity(values.order_detail_id, values.quantity || 0);
@@ -235,7 +238,7 @@ export function SalesDeliveries() {
       updateDeliveryTotal(selectedDelivery.id);
     } catch (error) {
       console.error('Error saving detail:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -317,7 +320,7 @@ export function SalesDeliveries() {
   const runDeliveryAction = async (action: 'submit' | 'approve' | 'post' | 'reverse_post', record: SalesDelivery) => {
     try {
       await runBusinessAction({ action, documentType: 'sales_delivery', documentId: record.id, user: businessUser });
-      const successText = action === 'submit' ? '提交审批成功' : action === 'approve' ? '审核成功' : action === 'post' ? '过账成功' : '反过账成功';
+      const successText = action === 'submit' ? t('salesDeliveries.submitSuccess') : action === 'approve' ? t('salesDeliveries.approveSuccess') : action === 'post' ? t('salesDeliveries.postSuccess') : t('salesDeliveries.reversePostSuccess');
       message.success(successText);
       fetchDeliveries();
       if (selectedDelivery?.id === record.id) {
@@ -325,7 +328,7 @@ export function SalesDeliveries() {
       }
     } catch (error: any) {
       console.error('Error running delivery action:', error);
-      message.error(error?.message || '操作失败');
+      message.error(error?.message || t('salesDeliveries.actionFailed'));
     }
   };
   const handleEdit = (record: SalesDelivery) => {
@@ -343,11 +346,11 @@ export function SalesDeliveries() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该出货单吗？',
+      title: t('common.confirmDelete'),
+      content: t('salesDeliveries.deleteDeliveryConfirm'),
       onOk: async () => {
         try {
-          await logWithTiming('删除销售出货单', 'DELETE', async () => {
+          await logWithTiming(t('salesDeliveries.logDelete'), 'DELETE', async () => {
             const { error } = await supabase
               .from(salesDeliveryTable)
               .update({ is_deleted: 'y' })
@@ -359,11 +362,11 @@ export function SalesDeliveries() {
               .eq('delivery_id', id);
             if (detailError) throw detailError;
           }, { table: salesDeliveryTable, recordId: id });
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchDeliveries();
         } catch (error) {
           console.error('Error deleting delivery:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -415,22 +418,22 @@ export function SalesDeliveries() {
 
   const handleDeleteDetail = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该明细吗？',
+      title: t('common.confirmDelete'),
+      content: t('salesDeliveries.deleteDetailConfirm'),
       onOk: async () => {
         try {
           await supabase
             .from('erp_sales_delivery_details_s_539dcf81_b')
             .update({ is_deleted: 'y' })
             .eq('id', id);
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           if (selectedDelivery) {
             fetchDetails(selectedDelivery.id);
             updateDeliveryTotal(selectedDelivery.id);
           }
         } catch (error) {
           console.error('Error deleting detail:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -512,50 +515,50 @@ export function SalesDeliveries() {
   );
 
   const statusLabels: Record<string, { text: string; color: string }> = {
-    draft: { text: '草稿', color: 'default' },
-    pending: { text: '待审核', color: 'warning' },
-    approved: { text: '已审核', color: 'success' },
-    posted: { text: '已过账', color: 'success' },
-    cancelled: { text: '已取消', color: 'error' },
+    draft: { text: t('salesDeliveries.statusDraft'), color: 'default' },
+    pending: { text: t('salesDeliveries.statusPending'), color: 'warning' },
+    approved: { text: t('salesDeliveries.statusApproved'), color: 'success' },
+    posted: { text: t('salesDeliveries.statusPosted'), color: 'success' },
+    cancelled: { text: t('salesDeliveries.statusCancelled'), color: 'error' },
   };
 
   const columns = [
     {
-      title: '出货单号',
+      title: t('salesDeliveries.deliveryNo'),
       dataIndex: 'delivery_no',
       key: 'delivery_no',
     },
     {
-      title: '销售订单',
+      title: t('salesDeliveries.salesOrder'),
       dataIndex: 'order_id',
       key: 'order_id',
       render: (orderId: number) => getOrderNo(orderId),
     },
     {
-      title: '客户',
+      title: t('salesDeliveries.customer'),
       dataIndex: 'customer_id',
       key: 'customer_id',
       render: (customerId: number) => getCustomerName(customerId),
     },
     {
-      title: '仓库',
+      title: t('salesDeliveries.warehouse'),
       dataIndex: 'warehouse_id',
       key: 'warehouse_id',
       render: (warehouseId: number) => getWarehouseName(warehouseId),
     },
     {
-      title: '出货日期',
+      title: t('salesDeliveries.deliveryDate'),
       dataIndex: 'delivery_date',
       key: 'delivery_date',
     },
     {
-      title: '金额',
+      title: t('salesDeliveries.amount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
       render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
@@ -564,30 +567,30 @@ export function SalesDeliveries() {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: SalesDelivery) => (
         <Space size="middle">
           <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetails(record)}>
-            明细
+            {t('salesDeliveries.details')}
           </Button>
           {record.status === 'draft' && (
-            <Button type="text" onClick={() => runDeliveryAction('submit', record)} disabled={record.status !== 'draft'}>提交</Button>
+            <Button type="text" onClick={() => runDeliveryAction('submit', record)} disabled={record.status !== 'draft'}>{t('salesDeliveries.submit')}</Button>
           )}
           {record.status === 'pending' && (
-            <Button type="text" onClick={() => runDeliveryAction('approve', record)}>审核</Button>
+            <Button type="text" onClick={() => runDeliveryAction('approve', record)}>{t('salesDeliveries.approve')}</Button>
           )}
           {record.status === 'approved' && (
-            <Button type="text" onClick={() => runDeliveryAction('post', record)}>过账</Button>
+            <Button type="text" onClick={() => runDeliveryAction('post', record)}>{t('salesDeliveries.post')}</Button>
           )}
           {record.status === 'posted' && (
-            <Button type="text" onClick={() => runDeliveryAction('reverse_post', record)}>反过账</Button>
+            <Button type="text" onClick={() => runDeliveryAction('reverse_post', record)}>{t('salesDeliveries.reversePost')}</Button>
           )}
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.status === 'posted'}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} disabled={record.status === 'posted'}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -596,65 +599,65 @@ export function SalesDeliveries() {
 
   const detailColumns = [
     {
-      title: '行号',
+      title: t('salesDeliveries.lineNo'),
       dataIndex: 'line_no',
       key: 'line_no',
     },
     {
-      title: '来源订单明细',
+      title: t('salesDeliveries.sourceOrderDetail'),
       dataIndex: 'order_detail_id',
       key: 'order_detail_id',
       render: (orderDetailId: number) => {
         const info = getOrderDetailInfo(orderDetailId);
-        return info ? <span>{info.productName} (剩余{info.remainingQty}{info.unit})</span> : '-';
+        return info ? <span>{info.productName} ({t('salesDeliveries.remainingQty', { qty: info.remainingQty, unit: info.unit })})</span> : '-';
       },
     },
     {
-      title: '产品',
+      title: t('salesDeliveries.product'),
       dataIndex: 'product_id',
       key: 'product_id',
       render: (productId: number) => getProductName(productId),
     },
     {
-      title: '单位',
+      title: t('salesDeliveries.unit'),
       dataIndex: 'product_id',
       key: 'unit',
       render: (productId: number) => getProductUnit(productId),
     },
     {
-      title: '数量',
+      title: t('salesDeliveries.quantity'),
       dataIndex: 'quantity',
       key: 'quantity',
       render: (qty: number) => qty?.toLocaleString() || '0',
     },
     {
-      title: '单价',
+      title: t('salesDeliveries.unitPrice'),
       dataIndex: 'unit_price',
       key: 'unit_price',
       render: (price: number) => `¥${(price ?? 0).toFixed(2)}`,
     },
     {
-      title: '金额',
+      title: t('salesDeliveries.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number) => `¥${(amount ?? 0).toFixed(2)}`,
     },
     {
-      title: '批次号',
+      title: t('salesDeliveries.batchNo'),
       dataIndex: 'batch_no',
       key: 'batch_no',
       render: (text: string) => text || '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: SalesDeliveryDetail) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)} disabled={isDisabled}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)} disabled={isDisabled}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -674,17 +677,17 @@ export function SalesDeliveries() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="sales-deliveries"
-        headerTitle="销售出货单"
+        headerTitle={t('salesDeliveries.title')}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
         queryBar={
           <Space wrap>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增出货单</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('salesDeliveries.addDelivery')}</Button>
             <Input.Search
               allowClear
-              placeholder="搜索出货单号、客户或销售订单..."
+              placeholder={t('salesDeliveries.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchDeliveries}
@@ -698,7 +701,7 @@ export function SalesDeliveries() {
         title={
           <>
             <EyeOutlined />
-            <span>{editingDelivery ? '编辑销售出货单' : '新增销售出货单'}</span>
+            <span>{editingDelivery ? t('salesDeliveries.editTitle') : t('salesDeliveries.addTitle')}</span>
           </>
         }
         open={isModalOpen}
@@ -717,8 +720,8 @@ export function SalesDeliveries() {
             </Tag>
           ) : null
         }
-        headerPanelTitle="销售出货单头"
-        detailPanelTitle="销售出货单明细"
+        headerPanelTitle={t('salesDeliveries.headerPanelTitle')}
+        detailPanelTitle={t('salesDeliveries.detailPanelTitle')}
         historyTable={salesDeliveryTable}
         historyRecordId={editingDelivery?.id || selectedDelivery?.id}
         workflowDocumentType="sales_delivery"
@@ -731,7 +734,7 @@ export function SalesDeliveries() {
             onClick={handleAddDetail}
             disabled={isDisabled}
           >
-            新增明细
+            {t('salesDeliveries.addDetail')}
           </Button>
         }
         formEle={
@@ -739,18 +742,18 @@ export function SalesDeliveries() {
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  label="出货单号"
+                  label={t('salesDeliveries.deliveryNo')}
                   name="delivery_no"
-                  rules={[{ required: true, message: '请输入出货单号' }]}
+                  rules={[{ required: true, message: t('salesDeliveries.deliveryNoRequired') }]}
                 >
-                  <Input placeholder="请输入出货单号" disabled={!!editingDelivery} />
+                  <Input placeholder={t('salesDeliveries.deliveryNoPlaceholder')} disabled={!!editingDelivery} />
                 </Form.Item>
                 <Form.Item
-                  label="关联销售订单"
+                  label={t('salesDeliveries.relatedSalesOrder')}
                   name="order_id"
                 >
                   <Select
-                    placeholder="请选择销售订单"
+                    placeholder={t('salesDeliveries.salesOrderPlaceholder')}
                     onChange={handleOrderChange}
                     allowClear
                     disabled={isDisabled}
@@ -761,22 +764,22 @@ export function SalesDeliveries() {
                   </Select>
                 </Form.Item>
                 <Form.Item
-                  label="客户"
+                  label={t('salesDeliveries.customer')}
                   name="customer_id"
-                  rules={[{ required: true, message: '请选择客户' }]}
+                  rules={[{ required: true, message: t('salesDeliveries.customerRequired') }]}
                 >
-                  <Select placeholder="请选择客户" disabled={isDisabled}>
+                  <Select placeholder={t('salesDeliveries.customerPlaceholder')} disabled={isDisabled}>
                     {customers.map((c) => (
                       <Option key={c.id} value={c.id}>{c.name}</Option>
                     ))}
                   </Select>
                 </Form.Item>
                 <Form.Item
-                  label="仓库"
+                  label={t('salesDeliveries.warehouse')}
                   name="warehouse_id"
-                  rules={[{ required: true, message: '请选择仓库' }]}
+                  rules={[{ required: true, message: t('salesDeliveries.warehouseRequired') }]}
                 >
-                  <Select placeholder="请选择仓库" disabled={isDisabled}>
+                  <Select placeholder={t('salesDeliveries.warehousePlaceholder')} disabled={isDisabled}>
                     {warehouses.map((w) => (
                       <Option key={w.id} value={w.id}>{w.name}</Option>
                     ))}
@@ -785,27 +788,27 @@ export function SalesDeliveries() {
               </Col>
               <Col span={12}>
                 <Form.Item
-                  label="出货日期"
+                  label={t('salesDeliveries.deliveryDate')}
                   name="delivery_date"
-                  rules={[{ required: true, message: '请选择出货日期' }]}
+                  rules={[{ required: true, message: t('salesDeliveries.deliveryDateRequired') }]}
                 >
                   <DatePicker disabled={isDisabled} />
                 </Form.Item>
-                <Form.Item label="总金额" name="total_amount" initialValue={0}>
+                <Form.Item label={t('salesDeliveries.totalAmount')} name="total_amount" initialValue={0}>
                   <InputNumber disabled style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item label="状态" name="status" initialValue="draft">
+                <Form.Item label={t('common.status')} name="status" initialValue="draft">
                   <Select disabled={isDisabled}>
-                    <Option value="draft">草稿</Option>
-                    <Option value="pending">待审核</Option>
-                    <Option value="approved">已审核</Option>
-                    <Option value="cancelled">已取消</Option>
+                    <Option value="draft">{t('salesDeliveries.statusDraft')}</Option>
+                    <Option value="pending">{t('salesDeliveries.statusPending')}</Option>
+                    <Option value="approved">{t('salesDeliveries.statusApproved')}</Option>
+                    <Option value="cancelled">{t('salesDeliveries.statusCancelled')}</Option>
                   </Select>
                 </Form.Item>
               </Col>
             </Row>
-            <Form.Item label="备注" name="remark">
-              <TextArea rows={2} placeholder="请输入备注" disabled={isDisabled} />
+            <Form.Item label={t('salesDeliveries.remark')} name="remark">
+              <TextArea rows={2} placeholder={t('salesDeliveries.remarkPlaceholder')} disabled={isDisabled} />
             </Form.Item>
           </Form>
         }
@@ -816,7 +819,7 @@ export function SalesDeliveries() {
           pagination={false}
           summary={() => (
             <Table.Summary.Row>
-              <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>合计</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>{t('salesDeliveries.totalText')}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={2} colSpan={2}></Table.Summary.Cell>
             </Table.Summary.Row>
@@ -824,9 +827,9 @@ export function SalesDeliveries() {
         />}
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
             <Button type="primary" onClick={() => form.submit()} disabled={isDisabled}>
-              保存
+              {t('common.save')}
             </Button>
           </Space>
         }
@@ -834,8 +837,8 @@ export function SalesDeliveries() {
         height={680}
       />
 
-      <Modal
-        title={editingDetail ? '编辑销售出货明细' : '新增销售出货明细'}
+      <SimpleModal  
+        title={editingDetail ? t('salesDeliveries.editDetailTitle') : t('salesDeliveries.addDetailTitle')}
         open={isDetailModalOpen}
         onCancel={() => {
           setIsDetailModalOpen(false);
@@ -843,20 +846,20 @@ export function SalesDeliveries() {
           setEditingDetail(null);
         }}
         footer={<Space>
-          <Button onClick={() => setIsDetailModalOpen(false)}>取消</Button>
+          <Button onClick={() => setIsDetailModalOpen(false)}>{t('common.cancel')}</Button>
           <Button type="primary" onClick={() => detailForm.submit()}>
-            保存
+            {t('common.save')}
           </Button>
         </Space>}
         width={500}
       >
         <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ marginTop: 16 }}>
           <Form.Item
-            label="关联订单明细"
+            label={t('salesDeliveries.relatedOrderDetail')}
             name="order_detail_id"
           >
             <Select
-              placeholder="选择关联的销售订单明细"
+              placeholder={t('salesDeliveries.orderDetailPlaceholder')}
               onChange={handleOrderDetailChange}
               allowClear
               disabled={isDisabled}
@@ -867,19 +870,19 @@ export function SalesDeliveries() {
                 const product = products.find((p) => p.id === d.product_id);
                 return (
                   <Option key={d.id} value={d.id}>
-                    {product?.code} - {product?.name} (剩余{remaining}{product?.unit})
+                    {product?.code} - {product?.name} ({t('salesDeliveries.remainingQty', { qty: remaining, unit: product?.unit })})
                   </Option>
                 );
               })}
             </Select>
           </Form.Item>
           <Form.Item
-            label="产品"
+            label={t('salesDeliveries.product')}
             name="product_id"
-            rules={[{ required: true, message: '请选择产品' }]}
+            rules={[{ required: true, message: t('salesDeliveries.productRequired') }]}
           >
             <Select
-              placeholder="请选择产品"
+              placeholder={t('salesDeliveries.productPlaceholder')}
               disabled={isDisabled}
               onChange={(value) => {
                 const price = getProductPrice(value as number);
@@ -894,34 +897,31 @@ export function SalesDeliveries() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="数量"
+                label={t('salesDeliveries.quantity')}
                 name="quantity"
-                rules={[{ required: true, message: '请输入数量' }]}
+                rules={[{ required: true, message: t('salesDeliveries.quantityRequired') }]}
               >
-                <InputNumber min={1} style={{ width: '100%' }} placeholder="请输入数量" disabled={isDisabled} />
+                <InputNumber min={1} style={{ width: '100%' }} placeholder={t('salesDeliveries.quantityPlaceholder')} disabled={isDisabled} />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item
-                label="单价"
+                label={t('salesDeliveries.unitPrice')}
                 name="unit_price"
-                rules={[{ required: true, message: '请输入单价' }]}
+                rules={[{ required: true, message: t('salesDeliveries.unitPriceRequired') }]}
               >
-                <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder="请输入单价" disabled={isDisabled} />
+                <InputNumber min={0} step={0.01} style={{ width: '100%' }} placeholder={t('salesDeliveries.unitPricePlaceholder')} disabled={isDisabled} />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item label="批次号" name="batch_no">
-            <Input placeholder="请输入批次号" disabled={isDisabled} />
+          <Form.Item label={t('salesDeliveries.batchNo')} name="batch_no">
+            <Input placeholder={t('salesDeliveries.batchNoPlaceholder')} disabled={isDisabled} />
           </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <Input placeholder="请输入备注" disabled={isDisabled} />
+          <Form.Item label={t('salesDeliveries.remark')} name="remark">
+            <Input placeholder={t('salesDeliveries.remarkPlaceholder')} disabled={isDisabled} />
           </Form.Item>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }
-
-
-

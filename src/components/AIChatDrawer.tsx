@@ -1041,7 +1041,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       onClose={onClose}
       title="AI 智能对话"
       className="ai-chat-drawer"
-      destroyOnClose={false}
+      destroyOnHidden={false}
     >
       <XProvider>
         <Flex vertical className="ai-chat-panel">
@@ -1314,8 +1314,13 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         title="大模型配置"
         open={configOpen}
         onCancel={() => setConfigOpen(false)}
-        footer={null}
-        width={620}
+        width={600}
+        styles={{ body: { height: '600px', overflowY: 'auto' } }}
+        footer={[
+          <Button icon={<PlusOutlined />} onClick={addProvider} type="primary">
+            新增大模型
+          </Button>
+        ]}
       >
         <Flex vertical gap={12}>
           <Typography.Text type="secondary">
@@ -1373,10 +1378,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                 />
               </Space>
             </Card>
-          ))}
-          <Button icon={<PlusOutlined />} onClick={addProvider} type="primary">
-            新增大模型
-          </Button>
+          ))}          
         </Flex>
       </Modal>
     </Drawer>

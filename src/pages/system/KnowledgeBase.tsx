@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Button,
   Card,
@@ -65,17 +66,6 @@ type ImportItem = {
   is_active?: boolean;
 };
 
-const defaultImportText = `[
-  {
-    "title": "采购订单创建流程",
-    "category": "采购",
-    "tags": ["采购订单", "流程"],
-    "source_type": "manual",
-    "source_ref": "/system/knowledge-base",
-    "content": "创建采购订单前，请先确认供应商、物料、数量、单价和税率是否完整。保存后再检查审批流是否配置正确。"
-  }
-]`;
-
 function normalizeTags(value?: string | null) {
   return (value || "")
     .split(/[,，\n]/)
@@ -84,6 +74,9 @@ function normalizeTags(value?: string | null) {
 }
 
 export function KnowledgeBase() {
+  const { t } = useTranslation();
+  const defaultImportText = t('knowledgeBase.importExample');
+
   const [rows, setRows] = useState<KnowledgeDoc[]>([]);
   const [loading, setLoading] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -104,7 +97,7 @@ export function KnowledgeBase() {
       setRows((data || []) as KnowledgeDoc[]);
     } catch (error) {
       console.error(error);
-      message.error("获取知识库文档失败");
+      message.error(t('knowledgeBase.fetchDocsFailed'));
     } finally {
       setLoading(false);
     }
@@ -137,18 +130,18 @@ export function KnowledgeBase() {
 
   const handleDelete = async (id: number) => {
     try {
-      await logWithTiming("删除知识库文档", "DELETE", async () => {
+      await logWithTiming(t('knowledgeBase.logDelete'), "DELETE", async () => {
         const { error } = await supabase
           .from("sys_ai_knowledge_docs")
           .delete()
           .eq("id", id);
         if (error) throw error;
       });
-      message.success("删除成功");
+      message.success(t('common.deleteSuccess'));
       await fetchRows();
     } catch (error) {
       console.error(error);
-      message.error("删除失败");
+      message.error(t('common.deleteFailed'));
     }
   };
 
@@ -167,12 +160,12 @@ export function KnowledgeBase() {
       };
 
       if (!payload.title || !payload.content) {
-        message.warning("标题和内容不能为空");
+        message.warning(t('knowledgeBase.titleContentRequired'));
         return;
       }
 
       if (editing) {
-        await logWithTiming("更新知识库文档", "UPDATE", async () => {
+        await logWithTiming(t('knowledgeBase.logUpdate'), "UPDATE", async () => {
           const { error } = await supabase
             .from("sys_ai_knowledge_docs")
             .update(payload)
@@ -180,7 +173,7 @@ export function KnowledgeBase() {
           if (error) throw error;
         });
       } else {
-        await logWithTiming("创建知识库文档", "INSERT", async () => {
+        await logWithTiming(t('knowledgeBase.logCreate'), "INSERT", async () => {
           const { error } = await supabase.from("sys_ai_knowledge_docs").insert({
             ...payload,
             created_at: new Date().toISOString(),
@@ -190,11 +183,11 @@ export function KnowledgeBase() {
       }
 
       setDrawerOpen(false);
-      message.success(editing ? "更新成功" : "创建成功");
+      message.success(editing ? t('common.updateSuccess') : t('knowledgeBase.createSuccess'));
       await fetchRows();
     } catch (error) {
       console.error(error);
-      message.error("保存失败");
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -203,7 +196,7 @@ export function KnowledgeBase() {
     try {
       const parsed = JSON.parse(importText) as ImportItem[];
       if (!Array.isArray(parsed) || !parsed.length) {
-        message.warning("请提供至少一条知识库文档");
+        message.warning(t('knowledgeBase.importNeedDoc'));
         return;
       }
 
@@ -222,18 +215,18 @@ export function KnowledgeBase() {
         }));
 
       if (!payload.length) {
-        message.warning("没有可导入的有效文档");
+        message.warning(t('knowledgeBase.importNoValid'));
         return;
       }
 
       const { error } = await supabase.from("sys_ai_knowledge_docs").insert(payload);
       if (error) throw error;
 
-      message.success(`已导入 ${payload.length} 条文档`);
+      message.success(t('knowledgeBase.importCount', { count: payload.length }));
       await fetchRows();
     } catch (error) {
       console.error(error);
-      message.error("导入失败，请检查 JSON 格式");
+      message.error(t('knowledgeBase.importFailedCheckJson'));
     } finally {
       setImporting(false);
     }
@@ -259,30 +252,30 @@ export function KnowledgeBase() {
         error?: string;
       };
       if (!response.ok || !result.ok) {
-        throw new Error(result.error || `索引请求失败：${response.status}`);
+        throw new Error(result.error || t('knowledgeBase.reindexRequestFailed', { status: response.status }));
       }
       message.success(
-        `索引完成，共 ${result.total || 0} 条，成功 ${result.success || 0} 条，失败 ${result.failed || 0} 条`,
+        t('knowledgeBase.reindexDone', {
+          total: result.total || 0,
+          success: result.success || 0,
+          failed: result.failed || 0,
+        }),
       );
     } catch (error) {
       console.error(error);
-      message.error(error instanceof Error ? error.message : "重新索引失败");
+      message.error(error instanceof Error ? error.message : t('knowledgeBase.reindexFailed'));
     } finally {
       setReindexing(false);
     }
   };
 
-  const handleReindexHint = useMemo(
-    () =>
-      "保存或导入文档后，请运行重新索引生成分片和向量。",
-    [],
-  );
+  const handleReindexHint = t('knowledgeBase.reindexHint');
 
   const columns: ColumnsType<KnowledgeDoc> = [
-    { title: "标题", dataIndex: "title", key: "title", ellipsis: true },
-    { title: "分类", dataIndex: "category", key: "category", width: 120, render: (value) => value || "-" },
+    { title: t('knowledgeBase.title'), dataIndex: "title", key: "title", ellipsis: true },
+    { title: t('knowledgeBase.category'), dataIndex: "category", key: "category", width: 120, render: (value) => value || "-" },
     {
-      title: "标签",
+      title: t('knowledgeBase.tags'),
       dataIndex: "tags",
       key: "tags",
       width: 220,
@@ -297,9 +290,9 @@ export function KnowledgeBase() {
           "-"
         ),
     },
-    { title: "来源类型", dataIndex: "source_type", key: "source_type", width: 120, render: (value) => value || "-" },
+    { title: t('knowledgeBase.sourceType'), dataIndex: "source_type", key: "source_type", width: 120, render: (value) => value || "-" },
     {
-      title: "来源链接",
+      title: t('knowledgeBase.sourceLink'),
       dataIndex: "source_ref",
       key: "source_ref",
       width: 180,
@@ -307,31 +300,31 @@ export function KnowledgeBase() {
       render: (value) => value || "-",
     },
     {
-      title: "状态",
+      title: t('common.status'),
       dataIndex: "is_active",
       key: "is_active",
       width: 100,
-      render: (value: boolean) => <Tag color={value ? "green" : "default"}>{value ? "启用" : "停用"}</Tag>,
+      render: (value: boolean) => <Tag color={value ? "green" : "default"}>{value ? t('common.enabled') : t('knowledgeBase.inactive')}</Tag>,
     },
     {
-      title: "更新时间",
+      title: t('knowledgeBase.updatedAt'),
       dataIndex: "updated_at",
       key: "updated_at",
       width: 180,
       render: (value) => (value ? new Date(value).toLocaleString("zh-CN", { hour12: false }) : "-"),
     },
     {
-      title: "操作",
+      title: t('common.actions'),
       key: "action",
       width: 220,
       fixed: "right",
       render: (_, record) => (
         <Space>
           <Button type="text" icon={<SyncOutlined />} onClick={() => void handleReindex(record.id)}>
-            索引
+            {t('knowledgeBase.reindexRow')}
           </Button>
           <Button type="text" icon={<EditOutlined />} onClick={() => openEdit(record)} />
-          <Popconfirm title="确定删除这条文档吗？" onConfirm={() => void handleDelete(record.id)}>
+          <Popconfirm title={t('knowledgeBase.confirmDeleteDoc')} onConfirm={() => void handleDelete(record.id)}>
             <Button type="text" danger icon={<DeleteOutlined />} />
           </Popconfirm>
         </Space>
@@ -341,17 +334,17 @@ export function KnowledgeBase() {
 
   return (
     <Card
-      title="知识库文档管理"
+      title={t('knowledgeBase.pageTitle')}
       extra={
         <Space>
           <Button icon={<SyncOutlined />} onClick={() => void fetchRows()}>
-            刷新
+            {t('common.refresh')}
           </Button>
           <Button loading={reindexing} icon={<SyncOutlined />} onClick={() => void handleReindex()}>
-            重新索引
+            {t('knowledgeBase.reindexAll')}
           </Button>
           <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-            新建文档
+            {t('knowledgeBase.newDoc')}
           </Button>
         </Space>
       }
@@ -364,7 +357,7 @@ export function KnowledgeBase() {
         items={[
           {
             key: "manage",
-            label: "文档管理",
+            label: t('knowledgeBase.tabDocuments'),
             children: (
               <Table
                 rowKey="id"
@@ -377,12 +370,12 @@ export function KnowledgeBase() {
           },
           {
             key: "import",
-            label: "批量导入",
+            label: t('knowledgeBase.tabImport'),
             children: (
               <Space direction="vertical" style={{ width: "100%" }} size="large">
-                <Card size="small" title="导入说明">
+                <Card size="small" title={t('knowledgeBase.importGuide')}>
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    直接粘贴 JSON 数组，每个对象代表一篇文档。保存后再运行重新索引生成分片和向量。
+                    {t('knowledgeBase.importInstructions')}
                   </Typography.Paragraph>
                 </Card>
                 <Input.TextArea
@@ -393,9 +386,9 @@ export function KnowledgeBase() {
                 />
                 <Space>
                   <Button type="primary" icon={<ImportOutlined />} loading={importing} onClick={() => void handleImport()}>
-                    导入文档
+                    {t('knowledgeBase.importBtn')}
                   </Button>
-                  <Button onClick={() => setImportText(defaultImportText)}>恢复示例</Button>
+                  <Button onClick={() => setImportText(defaultImportText)}>{t('knowledgeBase.restoreExample')}</Button>
                 </Space>
               </Space>
             ),
@@ -404,40 +397,40 @@ export function KnowledgeBase() {
       />
 
       <Drawer
-        title={editing ? "编辑知识库文档" : "新建知识库文档"}
+        title={editing ? t('knowledgeBase.drawerEditTitle') : t('knowledgeBase.drawerCreateTitle')}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         width={720}
-        destroyOnClose
+        destroyOnHidden
         footer={
           <Space style={{ justifyContent: "flex-end", width: "100%" }}>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
+            <Button onClick={() => setDrawerOpen(false)}>{t('common.cancel')}</Button>
             <Button type="primary" onClick={() => void handleSave()}>
-              保存
+              {t('common.save')}
             </Button>
           </Space>
         }
       >
         <Form form={form} layout="vertical" initialValues={{ is_active: true }}>
-          <Form.Item name="title" label="标题" rules={[{ required: true, message: "请输入标题" }]}>
-            <Input placeholder="例如：采购订单创建流程" />
+          <Form.Item name="title" label={t('knowledgeBase.title')} rules={[{ required: true, message: t('knowledgeBase.titleRequired') }]}>
+            <Input placeholder={t('knowledgeBase.titlePlaceholder')} />
           </Form.Item>
-          <Form.Item name="category" label="分类">
-            <Input placeholder="例如：采购 / 销售 / 财务 / 系统" />
+          <Form.Item name="category" label={t('knowledgeBase.category')}>
+            <Input placeholder={t('knowledgeBase.categoryPlaceholder')} />
           </Form.Item>
-          <Form.Item name="tagsText" label="标签">
-            <Input placeholder="逗号分隔，例如：采购订单, 流程, 审批" />
+          <Form.Item name="tagsText" label={t('knowledgeBase.tags')}>
+            <Input placeholder={t('knowledgeBase.tagsPlaceholder')} />
           </Form.Item>
-          <Form.Item name="source_type" label="来源类型">
-            <Input placeholder="manual / import / page / doc 等" />
+          <Form.Item name="source_type" label={t('knowledgeBase.sourceType')}>
+            <Input placeholder={t('knowledgeBase.sourceTypePlaceholder')} />
           </Form.Item>
-          <Form.Item name="source_ref" label="来源链接">
-            <Input placeholder="/system/knowledge-base 或 https://..." />
+          <Form.Item name="source_ref" label={t('knowledgeBase.sourceLink')}>
+            <Input placeholder={t('knowledgeBase.sourceLinkPlaceholder')} />
           </Form.Item>
-          <Form.Item name="content" label="内容" rules={[{ required: true, message: "请输入内容" }]}>
-            <Input.TextArea rows={10} placeholder="正文内容，建议写成可检索的操作说明或制度条款" />
+          <Form.Item name="content" label={t('knowledgeBase.content')} rules={[{ required: true, message: t('knowledgeBase.contentRequired') }]}>
+            <Input.TextArea rows={10} placeholder={t('knowledgeBase.contentPlaceholder')} />
           </Form.Item>
-          <Form.Item name="is_active" label="启用" valuePropName="checked">
+          <Form.Item name="is_active" label={t('common.enabled')} valuePropName="checked">
             <Switch />
           </Form.Item>
         </Form>

@@ -241,14 +241,14 @@ BEGIN
       || LPAD(d.detail_id::TEXT, 6, '0');
     INSERT INTO public.erp_inventory_transactions_s_539dcf81_b (
       corp_id, emp_id, is_deleted, transaction_no, transaction_type,
-      transaction_date, product_id, warehouse_id, batch_no, quantity,
+      transaction_date, product_id, warehouse_id, location_id, batch_no, quantity,
       unit_cost, total_cost, reference_type, reference_id,
       reference_detail_id, posting_idempotency_key, remark
     ) VALUES (
       h.corp_id, actor_id::TEXT, 'n', LEFT(v_transaction_no, 50),
       CASE WHEN p_document_type = 'purchase_receipt'
            THEN 'purchase_receipt_in' ELSE 'sales_delivery_out' END,
-      h.document_date, d.product_id, h.warehouse_id, normalized_batch,
+      h.document_date, d.product_id, h.warehouse_id, NULL, normalized_batch,
       CASE WHEN p_document_type = 'purchase_receipt'
            THEN d.quantity ELSE -d.quantity END,
       v_unit_cost,

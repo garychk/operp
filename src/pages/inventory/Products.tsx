@@ -20,13 +20,15 @@ import {
   EditOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { supabase } from "../../utils/supabase";
-import type { Tables } from "../../utils/supabase";
-import { logWithTiming } from "../../utils/logger";
+import { supabase } from "@/utils/supabase";
+import type { Tables } from "@/utils/supabase";
+import { logWithTiming } from "@/utils/logger";
 import { Categories } from "./Categories";
-import { SupaModal } from "../../components/SupaModal";
-import { SuperTable } from "../../components/SuperTable";
-import DictSelect from "../../components/DictSelect";
+import { SupaModal } from "@/components/SupaModal";
+import { SuperTable } from "@/components/SuperTable";
+import DictSelect from "@/components/DictSelect";
+import SimpleModal from "@/components/SimpleModal";
+import { useTranslation } from "react-i18next";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
@@ -35,6 +37,7 @@ const { Option } = Select;
 const productTable = "erp_products_s_539dcf81_b";
 
 export function Products() {
+  const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +66,7 @@ export function Products() {
       setProducts(data || []);
     } catch (error) {
       console.error("Error fetching products:", error);
-      message.error("获取数据失败");
+      message.error(t("common.fetchFailed"));
     } finally {
       setLoading(false);
     }
@@ -85,19 +88,19 @@ export function Products() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingProduct) {
-        await logWithTiming("更新物料", "UPDATE", async () => {
+        await logWithTiming(t("products.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(productTable)
             .update(values)
             .eq("id", editingProduct.id);
           if (error) throw error;
         }, { table: productTable, recordId: editingProduct.id });
-        message.success("更新成功");
+        message.success(t("common.updateSuccess"));
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: productTable,
         };
-        await logWithTiming("新增物料", "INSERT", async () => {
+        await logWithTiming(t("products.logCreate"), "INSERT", async () => {
           const { data, error } = await supabase
             .from(productTable)
             .insert([values])
@@ -106,7 +109,7 @@ export function Products() {
           if (error) throw error;
           logParams.recordId = data.id;
         }, logParams);
-        message.success("新增成功");
+        message.success(t("common.createSuccess"));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -114,14 +117,14 @@ export function Products() {
       fetchProducts();
     } catch (error) {
       console.error("Error saving product:", error);
-      message.error("保存失败");
+      message.error(t("common.saveFailed"));
     }
   };
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该物料吗？",
+      title: t("common.confirmDelete"),
+      content: t("products.deleteConfirm"),
       onOk: async () => {
         try {
           const { error } = await supabase
@@ -129,11 +132,11 @@ export function Products() {
             .update({ is_deleted: "y" })
             .eq("id", id);
           if (error) throw error;
-          message.success("删除成功");
+          message.success(t("common.deleteSuccess"));
           fetchProducts();
         } catch (error) {
           console.error("Error deleting product:", error);
-          message.error("删除失败");
+          message.error(t("common.deleteFailed"));
         }
       },
     });
@@ -158,7 +161,7 @@ export function Products() {
       short_name: "",
       category_id: undefined,
       specification: "",
-      unit: "件",
+      unit: t("products.unitDefault"),
       barcode: "",
       purchase_price: 0,
       sale_price: 0,
@@ -187,63 +190,63 @@ export function Products() {
 
   const columns = [
     {
-      title: "物料编码",
+      title: t("products.code"),
       dataIndex: "code",
       key: "code",
       width: 160,
     },
     {
-      title: "物料名称",
+      title: t("products.name"),
       dataIndex: "name",
       key: "name",
     },
     {
-      title: "类别",
+      title: t("products.category"),
       dataIndex: "category_id",
       key: "category_id",
       width: 120,
       render: (categoryId: number) => getCategoryName(categoryId),
     },
     {
-      title: "规格",
+      title: t("products.spec"),
       dataIndex: "specification",
       key: "specification",
       width: 280,
       render: (text: string) => text || "-",
     },
     {
-      title: "单位",
+      title: t("products.unit"),
       dataIndex: "unit",
       key: "unit",
       width: 120,
     },
     {
-      title: "采购价",
+      title: t("products.purchasePrice"),
       dataIndex: "purchase_price",
       key: "purchase_price",
       width: 120,
       render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
     },
     {
-      title: "销售价",
+      title: t("products.salePrice"),
       dataIndex: "sale_price",
       key: "sale_price",
       width: 120,
       render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
     },
     {
-      title: "状态",
+      title: t("common.status"),
       dataIndex: "status",
       key: "status",
       width: 120,
       render: (status: string) => (
         <Tag color={status === "active" ? "success" : "default"}>
-          {status === "active" ? "启用" : "停用"}
+          {status === "active" ? t("common.enabled") : t("products.disabled")}
         </Tag>
       ),
     },
     {
-      title: "操作",
+      title: t("common.actions"),
       key: "action",
       width: 120,
       render: (_: any, record: Product) => (
@@ -253,7 +256,7 @@ export function Products() {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t("common.edit")}
           </Button>
           <Button
             type="text"
@@ -261,7 +264,7 @@ export function Products() {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
           >
-            删除
+            {t("common.delete")}
           </Button>
         </Space>
       ),
@@ -278,7 +281,7 @@ export function Products() {
         pagination={{ pageSize: 10 }}
         storageKey="products"
         tableName={productTable}
-        headerTitle="物料管理"
+        headerTitle={t("products.title")}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -288,17 +291,17 @@ export function Products() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              新增物料
+              {t("products.addMaterial")}
             </Button>
             <Button
               icon={<SettingOutlined />}
               onClick={() => setIsCategoryModalOpen(true)}
             >
-              类别管理
+              {t("products.categoryManage")}
             </Button>
             <Input.Search
               allowClear
-              placeholder="搜索物料名称或编码..."
+              placeholder={t("products.searchPlaceholder")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchProducts}
@@ -309,14 +312,14 @@ export function Products() {
       />
 
       <SupaModal
-        title={editingProduct ? "编辑物料" : "新增物料"}
+        title={editingProduct ? t("products.editMaterial") : t("products.addMaterial")}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
           setEditingProduct(null);
         }}
-        headerPanelTitle="物料主档"
+        headerPanelTitle={t("products.masterTitle")}
         historyTable={productTable}
         historyRecordId={editingProduct?.id}
         form={form}
@@ -330,27 +333,27 @@ export function Products() {
             <Row gutter={16}>
               <Col span={8}>
                 <Form.Item
-                  label="物料编码"
+                  label={t("products.code")}
                   name="code"
-                  rules={[{ required: true, message: "请输入物料编码" }]}
+                  rules={[{ required: true, message: t("products.codeRequired") }]}
                 >
                   <Input
-                    placeholder="请输入物料编码"
+                    placeholder={t("products.codePlaceholder")}
                     disabled={!!editingProduct}
                   />
                 </Form.Item>
                 <Form.Item
-                  label="物料名称"
+                  label={t("products.name")}
                   name="name"
-                  rules={[{ required: true, message: "请输入物料名称" }]}
+                  rules={[{ required: true, message: t("products.nameRequired") }]}
                 >
-                  <Input placeholder="请输入物料名称" />
+                  <Input placeholder={t("products.namePlaceholder")} />
                 </Form.Item>
-                <Form.Item label="简称" name="short_name">
-                  <Input placeholder="请输入简称" />
+                <Form.Item label={t("products.shortName")} name="short_name">
+                  <Input placeholder={t("products.shortNamePlaceholder")} />
                 </Form.Item>
-                <Form.Item label="类别" name="category_id">
-                  <Select placeholder="请选择类别">
+                <Form.Item label={t("products.category")} name="category_id">
+                  <Select placeholder={t("products.categoryPlaceholder")}>
                     {categories.map((c) => (
                       <Option key={c.id} value={c.id}>
                         {c.name}
@@ -358,69 +361,74 @@ export function Products() {
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label="规格" name="specification">
-                  <Input placeholder="请输入规格" />
+                <Form.Item label={t("products.spec")} name="specification">
+                  <Input placeholder={t("products.specPlaceholder")} />
                 </Form.Item>
-                <Form.Item label="单位" name="unit" initialValue="件" tooltip="维护类型为uom的字典">
+                <Form.Item
+                  label={t("products.unit")}
+                  name="unit"
+                  initialValue={t("products.unitDefault")}
+                  tooltip={t("products.unitTooltip")}
+                >
                   <DictSelect
                     dictType="uom"
-                    placeholder="请输入单位"
+                    placeholder={t("products.unitPlaceholder")}
                     allowClear
                   />
                 </Form.Item>
               </Col>
               <Col span={8}>
-                <Form.Item label="条码" name="barcode">
-                  <Input placeholder="请输入条码" />
+                <Form.Item label={t("products.barcode")} name="barcode">
+                  <Input placeholder={t("products.barcodePlaceholder")} />
                 </Form.Item>
                 <Form.Item
-                  label="采购价"
+                  label={t("products.purchasePrice")}
                   name="purchase_price"
                   initialValue={0}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入采购价"
+                    placeholder={t("products.purchasePricePlaceholder")}
                   />
                 </Form.Item>
-                <Form.Item label="销售价" name="sale_price" initialValue={0}>
+                <Form.Item label={t("products.salePrice")} name="sale_price" initialValue={0}>
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入销售价"
+                    placeholder={t("products.salePricePlaceholder")}
                   />
                 </Form.Item>
-                <Form.Item label="成本价" name="cost_price" initialValue={0}>
+                <Form.Item label={t("products.costPrice")} name="cost_price" initialValue={0}>
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入成本价"
+                    placeholder={t("products.costPricePlaceholder")}
                   />
                 </Form.Item>
                 <Form.Item
-                  label="安全库存"
+                  label={t("products.safetyStock")}
                   name="safety_stock"
                   initialValue={0}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入安全库存"
+                    placeholder={t("products.safetyStockPlaceholder")}
                   />
                 </Form.Item>
               </Col>
               <Col span={8}>
-                <Form.Item label="最大库存" name="max_stock" initialValue={0}>
+                <Form.Item label={t("products.maxStock")} name="max_stock" initialValue={0}>
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入最大库存"
+                    placeholder={t("products.maxStockPlaceholder")}
                   />
                 </Form.Item>
-                <Form.Item label="最小库存" name="min_stock" initialValue={0}>
+                <Form.Item label={t("products.minStock")} name="min_stock" initialValue={0}>
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入最小库存"
+                    placeholder={t("products.minStockPlaceholder")}
                   />
                 </Form.Item>
                 <Form.Item
-                  label="可采购"
+                  label={t("products.purchasable")}
                   name="is_purchased"
                   valuePropName="checked"
                   initialValue={true}
@@ -428,7 +436,7 @@ export function Products() {
                   <Checkbox />
                 </Form.Item>
                 <Form.Item
-                  label="可销售"
+                  label={t("products.sellable")}
                   name="is_sold"
                   valuePropName="checked"
                   initialValue={true}
@@ -436,17 +444,17 @@ export function Products() {
                   <Checkbox />
                 </Form.Item>
                 <Form.Item
-                  label="可生产"
+                  label={t("products.manufacturable")}
                   name="is_manufactured"
                   valuePropName="checked"
                   initialValue={false}
                 >
                   <Checkbox />
                 </Form.Item>
-                <Form.Item label="状态" name="status" initialValue="active">
+                <Form.Item label={t("common.status")} name="status" initialValue="active">
                   <Select>
-                    <Option value="active">启用</Option>
-                    <Option value="inactive">停用</Option>
+                    <Option value="active">{t("common.enabled")}</Option>
+                    <Option value="inactive">{t("products.disabled")}</Option>
                   </Select>
                 </Form.Item>
               </Col>
@@ -455,25 +463,25 @@ export function Products() {
         }
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>{t("common.cancel")}</Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t("common.save")}
             </Button>
           </Space>
         }
         width={"70%"}
         height={650}
       />
-      <Modal
-        title="物料类别管理"
+      <SimpleModal
+        title={t("products.categoryManageTitle")}
         open={isCategoryModalOpen}
         onCancel={() => setIsCategoryModalOpen(false)}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         <Categories />
-      </Modal>
+      </SimpleModal>  
     </div>
   );
 }

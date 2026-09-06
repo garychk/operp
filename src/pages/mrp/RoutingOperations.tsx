@@ -32,6 +32,7 @@ import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
 import { RoutingMap } from "../../components/RoutingMap";
+import SimpleModal from "@/components/SimpleModal";
 
 type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
 type RoutingDetail =
@@ -713,7 +714,7 @@ export function RoutingOperations() {
         height={680}
       />
 
-      <Modal
+      <SimpleModal
         title={editingDetail ? "编辑工艺路线工序" : "新增工艺路线工序"}
         open={isDetailModalOpen}
         onCancel={() => {
@@ -832,7 +833,7 @@ export function RoutingOperations() {
             </Col>
           </Row>
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

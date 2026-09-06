@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Button,
   Card,
@@ -15,8 +16,10 @@ import {
 } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { supabase } from "../../utils/supabase";
-import { logWithTiming } from "../../utils/logger";
+import { supabase } from "@/utils/supabase";
+import { logWithTiming } from "@/utils/logger";
+import SimpleModal from "@/components/SimpleModal";
+
 interface DictType {
   id: number;
   code: string;
@@ -35,6 +38,7 @@ interface DictItem {
   sort_order: number;
 }
 export function Dictionaries() {
+  const { t } = useTranslation();
   const [types, setTypes] = useState<DictType[]>([]),
     [items, setItems] = useState<DictItem[]>([]),
     [selectedType, setSelectedType] = useState<number>(),
@@ -68,7 +72,7 @@ export function Dictionaries() {
       setItems(b.data || []);
       if (!selectedType && a.data?.length) setSelectedType(a.data[0].id);
     } catch {
-      message.error("获取数据字典失败");
+      message.error(t('dictionaries.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -79,7 +83,7 @@ export function Dictionaries() {
   const save = async (table: string, values: any, id?: number) => {
     try {
       await logWithTiming(
-        id ? "更新数据字典" : "创建数据字典",
+        id ? t('dictionaries.logUpdate') : t('dictionaries.logCreate'),
         id ? "UPDATE" : "INSERT",
         async () => {
           const q = id
@@ -89,10 +93,12 @@ export function Dictionaries() {
           if (error) throw error;
         },
       );
-      message.success(id ? "更新成功" : "创建成功");
+      message.success(
+        id ? t('common.updateSuccess') : t('dictionaries.createSuccess'),
+      );
       fetchData();
     } catch {
-      message.error("保存失败，请检查编码是否重复");
+      message.error(t('dictionaries.saveFailedDuplicateCode'));
     }
   };
   const remove = async (table: string, id: number) => {
@@ -102,30 +108,30 @@ export function Dictionaries() {
         .update({ is_deleted: "y" })
         .eq("id", id);
       if (error) throw error;
-      message.success("删除成功");
+      message.success(t('common.deleteSuccess'));
       fetchData();
     } catch {
-      message.error("删除失败");
+      message.error(t('common.deleteFailed'));
     }
   };
   const status = (v: string) => (
     <Tag color={v === "1" ? "success" : "default"}>
-      {v === "1" ? "启用" : "停用"}
+      {v === "1" ? t('common.enabled') : t('dictionaries.disabled')}
     </Tag>
   );
   const typeColumns: ColumnsType<DictType> = [
-    { title: "编码", dataIndex: "code" },
-    { title: "名称", dataIndex: "name" },
-    { title: "排序", dataIndex: "sort_order", width: 70 },
-    { title: "状态", dataIndex: "status", width: 80, render: status },
+    { title: t('common.code'), dataIndex: "code" },
+    { title: t('common.name'), dataIndex: "name" },
+    { title: t('dictionaries.sort'), dataIndex: "sort_order", width: 70 },
+    { title: t('common.status'), dataIndex: "status", width: 80, render: status },
     {
-      title: "操作",
+      title: t('common.actions'),
       width: 150,
       render: (_, r) => (
         <Space>
           <Button
             size="small"
-             type="link"
+            type="link"
             icon={<EditOutlined />}
             onClick={() => {
               setEditingType(r);
@@ -133,14 +139,14 @@ export function Dictionaries() {
               setTypeModal(true);
             }}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Popconfirm
-            title="确定删除该字典类型吗？"
+            title={t('dictionaries.confirmDeleteType')}
             onConfirm={() => remove("sys_dict_types", r.id)}
           >
             <Button size="small" danger type="link" icon={<DeleteOutlined />}>
-              删除
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -148,18 +154,18 @@ export function Dictionaries() {
     },
   ];
   const itemColumns: ColumnsType<DictItem> = [
-    { title: "编码", dataIndex: "code" },
-    { title: "显示名称", dataIndex: "label" },
-    { title: "排序", dataIndex: "sort_order", width: 70 },
-    { title: "状态", dataIndex: "status", width: 80, render: status },
+    { title: t('common.code'), dataIndex: "code" },
+    { title: t('dictionaries.displayName'), dataIndex: "label" },
+    { title: t('dictionaries.sort'), dataIndex: "sort_order", width: 70 },
+    { title: t('common.status'), dataIndex: "status", width: 80, render: status },
     {
-      title: "操作",
+      title: t('common.actions'),
       width: 150,
       render: (_, r) => (
         <Space>
           <Button
             size="small"
-             type="link"
+            type="link"
             icon={<EditOutlined />}
             onClick={() => {
               setEditingItem(r);
@@ -167,14 +173,14 @@ export function Dictionaries() {
               setItemModal(true);
             }}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Popconfirm
-            title="确定删除该字典项吗？"
+            title={t('dictionaries.confirmDeleteItem')}
             onConfirm={() => remove("sys_dict_items", r.id)}
           >
             <Button size="small" danger type="link" icon={<DeleteOutlined />}>
-              删除
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -193,7 +199,7 @@ export function Dictionaries() {
     >
       <Card
         className='mainContent'
-        title="字典类型"
+        title={t('dictionaries.dictTypeTitle')}
         extra={
           <Button
             type="primary"
@@ -204,7 +210,7 @@ export function Dictionaries() {
               setTypeModal(true);
             }}
           >
-            新增类型
+            {t('dictionaries.addType')}
           </Button>
         }
       >
@@ -222,7 +228,11 @@ export function Dictionaries() {
         />
       </Card>
       <Card
-        title={selectedName ? `${selectedName} - 字典项` : "字典项"}
+        title={
+          selectedName
+            ? t('dictionaries.dictItemsWithName', { name: selectedName })
+            : t('dictionaries.dictItemTitle')
+        }
         extra={
           <Button
             type="primary"
@@ -234,7 +244,7 @@ export function Dictionaries() {
               setItemModal(true);
             }}
           >
-            新增字典项
+            {t('dictionaries.addItem')}
           </Button>
         }
       >
@@ -247,8 +257,12 @@ export function Dictionaries() {
           pagination={{ pageSize: 8 }}
         />
       </Card>
-      <Modal
-        title={editingType ? "编辑字典类型" : "新增字典类型"}
+      <SimpleModal
+        title={
+          editingType
+            ? t('dictionaries.editDictType')
+            : t('dictionaries.addDictType')
+        }
         open={typeModal}
         onCancel={() => setTypeModal(false)}
         onOk={() => typeForm.submit()}
@@ -256,9 +270,7 @@ export function Dictionaries() {
         <Card size="small">
           <Form
             form={typeForm}
-            layout="horizontal"
-            labelCol={{ span: 6 }}
-            wrapperCol={{ span: 18 }}
+            layout="vertical"
             onFinish={(v) => {
               setTypeModal(false);
               save("sys_dict_types", v, editingType?.id);
@@ -266,37 +278,43 @@ export function Dictionaries() {
           >
             <Form.Item
               name="code"
-              label="类型编码"
+              label={t('dictionaries.typeCode')}
               rules={[{ required: true }]}
             >
               <Input disabled={!!editingType} />
             </Form.Item>
             <Form.Item
               name="name"
-              label="类型名称"
+              label={t('dictionaries.typeName')}
               rules={[{ required: true }]}
             >
               <Input />
             </Form.Item>
-            <Form.Item name="description" label="描述">
+            <Form.Item name="description" label={t('dictionaries.description')}>
               <Input.TextArea rows={2} />
             </Form.Item>
-            <Form.Item name="sort_order" label="排序" initialValue={0}>
+            <Form.Item
+              name="sort_order"
+              label={t('dictionaries.sort')}
+              initialValue={0}
+            >
               <InputNumber min={0} />
             </Form.Item>
-            <Form.Item name="status" label="状态" initialValue="1">
+            <Form.Item name="status" label={t('common.status')} initialValue="1">
               <Select
                 options={[
-                  { value: "1", label: "启用" },
-                  { value: "0", label: "停用" },
+                  { value: "1", label: t('common.enabled') },
+                  { value: "0", label: t('dictionaries.disabled') },
                 ]}
               />
             </Form.Item>
           </Form>
         </Card>
-      </Modal>
-      <Modal
-        title={editingItem ? "编辑字典项" : "新增字典项"}
+      </SimpleModal>
+      <SimpleModal
+        title={
+          editingItem ? t('dictionaries.editItem') : t('dictionaries.addItem')
+        }
         open={itemModal}
         onCancel={() => setItemModal(false)}
         onOk={() => itemForm.submit()}
@@ -304,11 +322,9 @@ export function Dictionaries() {
         <Card size="small">
           <Form
             form={itemForm}
-            layout="horizontal"
-            labelCol={{ span: 6 }}
-            wrapperCol={{ span: 18 }}
+            layout="vertical"
             onFinish={(v) => {
-              setItemModal(false);
+              setTypeModal(false);
               save(
                 "sys_dict_items",
                 { ...v, type_id: selectedType },
@@ -316,33 +332,41 @@ export function Dictionaries() {
               );
             }}
           >
-            <Form.Item name="code" label="字典值" rules={[{ required: true }]}>
+            <Form.Item
+              name="code"
+              label={t('dictionaries.dictValue')}
+              rules={[{ required: true }]}
+            >
               <Input disabled={!!editingItem} />
             </Form.Item>
             <Form.Item
               name="label"
-              label="显示名称"
+              label={t('dictionaries.displayName')}
               rules={[{ required: true }]}
             >
               <Input />
             </Form.Item>
-            <Form.Item name="description" label="描述">
+            <Form.Item name="description" label={t('dictionaries.description')}>
               <Input.TextArea rows={2} />
             </Form.Item>
-            <Form.Item name="sort_order" label="排序" initialValue={0}>
+            <Form.Item
+              name="sort_order"
+              label={t('dictionaries.sort')}
+              initialValue={0}
+            >
               <InputNumber min={0} />
             </Form.Item>
-            <Form.Item name="status" label="状态" initialValue="1">
+            <Form.Item name="status" label={t('common.status')} initialValue="1">
               <Select
                 options={[
-                  { value: "1", label: "启用" },
-                  { value: "0", label: "停用" },
+                  { value: "1", label: t('common.enabled') },
+                  { value: "0", label: t('dictionaries.disabled') },
                 ]}
               />
             </Form.Item>
           </Form>
         </Card>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

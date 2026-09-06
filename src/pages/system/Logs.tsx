@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Table, Card, DatePicker, Input, Button, Space, Tag, message, Popconfirm, Descriptions, Modal } from 'antd';
 import { SearchOutlined, ReloadOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -20,6 +21,7 @@ interface Log {
 }
 
 export function Logs() {
+  const { t } = useTranslation();
   const [logs, setLogs] = useState<Log[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
@@ -59,7 +61,7 @@ export function Logs() {
       setLogs(data || []);
       setTotal(count || 0);
     } catch (error) {
-      message.error('获取日志列表失败');
+      message.error(t('logs.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -95,10 +97,10 @@ export function Logs() {
         .eq('id', id);
 
       if (error) throw error;
-      message.success('删除成功');
+      message.success(t('common.deleteSuccess'));
       fetchLogs(pagination.current, pagination.pageSize);
     } catch (error) {
-      message.error('删除失败');
+      message.error(t('common.deleteFailed'));
     }
   };
 
@@ -110,11 +112,11 @@ export function Logs() {
         .in('id', selectedRowKeys);
 
       if (error) throw error;
-      message.success('批量删除成功');
+      message.success(t('logs.batchDeleteSuccess'));
       setSelectedRowKeys([]);
       fetchLogs(pagination.current, pagination.pageSize);
     } catch (error) {
-      message.error('批量删除失败');
+      message.error(t('logs.batchDeleteFailed'));
     }
   };
 
@@ -144,71 +146,71 @@ export function Logs() {
       width: 80,
     },
     {
-      title: '操作用户',
+      title: t('logs.operator'),
       dataIndex: 'username',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '操作类型',
+      title: t('logs.operationType'),
       dataIndex: 'operation',
       width: 150,
     },
     {
-      title: '请求方法',
+      title: t('logs.requestMethod'),
       dataIndex: 'method',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '请求参数',
+      title: t('logs.requestParams'),
       dataIndex: 'params',
       ellipsis: true,
       render: (params) => formatParams(params),
     },
     {
-      title: 'IP地址',
+      title: t('logs.ipAddress'),
       dataIndex: 'ip',
       width: 130,
     },
     {
-      title: '执行时长(ms)',
+      title: t('logs.executeTimeMs'),
       dataIndex: 'execute_time',
       width: 120,
       render: (time) => time || '-',
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       width: 80,
       render: (status) => (
         <Tag color={status === '1' || status === 'success' ? 'success' : 'error'}>
-          {status === '1' || status === 'success' ? '成功' : '失败'}
+          {status === '1' || status === 'success' ? t('logs.success') : t('logs.failure')}
         </Tag>
       ),
     },
     {
-      title: '操作时间',
+      title: t('logs.operationTime'),
       dataIndex: 'created_at',
       width: 180,
       render: (date) => new Date(date).toLocaleString(),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_, record) => (
         <Space>
           <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-            详情
+            {t('logs.detail')}
           </Button>
           <Popconfirm
-            title="确定删除这条日志吗？"
+            title={t('logs.deleteSingleConfirm')}
             onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('logs.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button type="text" danger icon={<DeleteOutlined />}>
-              删除
+              {t('common.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -223,28 +225,28 @@ export function Logs() {
 
   return (
     <>
-      <Card className='mainContent' variant="borderless" title="系统日志" extra={
+      <Card className='mainContent' variant="borderless" title={t('logs.title')} extra={
         <Space size="middle">
           {selectedRowKeys.length > 0 && (
             <Popconfirm
-              title={`确定删除选中的 ${selectedRowKeys.length} 条日志吗？`}
+              title={t('logs.batchDeleteConfirm', { count: selectedRowKeys.length })}
               onConfirm={handleBatchDelete}
-              okText="确定"
-              cancelText="取消"
+              okText={t('logs.confirm')}
+              cancelText={t('common.cancel')}
             >
               <Button type="primary" danger icon={<DeleteOutlined />}>
-                批量删除 ({selectedRowKeys.length})
+                {t('logs.batchDelete')} ({selectedRowKeys.length})
               </Button>
             </Popconfirm>
           )}
           <Input
-            placeholder="用户名"
+            placeholder={t('logs.username')}
             value={searchUsername}
             onChange={(e) => setSearchUsername(e.target.value)}
             style={{ width: 150 }}
           />
           <Input
-            placeholder="操作类型"
+            placeholder={t('logs.operationType')}
             value={searchOperation}
             onChange={(e) => setSearchOperation(e.target.value)}
             style={{ width: 150 }}
@@ -254,10 +256,10 @@ export function Logs() {
             onChange={(dates) => setDateRange(dates as [Dayjs | null, Dayjs | null] | null)}
           />
           <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>
-            查询
+            {t('logs.search')}
           </Button>
           <Button icon={<ReloadOutlined />} onClick={handleReset}>
-            重置
+            {t('common.reset')}
           </Button>
         </Space>
       }>
@@ -274,14 +276,14 @@ export function Logs() {
             pageSize: pagination.pageSize,
             showSizeChanger: true,
             pageSizeOptions: ['10', '20', '50', '100'],
-            showTotal: (total) => `共 ${total} 条`,
+            showTotal: (total) => t('logs.total', { total }),
             total,
             onChange: handlePageChange,
           }}
         />
       </Card>
       <Modal
-        title="日志详情"
+        title={t('logs.detailTitle')}
         open={isDetailModalOpen}
         onCancel={handleCloseDetailModal}
         footer={null}
@@ -290,24 +292,24 @@ export function Logs() {
       >
         {currentLog && (
             <Descriptions column={1} size='small' bordered>
-            <Descriptions.Item label="日志ID">{currentLog.id}</Descriptions.Item>
-            <Descriptions.Item label="操作用户">{currentLog.username}</Descriptions.Item>
-            <Descriptions.Item label="操作类型">{currentLog.operation}</Descriptions.Item>
-            <Descriptions.Item label="请求方法">{currentLog.method}</Descriptions.Item>
-            <Descriptions.Item label="请求参数">{formatParams(currentLog.params)}</Descriptions.Item>
-            <Descriptions.Item label="IP地址">{currentLog.ip}</Descriptions.Item>
+            <Descriptions.Item label={t('logs.logId')}>{currentLog.id}</Descriptions.Item>
+            <Descriptions.Item label={t('logs.operator')}>{currentLog.username}</Descriptions.Item>
+            <Descriptions.Item label={t('logs.operationType')}>{currentLog.operation}</Descriptions.Item>
+            <Descriptions.Item label={t('logs.requestMethod')}>{currentLog.method}</Descriptions.Item>
+            <Descriptions.Item label={t('logs.requestParams')}>{formatParams(currentLog.params)}</Descriptions.Item>
+            <Descriptions.Item label={t('logs.ipAddress')}>{currentLog.ip}</Descriptions.Item>
             <Descriptions.Item label="User Agent">{currentLog.user_agent || '-'}</Descriptions.Item>
-            <Descriptions.Item label="执行时长">{currentLog.execute_time} ms</Descriptions.Item>
-            <Descriptions.Item label="状态">
+            <Descriptions.Item label={t('logs.executeTime')}>{currentLog.execute_time} ms</Descriptions.Item>
+            <Descriptions.Item label={t('common.status')}>
               <Tag color={currentLog.status === '1' || currentLog.status === 'success' ? 'success' : 'error'}>
-                {currentLog.status === '1' || currentLog.status === 'success' ? '成功' : '失败'}
+                {currentLog.status === '1' || currentLog.status === 'success' ? t('logs.success') : t('logs.failure')}
               </Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="操作时间">
+            <Descriptions.Item label={t('logs.operationTime')}>
               {new Date(currentLog.created_at).toLocaleString()}
             </Descriptions.Item>
-            <Descriptions.Item label="错误信息">
-              <span className="detail-value error-msg">{currentLog.error_msg || '无'}</span>
+            <Descriptions.Item label={t('logs.errorMessage')}>
+              <span className="detail-value error-msg">{currentLog.error_msg || t('logs.none')}</span>
             </Descriptions.Item>
           </Descriptions>
         )}
