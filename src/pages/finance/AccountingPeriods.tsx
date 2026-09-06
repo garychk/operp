@@ -43,7 +43,7 @@ export function AccountingPeriods() {
 
   const handleGenerateYear = async () => {
     if (!generationYear || generationYear < 1900 || generationYear > 2999) {
-      message.warning('请输入有效的会计年度');
+      message.warning(t('accountingPeriods.validYearWarning'));
       return;
     }
     setGenerating(true);
@@ -53,29 +53,30 @@ export function AccountingPeriods() {
         p_idempotency_key: generateIdempotencyKey(),
       });
       if (error) throw error;
-      message.success('会计年度生成成功');
+      message.success(t('accountingPeriods.messages.generateSuccess'));
       await fetchRows();
     } catch (error: any) {
       console.error(error);
-      message.error(error?.message || '生成会计期间失败');
+      message.error(error?.message || t('accountingPeriods.messages.generateFailed'));
     } finally {
       setGenerating(false);
     }
   };
   const handleAction = (action: 'enable' | 'close' | 'lock', record: Period) => {
     const actionLabels = {
-      enable: '启用期间',
-      close: '结账期间',
-      lock: '关账期间',
+      enable: t('accountingPeriods.enablePeriod'),
+      close: t('accountingPeriods.closePeriod'),
+      lock: t('accountingPeriods.lockPeriod'),
     } as const;
     Modal.confirm({
-      title: `确认${actionLabels[action]}`,
-      content:
+      title: t('accountingPeriods.confirmTitle', { action: actionLabels[action] }),
+      content: t(
         action === 'enable'
-          ? '启用后该期间可进行正常记账。'
+          ? 'accountingPeriods.enableContent'
           : action === 'close'
-            ? '结账后该期间将禁止继续过账。'
-            : '关账后该期间将进入锁定状态，禁止继续修改。',
+            ? 'accountingPeriods.closeContent'
+            : 'accountingPeriods.lockContent',
+      ),
       onOk: async () => {
         try {
           const rpcName = action === 'enable' ? 'enable_accounting_period' : action === 'close' ? 'close_accounting_period' : 'lock_accounting_period';
@@ -102,48 +103,48 @@ export function AccountingPeriods() {
 
   const columns = [
     {
-      title: '期间',
+      title: t('accountingPeriods.period'),
       key: 'period',
       width: 120,
       render: (_: any, record: Period) => `${record.year}-${String(record.month).padStart(2, '0')}`,
     },
-    { title: '起始日期', dataIndex: 'start_date', key: 'start_date', width: 120 },
-    { title: '结束日期', dataIndex: 'end_date', key: 'end_date', width: 120 },
+    { title: t('accountingPeriods.startDate'), dataIndex: 'start_date', key: 'start_date', width: 120 },
+    { title: t('accountingPeriods.endDate'), dataIndex: 'end_date', key: 'end_date', width: 120 },
     {
-      title: '启用状态',
+      title: t('accountingPeriods.enabledStatus'),
       dataIndex: 'is_enabled',
       key: 'is_enabled',
       width: 120,
-      render: (value: boolean) => <Tag color={value ? 'success' : 'default'}>{value ? '已启用' : '未启用'}</Tag>,
+      render: (value: boolean) => <Tag color={value ? 'success' : 'default'}>{value ? t('accountingPeriods.enabled') : t('accountingPeriods.notEnabled')}</Tag>,
     },
     {
-      title: '结账状态',
+      title: t('accountingPeriods.closedStatus'),
       dataIndex: 'is_closed',
       key: 'is_closed',
       width: 120,
-      render: (value: boolean) => <Tag color={value ? 'warning' : 'default'}>{value ? '已结账' : '未结账'}</Tag>,
+      render: (value: boolean) => <Tag color={value ? 'warning' : 'default'}>{value ? t('accountingPeriods.closed') : t('accountingPeriods.notClosed')}</Tag>,
     },
     {
-      title: '关账状态',
+      title: t('accountingPeriods.lockedStatus'),
       dataIndex: 'is_locked',
       key: 'is_locked',
-      render: (value: boolean) => <Tag color={value ? 'error' : 'default'}>{value ? '已关账' : '未关账'}</Tag>,
+      render: (value: boolean) => <Tag color={value ? 'error' : 'default'}>{value ? t('accountingPeriods.locked') : t('accountingPeriods.notLocked')}</Tag>,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       width: 200,
       fixed: 'right',
       render: (_: any, record: Period) => (
         <Space size="middle">
           <Button type="text" icon={<CheckOutlined />} onClick={() => handleAction('enable', record)} disabled={!!record.is_locked}>
-            启用
+            {t('accountingPeriods.enable')}
           </Button>
           <Button type="text" icon={<LockOutlined />} onClick={() => handleAction('close', record)} disabled={!record.is_enabled || !!record.is_locked}>
-            结账
+            {t('accountingPeriods.close')}
           </Button>
           <Button type="text" danger icon={<UnlockOutlined />} onClick={() => handleAction('lock', record)} disabled={!record.is_closed || !!record.is_locked}>
-            关账
+            {t('accountingPeriods.lock')}
           </Button>
         </Space>
       ),
@@ -167,12 +168,12 @@ export function AccountingPeriods() {
         }}
         queryBar={
           <Space wrap>
-            <InputNumber min={1900} max={2999} value={generationYear} onChange={(value) => setGenerationYear(value || new Date().getFullYear())} addonAfter="年" />
-            <Button type="primary" loading={generating} onClick={handleGenerateYear}>生成年度期间</Button>
-            <Button icon={<ReloadOutlined />} onClick={fetchRows}>{'刷新'}</Button>
+            <InputNumber min={1900} max={2999} value={generationYear} onChange={(value) => setGenerationYear(value || new Date().getFullYear())} addonAfter={t('accountingPeriods.yearUnit')} />
+            <Button type="primary" loading={generating} onClick={handleGenerateYear}>{t('accountingPeriods.generateYear')}</Button>
+            <Button icon={<ReloadOutlined />} onClick={fetchRows}>{t('common.refresh')}</Button>
             <Input.Search
               allowClear
-              placeholder="搜索期间，例如 2026-08"
+              placeholder={t('accountingPeriods.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchRows}
@@ -184,4 +185,3 @@ export function AccountingPeriods() {
     </div>
   );
 }
-
