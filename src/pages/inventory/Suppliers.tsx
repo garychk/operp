@@ -4,6 +4,7 @@ import { Button, Input, Tag, Modal, Form, Select, Space, message, Row, Col, Inpu
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '@/utils/supabase';
 import { logWithTiming } from '@/utils/logger';
+import { useTranslation } from 'react-i18next';
 import type { Tables } from '@/utils/supabase';
 import { SupaModal } from '@/components/SupaModal';
 import { SuperTable } from '@/components/SuperTable';
@@ -14,6 +15,7 @@ const { Option } = Select;
 const supplierTable = 'erp_suppliers_s_539dcf81_b';
 
 export function Suppliers() {
+  const { t } = useTranslation();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,7 +41,7 @@ export function Suppliers() {
       setSuppliers(data || []);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -48,20 +50,20 @@ export function Suppliers() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingSupplier) {
-        await logWithTiming('更新供应商', 'UPDATE', async () => {
+        await logWithTiming(t('suppliers.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
             .from(supplierTable)
             .update(values)
             .eq('id', editingSupplier.id);
           if (error) throw error;
         });
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       } else {
         const { error } = await supabase
           .from(supplierTable)
           .insert([values]);
         if (error) throw error;
-        message.success('新增成功');
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -69,7 +71,7 @@ export function Suppliers() {
       fetchSuppliers();
     } catch (error) {
       console.error('Error saving supplier:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -81,22 +83,22 @@ export function Suppliers() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该供应商吗？',
+      title: t('common.confirmDelete'),
+      content: t('suppliers.deleteConfirm'),
       onOk: async () => {
         try {
-          await logWithTiming('删除供应商', 'DELETE', async () => {
+          await logWithTiming(t('suppliers.deleteAction'), 'DELETE', async () => {
             const { error } = await supabase
               .from(supplierTable)
             .update({ is_deleted: 'y' })
               .eq('id', id);
             if (error) throw error;
           });
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchSuppliers();
         } catch (error) {
           console.error('Error deleting supplier:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -115,75 +117,75 @@ export function Suppliers() {
   );
 
   const typeLabels: Record<string, string> = {
-    manufacturer: '制造商',
-    distributor: '经销商',
-    retailer: '零售商',
-    service: '服务商',
-    other: '其他',
+    manufacturer: 'suppliers.typeOptions.manufacturer',
+    distributor: 'suppliers.typeOptions.distributor',
+    retailer: 'suppliers.typeOptions.retailer',
+    service: 'suppliers.typeOptions.service',
+    other: 'suppliers.typeOptions.other',
   };
 
   const levelLabels: Record<string, string> = {
-    strategic: '战略',
-    preferred: '优先',
-    normal: '普通',
-    potential: '潜在',
+    strategic: 'suppliers.levelOptions.strategic',
+    preferred: 'suppliers.levelOptions.preferred',
+    normal: 'suppliers.levelOptions.normal',
+    potential: 'suppliers.levelOptions.potential',
   };
 
   const columns = [
     {
-      title: '供应商编码',
+      title: t('suppliers.code'),
       dataIndex: 'code',
       key: 'code',
     },
     {
-      title: '供应商名称',
+      title: t('suppliers.name'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: '类型',
+      title: t('common.type'),
       dataIndex: 'type',
       key: 'type',
-      render: (type: string) => typeLabels[type] || type,
+      render: (type: string) => (typeLabels[type] ? t(typeLabels[type]) : type),
     },
     {
-      title: '等级',
+      title: t('suppliers.level'),
       dataIndex: 'level',
       key: 'level',
-      render: (level: string) => levelLabels[level] || level,
+      render: (level: string) => (levelLabels[level] ? t(levelLabels[level]) : level),
     },
     {
-      title: '联系人',
+      title: t('suppliers.contactName'),
       dataIndex: 'contact_name',
       key: 'contact_name',
       render: (text: string) => text || '-',
     },
     {
-      title: '联系电话',
+      title: t('suppliers.contactPhone'),
       dataIndex: 'contact_phone',
       key: 'contact_phone',
       render: (text: string) => text || '-',
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
         <Tag color={status === 'active' ? 'success' : 'default'}>
-          {status === 'active' ? '启用' : '停用'}
+          {status === 'active' ? t('common.enabled') : t('suppliers.inactive')}
         </Tag>
       ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: Supplier) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -199,17 +201,17 @@ export function Suppliers() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="suppliers"
-        headerTitle="供应商管理"
+        headerTitle={t('suppliers.title')}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
         queryBar={
           <Space wrap>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增供应商</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('suppliers.addSupplier')}</Button>
             <Input.Search
               allowClear
-              placeholder="搜索供应商名称或编码..."
+              placeholder={t('suppliers.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchSuppliers}
@@ -220,7 +222,7 @@ export function Suppliers() {
       />
 
       <SupaModal
-        title={editingSupplier ? '编辑供应商' : '新增供应商'}
+        title={editingSupplier ? t('suppliers.editSupplier') : t('suppliers.addSupplier')}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -229,7 +231,7 @@ export function Suppliers() {
         }}
         width={1000}
         height={500}
-        headerPanelTitle="供应商主档"
+        headerPanelTitle={t('suppliers.headerPanelTitle')}
         historyTable={supplierTable}
         historyRecordId={editingSupplier?.id}
         form={form}
@@ -238,68 +240,68 @@ export function Suppliers() {
           <Row gutter={16}>
             <Col span={8}>
               <Form.Item
-                label="供应商编码"
+                label={t('suppliers.code')}
                 name="code"
-                rules={[{ required: true, message: '请输入供应商编码' }]}
+                rules={[{ required: true, message: t('suppliers.codeRequired') }]}
               >
-                <Input placeholder="请输入供应商编码" disabled={!!editingSupplier} />
+                <Input placeholder={t('suppliers.codePlaceholder')} disabled={!!editingSupplier} />
               </Form.Item>
               <Form.Item
-                label="供应商名称"
+                label={t('suppliers.name')}
                 name="name"
-                rules={[{ required: true, message: '请输入供应商名称' }]}
+                rules={[{ required: true, message: t('suppliers.nameRequired') }]}
               >
-                <Input placeholder="请输入供应商名称" />
+                <Input placeholder={t('suppliers.namePlaceholder')} />
               </Form.Item>
-              <Form.Item label="简称" name="short_name">
-                <Input placeholder="请输入简称" />
+              <Form.Item label={t('suppliers.shortName')} name="short_name">
+                <Input placeholder={t('suppliers.shortNamePlaceholder')} />
               </Form.Item>
-              <Form.Item label="类型" name="type" initialValue="manufacturer">
+              <Form.Item label={t('common.type')} name="type" initialValue="manufacturer">
                 <Select>
-                  <Option value="manufacturer">制造商</Option>
-                  <Option value="distributor">经销商</Option>
-                  <Option value="retailer">零售商</Option>
-                  <Option value="service">服务商</Option>
-                  <Option value="other">其他</Option>
+                  <Option value="manufacturer">{t('suppliers.typeOptions.manufacturer')}</Option>
+                  <Option value="distributor">{t('suppliers.typeOptions.distributor')}</Option>
+                  <Option value="retailer">{t('suppliers.typeOptions.retailer')}</Option>
+                  <Option value="service">{t('suppliers.typeOptions.service')}</Option>
+                  <Option value="other">{t('suppliers.typeOptions.other')}</Option>
                 </Select>
               </Form.Item>
-              <Form.Item label="等级" name="level" initialValue="normal">
+              <Form.Item label={t('suppliers.level')} name="level" initialValue="normal">
                 <Select>
-                  <Option value="strategic">战略</Option>
-                  <Option value="preferred">优先</Option>
-                  <Option value="normal">普通</Option>
-                  <Option value="potential">潜在</Option>
+                  <Option value="strategic">{t('suppliers.levelOptions.strategic')}</Option>
+                  <Option value="preferred">{t('suppliers.levelOptions.preferred')}</Option>
+                  <Option value="normal">{t('suppliers.levelOptions.normal')}</Option>
+                  <Option value="potential">{t('suppliers.levelOptions.potential')}</Option>
                 </Select>
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item label="联系人" name="contact_name">
-                <Input placeholder="请输入联系人" />
+              <Form.Item label={t('suppliers.contactName')} name="contact_name">
+                <Input placeholder={t('suppliers.contactNamePlaceholder')} />
               </Form.Item>
-              <Form.Item label="联系电话" name="contact_phone">
-                <Input placeholder="请输入联系电话" />
+              <Form.Item label={t('suppliers.contactPhone')} name="contact_phone">
+                <Input placeholder={t('suppliers.contactPhonePlaceholder')} />
               </Form.Item>
-              <Form.Item label="地址" name="address">
-                <Input placeholder="请输入地址" />
+              <Form.Item label={t('suppliers.address')} name="address">
+                <Input placeholder={t('suppliers.addressPlaceholder')} />
               </Form.Item>
-              <Form.Item label="税号" name="tax_no">
-                <Input placeholder="请输入税号" />
+              <Form.Item label={t('suppliers.taxNo')} name="tax_no">
+                <Input placeholder={t('suppliers.taxNoPlaceholder')} />
               </Form.Item>
             </Col>
             <Col span={8}>
-              <Form.Item label="开户银行" name="bank_name">
-                <Input placeholder="请输入开户银行" />
+              <Form.Item label={t('suppliers.bankName')} name="bank_name">
+                <Input placeholder={t('suppliers.bankNamePlaceholder')} />
               </Form.Item>
-              <Form.Item label="银行账号" name="bank_account">
-                <Input placeholder="请输入银行账号" />
+              <Form.Item label={t('suppliers.bankAccount')} name="bank_account">
+                <Input placeholder={t('suppliers.bankAccountPlaceholder')} />
               </Form.Item>
-              <Form.Item label="信用额度" name="credit_limit" initialValue={0}>
-                <InputNumber placeholder="请输入信用额度" />
+              <Form.Item label={t('suppliers.creditLimit')} name="credit_limit" initialValue={0}>
+                <InputNumber placeholder={t('suppliers.creditLimitPlaceholder')} />
               </Form.Item>
-              <Form.Item label="状态" name="status" initialValue="active">
+              <Form.Item label={t('common.status')} name="status" initialValue="active">
                 <Select>
-                  <Option value="active">启用</Option>
-                  <Option value="inactive">停用</Option>
+                  <Option value="active">{t('common.enabled')}</Option>
+                  <Option value="inactive">{t('suppliers.inactive')}</Option>
                 </Select>
               </Form.Item>
             </Col>
@@ -308,9 +310,9 @@ export function Suppliers() {
         }
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t('common.save')}
             </Button>
           </Space>
         }

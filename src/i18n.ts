@@ -14,6 +14,8 @@ void i18n.use(initReactI18next).init({
   fallbackLng: 'zh-CN',
   supportedLngs: ['zh-CN', 'en-US'],
   interpolation: { escapeValue: false },
+  // 翻译键已平铺为 "menu.home" 字面量，不再按 "." 拆分嵌套对象
+  keySeparator: false,
 });
 
 i18n.on('languageChanged', (language) => {
