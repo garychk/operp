@@ -28,7 +28,7 @@ import {
 import type { ColumnsType } from "antd/es/table";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
-import SimpleModal from "@/components/SimpleModal";
+import SimpleModal from "../../components/SimpleModal";
 
 interface Role {
   id: number;

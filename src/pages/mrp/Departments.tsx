@@ -16,12 +16,12 @@ import {
   DeleteOutlined,
   EditOutlined,
 } from "@ant-design/icons";
-import { supabase } from "@/utils/supabase";
-import { logWithTiming } from "@/utils/logger";
-import type { Tables } from "@/utils/supabase";
-import { SuperTable } from "@/components/SuperTable";
-import type { SuperTableColumn } from "@/components/SuperTable";
-import SimpleModal from "@/components/SimpleModal";
+import { supabase } from "../../utils/supabase";
+import { logWithTiming } from "../../utils/logger";
+import type { Tables } from "../../utils/supabase";
+import { SuperTable } from "../../components/SuperTable";
+import type { SuperTableColumn } from "../../components/SuperTable";
+import SimpleModal from "../../components/SimpleModal";
 
 type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
 

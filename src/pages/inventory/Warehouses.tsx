@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Card, Form, Input, Modal, Select, Space, Table, Tag, message, Checkbox } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { supabase } from '@/utils/supabase';
-import { logWithTiming } from '@/utils/logger';
-import type { Tables } from '@/utils/supabase';
-import { SuperTable } from '@/components/SuperTable';
-import SimpleModal from '@/components/SimpleModal';
+import { supabase } from '../../utils/supabase';
+import { logWithTiming } from '../../utils/logger';
+import type { Tables } from '../../utils/supabase';
+import { SuperTable } from '../../components/SuperTable';
+import SimpleModal from '../../components/SimpleModal';
 import { useTranslation } from 'react-i18next';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];

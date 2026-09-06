@@ -2,12 +2,12 @@ import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Input, Tag, Modal, Form, Select, Space, message, Row, Col, InputNumber } from 'antd';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
-import { supabase } from '@/utils/supabase';
-import { logWithTiming } from '@/utils/logger';
+import { supabase } from '../../utils/supabase';
+import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
-import type { Tables } from '@/utils/supabase';
-import { SupaModal } from '@/components/SupaModal';
-import { SuperTable } from '@/components/SuperTable';
+import type { Tables } from '../../utils/supabase';
+import { SupaModal } from '../../components/SupaModal';
+import { SuperTable } from '../../components/SuperTable';
 
 type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
 

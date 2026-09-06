@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Button, Input, Tag, Select, Card, message, Row, Col, Statistic, Space } from 'antd';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
-import { supabase } from '@/utils/supabase';
-import type { Tables } from '@/utils/supabase';
+import { supabase } from '../../utils/supabase';
+import type { Tables } from '../../utils/supabase';
 import { useTranslation } from 'react-i18next';
-import { SuperTable } from '@/components/SuperTable';
+import { SuperTable } from '../../components/SuperTable';
 
 type Inventory = Tables['erp_inventory_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];

@@ -22,13 +22,13 @@ import {
   EditOutlined,
   ShoppingCartOutlined,
 } from "@ant-design/icons";
-import { supabase } from "@/utils/supabase";
-import { logWithTiming } from "@/utils/logger";
-import type { Tables } from "@/utils/supabase";
+import { supabase } from "../../utils/supabase";
+import { logWithTiming } from "../../utils/logger";
+import type { Tables } from "../../utils/supabase";
 import dayjs from "dayjs";
-import { SupaModal } from "@/components/SupaModal";
-import { SuperTable } from "@/components/SuperTable";
-import SimpleModal from "@/components/SimpleModal";
+import { SupaModal } from "../../components/SupaModal";
+import { SuperTable } from "../../components/SuperTable";
+import SimpleModal from "../../components/SimpleModal";
 
 type SalesOrder = Tables["erp_sales_orders_s_539dcf81_b"]["Row"];
 type SalesOrderDetail = Tables["erp_sales_order_details_s_539dcf81_b"]["Row"];

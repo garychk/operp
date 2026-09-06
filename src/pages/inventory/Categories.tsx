@@ -14,7 +14,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
-import SimpleModal from "@/components/SimpleModal";
+import SimpleModal from "../../components/SimpleModal";
 
 const { Option } = Select;
 

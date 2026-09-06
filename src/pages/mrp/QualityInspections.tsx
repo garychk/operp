@@ -25,7 +25,7 @@ import {
 import dayjs from "dayjs";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
-import SimpleModal from "@/components/SimpleModal";
+import SimpleModal from "../../components/SimpleModal";
 
 type SourceType = "purchase_receipt" | "sales_return" | "production_operation";
 type Inspection = {

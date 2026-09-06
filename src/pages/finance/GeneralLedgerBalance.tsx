@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button, Form, Select, Space, message } from 'antd';
-import { supabase } from '@/utils/supabase';
-import type { Tables } from '@/utils/supabase';
-import { SuperTable } from '@/components/SuperTable';
+import { supabase } from '../../utils/supabase';
+import type { Tables } from '../../utils/supabase';
+import { SuperTable } from '../../components/SuperTable';
 import { useTranslation } from 'react-i18next';
 
 type Period = Tables['erp_accounting_periods_s_539dcf81_b']['Row'];

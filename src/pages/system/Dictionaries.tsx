@@ -15,9 +15,9 @@ import {
 } from "antd";
 import { DeleteOutlined, EditOutlined, PlusOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
-import { supabase } from "@/utils/supabase";
-import { logWithTiming } from "@/utils/logger";
-import SimpleModal from "@/components/SimpleModal";
+import { supabase } from "../../utils/supabase";
+import { logWithTiming } from "../../utils/logger";
+import SimpleModal from "../../components/SimpleModal";
 
 interface DictType {
   id: number;
