@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Input, Table, Tag, Select, Card, message, Row, Col, Statistic, Space } from 'antd';
+import { Button, Input, Tag, Select, Card, message, Row, Col, Statistic, Space } from 'antd';
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { supabase } from '@/utils/supabase';
 import type { Tables } from '@/utils/supabase';

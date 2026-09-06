@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, DatePicker, Input, Select, Table, Tag, message, Typography } from 'antd';
+import { Button, Card, DatePicker, Input, Select, Tag, message, Typography } from 'antd';
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';

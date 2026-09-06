@@ -6,7 +6,6 @@ import {
   Modal,
   Space,
   Button,
-  Collapse,
   Splitter,
   Timeline,
   Tag,

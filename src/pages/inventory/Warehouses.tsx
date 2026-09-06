@@ -6,7 +6,6 @@ import { supabase } from '@/utils/supabase';
 import { logWithTiming } from '@/utils/logger';
 import type { Tables } from '@/utils/supabase';
 import { SuperTable } from '@/components/SuperTable';
-import { SupaModal } from '@/components/SupaModal';
 import SimpleModal from '@/components/SimpleModal';
 import { useTranslation } from 'react-i18next';
 
