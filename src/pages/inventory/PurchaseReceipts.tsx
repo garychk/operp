@@ -10,7 +10,7 @@ import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
-import SimpleModal from '@/components/SimpleModal';
+import SimpleModal from '../../components/SimpleModal';
 
 type PurchaseReceipt = Tables['erp_purchase_receipts_s_539dcf81_b']['Row'];
 type PurchaseReceiptDetail = Tables['erp_purchase_receipt_details_s_539dcf81_b']['Row'];

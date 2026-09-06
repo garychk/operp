@@ -33,7 +33,7 @@ import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
 import { RoutingMap } from "../../components/RoutingMap";
-import SimpleModal from "@/components/SimpleModal";
+import SimpleModal from "../../components/SimpleModal";
 
 type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
 type RoutingDetail =

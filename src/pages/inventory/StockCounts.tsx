@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
-import SimpleModal from '@/components/SimpleModal';
+import SimpleModal from '../../components/SimpleModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];

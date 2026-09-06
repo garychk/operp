@@ -3,15 +3,15 @@ import { Button, Card, DatePicker, Input, Select, Tag, message, Typography } fro
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { supabase } from '@/utils/supabase';
-import type { Tables } from '@/utils/supabase';
+import { supabase } from '../../utils/supabase';
+import type { Tables } from '../../utils/supabase';
 import {
   INVENTORY_TRANSACTION_TYPE_LABELS,
   INVENTORY_TRANSACTION_TYPE_OPTIONS,
   normalizeInventoryTransactionType,
   type InventoryTransactionType,
-} from '@/constants/inventoryTransactionTypes';
-import { SuperTable } from '@/components/SuperTable';
+} from '../../constants/inventoryTransactionTypes';
+import { SuperTable } from '../../components/SuperTable';
 
 type InventoryTransaction = Tables['erp_inventory_transactions_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];

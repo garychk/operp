@@ -31,7 +31,7 @@ import dayjs from 'dayjs';
 import { SupaModal } from "../../components/SupaModal";
 import DictSelect from "../../components/DictSelect";
 import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
-import SimpleModal from "@/components/SimpleModal";
+import SimpleModal from "../../components/SimpleModal";
 
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];

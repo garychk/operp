@@ -20,14 +20,14 @@ import {
   EditOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
-import { supabase } from "@/utils/supabase";
-import type { Tables } from "@/utils/supabase";
-import { logWithTiming } from "@/utils/logger";
+import { supabase } from "../../utils/supabase";
+import type { Tables } from "../../utils/supabase";
+import { logWithTiming } from "../../utils/logger";
 import { Categories } from "./Categories";
-import { SupaModal } from "@/components/SupaModal";
-import { SuperTable } from "@/components/SuperTable";
-import DictSelect from "@/components/DictSelect";
-import SimpleModal from "@/components/SimpleModal";
+import { SupaModal } from "../../components/SupaModal";
+import { SuperTable } from "../../components/SuperTable";
+import DictSelect from "../../components/DictSelect";
+import SimpleModal from "../../components/SimpleModal";
 import { useTranslation } from "react-i18next";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];

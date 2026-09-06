@@ -7,7 +7,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { menuData } from '../../components/ProLayout';
-import SimpleModal from '@/components/SimpleModal';
+import SimpleModal from '../../components/SimpleModal';
 
 interface Menu {
   id: number;

@@ -6,7 +6,7 @@ import type { ColumnsType } from 'antd/es/table';
 import type { RcFile } from 'antd/es/upload/interface';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
-import SimpleModal from '@/components/SimpleModal';
+import SimpleModal from '../../components/SimpleModal';
 
 interface User {
   id: number;

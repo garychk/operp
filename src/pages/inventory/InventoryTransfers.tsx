@@ -4,11 +4,11 @@ import { Button, Form, Input, InputNumber, Modal, Select, Space, message, DatePi
 import { PlusOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { supabase } from '@/utils/supabase';
-import { logWithTiming } from '@/utils/logger';
-import { SuperTable } from '@/components/SuperTable';
-import type { Tables } from '@/utils/supabase';
-import SimpleModal from '@/components/SimpleModal';
+import { supabase } from '../../utils/supabase';
+import { logWithTiming } from '../../utils/logger';
+import { SuperTable } from '../../components/SuperTable';
+import type { Tables } from '../../utils/supabase';
+import SimpleModal from '../../components/SimpleModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];

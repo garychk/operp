@@ -11,7 +11,7 @@ import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
-import SimpleModal from '@/components/SimpleModal';
+import SimpleModal from '../../components/SimpleModal';
 
 type SalesDelivery = Tables['erp_sales_deliveries_s_539dcf81_b']['Row'];
 type SalesDeliveryDetail = Tables['erp_sales_delivery_details_s_539dcf81_b']['Row'];
