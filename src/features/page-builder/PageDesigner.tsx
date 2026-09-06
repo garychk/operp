@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AppstoreAddOutlined,
   BarChartOutlined,
@@ -39,21 +40,6 @@ import "./page-builder.css";
 import { listBaqs } from "../baq/api";
 import type { BaqQuery } from "../baq/types";
 
-const palette: Array<{
-  type: WidgetType;
-  label: string;
-  icon: React.ReactNode;
-}> = [
-  { type: "text", label: "文本", icon: <AppstoreAddOutlined /> },
-  { type: "statistic", label: "指标", icon: <AppstoreAddOutlined /> },
-  { type: "button", label: "按钮", icon: <AppstoreAddOutlined /> },
-  { type: "table", label: "表格", icon: <TableOutlined /> },
-  { type: "line", label: "折线图", icon: <LineChartOutlined /> },
-  { type: "column", label: "柱状图", icon: <BarChartOutlined /> },
-  { type: "pie", label: "饼图", icon: <PieChartOutlined /> },
-  { type: "divider", label: "分割线", icon: <MinusOutlined /> },
-];
-
 const emptyPage = (): CustomPage => ({
   name: "未命名页面",
   slug: `page-${Date.now()}`,
@@ -63,6 +49,22 @@ const emptyPage = (): CustomPage => ({
 });
 
 export function PageDesigner() {
+  const { t } = useTranslation();
+  const palette: Array<{
+    type: WidgetType;
+    label: string;
+    icon: React.ReactNode;
+  }> = [
+    { type: "text", label: t("pageDesigner.widgetText"), icon: <AppstoreAddOutlined /> },
+    { type: "statistic", label: t("pageDesigner.widgetStatistic"), icon: <AppstoreAddOutlined /> },
+    { type: "button", label: t("pageDesigner.widgetButton"), icon: <AppstoreAddOutlined /> },
+    { type: "table", label: t("pageDesigner.widgetTable"), icon: <TableOutlined /> },
+    { type: "line", label: t("pageDesigner.widgetLine"), icon: <LineChartOutlined /> },
+    { type: "column", label: t("pageDesigner.widgetColumn"), icon: <BarChartOutlined /> },
+    { type: "pie", label: t("pageDesigner.widgetPie"), icon: <PieChartOutlined /> },
+    { type: "divider", label: t("pageDesigner.widgetDivider"), icon: <MinusOutlined /> },
+  ];
+
   const [pages, setPages] = useState<CustomPage[]>([]);
   const [page, setPage] = useState<CustomPage>(emptyPage);
   const [selectedId, setSelectedId] = useState<string>();
@@ -78,7 +80,7 @@ export function PageDesigner() {
   const refresh = () =>
     listCustomPages()
       .then(setPages)
-      .catch(() => message.error("页面列表加载失败"));
+      .catch(() => message.error(t("pageDesigner.pagesLoadFailed")));
   useEffect(() => {
     void refresh();
     listBaqs(true).then(setBaqs).catch(() => undefined);
@@ -113,10 +115,10 @@ export function PageDesigner() {
     try {
       const saved = await saveCustomPage(page);
       setPage(saved);
-      message.success("草稿已保存");
+      message.success(t("pageDesigner.draftSaved"));
       refresh();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "保存失败");
+      message.error(error instanceof Error ? error.message : t("common.saveFailed"));
     } finally {
       setSaving(false);
     }
@@ -129,10 +131,10 @@ export function PageDesigner() {
       const saved = await publishCustomPage({ ...page, ...values });
       setPage(saved);
       setPublishOpen(false);
-      message.success("发布成功，菜单已生成");
+      message.success(t("pageDesigner.publishSuccess"));
       refresh();
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "发布失败");
+      message.error(error instanceof Error ? error.message : t("pageDesigner.publishFailed"));
     } finally {
       setSaving(false);
     }
@@ -153,7 +155,7 @@ export function PageDesigner() {
   return (
     <div className="page-designer">
       <Card
-        title={<Typography.Title level={4}>页面设计器</Typography.Title>}
+        title={<Typography.Title level={4}>{t("pageDesigner.title")}</Typography.Title>}
         variant="borderless"
         styles={{ body: { padding: "1px 0px 0px 0px" } }}
         extra={
@@ -170,31 +172,33 @@ export function PageDesigner() {
                 setSelectedId(undefined);
               }}
               options={[
-                { value: "new", label: "新建页面" },
+                { value: "new", label: t("pageDesigner.newPage") },
                 ...pages.map((item) => ({
                   value: item.id!,
-                  label: `${item.name}${item.status === "published" ? " · 已发布" : ""}`,
+                  label: `${item.name}${
+                    item.status === "published" ? " · " + t("pageDesigner.published") : ""
+                  }`,
                 })),
               ]}
             />
             <Button icon={<EyeOutlined />} onClick={() => setPreview(true)}>
-              预览
+              {t("pageDesigner.preview")}
             </Button>
             <Button icon={<SaveOutlined />} loading={saving} onClick={save}>
-              保存
+              {t("common.save")}
             </Button>
             <Button
               type="primary"
               icon={<SendOutlined />}
               onClick={() => setPublishOpen(true)}
             >
-              发布
+              {t("pageDesigner.publish")}
             </Button>
           </Space>
         }
       >
         <div className="designer-workspace">
-          <Card title="组件" variant="borderless" size="small">
+          <Card title={t("pageDesigner.widgets")} variant="borderless" size="small">
             <div className="palette-grid">
               {palette.map((item) => (
                 <Button
@@ -208,20 +212,20 @@ export function PageDesigner() {
             </div>
             <Divider />
             <Space orientation="vertical">
-              <Typography.Text strong>页面</Typography.Text>
+              <Typography.Text strong>{t("pageDesigner.page")}</Typography.Text>
               <Input
                 value={page.name}
                 onChange={(event) =>
                   setPage({ ...page, name: event.target.value })
                 }
-                placeholder="页面名称"
+                placeholder={t("pageDesigner.pageNamePlaceholder")}
               />
               <Input
                 value={page.description || ""}
                 onChange={(event) =>
                   setPage({ ...page, description: event.target.value })
                 }
-                placeholder="页面描述"
+                placeholder={t("pageDesigner.pageDescriptionPlaceholder")}
               />
             </Space>
           </Card>
@@ -235,16 +239,16 @@ export function PageDesigner() {
                 onLayoutChange={updateLayout}
               />
             ) : (
-              <Empty description="从左侧添加组件" />
+              <Empty description={t("pageDesigner.emptyCanvas")} />
             )}
           </main>
           <Card
-            title="组件属性"
+            title={t("pageDesigner.widgetProperties")}
             variant="borderless"
             size="small"
             extra={
               <Popconfirm
-                title="删除此组件？"
+                title={t("pageDesigner.deleteWidgetConfirm")}
                 onConfirm={() => {
                   setPage((current) => ({
                     ...current,
@@ -263,7 +267,7 @@ export function PageDesigner() {
           >
             {selected ? (
               <Form layout="vertical" size="small">
-                <Form.Item label="标题">
+                <Form.Item label={t("pageDesigner.widgetTitle")}>
                   <Input
                     value={selected.title}
                     onChange={(event) =>
@@ -272,7 +276,7 @@ export function PageDesigner() {
                   />
                 </Form.Item>
                 {(selected.type === "text" || selected.type === "button" || selected.type === "divider") && (
-                  <Form.Item label="内容">
+                  <Form.Item label={t("pageDesigner.widgetContent")}>
                     <Input.TextArea
                       value={selected.type === "divider" ? (selected.dividerText || "") : (selected.content || "")}
                       onChange={(event) =>
@@ -285,29 +289,29 @@ export function PageDesigner() {
                 )}
                 {selected.type === "divider" && (
                   <>
-                    <Form.Item label="虚线">
+                    <Form.Item label={t("pageDesigner.dashed")}>
                       <Segmented
                         block
                         value={selected.dashed ? "yes" : "no"}
                         options={[
-                          { label: "是", value: "yes" },
-                          { label: "否", value: "no" },
+                          { label: t("common.yes"), value: "yes" },
+                          { label: t("common.no"), value: "no" },
                         ]}
                         onChange={(value) => patchWidget({ dashed: value === "yes" })}
                       />
                     </Form.Item>
-                    <Form.Item label="文字位置">
+                    <Form.Item label={t("pageDesigner.titlePlacement")}>
                       <Select
                         value={selected.titlePlacement || "center"}
                         onChange={(value) => patchWidget({ titlePlacement: value })}
                         options={[
-                          { value: "start", label: "开始" },
-                          { value: "center", label: "居中" },
-                          { value: "end", label: "结束" },
+                          { value: "start", label: t("pageDesigner.placementStart") },
+                          { value: "center", label: t("pageDesigner.placementCenter") },
+                          { value: "end", label: t("pageDesigner.placementEnd") },
                         ]}
                       />
                     </Form.Item>
-                    <Form.Item label="方向">
+                    <Form.Item label={t("pageDesigner.orientation")}>
                       <Select
                         value={selected.orientation || "horizontal"}
                         onChange={(value) =>
@@ -320,41 +324,41 @@ export function PageDesigner() {
                           })
                         }
                         options={[
-                          { value: "horizontal", label: "水平" },
-                          { value: "vertical", label: "垂直" },
+                          { value: "horizontal", label: t("pageDesigner.horizontal") },
+                          { value: "vertical", label: t("pageDesigner.vertical") },
                         ]}
                       />
                     </Form.Item>
                     {selected.orientation !== "vertical" && (
-                      <Form.Item label="文字位置">
+                      <Form.Item label={t("pageDesigner.titlePlacement")}>
                         <Select
                           value={selected.titlePlacement || "center"}
                           onChange={(value) =>
                             patchWidget({ titlePlacement: value })
                           }
                           options={[
-                            { value: "start", label: "开始" },
-                            { value: "center", label: "居中" },
-                            { value: "end", label: "结束" },
+                            { value: "start", label: t("pageDesigner.placementStart") },
+                            { value: "center", label: t("pageDesigner.placementCenter") },
+                            { value: "end", label: t("pageDesigner.placementEnd") },
                           ]}
                         />
                       </Form.Item>
                     )}
-                    <Form.Item label="样式">
+                    <Form.Item label={t("pageDesigner.style")}>
                       <Select
                         value={selected.variant || "solid"}
                         onChange={(value) => patchWidget({ variant: value })}
                         options={[
-                          { value: "solid", label: "实线" },
-                          { value: "dashed", label: "虚线" },
-                          { value: "dotted", label: "点线" },
+                          { value: "solid", label: t("pageDesigner.lineSolid") },
+                          { value: "dashed", label: t("pageDesigner.lineDashed") },
+                          { value: "dotted", label: t("pageDesigner.lineDotted") },
                         ]}
                       />
                     </Form.Item>
                   </>
                 )}
                 <Space>
-                  <Form.Item label="列坐标 X">
+                  <Form.Item label={t("pageDesigner.columnX")}>
                     <InputNumber
                       min={0}
                       max={Math.max(0, 12 - selected.w)}
@@ -362,7 +366,7 @@ export function PageDesigner() {
                       onChange={(value) => patchWidget({ x: value ?? 0 })}
                     />
                   </Form.Item>
-                  <Form.Item label="行坐标 Y">
+                  <Form.Item label={t("pageDesigner.rowY")}>
                     <InputNumber
                       min={0}
                       value={selected.y}
@@ -371,7 +375,7 @@ export function PageDesigner() {
                   </Form.Item>
                 </Space>
                 <Space>
-                  <Form.Item label="宽度">
+                  <Form.Item label={t("pageDesigner.width")}>
                     <InputNumber
                       min={2}
                       max={12}
@@ -382,7 +386,7 @@ export function PageDesigner() {
                       }}
                     />
                   </Form.Item>
-                  <Form.Item label="高度">
+                  <Form.Item label={t("pageDesigner.height")}>
                     <InputNumber
                       min={2}
                       max={12}
@@ -391,13 +395,13 @@ export function PageDesigner() {
                     />
                   </Form.Item>
                 </Space>
-                <Divider>数据源</Divider>
+                <Divider>{t("pageDesigner.dataSource")}</Divider>
                 <Form.Item>
                   <Segmented
                     block
                     value={selected.dataSource.mode}
                     options={[
-                      { label: "静态 JSON", value: "static" },
+                      { label: t("pageDesigner.staticJson"), value: "static" },
                       { label: "Supabase", value: "supabase" },
                       { label: "BAQ", value: "baq" },
                     ]}
@@ -412,7 +416,7 @@ export function PageDesigner() {
                   />
                 </Form.Item>
                 {selected.dataSource.mode === "static" ? (
-                  <Form.Item label="JSON 数组">
+                  <Form.Item label={t("pageDesigner.jsonArray")}>
                     <Input.TextArea
                       rows={6}
                       value={JSON.stringify(
@@ -431,7 +435,7 @@ export function PageDesigner() {
                             },
                           });
                         } catch {
-                          message.error("请输入合法的 JSON 数组");
+                          message.error(t("pageDesigner.invalidJsonArray"));
                         }
                       }}
                       onChange={(event) => {
@@ -450,7 +454,7 @@ export function PageDesigner() {
                   </Form.Item>
                 ) : selected.dataSource.mode === "supabase" ? (
                   <>
-                    <Form.Item label="表名">
+                    <Form.Item label={t("pageDesigner.tableName")}>
                       <Input
                         value={selected.dataSource.table}
                         onChange={(event) =>
@@ -463,7 +467,7 @@ export function PageDesigner() {
                         }
                       />
                     </Form.Item>
-                    <Form.Item label="查询字段">
+                    <Form.Item label={t("pageDesigner.queryFields")}>
                       <Input
                         value={selected.dataSource.select || "*"}
                         onChange={(event) =>
@@ -478,15 +482,15 @@ export function PageDesigner() {
                     </Form.Item>
                   </>
                 ) : (
-                  <Form.Item label="已发布 BAQ">
-                    <Select showSearch optionFilterProp="label" value={selected.dataSource.baqCode} placeholder="选择业务活动查询"
+                  <Form.Item label={t("pageDesigner.publishedBaq")}>
+                    <Select showSearch optionFilterProp="label" value={selected.dataSource.baqCode} placeholder={t("pageDesigner.selectBaqPlaceholder")}
                       options={baqs.map((item) => ({ value: item.code, label: `${item.name} (${item.code})` }))}
                       onChange={(baqCode) => patchWidget({ dataSource: { ...selected.dataSource, baqCode } })} />
                   </Form.Item>
                 )}
                 {selected.type === "table" && (
                   <Space>
-                    <Form.Item label="分页大小">
+                    <Form.Item label={t("pageDesigner.pageSize")}>
                       <InputNumber
                         min={1}
                         max={100}
@@ -494,7 +498,7 @@ export function PageDesigner() {
                         onChange={(value) => patchWidget({ pageSize: value || 10 })}
                       />
                     </Form.Item>
-                    <Form.Item label="最大记录数">
+                    <Form.Item label={t("pageDesigner.maxRecords")}>
                       <InputNumber
                         min={1}
                         max={10000}
@@ -511,7 +515,9 @@ export function PageDesigner() {
                   <>
                     <Form.Item
                       label={
-                        selected.type === "pie" ? "分类字段" : "X / 标签字段"
+                        selected.type === "pie"
+                          ? t("pageDesigner.categoryField")
+                          : t("pageDesigner.xLabelField")
                       }
                     >
                       <Input
@@ -529,7 +535,7 @@ export function PageDesigner() {
                         }
                       />
                     </Form.Item>
-                    <Form.Item label="数值字段">
+                    <Form.Item label={t("pageDesigner.valueField")}>
                       <Input
                         value={selected.yField}
                         onChange={(event) =>
@@ -541,7 +547,7 @@ export function PageDesigner() {
                 )}
               </Form>
             ) : (
-              <Empty description="选择一个组件编辑属性" />
+              <Empty description={t("pageDesigner.emptyPropertyPanel")} />
             )}
           </Card>
         </div>
@@ -550,7 +556,7 @@ export function PageDesigner() {
         open={preview}
         onClose={() => setPreview(false)}
         width="90%"
-        title={`预览：${page.name}`}
+        title={t("pageDesigner.previewTitle", { name: page.name })}
       >
         <PageCanvas page={page} />
       </Drawer>
@@ -558,12 +564,12 @@ export function PageDesigner() {
         open={publishOpen}
         onCancel={() => setPublishOpen(false)}
         footer={null}
-        title="发布页面"
+        title={t("pageDesigner.publishPage")}
       >
         <Alert
           type="info"
           showIcon
-          message="发布后将创建或更新菜单，路由地址为 /custom/页面标识"
+          message={t("pageDesigner.publishHint")}
         />
         <Form
           layout="vertical"
@@ -573,25 +579,25 @@ export function PageDesigner() {
         >
           <Form.Item
             name="name"
-            label="菜单及页面名称"
+            label={t("pageDesigner.menuAndPageName")}
             rules={[{ required: true }]}
           >
             <Input />
           </Form.Item>
           <Form.Item
             name="slug"
-            label="页面标识"
+            label={t("pageDesigner.pageSlug")}
             rules={[
               { required: true },
               {
                 pattern: /^[a-z0-9-]+$/,
-                message: "仅支持小写字母、数字和连字符",
+                message: t("pageDesigner.slugPatternHint"),
               },
             ]}
           >
             <Input addonBefore="/custom/" />
           </Form.Item>
-          <Form.Item name="description" label="描述">
+          <Form.Item name="description" label={t("pageDesigner.description")}>
             <Input.TextArea />
           </Form.Item>
           <Button
@@ -601,7 +607,7 @@ export function PageDesigner() {
             loading={saving}
             icon={<PlusOutlined />}
           >
-            发布并生成菜单
+            {t("pageDesigner.publishAndGenerateMenu")}
           </Button>
         </Form>
       </Modal>

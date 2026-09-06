@@ -3,6 +3,7 @@ import { Alert, Button, Card, Divider, Empty, Skeleton, Statistic, Table, Typogr
 import { Column, Line, Pie } from '@ant-design/charts';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import { getCustomPage } from './api';
 import type { CustomPage, PageWidget } from './types';
@@ -61,6 +62,7 @@ function ChartWidget({ widget, data }: { widget: PageWidget; data: Record<string
 }
 
 function WidgetBody({ widget }: { widget: PageWidget }) {
+  const { t } = useTranslation();
   const [data, setData] = useState<Record<string, unknown>[]>(() => (widget.dataSource.staticData || []) as Record<string, unknown>[]);
   const [loading, setLoading] = useState(widget.dataSource.mode !== 'static');
   const [error, setError] = useState('');
@@ -81,7 +83,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
     if (source.mode === 'supabase' && !source.table?.trim()) {
       setData([]);
       setColumnOrder([]);
-      setError('请先配置 Supabase 表名');
+      setError(t('pageRenderer.configureSupabaseTable'));
       setLoading(false);
       return () => { active = false; };
     }
@@ -90,7 +92,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
     setError('');
     const request: Promise<{ data: unknown[]; error: { message: string; code?: string } | null; columns: string[] }> = (async () => {
       if (source.mode === 'baq') {
-        if (!source.baqCode) return { data: [], error: { message: '未选择 BAQ' }, columns: [] };
+        if (!source.baqCode) return { data: [], error: { message: t('pageRenderer.baqNotSelected') }, columns: [] };
         const result = await executeBaq(source.baqCode, 1, source.limit || 100);
         return { data: result.rows, error: null, columns: result.columns || [] };
       }
@@ -118,7 +120,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
         if (!active) return;
         setData([]);
         setColumnOrder([]);
-        setError(queryError instanceof Error ? queryError.message : '数据查询失败');
+        setError(queryError instanceof Error ? queryError.message : t('pageRenderer.dataQueryFailed'));
         setLoading(false);
       });
 
@@ -129,7 +131,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
     return keys.map(key => ({ title: key, dataIndex: key, key, ellipsis: true }));
   }, [data, columnOrder]);
   if (loading) return <Skeleton active paragraph={{ rows: 3 }} />;
-  if (error) return <Alert type="error" showIcon message="数据加载失败" description={error} />;
+  if (error) return <Alert type="error" showIcon message={t('pageRenderer.dataLoadFailed')} description={error} />;
   if (widget.type === 'text') return <Typography.Paragraph>{widget.content}</Typography.Paragraph>;
   if (widget.type === 'button') return <Button type="primary">{widget.content || widget.title}</Button>;
   if (widget.type === 'divider') return (
@@ -176,11 +178,12 @@ export function PageCanvas({ page, editable = false, selectedId, onSelect, onLay
 }
 
 export function CustomPageRenderer() {
+  const { t } = useTranslation();
   const { slug = '' } = useParams();
   const [page, setPage] = useState<CustomPage | null>(null);
   const [error, setError] = useState('');
   useEffect(() => { getCustomPage(slug).then(setPage).catch(err => setError(err.message)); }, [slug]);
-  if (error) return <Alert type="error" showIcon message="页面加载失败" description={error} />;
+  if (error) return <Alert type="error" showIcon message={t('pageRenderer.pageLoadFailed')} description={error} />;
   if (!page) return <Skeleton active />;
   return <div className="published-page"><div className="published-page-heading"><Typography.Title level={4}>{page.name}</Typography.Title>{page.description && <Typography.Text type="secondary">{page.description}</Typography.Text>}</div><PageCanvas page={page} /></div>;
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ArrowDownOutlined,
   ArrowUpOutlined,
@@ -43,25 +44,27 @@ import type {
 import "./baq.css";
 
 const uid = () => `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-const aggregateOptions = ["none", "sum", "count", "avg", "min", "max"].map(
-  (value) => ({
-    value,
-    label: value === "none" ? "不聚合" : value.toUpperCase(),
-  }),
-);
-const operatorOptions = [
-  { value: "eq", label: "等于" },
-  { value: "neq", label: "不等于" },
-  { value: "gt", label: "大于" },
-  { value: "gte", label: "大于等于" },
-  { value: "lt", label: "小于" },
-  { value: "lte", label: "小于等于" },
-  { value: "like", label: "包含" },
-  { value: "is_null", label: "为空" },
-  { value: "not_null", label: "不为空" },
-];
 
 export function BaqDesigner() {
+  const { t } = useTranslation();
+  const aggregateOptions = ["none", "sum", "count", "avg", "min", "max"].map(
+    (value) => ({
+      value,
+      label:
+        value === "none" ? t('baqDesigner.noAggregate') : value.toUpperCase(),
+    }),
+  );
+  const operatorOptions = [
+    { value: "eq", label: t('baqDesigner.equals') },
+    { value: "neq", label: t('baqDesigner.notEquals') },
+    { value: "gt", label: t('baqDesigner.greaterThan') },
+    { value: "gte", label: t('baqDesigner.greaterThanOrEqual') },
+    { value: "lt", label: t('baqDesigner.lessThan') },
+    { value: "lte", label: t('baqDesigner.lessThanOrEqual') },
+    { value: "like", label: t('baqDesigner.contains') },
+    { value: "is_null", label: t('baqDesigner.isEmpty') },
+    { value: "not_null", label: t('baqDesigner.isNotEmpty') },
+  ];
   const [items, setItems] = useState<BaqQuery[]>([]);
   const [catalog, setCatalog] = useState<BaqTable[]>([]);
   const [baq, setBaq] = useState<BaqQuery>(emptyBaq);
@@ -79,7 +82,11 @@ export function BaqDesigner() {
     void refresh();
     loadCatalog()
       .then(setCatalog)
-      .catch((e) => message.error(`数据目录加载失败：${e.message}`));
+      .catch((e) =>
+        message.error(
+          t('baqDesigner.catalogLoadFailed', { message: e.message }),
+        ),
+      );
   }, []);
   const aliases = useMemo(
     () => [
@@ -91,13 +98,13 @@ export function BaqDesigner() {
     ],
     [baq.definition],
   );
-  const tableOptions = catalog.map((t) => ({
-    value: t.table,
-    label: `${t.label}`,
+  const tableOptions = catalog.map((x) => ({
+    value: x.table,
+    label: `${x.label}`,
   }));
   const columns = (alias: string) =>
     catalog.find(
-      (t) => t.table === aliases.find((a) => a.alias === alias)?.table,
+      (x) => x.table === aliases.find((a) => a.alias === alias)?.table,
     )?.columns || [];
   const patchDef = (patch: Partial<BaqDefinition>) =>
     setBaq((current) => ({
@@ -111,11 +118,13 @@ export function BaqDesigner() {
       setBaq(saved);
       await refresh();
       message.success(
-        status === "published" ? "已发布，可供页面设计器使用" : "草稿已保存",
+        status === "published"
+          ? t('baqDesigner.publishedReady')
+          : t('baqDesigner.draftSaved'),
       );
       return saved;
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "保存失败");
+      message.error(e instanceof Error ? e.message : t('common.saveFailed'));
     } finally {
       setBusy(false);
     }
@@ -127,7 +136,7 @@ export function BaqDesigner() {
     try {
       setResult(await executeBaq(saved.code));
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "执行失败");
+      message.error(e instanceof Error ? e.message : t('baqDesigner.executeFailed'));
     } finally {
       setBusy(false);
     }
@@ -160,7 +169,7 @@ export function BaqDesigner() {
       setOriginalLabels(Object.fromEntries(rows.map(row => [row.id, row.table_label])));
       setTableLabelOpen(true);
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "表名称加载失败");
+      message.error(e instanceof Error ? e.message : t('baqDesigner.tableLabelsLoadFailed'));
     } finally {
       setBusy(false);
     }
@@ -173,9 +182,11 @@ export function BaqDesigner() {
       await updateTableLabels(changed.map(({ id, table_label }) => ({ id, table_label: table_label.trim() })));
       setCatalog(await loadCatalog());
       setTableLabelOpen(false);
-      message.success(`已更新 ${changed.length} 个表名称`);
+      message.success(
+        t('baqDesigner.tableLabelsUpdated', { count: changed.length }),
+      );
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "表名称保存失败");
+      message.error(e instanceof Error ? e.message : t('baqDesigner.tableLabelsSaveFailed'));
     } finally {
       setBusy(false);
     }
@@ -187,9 +198,9 @@ export function BaqDesigner() {
       const rows = await listTableLabels();
       setTableLabels(rows);
       setOriginalLabels(Object.fromEntries(rows.map(row => [row.id, row.table_label])));
-      message.success("数据表已刷新");
+      message.success(t('baqDesigner.sysTablesRefreshed'));
     } catch (e) {
-      message.error(e instanceof Error ? e.message : "数据表刷新失败");
+      message.error(e instanceof Error ? e.message : t('baqDesigner.sysTablesRefreshFailed'));
     } finally {
       setBusy(false);
     }
@@ -200,22 +211,26 @@ export function BaqDesigner() {
         variant="borderless"
         title={
           <Space>
-            <Typography.Title level={4}>BAQ 设计管理</Typography.Title>
+            <Typography.Title level={4}>
+              {t('baqDesigner.pageTitle')}
+            </Typography.Title>
             <Tag color={baq.status === "published" ? "green" : "default"}>
-              {baq.status === "published" ? "已发布" : "草稿"}
+              {baq.status === "published"
+                ? t('baqDesigner.published')
+                : t('baqDesigner.draft')}
             </Tag>
           </Space>
         }
         extra={
           <Space>
             <Button icon={<DatabaseOutlined />} loading={busy} onClick={() => void openTableLabels()}>
-              表名称维护
+              {t('baqDesigner.tableLabelsMaintenance')}
             </Button>
             <Select
               className="baq-picker"
               value={baq.id || "new"}
               options={[
-                { value: "new", label: "新建 BAQ" },
+                { value: "new", label: t('baqDesigner.newBaq') },
                 ...items.map((x) => ({ value: x.id!, label: x.name })),
               ]}
               onChange={(v) => {
@@ -229,7 +244,7 @@ export function BaqDesigner() {
             />
             {baq.id && (
               <Popconfirm
-                title="删除此 BAQ？"
+                title={t('baqDesigner.deleteConfirm')}
                 onConfirm={async () => {
                   await removeBaq(baq.id!);
                   setBaq(emptyBaq());
@@ -240,14 +255,14 @@ export function BaqDesigner() {
               </Popconfirm>
             )}
             <Button icon={<EyeOutlined />} loading={busy} onClick={preview}>
-              预览
+              {t('baqDesigner.preview')}
             </Button>
             <Button
               icon={<SaveOutlined />}
               loading={busy}
               onClick={() => void save("draft")}
             >
-              保存
+              {t('common.save')}
             </Button>
             <Button
               type="primary"
@@ -255,27 +270,27 @@ export function BaqDesigner() {
               loading={busy}
               onClick={() => void save("published")}
             >
-              发布
+              {t('baqDesigner.publish')}
             </Button>
           </Space>
         }
       >
         <Form layout="vertical">
           <div className="baq-meta">
-            <Form.Item label="名称" required>
+            <Form.Item label={t('common.name')} required>
               <Input
                 value={baq.name}
                 onChange={(e) => setBaq({ ...baq, name: e.target.value })}
               />
             </Form.Item>
-            <Form.Item label="编码" required>
+            <Form.Item label={t('common.code')} required>
               <Input
                 disabled={!!baq.id}
                 value={baq.code}
                 onChange={(e) => setBaq({ ...baq, code: e.target.value })}
               />
             </Form.Item>
-            <Form.Item label="描述">
+            <Form.Item label={t('baqDesigner.description')}>
               <Input
                 value={baq.description || ""}
                 onChange={(e) =>
@@ -289,11 +304,11 @@ export function BaqDesigner() {
           items={[
             {
               key: "source",
-              label: "数据源与关联",
+              label: t('baqDesigner.sourceTab'),
               children: (
                 <>
                   <div className="baq-source">
-                    <Typography.Text strong>主表</Typography.Text>
+                    <Typography.Text strong>{t('baqDesigner.mainTable')}</Typography.Text>
                     <Select
                       showSearch
                       optionFilterProp="label"
@@ -309,7 +324,7 @@ export function BaqDesigner() {
                         })
                       }
                     />
-                    <Tag>别名 t0</Tag>
+                    <Tag>{t('baqDesigner.alias')} t0</Tag>
                   </div>
                   <Table
                     size="small"
@@ -318,7 +333,7 @@ export function BaqDesigner() {
                     dataSource={baq.definition.joins}
                     columns={[
                       {
-                        title: "类型",
+                        title: t('common.type'),
                         render: (_, r, i) => (
                           <Select
                             value={r.type}
@@ -337,7 +352,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "关联表",
+                        title: t('baqDesigner.joinTable'),
                         render: (_, r, i) => (
                           <Select
                             className="wide"
@@ -357,7 +372,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "别名",
+                        title: t('baqDesigner.alias'),
                         render: (_, r, i) => (
                           <Input
                             value={r.alias}
@@ -372,7 +387,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "左表",
+                        title: t('baqDesigner.leftTable'),
                         render: (_, r, i) => (
                           <Select
                             value={r.leftAlias}
@@ -390,7 +405,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "左字段",
+                        title: t('baqDesigner.leftField'),
                         width: 260,
                         render: (_, r, i) => (
                           <Select
@@ -413,7 +428,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "右字段",
+                        title: t('baqDesigner.rightField'),
                         width: 260,
                         render: (_, r, i) => (
                           <Select
@@ -422,7 +437,7 @@ export function BaqDesigner() {
                             value={r.rightField}
                             style={{ width: 260 }}
                             options={(
-                              catalog.find((t) => t.table === r.table)
+                              catalog.find((x) => x.table === r.table)
                                 ?.columns || []
                             ).map((c) => ({ value: c.name, label: c.name }))}
                             onChange={(rightField) =>
@@ -462,14 +477,16 @@ export function BaqDesigner() {
                       })
                     }
                   >
-                    添加关联
+                    {t('baqDesigner.addJoin')}
                   </Button>
                 </>
               ),
             },
             {
               key: "fields",
-              label: `输出字段 (${baq.definition.fields.length})`,
+              label: t('baqDesigner.outputFieldsTab', {
+                count: baq.definition.fields.length,
+              }),
               children: (
                 <>
                   <Table
@@ -479,7 +496,7 @@ export function BaqDesigner() {
                     dataSource={baq.definition.fields}
                     columns={[
                       {
-                        title: "表",
+                        title: t('baqDesigner.tableCol'),
                         render: (_, r, i) => (
                           <Select
                             value={r.tableAlias}
@@ -498,7 +515,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "字段",
+                        title: t('baqDesigner.fieldCol'),
                         render: (_, r, i) => (
                           <Select
                             className="wide"
@@ -519,7 +536,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "输出别名",
+                        title: t('baqDesigner.outputAlias'),
                         render: (_, r, i) => (
                           <Input
                             value={r.alias}
@@ -534,7 +551,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "聚合",
+                        title: t('baqDesigner.aggregate'),
                         render: (_, r, i) => (
                           <Select
                             value={r.aggregate}
@@ -550,7 +567,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "分组",
+                        title: t('baqDesigner.groupBy'),
                         render: (_, r, i) => (
                           <Switch
                             checked={r.groupBy}
@@ -565,11 +582,11 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "顺序",
+                        title: t('baqDesigner.order'),
                         width: 132,
                         render: (_, __, i) => (
                           <Space size={0}>
-                            <Tooltip title="上移">
+                            <Tooltip title={t('baqDesigner.moveUp')}>
                               <Button
                                 type="text"
                                 icon={<ArrowUpOutlined />}
@@ -577,7 +594,7 @@ export function BaqDesigner() {
                                 onClick={() => moveField(i, -1)}
                               />
                             </Tooltip>
-                            <Tooltip title="下移">
+                            <Tooltip title={t('baqDesigner.moveDown')}>
                               <Button
                                 type="text"
                                 icon={<ArrowDownOutlined />}
@@ -611,20 +628,22 @@ export function BaqDesigner() {
                       })
                     }
                   >
-                    添加字段
+                    {t('baqDesigner.addField')}
                   </Button>
                 </>
               ),
             },
             {
               key: "filters",
-              label: `筛选 (${baq.definition.filters.length})`,
+              label: t('baqDesigner.filtersTab', {
+                count: baq.definition.filters.length,
+              }),
               children: (
                 <>
                   <Alert
                     type="info"
                     showIcon
-                    message="MVP 阶段筛选条件之间使用 AND 连接"
+                    message={t('baqDesigner.filtersMvpNote')}
                   />
                   <Table
                     size="small"
@@ -633,7 +652,7 @@ export function BaqDesigner() {
                     dataSource={baq.definition.filters}
                     columns={[
                       {
-                        title: "表",
+                        title: t('baqDesigner.tableCol'),
                         render: (_, r, i) => (
                           <Select
                             value={r.tableAlias}
@@ -652,7 +671,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "字段",
+                        title: t('baqDesigner.fieldCol'),
                         render: (_, r, i) => (
                           <Select
                             className="wide"
@@ -673,7 +692,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "条件",
+                        title: t('baqDesigner.condition'),
                         render: (_, r, i) => (
                           <Select
                             value={r.operator}
@@ -689,7 +708,7 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "值",
+                        title: t('baqDesigner.value'),
                         render: (_, r, i) => (
                           <Input
                             disabled={["is_null", "not_null"].includes(
@@ -730,14 +749,16 @@ export function BaqDesigner() {
                       })
                     }
                   >
-                    添加条件
+                    {t('baqDesigner.addCondition')}
                   </Button>
                 </>
               ),
             },
             {
               key: "sorts",
-              label: `排序 (${baq.definition.sorts.length})`,
+              label: t('baqDesigner.sortsTab', {
+                count: baq.definition.sorts.length,
+              }),
               children: (
                 <>
                   <Table
@@ -747,7 +768,7 @@ export function BaqDesigner() {
                     dataSource={baq.definition.sorts}
                     columns={[
                       {
-                        title: "输出字段",
+                        title: t('baqDesigner.outputFieldCol'),
                         render: (_, r, i) => (
                           <Select
                             className="wide"
@@ -766,13 +787,13 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: "方向",
+                        title: t('baqDesigner.direction'),
                         render: (_, r, i) => (
                           <Select
                             value={r.direction}
                             options={[
-                              { value: "asc", label: "升序" },
-                              { value: "desc", label: "降序" },
+                              { value: "asc", label: t('baqDesigner.ascending') },
+                              { value: "desc", label: t('baqDesigner.descending') },
                             ]}
                             onChange={(direction) =>
                               patchDef({
@@ -802,7 +823,7 @@ export function BaqDesigner() {
                       })
                     }
                   >
-                    添加排序
+                    {t('baqDesigner.addSort')}
                   </Button>
                 </>
               ),
@@ -811,11 +832,11 @@ export function BaqDesigner() {
         />
       </Card>
       <Card
-        title="结果预览"
+        title={t('baqDesigner.resultPreview')}
         extra={
           result && (
             <Typography.Text type="secondary">
-              共 {result.total} 行，最多显示 100 行
+              {t('baqDesigner.resultSummary', { total: result.total })}
             </Typography.Text>
           )
         }
@@ -840,29 +861,29 @@ export function BaqDesigner() {
             pagination={false}
           />
         ) : (
-          <Empty description="保存并预览 BAQ 查看结果" />
+          <Empty description={t('baqDesigner.emptyPreviewHint')} />
         )}
       </Card>
       <Modal
-        title="表名称维护"
+        title={t('baqDesigner.tableLabelsMaintenance')}
         open={tableLabelOpen}
         width={860}
         confirmLoading={busy}
-        okText="保存修改"
-        cancelText="取消"
+        okText={t('baqDesigner.saveChanges')}
+        cancelText={t('common.cancel')}
         onOk={() => void saveTableLabels()}
         onCancel={() => setTableLabelOpen(false)}
       >
         <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
           <Input.Search
             allowClear
-            placeholder="搜索真实表名或显示名称"
+            placeholder={t('baqDesigner.tableLabelSearchPlaceholder')}
             value={tableLabelSearch}
             onChange={(event) => setTableLabelSearch(event.target.value)}
             style={{ flex: 1 }}
           />
           <Button icon={<ReloadOutlined />} loading={busy} onClick={() => void refreshTableList()}>
-            更新表
+            {t('baqDesigner.refreshTableList')}
           </Button>
         </div>
         <Table
@@ -876,19 +897,19 @@ export function BaqDesigner() {
           })}
           columns={[
             {
-              title: "模块",
+              title: t('baqDesigner.moduleCol'),
               dataIndex: "module_name",
               width: 100,
               render: (value) => <Tag>{value}</Tag>,
             },
             {
-              title: "数据库表名",
+              title: t('baqDesigner.dbTableName'),
               dataIndex: "table_name",
               width: 330,
               ellipsis: true,
             },
             {
-              title: "显示名称",
+              title: t('baqDesigner.displayName'),
               dataIndex: "table_label",
               render: (_, row) => (
                 <Input
