@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker } from 'antd';
 import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { supabase } from '@/utils/supabase';
@@ -15,6 +16,7 @@ const { TextArea } = Input;
 const mrpPlanTable = 'erp_mrp_plans_s_539dcf81_b';
 
 export function MrpPlans() {
+  const { t } = useTranslation();
   const [plans, setPlans] = useState<MrpPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,7 +41,7 @@ export function MrpPlans() {
       setPlans(data || []);
     } catch (error) {
       console.error('Error fetching plans:', error);
-      message.error('获取数据失败');
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -51,20 +53,20 @@ export function MrpPlans() {
         .from(mrpPlanTable)
         .insert([values]);
       if (error) throw error;
-      message.success('新增成功');
+      message.success(t('common.createSuccess'));
       setIsModalOpen(false);
       form.resetFields();
       fetchPlans();
     } catch (error) {
       console.error('Error saving plan:', error);
-      message.error('保存失败');
+      message.error(t('common.saveFailed'));
     }
   };
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: '确认删除',
-      content: '确定要删除该计划吗？',
+      title: t('common.confirmDelete'),
+      content: t('mrp.plans.deleteConfirm'),
       onOk: async () => {
         try {
           const { error } = await supabase
@@ -72,11 +74,11 @@ export function MrpPlans() {
             .update({ is_deleted: 'y' })
             .eq('id', id);
           if (error) throw error;
-          message.success('删除成功');
+          message.success(t('common.deleteSuccess'));
           fetchPlans();
         } catch (error) {
           console.error('Error deleting plan:', error);
-          message.error('删除失败');
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -84,8 +86,8 @@ export function MrpPlans() {
 
   const handleRunMrp = async (id: number) => {
     Modal.confirm({
-      title: '确认运行',
-      content: '确定要运行MRP计算吗？',
+      title: t('mrp.plans.confirmRun'),
+      content: t('mrp.plans.confirmRunContent'),
       onOk: async () => {
         try {
           const { error } = await supabase
@@ -93,11 +95,11 @@ export function MrpPlans() {
             .update({ status: 'running' })
             .eq('id', id);
           if (error) throw error;
-          message.success('MRP计算已开始');
+          message.success(t('mrp.plans.runStarted'));
           fetchPlans();
         } catch (error) {
           console.error('Error running MRP:', error);
-          message.error('运行失败');
+          message.error(t('mrp.plans.runFailed'));
         }
       },
     });
@@ -123,50 +125,50 @@ export function MrpPlans() {
   );
 
   const typeLabels: Record<string, string> = {
-    master: '主生产计划',
-    material: '物料需求计划',
-    capacity: '产能计划',
-    procurement: '采购计划',
+    master: t('mrp.plans.typeMaster'),
+    material: t('mrp.plans.typeMaterial'),
+    capacity: t('mrp.plans.typeCapacity'),
+    procurement: t('mrp.plans.typeProcurement'),
   };
 
   const statusLabels: Record<string, { text: string; color: string }> = {
-    draft: { text: '草稿', color: 'default' },
-    running: { text: '计算中', color: 'processing' },
-    completed: { text: '已完成', color: 'success' },
-    cancelled: { text: '已取消', color: 'error' },
+    draft: { text: t('mrp.plans.statusDraft'), color: 'default' },
+    running: { text: t('mrp.plans.statusRunning'), color: 'processing' },
+    completed: { text: t('mrp.plans.statusCompleted'), color: 'success' },
+    cancelled: { text: t('mrp.plans.statusCancelled'), color: 'error' },
   };
 
   const columns = [
     {
-      title: '计划号',
+      title: t('mrp.plans.planNo'),
       dataIndex: 'plan_no',
       key: 'plan_no',
     },
     {
-      title: '计划日期',
+      title: t('mrp.plans.planDate'),
       dataIndex: 'plan_date',
       key: 'plan_date',
     },
     {
-      title: '开始日期',
+      title: t('mrp.plans.startDate'),
       dataIndex: 'start_date',
       key: 'start_date',
       render: (text: string) => text || '-',
     },
     {
-      title: '结束日期',
+      title: t('mrp.plans.endDate'),
       dataIndex: 'end_date',
       key: 'end_date',
       render: (text: string) => text || '-',
     },
     {
-      title: '类型',
+      title: t('common.type'),
       dataIndex: 'plan_type',
       key: 'plan_type',
       render: (type: string) => typeLabels[type] || type,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => {
@@ -175,20 +177,20 @@ export function MrpPlans() {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       render: (_: any, record: MrpPlan) => (
         <Space size="middle">
           <Button type="text" icon={<EyeOutlined />}>
-            查看
+            {t('mrp.plans.view')}
           </Button>
           {record.status === 'draft' && (
             <Button type="text" icon={<PlayCircleOutlined />} onClick={() => handleRunMrp(record.id)}>
-              运行
+              {t('mrp.plans.run')}
             </Button>
           )}
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -204,17 +206,17 @@ export function MrpPlans() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="mrp-plans"
-        headerTitle="MRP计划管理"
+        headerTitle={t('mrp.plans.title')}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
         }}
         queryBar={
           <Space wrap>
-            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>新增计划</Button>
+            <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('mrp.plans.add')}</Button>
             <Input.Search
               allowClear
-              placeholder="搜索计划号..."
+              placeholder={t('mrp.plans.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchPlans}
@@ -225,52 +227,52 @@ export function MrpPlans() {
       />
 
       <SimpleModal
-        title="新增MRP计划"
+        title={t('mrp.plans.addTitle')}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
         }}
         footer={<Space>
-              <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+              <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
               <Button type="primary" onClick={() => form.submit()}>
-                保存
+                {t('common.save')}
               </Button>
             </Space>}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginTop: 16 }}>
           <Form.Item
-            label="计划号"
+            label={t('mrp.plans.planNo')}
             name="plan_no"
-            rules={[{ required: true, message: '请输入计划号' }]}
+            rules={[{ required: true, message: t('mrp.plans.planNoPrompt') }]}
           >
-            <Input placeholder="请输入计划号" />
+            <Input placeholder={t('mrp.plans.planNoPrompt')} />
           </Form.Item>
-          <Form.Item label="计划类型" name="plan_type" initialValue="master">
+          <Form.Item label={t('mrp.plans.planType')} name="plan_type" initialValue="master">
             <Select>
-              <Option value="master">主生产计划</Option>
-              <Option value="material">物料需求计划</Option>
-              <Option value="capacity">产能计划</Option>
-              <Option value="procurement">采购计划</Option>
+              <Option value="master">{t('mrp.plans.typeMaster')}</Option>
+              <Option value="material">{t('mrp.plans.typeMaterial')}</Option>
+              <Option value="capacity">{t('mrp.plans.typeCapacity')}</Option>
+              <Option value="procurement">{t('mrp.plans.typeProcurement')}</Option>
             </Select>
           </Form.Item>
-          <Form.Item label="计划日期" name="plan_date">
+          <Form.Item label={t('mrp.plans.planDate')} name="plan_date">
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="开始日期" name="start_date">
+          <Form.Item label={t('mrp.plans.startDate')} name="start_date">
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="结束日期" name="end_date">
+          <Form.Item label={t('mrp.plans.endDate')} name="end_date">
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item label="备注" name="remark">
-            <TextArea rows={3} placeholder="请输入备注" />
+          <Form.Item label={t('mrp.plans.remark')} name="remark">
+            <TextArea rows={3} placeholder={t('mrp.plans.remarkPrompt')} />
           </Form.Item>
-          <Form.Item label="状态" name="status" initialValue="draft">
+          <Form.Item label={t('common.status')} name="status" initialValue="draft">
             <Select>
-              <Option value="draft">草稿</Option>
-              <Option value="running">计算中</Option>
-              <Option value="completed">已完成</Option>
+              <Option value="draft">{t('mrp.plans.statusDraft')}</Option>
+              <Option value="running">{t('mrp.plans.statusRunning')}</Option>
+              <Option value="completed">{t('mrp.plans.statusCompleted')}</Option>
             </Select>
           </Form.Item>
         </Form>

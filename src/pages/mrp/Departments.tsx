@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from 'react-i18next';
 import type { Key } from "react";
 import {
   Button,
@@ -29,6 +30,7 @@ const { Option } = Select;
 const departmentTable = 'erp_departments_s_539dcf81_b';
 
 export function Departments() {
+  const { t } = useTranslation();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -56,7 +58,7 @@ export function Departments() {
       setDepartments(data || []);
     } catch (error) {
       console.error("Error fetching departments:", error);
-      message.error("获取数据失败");
+      message.error(t("common.fetchFailed"));
     } finally {
       setLoading(false);
     }
@@ -72,7 +74,7 @@ export function Departments() {
             .eq("id", editingDepartment.id);
           if (error) throw error;
         });
-        message.success("更新成功");
+        message.success(t("common.updateSuccess"));
       } else {
         await logWithTiming("新增部门", "INSERT", async () => {
           const { error } = await supabase
@@ -80,7 +82,7 @@ export function Departments() {
             .insert([values]);
           if (error) throw error;
         });
-        message.success("新增成功");
+        message.success(t("common.createSuccess"));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -88,7 +90,7 @@ export function Departments() {
       fetchDepartments();
     } catch (error) {
       console.error("Error saving department:", error);
-      message.error("保存失败");
+      message.error(t("common.saveFailed"));
     }
   };
 
@@ -100,8 +102,8 @@ export function Departments() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该部门吗？",
+      title: t("common.confirmDelete"),
+      content: t("mrp.departments.deleteConfirm"),
       onOk: async () => {
         try {
           await logWithTiming("删除部门", "DELETE", async () => {
@@ -111,11 +113,11 @@ export function Departments() {
               .eq("id", id);
             if (error) throw error;
           });
-          message.success("删除成功");
+          message.success(t("common.deleteSuccess"));
           fetchDepartments();
         } catch (error) {
           console.error("Error deleting department:", error);
-          message.error("删除失败");
+          message.error(t("common.deleteFailed"));
         }
       },
     });
@@ -148,36 +150,36 @@ export function Departments() {
 
   const columns: SuperTableColumn<Department>[] = [
     {
-      title: "部门编码",
+      title: t("mrp.departments.code"),
       dataIndex: "code",
       key: "code",
       width: 200,
     },
     {
-      title: "部门名称",
+      title: t("mrp.departments.name"),
       dataIndex: "name",
       key: "name",
     },
     {
-      title: "上级部门",
+      title: t("mrp.departments.parent"),
       dataIndex: "parent_id",
       key: "parent_id",
       width: 200,
       render: (parentId: number | null) => getParentDepartmentName(parentId),
     },
     {
-      title: "状态",
+      title: t("common.status"),
       dataIndex: "status",
       key: "status",
       width: 200,
       render: (status: string | null) => (
         <Tag color={status === "active" ? "success" : "default"}>
-          {status === "active" ? "启用" : "停用"}
+          {status === "active" ? t("common.enabled") : t("mrp.inactive")}
         </Tag>
       ),
     },
     {
-      title: "操作",
+      title: t("common.actions"),
       key: "action",
       width: 200,
       fixed: "right",
@@ -188,7 +190,7 @@ export function Departments() {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t("common.edit")}
           </Button>
           <Button
             type="text"
@@ -196,7 +198,7 @@ export function Departments() {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
           >
-            删除
+            {t("common.delete")}
           </Button>
         </Space>
       ),
@@ -212,7 +214,7 @@ export function Departments() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="departments"
-        headerTitle="部门管理"
+        headerTitle={t("mrp.departments.title")}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -220,11 +222,11 @@ export function Departments() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              新增部门
+              {t("mrp.departments.add")}
             </Button>
             <Input.Search
               allowClear
-              placeholder="搜索部门名称或编码..."
+              placeholder={t("mrp.departments.searchPlaceholder")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchDepartments}
@@ -235,7 +237,7 @@ export function Departments() {
       />
 
       <SimpleModal
-        title={editingDepartment ? "编辑部门" : "新增部门"}
+        title={editingDepartment ? t("mrp.departments.edit") : t("mrp.departments.add")}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -244,9 +246,11 @@ export function Departments() {
         }}
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>
+              {t("common.cancel")}
+            </Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t("common.save")}
             </Button>
           </Space>
         }
@@ -258,24 +262,24 @@ export function Departments() {
             onFinish={handleSubmit}
           >
             <Form.Item
-              label="部门编码"
+              label={t("mrp.departments.code")}
               name="code"
-              rules={[{ required: true, message: "请输入部门编码" }]}
+              rules={[{ required: true, message: t("mrp.departments.codePrompt") }]}
             >
               <Input
-                placeholder="请输入部门编码"
+                placeholder={t("mrp.departments.codePrompt")}
                 disabled={!!editingDepartment}
               />
             </Form.Item>
             <Form.Item
-              label="部门名称"
+              label={t("mrp.departments.name")}
               name="name"
-              rules={[{ required: true, message: "请输入部门名称" }]}
+              rules={[{ required: true, message: t("mrp.departments.namePrompt") }]}
             >
-              <Input placeholder="请输入部门名称" />
+              <Input placeholder={t("mrp.departments.namePrompt")} />
             </Form.Item>
-            <Form.Item label="上级部门" name="parent_id">
-              <Select placeholder="请选择上级部门" allowClear>
+            <Form.Item label={t("mrp.departments.parent")} name="parent_id">
+              <Select placeholder={t("mrp.departments.parentPrompt")} allowClear>
                 {departments
                   .filter((d) => d.id !== editingDepartment?.id)
                   .map((d) => (
@@ -285,10 +289,10 @@ export function Departments() {
                   ))}
               </Select>
             </Form.Item>
-            <Form.Item label="状态" name="status" initialValue="active">
+            <Form.Item label={t("common.status")} name="status" initialValue="active">
               <Select>
-                <Option value="active">启用</Option>
-                <Option value="inactive">停用</Option>
+                <Option value="active">{t("common.enabled")}</Option>
+                <Option value="inactive">{t("mrp.inactive")}</Option>
               </Select>
             </Form.Item>
           </Form>

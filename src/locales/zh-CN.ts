@@ -1669,6 +1669,7 @@ const zhCN = {
     "mrp.boms.detailPanelTitle": "子项明细",
     "mrp.productionOrders.title": "生产订单",
     "mrp.productionOrders.add": "新增订单",
+    "mrp.productionOrders.addTitle": "新增生产订单",
     "mrp.productionOrders.edit": "编辑生产订单",
     "mrp.productionOrders.searchPlaceholder": "搜索订单号或产品...",
     "mrp.productionOrders.deleteConfirm": "确定要删除该生产订单吗？",

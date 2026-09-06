@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Key } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Button,
   Input,
@@ -33,6 +34,7 @@ const { TextArea } = Input;
 const operationTable = 'erp_operations_s_539dcf81_b';
 
 export function Operations() {
+  const { t } = useTranslation();
   const [operations, setOperations] = useState<Operation[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,7 +64,7 @@ export function Operations() {
       setOperations(data || []);
     } catch (error) {
       console.error("Error fetching operations:", error);
-      message.error("获取数据失败");
+      message.error(t("common.fetchFailed"));
     } finally {
       setLoading(false);
     }
@@ -91,7 +93,7 @@ export function Operations() {
             .eq("id", editingOperation.id);
           if (error) throw error;
         });
-        message.success("更新成功");
+        message.success(t("common.updateSuccess"));
       } else {
         await logWithTiming("新增工序", "INSERT", async () => {
           const { error } = await supabase
@@ -99,7 +101,7 @@ export function Operations() {
             .insert([values]);
           if (error) throw error;
         });
-        message.success("新增成功");
+        message.success(t("common.createSuccess"));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -107,7 +109,7 @@ export function Operations() {
       fetchOperations();
     } catch (error) {
       console.error("Error saving operation:", error);
-      message.error("保存失败");
+      message.error(t("common.saveFailed"));
     }
   };
 
@@ -119,8 +121,8 @@ export function Operations() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该工序吗？",
+      title: t("common.confirmDelete"),
+      content: t("mrp.operations.deleteConfirm"),
       onOk: async () => {
         try {
           await logWithTiming("删除工序", "DELETE", async () => {
@@ -130,11 +132,11 @@ export function Operations() {
               .eq("id", id);
             if (error) throw error;
           });
-          message.success("删除成功");
+          message.success(t("common.deleteSuccess"));
           fetchOperations();
         } catch (error) {
           console.error("Error deleting operation:", error);
-          message.error("删除失败");
+          message.error(t("common.deleteFailed"));
         }
       },
     });
@@ -169,57 +171,58 @@ export function Operations() {
 
   const columns = [
     {
-      title: "工序编码",
+      title: t("mrp.operations.code"),
       dataIndex: "code",
       key: "code",
     },
     {
-      title: "工序名称",
+      title: t("mrp.operations.name"),
       dataIndex: "name",
       key: "name",
     },
     {
-      title: "工作中心",
+      title: t("mrp.operations.workCenter"),
       dataIndex: "work_center_id",
       key: "work_center_id",
       render: (workCenterId: number) => getWorkCenterName(workCenterId),
     },
     {
-      title: "标准工时",
+      title: t("mrp.operations.standardHours"),
       dataIndex: "standard_hours",
       key: "standard_hours",
-      render: (hours: number) => `${hours}小时`,
+      render: (hours: number) => t("mrp.hoursAmount", { hours: hours }),
     },
     {
-      title: "准备工时",
+      title: t("mrp.operations.setupHours"),
       dataIndex: "setup_hours",
       key: "setup_hours",
-      render: (hours: number) => `${hours}小时`,
+      render: (hours: number) => t("mrp.hoursAmount", { hours: hours }),
     },
     {
-      title: "人工费率",
+      title: t("mrp.operations.laborRate"),
       dataIndex: "labor_rate",
       key: "labor_rate",
-      render: (rate: number) => `¥${(rate ?? 0).toLocaleString()}/小时`,
+      render: (rate: number) => t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
     },
     {
-      title: "制造费率",
+      title: t("mrp.operations.overheadRate"),
       dataIndex: "overhead_rate",
       key: "overhead_rate",
-      render: (rate: number) => `¥${(rate ?? 0).toLocaleString()}/小时`,
+      render: (rate: number) =>
+        t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
     },
     {
-      title: "状态",
+      title: t("common.status"),
       dataIndex: "status",
       key: "status",
       render: (status: string) => (
         <Tag color={status === "active" ? "success" : "default"}>
-          {status === "active" ? "启用" : "停用"}
+          {status === "active" ? t("common.enabled") : t("mrp.inactive")}
         </Tag>
       ),
     },
     {
-      title: "操作",
+      title: t("common.actions"),
       key: "action",
       render: (_: any, record: Operation) => (
         <Space size="middle">
@@ -228,7 +231,7 @@ export function Operations() {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t("common.edit")}
           </Button>
           <Button
             type="text"
@@ -236,7 +239,7 @@ export function Operations() {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
           >
-            删除
+            {t("common.delete")}
           </Button>
         </Space>
       ),
@@ -252,7 +255,7 @@ export function Operations() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="operations"
-        headerTitle="工序管理"
+        headerTitle={t("mrp.operations.title")}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -260,11 +263,11 @@ export function Operations() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              新增工序
+              {t("mrp.operations.add")}
             </Button>
             <Input.Search
               allowClear
-              placeholder="搜索工序名称或编码..."
+              placeholder={t("mrp.operations.searchPlaceholder")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchOperations}
@@ -275,7 +278,7 @@ export function Operations() {
       />
 
       <SimpleModal
-        title={editingOperation ? "编辑工序" : "新增工序"}
+        title={editingOperation ? t("mrp.operations.edit") : t("mrp.operations.add")}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -284,9 +287,9 @@ export function Operations() {
         }}
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>{t("common.cancel")}</Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t("common.save")}
             </Button>
           </Space>
         }
@@ -301,27 +304,27 @@ export function Operations() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="工序编码"
+                label={t("mrp.operations.code")}
                 name="code"
-                rules={[{ required: true, message: "请输入工序编码" }]}
+                rules={[{ required: true, message: t("mrp.operations.codePrompt") }]}
               >
                 <Input
-                  placeholder="请输入工序编码"
+                  placeholder={t("mrp.operations.codePrompt")}
                   disabled={!!editingOperation}
                 />
               </Form.Item>
               <Form.Item
-                label="工序名称"
+                label={t("mrp.operations.name")}
                 name="name"
-                rules={[{ required: true, message: "请输入工序名称" }]}
+                rules={[{ required: true, message: t("mrp.operations.namePrompt") }]}
               >
-                <Input placeholder="请输入工序名称" />
+                <Input placeholder={t("mrp.operations.namePrompt")} />
               </Form.Item>
-              <Form.Item label="描述" name="description">
-                <TextArea rows={3} placeholder="请输入描述" />
+              <Form.Item label={t("mrp.operations.description")} name="description">
+                <TextArea rows={3} placeholder={t("mrp.operations.descriptionPrompt")} />
               </Form.Item>
-              <Form.Item label="工作中心" name="work_center_id">
-                <Select placeholder="请选择工作中心">
+              <Form.Item label={t("mrp.operations.workCenter")} name="work_center_id">
+                <Select placeholder={t("mrp.operations.workCenterPrompt")}>
                   {workCenters.map((w) => (
                     <Option key={w.id} value={w.id}>
                       {w.name}
@@ -332,41 +335,41 @@ export function Operations() {
             </Col>
             <Col span={12}>
               <Form.Item
-                label="标准工时(小时)"
+                label={t("mrp.operations.standardHoursUnit")}
                 name="standard_hours"
                 initialValue={0}
               >
                 <InputNumber
                   style={{ width: "100%" }}
-                  placeholder="请输入标准工时"
+                  placeholder={t("mrp.operations.standardHoursPrompt")}
                 />
               </Form.Item>
               <Form.Item
-                label="准备工时(小时)"
+                label={t("mrp.operations.setupHoursUnit")}
                 name="setup_hours"
                 initialValue={0}
               >
                 <InputNumber
                   style={{ width: "100%" }}
-                  placeholder="请输入准备工时"
+                  placeholder={t("mrp.operations.setupHoursPrompt")}
                 />
               </Form.Item>
-              <Form.Item label="人工费率" name="labor_rate" initialValue={0}>
+              <Form.Item label={t("mrp.operations.laborRate")} name="labor_rate" initialValue={0}>
                 <InputNumber
                   style={{ width: "100%" }}
-                  placeholder="请输入人工费率"
+                  placeholder={t("mrp.operations.laborRatePrompt")}
                 />
               </Form.Item>
-              <Form.Item label="制造费率" name="overhead_rate" initialValue={0}>
+              <Form.Item label={t("mrp.operations.overheadRate")} name="overhead_rate" initialValue={0}>
                 <InputNumber
                   style={{ width: "100%" }}
-                  placeholder="请输入制造费率"
+                  placeholder={t("mrp.operations.overheadRatePrompt")}
                 />
               </Form.Item>
-              <Form.Item label="状态" name="status" initialValue="active">
+              <Form.Item label={t("common.status")} name="status" initialValue="active">
                 <Select>
-                  <Option value="active">启用</Option>
-                  <Option value="inactive">停用</Option>
+                  <Option value="active">{t("common.enabled")}</Option>
+                  <Option value="inactive">{t("mrp.inactive")}</Option>
                 </Select>
               </Form.Item>
             </Col>

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Key } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Card,
   Button,
@@ -31,6 +32,7 @@ const { Option } = Select;
 const workCenterTable = "erp_work_centers_s_539dcf81_b";
 
 export function WorkCenters() {
+  const { t } = useTranslation();
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -60,7 +62,7 @@ export function WorkCenters() {
       setWorkCenters(data || []);
     } catch (error) {
       console.error("Error fetching work centers:", error);
-      message.error("获取数据失败");
+      message.error(t("common.fetchFailed"));
     } finally {
       setLoading(false);
     }
@@ -89,7 +91,7 @@ export function WorkCenters() {
             .eq("id", editingWorkCenter.id);
           if (error) throw error;
         });
-        message.success("更新成功");
+        message.success(t("common.updateSuccess"));
       } else {
         await logWithTiming("新增工作中心", "INSERT", async () => {
           const { error } = await supabase
@@ -97,7 +99,7 @@ export function WorkCenters() {
             .insert([values]);
           if (error) throw error;
         });
-        message.success("新增成功");
+        message.success(t("common.createSuccess"));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -105,7 +107,7 @@ export function WorkCenters() {
       fetchWorkCenters();
     } catch (error) {
       console.error("Error saving work center:", error);
-      message.error("保存失败");
+      message.error(t("common.saveFailed"));
     }
   };
 
@@ -117,8 +119,8 @@ export function WorkCenters() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该工作中心吗？",
+      title: t("common.confirmDelete"),
+      content: t("mrp.workCenters.deleteConfirm"),
       onOk: async () => {
         try {
           await logWithTiming("删除工作中心", "DELETE", async () => {
@@ -128,11 +130,11 @@ export function WorkCenters() {
               .eq("id", id);
             if (error) throw error;
           });
-          message.success("删除成功");
+          message.success(t("common.deleteSuccess"));
           fetchWorkCenters();
         } catch (error) {
           console.error("Error deleting work center:", error);
-          message.error("删除失败");
+          message.error(t("common.deleteFailed"));
         }
       },
     });
@@ -165,70 +167,72 @@ export function WorkCenters() {
   );
 
   const typeLabels: Record<string, string> = {
-    machine: "机器",
-    labor: "人工",
-    mixed: "混合",
-    other: "其他",
+    machine: t("mrp.workCenters.typeMachine"),
+    labor: t("mrp.workCenters.typeLabor"),
+    mixed: t("mrp.workCenters.typeMixed"),
+    other: t("mrp.workCenters.typeOther"),
   };
 
   const columns = [
     {
-      title: "编码",
+      title: t("common.code"),
       dataIndex: "code",
       key: "code",
       width: 200,
     },
     {
-      title: "名称",
+      title: t("common.name"),
       dataIndex: "name",
       key: "name",
     },
     {
-      title: "类型",
+      title: t("common.type"),
       dataIndex: "type",
       key: "type",
       width: 200,
       render: (type: string) => typeLabels[type] || type,
     },
     {
-      title: "所属部门",
+      title: t("mrp.workCenters.department"),
       dataIndex: "department_id",
       key: "department_id",
       render: (departmentId: number) => getDepartmentName(departmentId),
     },
     {
-      title: "日产能(小时)",
+      title: t("mrp.workCenters.capacity"),
       dataIndex: "capacity_per_day",
       key: "capacity_per_day",
       width: 200,
     },
     {
-      title: "人工费率",
+      title: t("mrp.workCenters.laborRate"),
       dataIndex: "labor_rate",
       key: "labor_rate",
       width: 200,
-      render: (rate: number) => `¥${(rate ?? 0).toLocaleString()}/小时`,
+      render: (rate: number) =>
+        t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
     },
     {
-      title: "制造费率",
+      title: t("mrp.workCenters.overheadRate"),
       dataIndex: "overhead_rate",
       key: "overhead_rate",
       width: 200,
-      render: (rate: number) => `¥${(rate ?? 0).toLocaleString()}/小时`,
+      render: (rate: number) =>
+        t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
     },
     {
-      title: "状态",
+      title: t("common.status"),
       dataIndex: "status",
       key: "status",
       width: 200,
       render: (status: string) => (
         <Tag color={status === "active" ? "success" : "default"}>
-          {status === "active" ? "启用" : "停用"}
+          {status === "active" ? t("common.enabled") : t("mrp.inactive")}
         </Tag>
       ),
     },
     {
-      title: "操作",
+      title: t("common.actions"),
       key: "action",
       width: 200,
       render: (_: any, record: WorkCenter) => (
@@ -238,7 +242,7 @@ export function WorkCenters() {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t("common.edit")}
           </Button>
           <Button
             type="text"
@@ -246,7 +250,7 @@ export function WorkCenters() {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
           >
-            删除
+            {t("common.delete")}
           </Button>
         </Space>
       ),
@@ -262,7 +266,7 @@ export function WorkCenters() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="work-centers"
-        headerTitle="工作中心管理"
+        headerTitle={t("mrp.workCenters.title")}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -270,11 +274,11 @@ export function WorkCenters() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              新增工作中心
+              {t("mrp.workCenters.add")}
             </Button>
             <Input.Search
               allowClear
-              placeholder="搜索工作中心名称或编码..."
+              placeholder={t("mrp.workCenters.searchPlaceholder")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchWorkCenters}
@@ -285,7 +289,9 @@ export function WorkCenters() {
       />
 
       <SimpleModal
-        title={editingWorkCenter ? "编辑工作中心" : "新增工作中心"}
+        title={
+          editingWorkCenter ? t("mrp.workCenters.edit") : t("mrp.workCenters.add")
+        }
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -295,9 +301,11 @@ export function WorkCenters() {
         width={400}
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>
+              {t("common.cancel")}
+            </Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t("common.save")}
             </Button>
           </Space>
         }
@@ -311,29 +319,35 @@ export function WorkCenters() {
           onFinish={handleSubmit}
         >
           <Form.Item
-            label="编码"
+            label={t("common.code")}
             name="code"
-            rules={[{ required: true, message: "请输入编码" }]}
+            rules={[{ required: true, message: t("mrp.workCenters.codePrompt") }]}
           >
-            <Input placeholder="请输入编码" disabled={!!editingWorkCenter} />
+            <Input
+              placeholder={t("mrp.workCenters.codePrompt")}
+              disabled={!!editingWorkCenter}
+            />
           </Form.Item>
           <Form.Item
-            label="名称"
+            label={t("common.name")}
             name="name"
-            rules={[{ required: true, message: "请输入名称" }]}
+            rules={[{ required: true, message: t("mrp.workCenters.namePrompt") }]}
           >
-            <Input placeholder="请输入名称" />
+            <Input placeholder={t("mrp.workCenters.namePrompt")} />
           </Form.Item>
-          <Form.Item label="类型" name="type" initialValue="machine">
+          <Form.Item label={t("common.type")} name="type" initialValue="machine">
             <Select>
-              <Option value="machine">机器</Option>
-              <Option value="labor">人工</Option>
-              <Option value="mixed">混合</Option>
-              <Option value="other">其他</Option>
+              <Option value="machine">{t("mrp.workCenters.typeMachine")}</Option>
+              <Option value="labor">{t("mrp.workCenters.typeLabor")}</Option>
+              <Option value="mixed">{t("mrp.workCenters.typeMixed")}</Option>
+              <Option value="other">{t("mrp.workCenters.typeOther")}</Option>
             </Select>
           </Form.Item>
-          <Form.Item label="所属部门" name="department_id">
-            <Select placeholder="请选择部门">
+          <Form.Item
+            label={t("mrp.workCenters.department")}
+            name="department_id"
+          >
+            <Select placeholder={t("mrp.workCenters.departmentPrompt")}>
               {departments.map((d) => (
                 <Option key={d.id} value={d.id}>
                   {d.name}
@@ -342,28 +356,39 @@ export function WorkCenters() {
             </Select>
           </Form.Item>
           <Form.Item
-            label="日产能(小时)"
+            label={t("mrp.workCenters.capacity")}
             name="capacity_per_day"
             initialValue={8}
           >
-            <InputNumber style={{ width: "100%" }} placeholder="请输入日产能" />
-          </Form.Item>
-          <Form.Item label="人工费率" name="labor_rate" initialValue={0}>
             <InputNumber
               style={{ width: "100%" }}
-              placeholder="请输入人工费率"
+              placeholder={t("mrp.workCenters.capacityPrompt")}
             />
           </Form.Item>
-          <Form.Item label="制造费率" name="overhead_rate" initialValue={0}>
+          <Form.Item
+            label={t("mrp.workCenters.laborRate")}
+            name="labor_rate"
+            initialValue={0}
+          >
             <InputNumber
               style={{ width: "100%" }}
-              placeholder="请输入制造费率"
+              placeholder={t("mrp.workCenters.laborRatePrompt")}
             />
           </Form.Item>
-          <Form.Item label="状态" name="status" initialValue="active">
+          <Form.Item
+            label={t("mrp.workCenters.overheadRate")}
+            name="overhead_rate"
+            initialValue={0}
+          >
+            <InputNumber
+              style={{ width: "100%" }}
+              placeholder={t("mrp.workCenters.overheadRatePrompt")}
+            />
+          </Form.Item>
+          <Form.Item label={t("common.status")} name="status" initialValue="active">
             <Select>
-              <Option value="active">启用</Option>
-              <Option value="inactive">停用</Option>
+              <Option value="active">{t("common.enabled")}</Option>
+              <Option value="inactive">{t("mrp.inactive")}</Option>
             </Select>
           </Form.Item>
         </Form>
