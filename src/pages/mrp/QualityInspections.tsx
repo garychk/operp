@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Button,
   Card,
@@ -7,7 +8,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Modal,
   Row,
   Select,
   Space,
@@ -63,33 +63,34 @@ type Source = {
   operationId?: number | null;
   label: string;
 };
-const sourceNames: Record<SourceType, string> = {
-  purchase_receipt: "采购收货",
-  sales_return: "销售退货",
-  production_operation: "工序完工",
-};
-const results: Record<string, [string, string]> = {
-  pending: ["待判定", "default"],
-  qualified: ["合格", "success"],
-  unqualified: ["不合格", "error"],
-  conditional: ["让步接收", "warning"],
-};
-const statuses: Record<string, [string, string]> = {
-  pending: ["待检", "gold"],
-  inspecting: ["检验中", "processing"],
-  completed: ["已完成", "success"],
-  cancelled: ["已取消", "default"],
-};
-const dispositions = [
-  ["accept", "接收"],
-  ["return", "退货"],
-  ["rework", "返工"],
-  ["scrap", "报废"],
-  ["concession", "让步接收"],
-  ["sort", "挑选"],
-].map(([value, label]) => ({ value, label }));
 
 export function QualityInspections() {
+  const { t } = useTranslation();
+  const sourceNames: Record<SourceType, string> = {
+    purchase_receipt: t("mrp.quality.sourcePurchaseReceipt"),
+    sales_return: t("mrp.quality.sourceSalesReturn"),
+    production_operation: t("mrp.quality.sourceProductionOperation"),
+  };
+  const results: Record<string, [string, string]> = {
+    pending: [t("mrp.quality.resultPending"), "default"],
+    qualified: [t("mrp.quality.resultQualified"), "success"],
+    unqualified: [t("mrp.quality.resultUnqualified"), "error"],
+    conditional: [t("mrp.quality.resultConditional"), "warning"],
+  };
+  const statuses: Record<string, [string, string]> = {
+    pending: [t("mrp.quality.statusPending"), "gold"],
+    inspecting: [t("mrp.quality.statusInspecting"), "processing"],
+    completed: [t("mrp.quality.statusCompleted"), "success"],
+    cancelled: [t("mrp.quality.statusCancelled"), "default"],
+  };
+  const dispositions = [
+    ["accept", t("mrp.quality.dispAccept")],
+    ["return", t("mrp.quality.dispReturn")],
+    ["rework", t("mrp.quality.dispRework")],
+    ["scrap", t("mrp.quality.dispScrap")],
+    ["concession", t("mrp.quality.dispConcession")],
+    ["sort", t("mrp.quality.dispSort")],
+  ].map(([value, label]) => ({ value, label }));
   const [rows, setRows] = useState<Inspection[]>([]),
     [products, setProducts] = useState<Product[]>([]),
     [sources, setSources] = useState<Source[]>([]);
@@ -120,9 +121,7 @@ export function QualityInspections() {
     ]);
     setLoading(false);
     if (a.error) {
-      message.error(
-        "获取检验数据失败，请先执行 deploy_10_quality_inspection.sql",
-      );
+      message.error(t("mrp.quality.fetchDataFailed"));
       return;
     }
     setRows((a.data || []) as Inspection[]);
@@ -237,7 +236,7 @@ export function QualityInspections() {
       }
     } catch (e) {
       console.error(e);
-      message.error("获取来源单据失败");
+      message.error(t("mrp.quality.fetchSourcesFailed"));
     }
   };
   useEffect(() => {
@@ -275,13 +274,15 @@ export function QualityInspections() {
         },
         { table: "erp_quality_inspections_s_539dcf81_b" },
       );
-      message.success("检验任务已创建");
+      message.success(t("mrp.quality.taskCreated"));
       setCreateOpen(false);
       createForm.resetFields();
       void load();
     } catch (e: any) {
       message.error(
-        e?.code === "23505" ? "该来源明细已存在检验任务" : "创建失败",
+        e?.code === "23505"
+          ? t("mrp.quality.sourceDuplicated")
+          : t("mrp.quality.createFailed"),
       );
     }
   };
@@ -303,11 +304,11 @@ export function QualityInspections() {
       good = Number(v.qualified_quantity),
       bad = Number(v.unqualified_quantity);
     if (good + bad !== sample)
-      return void message.error("合格数量与不合格数量之和必须等于抽样数量");
+      return void message.error(t("mrp.quality.sumMustEqualSample"));
     if (sample > current.inspection_quantity)
-      return void message.error("抽样数量不能超过报检数量");
+      return void message.error(t("mrp.quality.sampleExceeds"));
     if (complete && bad > 0 && !v.disposition)
-      return void message.error("存在不合格时必须选择处置方式");
+      return void message.error(t("mrp.quality.needDisposition"));
     const result =
       bad === 0
         ? "qualified"
@@ -332,11 +333,15 @@ export function QualityInspections() {
         },
         { table: "erp_quality_inspections_s_539dcf81_b", recordId: current.id },
       );
-      message.success(complete ? "检验已完成" : "已暂存");
+      message.success(
+        complete
+          ? t("mrp.quality.inspectionCompleted")
+          : t("mrp.quality.savedTemp"),
+      );
       setInspectOpen(false);
       void load();
     } catch {
-      message.error("保存失败");
+      message.error(t("common.saveFailed"));
     }
   };
   const filtered = rows.filter((r) =>
@@ -346,20 +351,20 @@ export function QualityInspections() {
   );
   const columns: any[] = [
     {
-      title: "检验单号",
+      title: t("mrp.quality.inspectionNo"),
       dataIndex: "inspection_no",
       fixed: "left",
       width: 160,
     },
     {
-      title: "来源",
+      title: t("mrp.quality.source"),
       dataIndex: "source_type",
       width: 110,
       render: (v: SourceType) => <Tag>{sourceNames[v]}</Tag>,
     },
-    { title: "来源单号", dataIndex: "source_no", width: 150 },
+    { title: t("mrp.quality.sourceNo"), dataIndex: "source_no", width: 150 },
     {
-      title: "物料",
+      title: t("mrp.quality.material"),
       dataIndex: "product_id",
       width: 190,
       render: (v: number) => {
@@ -368,13 +373,13 @@ export function QualityInspections() {
       },
     },
     {
-      title: "报检/抽样",
+      title: t("mrp.quality.inspectionSample"),
       width: 130,
       render: (_: unknown, r: Inspection) =>
         `${r.inspection_quantity} / ${r.sample_quantity}`,
     },
     {
-      title: "结论",
+      title: t("mrp.quality.result"),
       dataIndex: "result",
       width: 100,
       render: (v: string) => (
@@ -382,21 +387,23 @@ export function QualityInspections() {
       ),
     },
     {
-      title: "状态",
+      title: t("common.status"),
       dataIndex: "status",
       width: 100,
       render: (v: string) => (
         <Tag color={statuses[v]?.[1]}>{statuses[v]?.[0] || v}</Tag>
       ),
     },
-    { title: "检验员", dataIndex: "inspector", width: 100 },
+    { title: t("mrp.quality.inspector"), dataIndex: "inspector", width: 100 },
     {
-      title: "操作",
+      title: t("common.actions"),
       fixed: "right",
       width: 90,
       render: (_: unknown, r: Inspection) => (
         <Button type="link" onClick={() => inspect(r)}>
-          {r.status === "completed" ? "复检" : "检验"}
+          {r.status === "completed"
+            ? t("mrp.quality.reInspect")
+            : t("mrp.quality.inspect")}
         </Button>
       ),
     },
@@ -407,7 +414,7 @@ export function QualityInspections() {
         <Col span={8}>
           <Card size="small">
             <Statistic
-              title="待检任务"
+              title={t("mrp.quality.pendingTasks")}
               value={rows.filter((r) => r.status === "pending").length}
               prefix={<ExperimentOutlined />}
             />
@@ -416,7 +423,7 @@ export function QualityInspections() {
         <Col span={8}>
           <Card size="small">
             <Statistic
-              title="已完成"
+              title={t("mrp.quality.completedTasks")}
               value={rows.filter((r) => r.status === "completed").length}
               prefix={<CheckCircleOutlined />}
             />
@@ -425,7 +432,7 @@ export function QualityInspections() {
         <Col span={8}>
           <Card size="small">
             <Statistic
-              title="不合格/让步"
+              title={t("mrp.quality.unqualifiedOrConcession")}
               value={
                 rows.filter((r) =>
                   ["unqualified", "conditional"].includes(r.result),
@@ -437,7 +444,7 @@ export function QualityInspections() {
         </Col>
       </Row>
       <Card
-        title="检验管理"
+        title={t("mrp.quality.title")}
         extra={
           <Space>
             <Input
@@ -445,7 +452,7 @@ export function QualityInspections() {
               allowClear
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="检验单号、来源、物料"
+              placeholder={t("mrp.quality.searchPlaceholder")}
             />
             <Button
               type="primary"
@@ -459,7 +466,7 @@ export function QualityInspections() {
                 setCreateOpen(true);
               }}
             >
-              创建检验任务
+              {t("mrp.quality.addTask")}
             </Button>
           </Space>
         }
@@ -473,7 +480,7 @@ export function QualityInspections() {
         />
       </Card>
       <SimpleModal
-        title="创建检验任务"
+        title={t("mrp.quality.addTask")}
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={() => createForm.submit()}
@@ -483,7 +490,7 @@ export function QualityInspections() {
           <Row gutter={12}>
             <Col span={12}>
               <Form.Item
-                label="检验单号"
+                label={t("mrp.quality.inspectionNo")}
                 name="inspection_no"
                 rules={[{ required: true }]}
               >
@@ -492,7 +499,7 @@ export function QualityInspections() {
             </Col>
             <Col span={12}>
               <Form.Item
-                label="检验日期"
+                label={t("mrp.quality.inspectionDate")}
                 name="inspection_date"
                 rules={[{ required: true }]}
               >
@@ -500,7 +507,7 @@ export function QualityInspections() {
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item label="来源类型">
+          <Form.Item label={t("mrp.quality.sourceType")}>
             <Select
               value={sourceType}
               onChange={setSourceType}
@@ -511,7 +518,7 @@ export function QualityInspections() {
             />
           </Form.Item>
           <Form.Item
-            label="来源明细"
+            label={t("mrp.quality.sourceDetail")}
             name="sourceKey"
             rules={[{ required: true }]}
           >
@@ -519,35 +526,46 @@ export function QualityInspections() {
               showSearch
               optionFilterProp="label"
               options={sources.map((s) => ({ value: s.key, label: s.label }))}
-              placeholder={sources.length ? "请选择来源明细" : "暂无可检验来源"}
+              placeholder={
+                sources.length
+                  ? t("mrp.quality.selectSourceDetail")
+                  : t("mrp.quality.noAvailableSource")
+              }
             />
           </Form.Item>
-          <Form.Item label="抽样数量" name="sample_quantity">
+          <Form.Item
+            label={t("mrp.quality.sampleQuantity")}
+            name="sample_quantity"
+          >
             <InputNumber
               min={0.0001}
               style={{ width: "100%" }}
-              placeholder="默认全部检验"
+              placeholder={t("mrp.quality.defaultFullInspection")}
             />
           </Form.Item>
-          <Form.Item label="备注" name="remark">
+          <Form.Item label={t("mrp.quality.remark")} name="remark">
             <Input.TextArea />
           </Form.Item>
         </Form>
       </SimpleModal>
       <SimpleModal
-        title={`${current?.inspection_no || ""} - 检验记录`}
+        title={t("mrp.quality.inspectRecord", {
+          inspectionNo: current?.inspection_no || "",
+        })}
         width={760}
         open={inspectOpen}
         onCancel={() => setInspectOpen(false)}
         footer={
           <Space>
-            <Button onClick={() => setInspectOpen(false)}>取消</Button>
+            <Button onClick={() => setInspectOpen(false)}>
+              {t("common.cancel")}
+            </Button>
             <Button
               onClick={() =>
                 inspectForm.validateFields().then((v) => save(v, false))
               }
             >
-              暂存
+              {t("mrp.quality.saveTemp")}
             </Button>
             <Button
               type="primary"
@@ -555,7 +573,7 @@ export function QualityInspections() {
                 inspectForm.validateFields().then((v) => save(v, true))
               }
             >
-              完成检验
+              {t("mrp.quality.completeInspection")}
             </Button>
           </Space>
         }
@@ -564,7 +582,7 @@ export function QualityInspections() {
           <Row gutter={12}>
             <Col span={8}>
               <Form.Item
-                label="抽样数量"
+                label={t("mrp.quality.sampleQuantity")}
                 name="sample_quantity"
                 rules={[{ required: true }]}
               >
@@ -573,7 +591,7 @@ export function QualityInspections() {
             </Col>
             <Col span={8}>
               <Form.Item
-                label="合格数量"
+                label={t("mrp.quality.qualifiedQuantity")}
                 name="qualified_quantity"
                 rules={[{ required: true }]}
               >
@@ -582,7 +600,7 @@ export function QualityInspections() {
             </Col>
             <Col span={8}>
               <Form.Item
-                label="不合格数量"
+                label={t("mrp.quality.unqualifiedQuantity")}
                 name="unqualified_quantity"
                 rules={[{ required: true }]}
               >
@@ -593,7 +611,7 @@ export function QualityInspections() {
           <Row gutter={12}>
             <Col span={12}>
               <Form.Item
-                label="检验员"
+                label={t("mrp.quality.inspector")}
                 name="inspector"
                 rules={[{ required: true }]}
               >
@@ -601,12 +619,15 @@ export function QualityInspections() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="不合格处置" name="disposition">
+              <Form.Item
+                label={t("mrp.quality.disposition")}
+                name="disposition"
+              >
                 <Select allowClear options={dispositions} />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item label="检验备注" name="remark">
+          <Form.Item label={t("mrp.quality.inspectionRemark")} name="remark">
             <Input.TextArea />
           </Form.Item>
         </Form>

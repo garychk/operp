@@ -25,6 +25,7 @@ import { SuperTable } from "../../components/SuperTable";
 import type { Tables } from "../../utils/supabase";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
+import { useTranslation } from "react-i18next";
 
 type ProductionOrder = Tables["erp_production_orders_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
@@ -36,6 +37,7 @@ const { Option } = Select;
 const productionOrderTable = "erp_production_orders_s_539dcf81_b";
 
 export function ProductionOrders() {
+  const { t } = useTranslation();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [boms, setBoms] = useState<Bom[]>([]);
@@ -71,7 +73,7 @@ export function ProductionOrders() {
       setOrders(data || []);
     } catch (error) {
       console.error("Error fetching orders:", error);
-      message.error("获取数据失败");
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -142,7 +144,7 @@ export function ProductionOrders() {
             .eq("id", editingOrder.id);
           if (error) throw error;
         }, { table: productionOrderTable, recordId: editingOrder.id });
-        message.success("更新成功");
+        message.success(t('common.updateSuccess'));
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: productionOrderTable,
@@ -158,7 +160,7 @@ export function ProductionOrders() {
           return data;
         }, logParams);
         setEditingOrder(data);
-        message.success("新增成功");
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -166,7 +168,7 @@ export function ProductionOrders() {
       fetchOrders();
     } catch (error) {
       console.error("Error saving order:", error);
-      message.error("保存失败");
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -184,8 +186,8 @@ export function ProductionOrders() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该生产订单吗？",
+      title: t('common.confirmDelete'),
+      content: t('mrp.productionOrders.deleteConfirm'),
       onOk: async () => {
         try {
           await logWithTiming("删除生产订单", "DELETE", async () => {
@@ -195,11 +197,11 @@ export function ProductionOrders() {
               .eq("id", id);
             if (error) throw error;
           }, { table: productionOrderTable, recordId: id });
-          message.success("删除成功");
+          message.success(t('common.deleteSuccess'));
           fetchOrders();
         } catch (error) {
           console.error("Error deleting order:", error);
-          message.error("删除失败");
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -247,71 +249,71 @@ export function ProductionOrders() {
   );
 
   const statusLabels: Record<string, { text: string; color: string }> = {
-    draft: { text: "草稿", color: "default" },
-    planned: { text: "已计划", color: "processing" },
-    released: { text: "已下达", color: "warning" },
-    in_progress: { text: "生产中", color: "blue" },
-    completed: { text: "已完成", color: "success" },
-    closed: { text: "已关闭", color: "default" },
-    cancelled: { text: "已取消", color: "error" },
+    draft: { text: t('mrp.productionOrders.statusDraft'), color: "default" },
+    planned: { text: t('mrp.productionOrders.statusPlanned'), color: "processing" },
+    released: { text: t('mrp.productionOrders.statusReleased'), color: "warning" },
+    in_progress: { text: t('mrp.productionOrders.statusInProgress'), color: "blue" },
+    completed: { text: t('mrp.productionOrders.statusCompleted'), color: "success" },
+    closed: { text: t('mrp.productionOrders.statusClosed'), color: "default" },
+    cancelled: { text: t('mrp.productionOrders.statusCancelled'), color: "error" },
   };
 
   const priorityLabels: Record<number, string> = {
-    1: "低",
-    2: "中",
-    3: "高",
-    4: "紧急",
+    1: t('mrp.productionOrders.priorityLow'),
+    2: t('mrp.productionOrders.priorityMedium'),
+    3: t('mrp.productionOrders.priorityHigh'),
+    4: t('mrp.productionOrders.priorityUrgent'),
   };
 
   const columns = [
     {
-      title: "订单号",
+      title: t('mrp.productionOrders.orderNo'),
       dataIndex: "order_no",
       key: "order_no",
     },
     {
-      title: "产品",
+      title: t('mrp.productionOrders.product'),
       dataIndex: "product_id",
       key: "product_id",
       render: (productId: number) => getProductName(productId),
     },
     {
-      title: "计划数量",
+      title: t('mrp.productionOrders.plannedQuantity'),
       dataIndex: "planned_quantity",
       key: "planned_quantity",
     },
     {
-      title: "完成数量",
+      title: t('mrp.productionOrders.completedQuantity'),
       dataIndex: "completed_quantity",
       key: "completed_quantity",
       render: (qty: number) => qty || 0,
     },
     {
-      title: "计划开始",
+      title: t('mrp.productionOrders.plannedStart'),
       dataIndex: "planned_start_date",
       key: "planned_start_date",
       render: (text: string) => text || "-",
     },
     {
-      title: "计划结束",
+      title: t('mrp.productionOrders.plannedEnd'),
       dataIndex: "planned_end_date",
       key: "planned_end_date",
       render: (text: string) => text || "-",
     },
     {
-      title: "工作中心",
+      title: t('mrp.productionOrders.workCenter'),
       dataIndex: "work_center_id",
       key: "work_center_id",
       render: (workCenterId: number) => getWorkCenterName(workCenterId),
     },
     {
-      title: "优先级",
+      title: t('mrp.productionOrders.priority'),
       dataIndex: "priority",
       key: "priority",
-      render: (priority: number) => priorityLabels[priority] || "低",
+      render: (priority: number) => priorityLabels[priority] || t('mrp.productionOrders.priorityLow'),
     },
     {
-      title: "状态",
+      title: t('common.status'),
       dataIndex: "status",
       key: "status",
       render: (status: string) => {
@@ -323,7 +325,7 @@ export function ProductionOrders() {
       },
     },
     {
-      title: "操作",
+      title: t('common.actions'),
       key: "action",
       render: (_: any, record: ProductionOrder) => (
         <Space>
@@ -332,7 +334,7 @@ export function ProductionOrders() {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Button
             type="text"
@@ -340,7 +342,7 @@ export function ProductionOrders() {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
           >
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -356,7 +358,7 @@ export function ProductionOrders() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="production-orders"
-        headerTitle="生产订单"
+        headerTitle={t('mrp.productionOrders.title')}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -364,11 +366,11 @@ export function ProductionOrders() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              新增订单
+              {t('mrp.productionOrders.add')}
             </Button>
             <Input.Search
               allowClear
-              placeholder="搜索订单号或产品..."
+              placeholder={t('mrp.productionOrders.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchOrders}
@@ -379,7 +381,7 @@ export function ProductionOrders() {
       />
 
       <SupaModal
-        title={editingOrder ? "编辑生产订单" : "新增生产订单"}
+        title={editingOrder ? t('mrp.productionOrders.edit') : t('mrp.productionOrders.addTitle')}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -399,25 +401,25 @@ export function ProductionOrders() {
             <Row gutter={16}>
               <Col span={8}>
                 <Form.Item
-                  label="订单号"
+                  label={t('mrp.productionOrders.orderNo')}
                   name="order_no"
-                  rules={[{ required: true, message: "请输入订单号" }]}
+                  rules={[{ required: true, message: t('mrp.productionOrders.orderNoPrompt') }]}
                 >
-                  <Input placeholder="请输入订单号" disabled={!!editingOrder} />
+                  <Input placeholder={t('mrp.productionOrders.orderNoPrompt')} disabled={!!editingOrder} />
                 </Form.Item>
                 <Form.Item
-                  label="订单日期"
+                  label={t('mrp.productionOrders.orderDate')}
                   name="order_date"
-                  rules={[{ required: true, message: "请选择订单日期" }]}
+                  rules={[{ required: true, message: t('mrp.productionOrders.orderDatePrompt') }]}
                 >
                   <DatePicker style={{ width: "100%" }} />
                 </Form.Item>
                 <Form.Item
-                  label="产品"
+                  label={t('mrp.productionOrders.product')}
                   name="product_id"
-                  rules={[{ required: true, message: "请选择产品" }]}
+                  rules={[{ required: true, message: t('mrp.productionOrders.productPrompt') }]}
                 >
-                  <Select placeholder="请选择产品" disabled={!!editingOrder}>
+                  <Select placeholder={t('mrp.productionOrders.productPrompt')} disabled={!!editingOrder}>
                     {products.map((p) => (
                       <Option key={p.id} value={p.id}>
                         {p.name}
@@ -425,8 +427,8 @@ export function ProductionOrders() {
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label="BOM" name="bom_id">
-                  <Select placeholder="请选择BOM">
+                <Form.Item label={t('mrp.productionOrders.bom')} name="bom_id">
+                  <Select placeholder={t('mrp.productionOrders.bomPrompt')}>
                     {boms.map((b) => (
                       <Option key={b.id} value={b.id}>
                         {b.bom_no}
@@ -434,8 +436,8 @@ export function ProductionOrders() {
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label="工艺路线" name="routing_id">
-                  <Select placeholder="请选择工艺路线" allowClear>
+                <Form.Item label={t('mrp.productionOrders.routing')} name="routing_id">
+                  <Select placeholder={t('mrp.productionOrders.routingPrompt')} allowClear>
                     {routings.map((r) => (
                       <Option key={r.id} value={r.id}>
                         {r.routing_no}
@@ -446,52 +448,52 @@ export function ProductionOrders() {
               </Col>
               <Col span={8}>
                 <Form.Item
-                  label="计划数量"
+                  label={t('mrp.productionOrders.plannedQuantity')}
                   name="planned_quantity"
                   initialValue={1}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入计划数量"
+                    placeholder={t('mrp.productionOrders.plannedQuantityPrompt')}
                   />
                 </Form.Item>
                 <Form.Item
-                  label="完成数量"
+                  label={t('mrp.productionOrders.completedQuantity')}
                   name="completed_quantity"
                   initialValue={0}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入完成数量"
+                    placeholder={t('mrp.productionOrders.completedQuantityPrompt')}
                   />
                 </Form.Item>
                 <Form.Item
-                  label="报废数量"
+                  label={t('mrp.productionOrders.scrappedQuantity')}
                   name="scrapped_quantity"
                   initialValue={0}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入报废数量"
+                    placeholder={t('mrp.productionOrders.scrappedQuantityPrompt')}
                   />
                 </Form.Item>
-                <Form.Item label="计划开始日期" name="planned_start_date">
+                <Form.Item label={t('mrp.productionOrders.plannedStartDate')} name="planned_start_date">
                   <DatePicker style={{ width: "100%" }} />
                 </Form.Item>
-                <Form.Item label="计划结束日期" name="planned_end_date">
+                <Form.Item label={t('mrp.productionOrders.plannedEndDate')} name="planned_end_date">
                   <DatePicker style={{ width: "100%" }} />
                 </Form.Item>
 
               </Col>
               <Col span={8}>
-                <Form.Item label="实际开始日期" name="actual_start_date">
+                <Form.Item label={t('mrp.productionOrders.actualStartDate')} name="actual_start_date">
                   <DatePicker style={{ width: "100%" }} />
                 </Form.Item>
-                <Form.Item label="实际结束日期" name="actual_end_date">
+                <Form.Item label={t('mrp.productionOrders.actualEndDate')} name="actual_end_date">
                   <DatePicker style={{ width: "100%" }} />
                 </Form.Item>
-                <Form.Item label="工作中心" name="work_center_id">
-                  <Select placeholder="请选择工作中心">
+                <Form.Item label={t('mrp.productionOrders.workCenter')} name="work_center_id">
+                  <Select placeholder={t('mrp.productionOrders.workCenterPrompt')}>
                     {workCenters.map((w) => (
                       <Option key={w.id} value={w.id}>
                         {w.name}
@@ -499,40 +501,40 @@ export function ProductionOrders() {
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label="优先级" name="priority" initialValue={1}>
+                <Form.Item label={t('mrp.productionOrders.priority')} name="priority" initialValue={1}>
                   <Select>
-                    <Option value={1}>低</Option>
-                    <Option value={2}>中</Option>
-                    <Option value={3}>高</Option>
-                    <Option value={4}>紧急</Option>
+                    <Option value={1}>{t('mrp.productionOrders.priorityLow')}</Option>
+                    <Option value={2}>{t('mrp.productionOrders.priorityMedium')}</Option>
+                    <Option value={3}>{t('mrp.productionOrders.priorityHigh')}</Option>
+                    <Option value={4}>{t('mrp.productionOrders.priorityUrgent')}</Option>
                   </Select>
                 </Form.Item>
-                <Form.Item label="状态" name="status" initialValue="draft">
+                <Form.Item label={t('common.status')} name="status" initialValue="draft">
                   <Select>
-                    <Option value="draft">草稿</Option>
-                    <Option value="planned">已计划</Option>
-                    <Option value="released">已下达</Option>
-                    <Option value="in_progress">生产中</Option>
-                    <Option value="completed">已完成</Option>
-                    <Option value="closed">已关闭</Option>
-                    <Option value="cancelled">已取消</Option>
+                    <Option value="draft">{t('mrp.productionOrders.statusDraft')}</Option>
+                    <Option value="planned">{t('mrp.productionOrders.statusPlanned')}</Option>
+                    <Option value="released">{t('mrp.productionOrders.statusReleased')}</Option>
+                    <Option value="in_progress">{t('mrp.productionOrders.statusInProgress')}</Option>
+                    <Option value="completed">{t('mrp.productionOrders.statusCompleted')}</Option>
+                    <Option value="closed">{t('mrp.productionOrders.statusClosed')}</Option>
+                    <Option value="cancelled">{t('mrp.productionOrders.statusCancelled')}</Option>
                   </Select>
                 </Form.Item>
               </Col>
               <Col span={24}>
-                <Form.Item label="备注" name="remark">
-                  <Input.TextArea rows={2} placeholder="请输入备注" />
+                <Form.Item label={t('mrp.productionOrders.remark')} name="remark">
+                  <Input.TextArea rows={2} placeholder={t('mrp.productionOrders.remarkPrompt')} />
                 </Form.Item>
               </Col>
             </Row>
           </Form>
         }
-        headerPanelTitle="生产订单"
+        headerPanelTitle={t('mrp.productionOrders.title')}
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t('common.save')}
             </Button>
           </Space>
         }

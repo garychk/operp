@@ -6,7 +6,6 @@ import {
   Form,
   Input,
   InputNumber,
-  Modal,
   Popconfirm,
   Select,
   Space,
@@ -122,7 +121,7 @@ export function Dictionaries() {
   const typeColumns: ColumnsType<DictType> = [
     { title: t('common.code'), dataIndex: "code" },
     { title: t('common.name'), dataIndex: "name" },
-    { title: t('dictionaries.sort'), dataIndex: "sort_order", width: 70 },
+    { title: t('dictionaries.sort'), dataIndex: "sort_order", width: 100 },
     { title: t('common.status'), dataIndex: "status", width: 80, render: status },
     {
       title: t('common.actions'),
@@ -156,7 +155,7 @@ export function Dictionaries() {
   const itemColumns: ColumnsType<DictItem> = [
     { title: t('common.code'), dataIndex: "code" },
     { title: t('dictionaries.displayName'), dataIndex: "label" },
-    { title: t('dictionaries.sort'), dataIndex: "sort_order", width: 70 },
+    { title: t('dictionaries.sort'), dataIndex: "sort_order", width: 100 },
     { title: t('common.status'), dataIndex: "status", width: 80, render: status },
     {
       title: t('common.actions'),

@@ -9,7 +9,6 @@ import { logWithTiming } from '@/utils/logger';
 import { SuperTable } from '@/components/SuperTable';
 import type { Tables } from '@/utils/supabase';
 import SimpleModal from '@/components/SimpleModal';
-import { SupaModal } from '@/components/SupaModal';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];

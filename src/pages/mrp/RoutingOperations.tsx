@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from 'react-i18next';
 import type { Key } from "react";
 import {
   Button,
@@ -45,6 +46,7 @@ const routingTable = "erp_routing_operations_s_539dcf81_b";
 const routingDetailTable = "erp_routing_operation_details_s_539dcf81_b";
 
 export function RoutingOperations() {
+  const { t } = useTranslation();
   const [routings, setRoutings] = useState<Routing[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
@@ -96,7 +98,7 @@ export function RoutingOperations() {
       setRoutings(data || []);
     } catch (error) {
       console.error("Error fetching routings:", error);
-      message.error("获取数据失败");
+      message.error(t('common.fetchFailed'));
     } finally {
       setLoading(false);
     }
@@ -128,7 +130,7 @@ export function RoutingOperations() {
       setDetails(data || []);
     } catch (error) {
       console.error("Error fetching details:", error);
-      message.error("获取明细失败");
+      message.error(t('mrp.fetchDetailsFailed'));
     }
   };
 
@@ -153,7 +155,7 @@ export function RoutingOperations() {
           },
           { table: routingTable, recordId: editingRouting.id },
         );
-        message.success("更新成功");
+        message.success(t('common.updateSuccess'));
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: routingTable,
@@ -174,7 +176,7 @@ export function RoutingOperations() {
           logParams,
         );
         setSelectedRouting(data);
-        message.success("新增成功");
+        message.success(t('common.createSuccess'));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -182,14 +184,14 @@ export function RoutingOperations() {
       fetchRoutings();
     } catch (error) {
       console.error("Error saving routing:", error);
-      message.error("保存失败");
+      message.error(t('common.saveFailed'));
     }
   };
 
   const handleDetailSubmit = async (values: any) => {
     try {
       if (!selectedRouting) {
-        message.error("请先选择工艺路线");
+        message.error(t('mrp.routingOperations.selectRoutingFirst'));
         return;
       }
 
@@ -198,7 +200,7 @@ export function RoutingOperations() {
           .from("erp_routing_operation_details_s_539dcf81_b")
           .update(values)
           .eq("id", editingDetail.id);
-        message.success("更新成功");
+        message.success(t('common.updateSuccess'));
       } else {
         values.routing_id = selectedRouting.id;
         values.is_deleted = "n";
@@ -207,7 +209,7 @@ export function RoutingOperations() {
           .from("erp_routing_operation_details_s_539dcf81_b")
           .insert([values]);
         if (error) throw error;
-        message.success("新增成功");
+        message.success(t('common.createSuccess'));
       }
       setIsDetailModalOpen(false);
       detailForm.resetFields();
@@ -216,7 +218,7 @@ export function RoutingOperations() {
       updateRoutingTotal(selectedRouting.id);
     } catch (error) {
       console.error("Error saving detail:", error);
-      message.error("保存失败");
+      message.error(t('common.saveFailed'));
     }
   };
 
@@ -260,8 +262,8 @@ export function RoutingOperations() {
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该工艺路线吗？",
+      title: t('common.confirmDelete'),
+      content: t('mrp.routingOperations.deleteConfirm'),
       onOk: async () => {
         try {
           await logWithTiming(
@@ -281,11 +283,11 @@ export function RoutingOperations() {
             },
             { table: routingTable, recordId: id },
           );
-          message.success("删除成功");
+          message.success(t('common.deleteSuccess'));
           fetchRoutings();
         } catch (error) {
           console.error("Error deleting routing:", error);
-          message.error("删除失败");
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -332,22 +334,22 @@ export function RoutingOperations() {
 
   const handleDeleteDetail = async (id: number) => {
     Modal.confirm({
-      title: "确认删除",
-      content: "确定要删除该工序吗？",
+      title: t('common.confirmDelete'),
+      content: t('mrp.routingOperations.operationDeleteConfirm'),
       onOk: async () => {
         try {
           await supabase
             .from("erp_routing_operation_details_s_539dcf81_b")
             .update({ is_deleted: "y" })
             .eq("id", id);
-          message.success("删除成功");
+          message.success(t('common.deleteSuccess'));
           if (selectedRouting) {
             fetchDetails(selectedRouting.id);
             updateRoutingTotal(selectedRouting.id);
           }
         } catch (error) {
           console.error("Error deleting detail:", error);
-          message.error("删除失败");
+          message.error(t('common.deleteFailed'));
         }
       },
     });
@@ -373,45 +375,45 @@ export function RoutingOperations() {
 
   const columns = [
     {
-      title: "工艺路线编号",
+      title: t('mrp.routingOperations.routingNo'),
       dataIndex: "routing_no",
       key: "routing_no",
     },
     {
-      title: "产品",
+      title: t('mrp.routingOperations.product'),
       dataIndex: "product_id",
       key: "product_id",
       render: (productId: number) => getProductName(productId),
     },
     {
-      title: "版本",
+      title: t('mrp.routingOperations.version'),
       dataIndex: "version",
       key: "version",
     },
     {
-      title: "标准工时",
+      title: t('mrp.routingOperations.standardHours'),
       dataIndex: "total_standard_hours",
       key: "total_standard_hours",
-      render: (hours: number) => `${hours}小时`,
+      render: (hours: number) => t('mrp.hoursAmount', { hours: hours }),
     },
     {
-      title: "默认",
+      title: t('mrp.routingOperations.defaultLabel'),
       dataIndex: "is_default",
       key: "is_default",
-      render: (isDefault: boolean) => (isDefault ? "是" : "否"),
+      render: (isDefault: boolean) => (isDefault ? t('common.yes') : t('common.no')),
     },
     {
-      title: "状态",
+      title: t('common.status'),
       dataIndex: "is_active",
       key: "is_active",
       render: (isActive: boolean) => (
         <Tag color={isActive ? "success" : "default"}>
-          {isActive ? "启用" : "停用"}
+          {isActive ? t('common.enabled') : t('mrp.inactive')}
         </Tag>
       ),
     },
     {
-      title: "操作",
+      title: t('common.actions'),
       key: "action",
       render: (_: any, record: Routing) => (
         <Space size="middle">
@@ -420,14 +422,14 @@ export function RoutingOperations() {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Button
             type="text"
             icon={<AppstoreOutlined />}
             onClick={() => handleShowMap(record)}
           >
-            图形
+            {t('mrp.routingOperations.map')}
           </Button>
           <Button
             type="text"
@@ -435,7 +437,7 @@ export function RoutingOperations() {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
           >
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -444,48 +446,48 @@ export function RoutingOperations() {
 
   const detailColumns = [
     {
-      title: "序号",
+      title: t('mrp.routingOperations.seqNo'),
       dataIndex: "sequence_no",
       key: "sequence_no",
     },
     {
-      title: "工序名称",
+      title: t('mrp.routingOperations.operationName'),
       dataIndex: "operation_id",
       key: "operation_id",
       render: (operationId: number) => getOperationName(operationId),
     },
     {
-      title: "标准工时(小时)",
+      title: t('mrp.routingOperations.standardHoursUnit'),
       dataIndex: "standard_hours",
       key: "standard_hours",
       render: (hours: number) => hours || 0,
     },
     {
-      title: "准备工时(小时)",
+      title: t('mrp.routingOperations.setupHoursUnit'),
       dataIndex: "setup_hours",
       key: "setup_hours",
       render: (hours: number) => hours || 0,
     },
     {
-      title: "人工费率",
+      title: t('mrp.routingOperations.laborRate'),
       dataIndex: "labor_rate",
       key: "labor_rate",
       render: (rate: number) => rate || 0,
     },
     {
-      title: "制造费用率",
+      title: t('mrp.routingOperations.overheadRate'),
       dataIndex: "overhead_rate",
       key: "overhead_rate",
       render: (rate: number) => rate || 0,
     },
     {
-      title: "是否检验",
+      title: t('mrp.routingOperations.inspectionRequired'),
       dataIndex: "is_inspection_required",
       key: "is_inspection_required",
-      render: (isRequired: boolean) => (isRequired ? "是" : "否"),
+      render: (isRequired: boolean) => (isRequired ? t('common.yes') : t('common.no')),
     },
     {
-      title: "操作",
+      title: t('common.actions'),
       key: "action",
       render: (_: any, record: RoutingDetail) => (
         <Space size="middle">
@@ -494,7 +496,7 @@ export function RoutingOperations() {
             icon={<EditOutlined />}
             onClick={() => handleEditDetail(record)}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Button
             type="text"
@@ -502,7 +504,7 @@ export function RoutingOperations() {
             icon={<DeleteOutlined />}
             onClick={() => handleDeleteDetail(record.id)}
           >
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -523,7 +525,7 @@ export function RoutingOperations() {
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey="routing-operations"
-        headerTitle="工艺路线管理"
+        headerTitle={t('mrp.routingOperations.title')}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -531,11 +533,11 @@ export function RoutingOperations() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-              新增工艺路线
+              {t('mrp.routingOperations.add')}
             </Button>
             <Input.Search
               allowClear
-              placeholder="搜索工艺路线编号或产品..."
+              placeholder={t('mrp.routingOperations.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchRoutings}
@@ -546,7 +548,7 @@ export function RoutingOperations() {
       />
 
       <Modal
-        title="工艺路线图"
+        title={t('mrp.routingOperations.mapTitle')}
         open={isMapModalOpen}
         onCancel={() => setIsMapModalOpen(false)}
         footer={null}
@@ -570,7 +572,7 @@ export function RoutingOperations() {
         title={
           <>
             <ShoppingOutlined />
-            <span>{editingRouting ? "编辑工艺路线" : "新增工艺路线"}</span>
+            <span>{editingRouting ? t('mrp.routingOperations.edit') : t('mrp.routingOperations.add')}</span>
           </>
         }
         headerExtra={
@@ -581,7 +583,7 @@ export function RoutingOperations() {
               size="small"
               icon={<CheckOutlined />}
             >
-              审核
+              {t('mrp.routingOperations.approve')}
             </Button>
             <Button
               type="dashed"
@@ -589,12 +591,12 @@ export function RoutingOperations() {
               size="small"
               icon={<PrinterOutlined />}
             >
-              打印
+              {t('mrp.routingOperations.print')}
             </Button>
           </Space>
         }
-        headerPanelTitle="工艺路线头"
-        detailPanelTitle="工艺路线工序明细"
+        headerPanelTitle={t('mrp.routingOperations.headerPanelTitle')}
+        detailPanelTitle={t('mrp.routingOperations.detailPanelTitle')}
         historyTable={routingTable}
         historyRecordId={editingRouting?.id || selectedRouting?.id}
         detailExtra={
@@ -604,7 +606,7 @@ export function RoutingOperations() {
             icon={<PlusOutlined />}
             onClick={handleAddDetail}
           >
-            新增工序
+            {t('mrp.routingOperations.addOperation')}
           </Button>
         }
         form={form}
@@ -618,21 +620,21 @@ export function RoutingOperations() {
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  label="工艺路线编号"
+                  label={t('mrp.routingOperations.routingNo')}
                   name="routing_no"
-                  rules={[{ required: true, message: "请输入工艺路线编号" }]}
+                  rules={[{ required: true, message: t('mrp.routingOperations.routingNoPrompt') }]}
                 >
                   <Input
-                    placeholder="请输入工艺路线编号"
+                    placeholder={t('mrp.routingOperations.routingNoPrompt')}
                     disabled={!!editingRouting}
                   />
                 </Form.Item>
                 <Form.Item
-                  label="产品"
+                  label={t('mrp.routingOperations.product')}
                   name="product_id"
-                  rules={[{ required: true, message: "请选择产品" }]}
+                  rules={[{ required: true, message: t('mrp.routingOperations.productPrompt') }]}
                 >
-                  <Select placeholder="请选择产品" disabled={!!editingRouting}>
+                  <Select placeholder={t('mrp.routingOperations.productPrompt')} disabled={!!editingRouting}>
                     {products.map((p) => (
                       <Option key={p.id} value={p.id}>
                         {p.name}
@@ -640,21 +642,21 @@ export function RoutingOperations() {
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label="版本" name="version" initialValue="1.0">
-                  <Input placeholder="请输入版本" />
+                <Form.Item label={t('mrp.routingOperations.version')} name="version" initialValue="1.0">
+                  <Input placeholder={t('mrp.routingOperations.versionPrompt')} />
                 </Form.Item>
                 <Form.Item
-                  label="标准工时(小时)"
+                  label={t('mrp.routingOperations.standardHoursUnit')}
                   name="total_standard_hours"
                   initialValue={0}
                 >
                   <InputNumber
                     style={{ width: "100%" }}
-                    placeholder="请输入标准工时"
+                    placeholder={t('mrp.routingOperations.standardHoursPrompt')}
                   />
                 </Form.Item>
                 <Form.Item
-                  label="设为默认工艺路线"
+                  label={t('mrp.routingOperations.setDefault')}
                   name="is_default"
                   valuePropName="checked"
                   initialValue={true}
@@ -663,17 +665,17 @@ export function RoutingOperations() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label="生效日期" name="effective_date">
+                <Form.Item label={t('mrp.routingOperations.effectiveDate')} name="effective_date">
                   <DatePicker />
                 </Form.Item>
-                <Form.Item label="失效日期" name="expiry_date">
+                <Form.Item label={t('mrp.routingOperations.expiryDate')} name="expiry_date">
                   <DatePicker />
                 </Form.Item>
-                <Form.Item label="备注" name="remark">
-                  <Input.TextArea rows={5} placeholder="请输入备注" />
+                <Form.Item label={t('mrp.routingOperations.remark')} name="remark">
+                  <Input.TextArea rows={5} placeholder={t('mrp.routingOperations.remarkPrompt')} />
                 </Form.Item>
                 <Form.Item
-                  label="启用"
+                  label={t('common.enabled')}
                   name="is_active"
                   valuePropName="checked"
                   initialValue={true}
@@ -693,10 +695,10 @@ export function RoutingOperations() {
             summary={() => (
               <Table.Summary.Row>
                 <Table.Summary.Cell index={0} colSpan={3} align="right">
-                  <strong>合计</strong>
+                  <strong>{t('mrp.routingOperations.total')}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={1} align="left">
-                  <strong>{detailTotal}小时</strong>
+                  <strong>{t('mrp.hoursAmount', { hours: detailTotal })}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={2}></Table.Summary.Cell>
               </Table.Summary.Row>
@@ -705,9 +707,9 @@ export function RoutingOperations() {
         }
         footer={
           <Space>
-            <Button onClick={() => setIsModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t('common.save')}
             </Button>
           </Space>
         }
@@ -715,7 +717,7 @@ export function RoutingOperations() {
       />
 
       <SimpleModal
-        title={editingDetail ? "编辑工艺路线工序" : "新增工艺路线工序"}
+        title={editingDetail ? t('mrp.routingOperations.editOperationDetail') : t('mrp.routingOperations.addOperationDetail')}
         open={isDetailModalOpen}
         onCancel={() => {
           setIsDetailModalOpen(false);
@@ -724,9 +726,9 @@ export function RoutingOperations() {
         }}
         footer={
           <Space>
-            <Button onClick={() => setIsDetailModalOpen(false)}>取消</Button>
+            <Button onClick={() => setIsDetailModalOpen(false)}>{t('common.cancel')}</Button>
             <Button type="primary" onClick={() => detailForm.submit()}>
-              保存
+              {t('common.save')}
             </Button>
           </Space>
         }
@@ -742,22 +744,22 @@ export function RoutingOperations() {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
-                label="序号"
+                label={t('mrp.routingOperations.seqNo')}
                 name="sequence_no"
-                rules={[{ required: true, message: "请输入序号" }]}
+                rules={[{ required: true, message: t('mrp.routingOperations.seqNoPrompt') }]}
               >
                 <InputNumber
                   min={1}
                   style={{ width: "100%" }}
-                  placeholder="请输入序号"
+                  placeholder={t('mrp.routingOperations.seqNoPrompt')}
                 />
               </Form.Item>
               <Form.Item
-                label="工序名称"
+                label={t('mrp.routingOperations.operationName')}
                 name="operation_id"
-                rules={[{ required: true, message: "请选择工序" }]}
+                rules={[{ required: true, message: t('mrp.routingOperations.operationPrompt') }]}
               >
-                <Select placeholder="请选择工序">
+                <Select placeholder={t('mrp.routingOperations.operationPrompt')}>
                   {operations.map((op) => (
                     <Option key={op.id} value={op.id}>
                       {op.name}
@@ -765,8 +767,8 @@ export function RoutingOperations() {
                   ))}
                 </Select>
               </Form.Item>
-              <Form.Item label="下一道工序" name="next_operation_id">
-                <Select placeholder="请选择下一道工序" allowClear>
+              <Form.Item label={t('mrp.routingOperations.nextOperation')} name="next_operation_id">
+                <Select placeholder={t('mrp.routingOperations.nextOperationPrompt')} allowClear>
                   {operations.map((op) => (
                     <Option key={op.id} value={op.id}>
                       {op.name}
@@ -775,7 +777,7 @@ export function RoutingOperations() {
                 </Select>
               </Form.Item>
               <Form.Item
-                label="标准工时(小时)"
+                label={t('mrp.routingOperations.standardHoursUnit')}
                 name="standard_hours"
                 initialValue={0}
               >
@@ -783,11 +785,11 @@ export function RoutingOperations() {
                   min={0}
                   step={0.1}
                   style={{ width: "100%" }}
-                  placeholder="请输入标准工时"
+                  placeholder={t('mrp.routingOperations.standardHoursPrompt')}
                 />
               </Form.Item>
               <Form.Item
-                label="准备工时(小时)"
+                label={t('mrp.routingOperations.setupHoursUnit')}
                 name="setup_hours"
                 initialValue={0}
               >
@@ -795,22 +797,22 @@ export function RoutingOperations() {
                   min={0}
                   step={0.1}
                   style={{ width: "100%" }}
-                  placeholder="请输入准备工时"
+                  placeholder={t('mrp.routingOperations.setupHoursPrompt')}
                 />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item label="人工费率" name="labor_rate" initialValue={0}>
+              <Form.Item label={t('mrp.routingOperations.laborRate')} name="labor_rate" initialValue={0}>
                 <InputNumber
                   min={0}
                   step={0.0001}
                   precision={4}
                   style={{ width: "100%" }}
-                  placeholder="请输入人工费率"
+                  placeholder={t('mrp.routingOperations.laborRatePrompt')}
                 />
               </Form.Item>
               <Form.Item
-                label="制造费用率"
+                label={t('mrp.routingOperations.overheadRate')}
                 name="overhead_rate"
                 initialValue={0}
               >
@@ -819,11 +821,11 @@ export function RoutingOperations() {
                   step={0.0001}
                   precision={4}
                   style={{ width: "100%" }}
-                  placeholder="请输入制造费用率"
+                  placeholder={t('mrp.routingOperations.overheadRatePrompt')}
                 />
               </Form.Item>
               <Form.Item
-                label="是否需要检验"
+                label={t('mrp.routingOperations.inspectionRequiredField')}
                 name="is_inspection_required"
                 valuePropName="checked"
                 initialValue={false}

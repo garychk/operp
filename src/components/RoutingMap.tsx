@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Graph } from "@antv/x6";
 import { Spin } from "antd";
+import { useTranslation } from "react-i18next";
 
 interface RoutingMapProps {
   details: any[];
@@ -19,13 +20,15 @@ interface NodeData {
 }
 
 export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) {
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const [loading, setLoading] = useState(false);
 
   const getOperationName = (operationId: number | null) => {
     const operation = operations.find((op) => op.id === operationId);
-    return '🕒 '+operation?.name || "未知工序";
+    if (!operation?.name) return t("routingMap.fallback.operation");
+    return `🕒 ${operation.name}`;
   };
   // 滤镜配置
   const FILTERS = {
@@ -54,14 +57,16 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
     let infoNode = graph.getCellById("info-node");
 
     if (data) {
-      const infoText = `工序详情
-序号: ${data.sequenceNo}
-工序: ${data.operationName}
-标准工时: ${data.standardHours}小时
-准备工时: ${data.setupHours}小时
-人工费率: ${data.laborRate}
-制造费用率: ${data.overheadRate}
-${data.isInspection ? "需要检验⚠️ " : ""}`;
+      const infoText = [
+        t("routingMap.detail.title"),
+        t("routingMap.detail.seqNo", { value: data.sequenceNo }),
+        t("routingMap.detail.operation", { value: data.operationName }),
+        t("routingMap.detail.standardHours", { value: data.standardHours }),
+        t("routingMap.detail.setupHours", { value: data.setupHours }),
+        t("routingMap.detail.laborRate", { value: data.laborRate }),
+        t("routingMap.detail.overheadRate", { value: data.overheadRate }),
+        data.isInspection ? t("routingMap.detail.needInspect") : "",
+      ].join("\n");
 
       const nodeWidth = 140;
       const nodeHeight = 175;
@@ -161,7 +166,7 @@ ${data.isInspection ? "需要检验⚠️ " : ""}`;
 
     graphRef.current = graph;
 
-    const titleText = `💡工艺路线图 - ${routingNo || "请选择工艺路线"}`;
+    const titleText = `💡${routingNo ? t("routingMap.titleWithNo", { no: routingNo }) : t("routingMap.selectRouting")}`;
     graph.addNode({
       id: "title-node",
       x: 10,
@@ -301,7 +306,7 @@ ${data.isInspection ? "需要检验⚠️ " : ""}`;
               {
                 attrs: {
                   text: {
-                    text: "下一工序",
+                    text: t("routingMap.nextOperation"),
                     fill: "#31d0c6",
                     fontSize: 10,
                   },
@@ -362,7 +367,7 @@ ${data.isInspection ? "需要检验⚠️ " : ""}`;
 
   return (
     <>
-      <Spin spinning={loading} indicator={<span>正在渲染工艺路线图...</span>}>
+      <Spin spinning={loading} indicator={<span>{t("routingMap.loading")}</span>}>
         <div
           ref={containerRef}
           style={{
@@ -383,7 +388,7 @@ ${data.isInspection ? "需要检验⚠️ " : ""}`;
             color: "#999",
           }}
         >
-          请在上方表格中选择一条工艺路线查看图形
+          {t("routingMap.empty.selectRouting")}
         </div>
       )}
     </>

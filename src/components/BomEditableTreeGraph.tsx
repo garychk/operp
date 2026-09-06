@@ -183,7 +183,11 @@ async function buildBomTree(materialCode: string, t: (key: string, options?: Rec
       bomId: detail.bom_id,
       productId: detail.material_id,
       title: product ? `${product.code} ${product.name}` : t("bomTree.fallback.unnamedMaterial"),
-      subtitle: `数量 ${detail.quantity ?? 0}${detail.unit ? ` / ${detail.unit}` : ""}${detail.loss_rate != null ? ` / 损耗 ${((detail.loss_rate || 0) * 100).toFixed(2)}%` : ""}`,
+      subtitle: [
+        t("bomTree.node.quantity", { quantity: detail.quantity ?? 0 }),
+        detail.unit,
+        detail.loss_rate != null ? t("bomTree.node.lossRate", { rate: ((detail.loss_rate || 0) * 100).toFixed(2) }) : undefined,
+      ].filter(Boolean).join(" / "),
       tag: `Detail L${level + 1}`,
     };
     if (!product || level > 10) return node;
@@ -196,7 +200,7 @@ async function buildBomTree(materialCode: string, t: (key: string, options?: Rec
   return buildBomNode(rootProduct, 0);
 }
 
-function flattenTree(root: BomTreeNode | null) {
+function flattenTree(root: BomTreeNode | null, t: (key: string, options?: Record<string, unknown>) => string) {
   const nodes: DiagramNode[] = [];
   const edges: DiagramEdge[] = [];
   const visited = new Set<string>();
@@ -215,7 +219,7 @@ function flattenTree(root: BomTreeNode | null) {
         id: `${node.id}-to-${child.id}`,
         source: node.id,
         target: child.id,
-        label: `${node.type === "bom" ? "主档" : "子项"} → ${child.type === "bom" ? "主档" : "子项"}`,
+        label: `${node.type === "bom" ? t("bomTree.node.headerType") : t("bomTree.node.detailType")} → ${child.type === "bom" ? t("bomTree.node.headerType") : t("bomTree.node.detailType")}`,
       });
       walk(child, row + index + 1);
     });
@@ -271,7 +275,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
       }
     } catch (error) {
       console.error(error);
-      message.error("加载BOM树失败");
+      message.error(t("bomTree.msg.loadFailed"));
     } finally {
       setLoading(false);
     }
@@ -331,7 +335,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
     graphRef.current?.dispose();
     const storageKey = `${POSITION_STORAGE_PREFIX}${materialCode || "default"}`;
     try { positionCacheRef.current = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch { positionCacheRef.current = {}; }
-    const model = flattenTree(treeData);
+    const model = flattenTree(treeData, t);
     const graph = new Graph({
       container: containerRef.current,
       width: containerRef.current.clientWidth || 900,
@@ -376,17 +380,17 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         const values = await leftForm.validateFields();
         const { error } = await supabase.from(BOM_TABLE).update(values).eq("id", selectedNode.bomId);
         if (error) throw error;
-        message.success("BOM主档已保存");
+        message.success(t("bomTree.msg.headerSaved"));
       } else if (selectedNode.type === "detail" && selectedNode.detailId) {
         const values = await rightForm.validateFields();
         const { error } = await supabase.from(BOM_DETAIL_TABLE).update(values).eq("id", selectedNode.detailId);
         if (error) throw error;
-        message.success("BOM子项已保存");
+        message.success(t("bomTree.msg.detailSaved"));
       }
       await reloadTree(selectedNode.id);
     } catch (error) {
       console.error(error);
-      message.error("保存失败");
+      message.error(t("common.saveFailed"));
     }
   };
 
@@ -433,7 +437,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         };
         const { error } = await supabase.from(BOM_DETAIL_TABLE).insert([payload as any]);
         if (error) throw error;
-        message.success("已新增明细行");
+        message.success(t("bomTree.msg.detailAdded"));
         setCreateModalOpen(false);
         await reloadTree(selectedNode.id);
         return;
@@ -442,12 +446,12 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
       if (createTarget === "bom" && selectedNode.type === "detail" && selectedNode.productId) {
         const product = products.find((item) => item.id === selectedNode.productId);
         if (!product) {
-          message.warning("找不到该物料");
+          message.warning(t("bomTree.msg.materialNotFound"));
           return;
         }
         const existedBom = await fetchBomByProductId(product.id);
         if (existedBom) {
-          message.info("该物料已有BOM主档，已自动接入下一层");
+          message.info(t("bomTree.msg.bomExistsLinked"));
           setCreateModalOpen(false);
           await reloadTree(selectedNode.id);
           return;
@@ -466,13 +470,13 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         };
         const { error: bomError } = await supabase.from(BOM_TABLE).insert([bomPayload as any]);
         if (bomError) throw bomError;
-        message.success("已新增下一层 BOM 主档并自动接入");
+        message.success(t("bomTree.msg.nextBomAdded"));
         setCreateModalOpen(false);
         await reloadTree(selectedNode.id);
       }
     } catch (error) {
       console.error(error);
-      message.error("创建失败");
+      message.error(t("bomTree.msg.createFailed"));
     }
   };
 
@@ -482,15 +486,15 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
     <>
     <Splitter style={{ height: "calc(100vh - 120px)", width: "100%" }}>
       <Splitter.Panel defaultSize="15%" min="260px">
-        <Card size="small" title="BOM主档" style={{ height: "100%", overflow: "auto" }}>
+        <Card size="small" title={t("bomTree.panel.header")} style={{ height: "100%", overflow: "auto" }}>
           <Form form={leftForm} layout="vertical">
-            <Form.Item label="BOM编号" name="bom_no"><Input /></Form.Item>
-            <Form.Item label="产品" name="product_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
-            <Form.Item label="版本" name="version"><Input /></Form.Item>
-            <Form.Item label="数量" name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
-            <Form.Item label="单位" name="unit"><DictSelect dictType="uom" placeholder="请输入单位" allowClear /></Form.Item>
-            <Form.Item label="备注" name="remark"><Input.TextArea rows={4} /></Form.Item>
-            <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "bom"}>保存主档</Button>
+            <Form.Item label={t("bomTree.field.bomNo")} name="bom_no"><Input /></Form.Item>
+            <Form.Item label={t("bomTree.field.product")} name="product_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
+            <Form.Item label={t("bomTree.field.version")} name="version"><Input /></Form.Item>
+            <Form.Item label={t("bomTree.field.quantity")} name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
+            <Form.Item label={t("bomTree.field.unit")} name="unit"><DictSelect dictType="uom" placeholder={t("bomTree.field.unitPrompt")} allowClear /></Form.Item>
+            <Form.Item label={t("bomTree.field.remark")} name="remark"><Input.TextArea rows={4} /></Form.Item>
+            <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "bom"}>{t("bomTree.action.saveHeader")}</Button>
           </Form>
         </Card>
       </Splitter.Panel>
@@ -500,8 +504,8 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
           <Card  title={title} style={{ height: "100%" }} styles={{ body: { padding: 0, height: "100%", overflow: "hidden" } }}
           extra={
           <Space>
-              <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "detail"}>保存</Button>
-              <Button block onClick={openCreateModal} disabled={!selectedNode}>添加子节点</Button></Space>
+              <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "detail"}>{t("common.save")}</Button>
+              <Button block onClick={openCreateModal} disabled={!selectedNode}>{t("bomTree.action.addChild")}</Button></Space>
           }>
             <div ref={containerRef} style={{ width: "100%", height: "calc(100vh - 160px)", minHeight: 700 }} />
           </Card>
@@ -509,15 +513,15 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
       </Splitter.Panel>
 
       <Splitter.Panel defaultSize="15%" min="260px">
-        <Card size="small" title="BOM子项" style={{ height: "100%", overflow: "auto" }}>
+        <Card size="small" title={t("bomTree.panel.detail")} style={{ height: "100%", overflow: "auto" }}>
           <Form form={rightForm} layout="vertical">
-            <Form.Item label="行号" name="line_no"><InputNumber style={{ width: "100%" }} /></Form.Item>
-            <Form.Item label="物料" name="material_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
-            <Form.Item label="数量" name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
-            <Form.Item label="单位" name="unit"><DictSelect dictType="uom" placeholder="请输入单位" allowClear /></Form.Item>
-            <Form.Item label="损耗率" name="loss_rate"><InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} /></Form.Item>
-            <Form.Item label="工序" name="operation_id"><Select allowClear options={operations.map((o) => ({ label: o.name, value: o.id }))} /></Form.Item>
-            <Form.Item label="备注" name="remark"><Input.TextArea rows={4} /></Form.Item>
+            <Form.Item label={t("bomTree.field.lineNo")} name="line_no"><InputNumber style={{ width: "100%" }} /></Form.Item>
+            <Form.Item label={t("bomTree.field.material")} name="material_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
+            <Form.Item label={t("bomTree.field.quantity")} name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
+            <Form.Item label={t("bomTree.field.unit")} name="unit"><DictSelect dictType="uom" placeholder={t("bomTree.field.unitPrompt")} allowClear /></Form.Item>
+            <Form.Item label={t("bomTree.field.lossRate")} name="loss_rate"><InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} /></Form.Item>
+            <Form.Item label={t("bomTree.field.operation")} name="operation_id"><Select allowClear options={operations.map((o) => ({ label: o.name, value: o.id }))} /></Form.Item>
+            <Form.Item label={t("bomTree.field.remark")} name="remark"><Input.TextArea rows={4} /></Form.Item>
             
             
           </Form>
@@ -527,12 +531,12 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
       
     </Splitter>
     <Modal
-        title={createTarget === "detail" ? "新增BOM明细" : "新增下一层BOM主档"}
+        title={createTarget === "detail" ? t("bomTree.modal.addDetail") : t("bomTree.modal.addBom")}
         open={createModalOpen}
         onCancel={() => setCreateModalOpen(false)}
         onOk={handleCreateSubmit}
-        okText="创建"
-        cancelText="取消"
+        okText={t("bomTree.modal.create")}
+        cancelText={t("common.cancel")}
         destroyOnHidden
       >
         <Card size="small">
@@ -541,43 +545,43 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
             <>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item label="物料" name="material_id" rules={[{ required: true, message: "请选择物料" }]}>
+                  <Form.Item label={t("bomTree.field.material")} name="material_id" rules={[{ required: true, message: t("bomTree.prompt.material") }]}>
                     <Select showSearch optionFilterProp="label" options={products.filter((p) => !selectedNode || p.id !== selectedNode.productId).map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="行号" name="line_no">
+                  <Form.Item label={t("bomTree.field.lineNo")} name="line_no">
                     <InputNumber style={{ width: "100%" }} min={1} />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item label="数量" name="quantity" rules={[{ required: true, message: "请输入数量" }]}>
+                  <Form.Item label={t("bomTree.field.quantity")} name="quantity" rules={[{ required: true, message: t("bomTree.prompt.quantity") }]}>
                     <InputNumber style={{ width: "100%" }} min={0} step={0.000001} precision={6} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="单位" name="unit">
-                    <DictSelect dictType="uom" placeholder="请输入单位" allowClear />
+                  <Form.Item label={t("bomTree.field.unit")} name="unit">
+                    <DictSelect dictType="uom" placeholder={t("bomTree.field.unitPrompt")} allowClear />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item label="损耗率" name="loss_rate">
+                  <Form.Item label={t("bomTree.field.lossRate")} name="loss_rate">
                     <InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} precision={4} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="工序" name="operation_id">
+                  <Form.Item label={t("bomTree.field.operation")} name="operation_id">
                     <Select allowClear showSearch optionFilterProp="label" options={operations.map((o) => ({ label: o.name, value: o.id }))} />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={16}>
                 <Col span={24}>
-                  <Form.Item label="备注" name="remark">
+                  <Form.Item label={t("bomTree.field.remark")} name="remark">
                     <Input.TextArea rows={3} />
                   </Form.Item>
                 </Col>
@@ -587,12 +591,12 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
             <>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item label="BOM编号" name="bom_no" rules={[{ required: true, message: "请输入BOM编号" }]}>
+                  <Form.Item label={t("bomTree.field.bomNo")} name="bom_no" rules={[{ required: true, message: t("bomTree.prompt.bomNo") }]}>
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="产品" name="product_id" rules={[{ required: true, message: "请选择产品" }]}>
+                  <Form.Item label={t("bomTree.field.product")} name="product_id" rules={[{ required: true, message: t("bomTree.prompt.product") }]}>
                     <Select
                       showSearch
                       optionFilterProp="label"
@@ -607,29 +611,29 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
               </Row>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item label="版本" name="version">
+                  <Form.Item label={t("bomTree.field.version")} name="version">
                     <Input />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="数量" name="quantity">
+                  <Form.Item label={t("bomTree.field.quantity")} name="quantity">
                     <InputNumber style={{ width: "100%" }} min={0} step={0.000001} precision={6} />
                   </Form.Item>
                 </Col>
               </Row>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Form.Item label="单位" name="unit">
-                    <DictSelect dictType="uom" placeholder="请输入单位" allowClear />
+                  <Form.Item label={t("bomTree.field.unit")} name="unit">
+                    <DictSelect dictType="uom" placeholder={t("bomTree.field.unitPrompt")} allowClear />
                   </Form.Item>
                 </Col>
                 <Col span={6}>
-                  <Form.Item label="启用" name="is_active" valuePropName="checked">
+                  <Form.Item label={t("common.enabled")} name="is_active" valuePropName="checked">
                     <Checkbox />
                   </Form.Item>
                 </Col>
                 <Col span={6}>
-                  <Form.Item label="默认BOM" name="is_default" valuePropName="checked">
+                  <Form.Item label={t("bomTree.field.defaultBom")} name="is_default" valuePropName="checked">
                     <Checkbox />
                   </Form.Item>
                 </Col>
@@ -637,12 +641,12 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
               <Row gutter={16}>
                 
                 <Col span={12}>
-                  <Form.Item label="生效日期" name="effective_date">
+                  <Form.Item label={t("bomTree.field.effectiveDate")} name="effective_date">
                     <DatePicker style={{ width: "100%" }} />
                   </Form.Item>
                 </Col>
                 <Col span={12}>
-                  <Form.Item label="失效日期" name="expiry_date">
+                  <Form.Item label={t("bomTree.field.expiryDate")} name="expiry_date">
                     <DatePicker style={{ width: "100%" }} />
                   </Form.Item>
                 </Col>
@@ -652,7 +656,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
               </Row>
               <Row gutter={16}>
                 <Col span={24}>
-                  <Form.Item label="备注" name="remark">
+                  <Form.Item label={t("bomTree.field.remark")} name="remark">
                     <Input.TextArea rows={3} />
                   </Form.Item>
                 </Col>
