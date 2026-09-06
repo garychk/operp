@@ -462,7 +462,7 @@ export function Roles() {
     {
       title: t('roles.sort'),
       dataIndex: "sort_order",
-      width: 80,
+      width: 120,
     },
     {
       title: t('common.status'),
