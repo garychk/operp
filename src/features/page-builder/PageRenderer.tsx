@@ -183,7 +183,7 @@ export function CustomPageRenderer() {
   const [page, setPage] = useState<CustomPage | null>(null);
   const [error, setError] = useState('');
   useEffect(() => { getCustomPage(slug).then(setPage).catch(err => setError(err.message)); }, [slug]);
-  if (error) return <Alert type="error" showIcon message={t('pageRenderer.pageLoadFailed')} description={error} />;
+  if (error) return <Alert type="error" showIcon title={t('pageRenderer.pageLoadFailed')} description={error} />;
   if (!page) return <Skeleton active />;
   return <div className="published-page"><div className="published-page-heading"><Typography.Title level={4}>{page.name}</Typography.Title>{page.description && <Typography.Text type="secondary">{page.description}</Typography.Text>}</div><PageCanvas page={page} /></div>;
 }
