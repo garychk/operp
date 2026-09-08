@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from 'react-i18next';
 import type { ReactNode } from "react";
 import {
   BulbOutlined,
@@ -93,14 +94,6 @@ interface ConversationListItem {
   updatedAt: string;
 }
 type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
-const aiSkillOptions: { value: AiSkill; label: string; icon: ReactNode }[] = [
-  { value: "auto", label: "自动", icon: <SendOutlined /> },
-  { value: "analysis", label: "数据分析", icon: <DatabaseOutlined /> },
-  { value: "create", label: "创建业务", icon: <PlusOutlined /> },
-  { value: "action", label: "业务动作", icon: <SendOutlined /> },
-  { value: "baq", label: "创建 BAQ", icon: <DatabaseOutlined /> },
-  { value: "chat", label: "普通对话", icon: <BulbOutlined /> },
-];
 type AiChatStreamEvent =
   | { type: "step"; step: string; message: string; data?: unknown }
   | {
@@ -143,33 +136,6 @@ const resolveAIBaseUrl = () => {
 };
 
 const AI_SERVER_URL = resolveAIBaseUrl();
-const quickPrompts = [
-  {
-    key: "erp",
-    icon: <DatabaseOutlined />,
-    label: "ERP 数据助手",
-    description: "帮我分析当前 ERP 业务数据应该从哪里入手",
-  },
-  {
-    key: "finance",
-    icon: <BulbOutlined />,
-    label: "财务建议",
-    description: "帮我整理一份本月应收应付检查清单",
-  },
-  {
-    key: "inventory",
-    icon: <SendOutlined />,
-    label: "库存排查",
-    description: "如何排查库存数量和采购入库不一致",
-  },
-  {
-    key: "business",
-    icon: <SendOutlined />,
-    label: "新增业务",
-    description: "帮我新增一个销售订单、采购订单、客户、供应商、物料等",
-  },
-];
-
 const readSessionId = () => {
   try {
     const key = "operp-ai-chat-session-id";
@@ -335,24 +301,27 @@ const MarkdownMessage = ({ content }: { content: string }) => (
   <div className="ai-markdown-body">{renderMarkdown(content)}</div>
 );
 
-const renderThoughtTitle = (message: string) => {
+const renderThoughtTitle = (
+  message: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+) => {
   const value = message.trim();
-  if (!value) return "处理中";
+  if (!value) return t("aiChat.thought.processing");
   const nodeLabels: Record<string, string> = {
-    contextLoader: "读取上下文",
-    intentRouter: "判断任务意图",
-    planner: "规划执行任务",
-    toolExecutor: "执行业务操作",
-    memoryWriter: "保存对话上下文",
-    responseComposer: "整理处理结果",
+    contextLoader: t("aiChat.thought.loadContext"),
+    intentRouter: t("aiChat.thought.identifyIntent"),
+    planner: t("aiChat.thought.planning"),
+    toolExecutor: t("aiChat.thought.execute"),
+    memoryWriter: t("aiChat.thought.saveMemory"),
+    responseComposer: t("aiChat.thought.compose"),
   };
   if (nodeLabels[value]) return nodeLabels[value];
-  if (value.includes("加载上下文")) return "加载上下文";
-  if (value.includes("识别意图")) return "识别意图";
-  if (value.includes("拆解任务")) return "任务拆解";
-  if (value.includes("执行工具")) return "工具调用";
-  if (value.includes("写入会话")) return "记忆写入";
-  if (value.includes("整理回复")) return "整理回复";
+  if (value.includes("加载上下文")) return t("aiChat.thought.loadingContext");
+  if (value.includes("识别意图")) return t("aiChat.thought.detectIntent");
+  if (value.includes("拆解任务")) return t("aiChat.thought.decompose");
+  if (value.includes("执行工具")) return t("aiChat.thought.invokeTool");
+  if (value.includes("写入会话")) return t("aiChat.thought.writeMemory");
+  if (value.includes("整理回复")) return t("aiChat.thought.composeReply");
   return value;
 };
 
@@ -376,61 +345,91 @@ const formatStepContent = (data: unknown): string => {
 
 const isPendingStep = (message: string) => message.startsWith("正在");
 
-const formatStepResult = (data: unknown, message: string): string => {
+const formatStepResult = (
+  data: unknown,
+  message: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string => {
   const value =
     data && typeof data === "object" ? (data as Record<string, unknown>) : {};
 
   if (message.includes("上下文已加载")) {
     const recentMessages = Number(value.recentMessages || 0);
-    return recentMessages
-      ? `已读取最近 ${recentMessages} 条对话记录${value.hasFocus ? "，并定位到当前业务对象" : ""}。`
-      : "已读取当前页面上下文，暂无历史对话记录。";
+    if (recentMessages) {
+      return t("aiChat.result.contextRecent", {
+        count: recentMessages,
+        focus: value.hasFocus ? t("aiChat.result.focusSuffix") : "",
+      });
+    }
+    return t("aiChat.result.contextEmpty");
   }
 
   if (message.includes("意图已识别")) {
     const intentLabels: Record<string, string> = {
-      baq: "BAQ 查询设计",
-      create: "创建业务",
-      update: "修改业务",
-      analysis: "分析/统计",
-      knowledge: "知识库查询",
-      chat: "普通咨询",
+      baq: t("aiChat.result.intentBaQ"),
+      create: t("aiChat.result.intentCreate"),
+      update: t("aiChat.result.intentUpdate"),
+      analysis: t("aiChat.result.intentAnalysis"),
+      knowledge: t("aiChat.result.intentKnowledge"),
+      chat: t("aiChat.result.intentChat"),
     };
     const intent = String(value.intent || "chat");
-    const target = value.target ? `，对象：${String(value.target)}` : "";
-    const queryMode = value.queryMode ? `，查询方式：${String(value.queryMode)}` : "";
-    const responseMode = value.responseMode ? `，展示方式：${String(value.responseMode)}` : "";
-    return `判断为「${intentLabels[intent] || intent}」${value.domain ? `，业务领域：${String(value.domain)}` : ""}${target}${queryMode}${responseMode}。`;
+    const domain = value.domain
+      ? t("aiChat.result.domainSuffix", { value: String(value.domain) })
+      : "";
+    const target = value.target
+      ? t("aiChat.result.targetSuffix", { value: String(value.target) })
+      : "";
+    const queryMode = value.queryMode
+      ? t("aiChat.result.queryModeSuffix", { value: String(value.queryMode) })
+      : "";
+    const responseMode = value.responseMode
+      ? t("aiChat.result.responseModeSuffix", {
+          value: String(value.responseMode),
+        })
+      : "";
+    return t("aiChat.result.intentSummary", {
+      intent: intentLabels[intent] || intent,
+      domain,
+      target,
+      queryMode,
+      responseMode,
+    });
   }
 
   if (message.includes("任务已拆解")) {
     const plan = Array.isArray(value.plan) ? value.plan : [];
-    if (!plan.length) return "暂未生成可执行步骤。";
+    if (!plan.length) return t("aiChat.result.noPlan");
     const first = plan[0] as Record<string, unknown>;
     const toolLabels: Record<string, string> = {
-      "baq.upsert": "BAQ 创建或修改",
-      "entity.upsert": "ERP 业务数据创建或修改",
-      "finance.summary": "财务数据汇总分析",
-      "chat.respond": "生成自然语言回复",
+      "baq.upsert": t("aiChat.result.toolBaq"),
+      "entity.upsert": t("aiChat.result.toolEntity"),
+      "finance.summary": t("aiChat.result.toolFinance"),
+      "chat.respond": t("aiChat.result.toolChat"),
     };
-    return `已规划 ${plan.length} 个动作：${toolLabels[String(first.tool)] || String(first.tool || "智能处理")}。`;
+    return t("aiChat.result.planSummary", {
+      count: plan.length,
+      tool:
+        toolLabels[String(first.tool)] ||
+        String(first.tool || t("aiChat.result.toolDefault")),
+    });
   }
 
   if (message.includes("工具执行完成")) {
     const results = Array.isArray(value.toolResults) ? value.toolResults : [];
     const result = results[0] as Record<string, unknown> | undefined;
     if (result?.reply) return String(result.reply);
-    if (result?.status === "needs_more") return "需要补充信息后才能继续。";
-    if (result?.status === "error") return "工具执行失败。";
-    return results.length ? "业务工具已执行完成。" : "本次没有调用业务工具。";
+    if (result?.status === "needs_more") return t("aiChat.result.needMore");
+    if (result?.status === "error") return t("aiChat.result.toolError");
+    return results.length ? t("aiChat.result.toolsDone") : t("aiChat.result.noTools");
   }
 
   if (message.includes("会话记忆已写入")) {
-    return "已保留本次对话上下文，方便继续追问或修改刚才的结果。";
+    return t("aiChat.result.memorySaved");
   }
 
   if (message.includes("回复已整理")) {
-    return "已整理执行结果，准备展示给你。";
+    return t("aiChat.result.replyReady");
   }
 
   return formatStepContent(data) || message;
@@ -439,6 +438,7 @@ const formatStepResult = (data: unknown, message: string): string => {
 const streamAIReply = async (
   payload: Record<string, unknown>,
   onEvent: (event: AiChatStreamPacket) => void | Promise<void>,
+  t: (key: string, options?: Record<string, unknown>) => string,
 ) => {
   const response = await fetch(`${AI_SERVER_URL}/chat`, {
     method: "POST",
@@ -452,7 +452,9 @@ const streamAIReply = async (
   if (!response.ok || !response.body) {
     const errorText = await response.text();
     throw new Error(
-      `AI 服务请求失败：${response.status}${errorText ? `，${errorText}` : ""}`,
+      t("aiChat.error.requestPrefix", {
+        detail: [String(response.status), ...(errorText ? [errorText] : [])].join(" - "),
+      }),
     );
   }
 
@@ -500,6 +502,7 @@ const streamAIReply = async (
 };
 
 export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
+  const { t } = useTranslation();
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -517,6 +520,42 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   const navigate = useNavigate();
   const providers = aiSettings.providers;
   const activeProviderId = aiSettings.activeProviderId;
+
+  const aiSkillOptions: { value: AiSkill; label: string; icon: ReactNode }[] = [
+    { value: "auto", label: t("aiChat.skill.auto"), icon: <SendOutlined /> },
+    { value: "analysis", label: t("aiChat.skill.analysis"), icon: <DatabaseOutlined /> },
+    { value: "create", label: t("aiChat.skill.create"), icon: <PlusOutlined /> },
+    { value: "action", label: t("aiChat.skill.action"), icon: <SendOutlined /> },
+    { value: "baq", label: t("aiChat.skill.baq"), icon: <DatabaseOutlined /> },
+    { value: "chat", label: t("aiChat.skill.chat"), icon: <BulbOutlined /> },
+  ];
+
+  const quickPrompts = [
+    {
+      key: "erp",
+      icon: <DatabaseOutlined />,
+      label: t("aiChat.prompt.erp.label"),
+      description: t("aiChat.prompt.erp.description"),
+    },
+    {
+      key: "finance",
+      icon: <BulbOutlined />,
+      label: t("aiChat.prompt.finance.label"),
+      description: t("aiChat.prompt.finance.description"),
+    },
+    {
+      key: "inventory",
+      icon: <SendOutlined />,
+      label: t("aiChat.prompt.inventory.label"),
+      description: t("aiChat.prompt.inventory.description"),
+    },
+    {
+      key: "business",
+      icon: <SendOutlined />,
+      label: t("aiChat.prompt.business.label"),
+      description: t("aiChat.prompt.business.description"),
+    },
+  ];
 
   const activeProvider = useMemo(
     () =>
@@ -541,7 +580,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       })
       .catch(() => {
         setConfigLoaded(true);
-        message.error("读取AI设置失败，将使用默认配置");
+        message.error(t("aiChat.msg.settingsLoadFailed"));
       });
   }, [configLoaded, open]);
 
@@ -576,20 +615,31 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
   };
 
   const formatConversationTime = (value?: string | null) => {
-    if (!value) return "刚刚";
+    if (!value) return t("aiChat.time.justNow");
     const time = new Date(value).getTime();
-    if (Number.isNaN(time)) return "刚刚";
+    if (Number.isNaN(time)) return t("aiChat.time.justNow");
     const diff = Date.now() - time;
-    if (diff < 60_000) return "刚刚";
-    if (diff < 3_600_000) return `${Math.max(1, Math.floor(diff / 60_000))} 分钟前`;
-    if (diff < 86_400_000) return `${Math.max(1, Math.floor(diff / 3_600_000))} 小时前`;
-    return `${Math.max(1, Math.floor(diff / 86_400_000))} 天前`;
+    if (diff < 60_000) return t("aiChat.time.justNow");
+    if (diff < 3_600_000)
+      return t("aiChat.time.minutesAgo", {
+        value: Math.max(1, Math.floor(diff / 60_000)),
+      });
+    if (diff < 86_400_000)
+      return t("aiChat.time.hoursAgo", {
+        value: Math.max(1, Math.floor(diff / 3_600_000)),
+      });
+    return t("aiChat.time.daysAgo", {
+      value: Math.max(1, Math.floor(diff / 86_400_000)),
+    });
   };
 
   const mapSessionToListItem = (session: AIChatSessionRecord): ConversationListItem => ({
     id: session.id,
-    title: session.title || "新对话",
-    lastMessage: session.last_message_preview || "暂无消息",
+    title:
+      !session.title || session.title === "新对话"
+        ? t("aiChat.newConversation")
+        : session.title,
+    lastMessage: session.last_message_preview || t("aiChat.noMessages"),
     updatedAt: formatConversationTime(session.last_message_at || session.updated_at),
   });
 
@@ -629,7 +679,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     const session = await createChatSession({
       id: sessionId,
       user_id: user?.profile.id ?? null,
-      title: preferredTitle?.trim() || "新对话",
+      title: preferredTitle?.trim() || t("aiChat.newConversation"),
     });
     syncSessionId(session.id);
     setActiveConversationId(session.id);
@@ -656,7 +706,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           const created = await createChatSession({
             id: localSessionId,
             user_id: user?.profile.id ?? null,
-            title: "新对话",
+            title: t("aiChat.newConversation"),
           });
           activeId = created.id;
           setConversationItems([mapSessionToListItem(created)]);
@@ -667,7 +717,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         await loadConversationMessages(activeId);
       } catch (error) {
         console.error("加载 AI 对话历史失败", error);
-        message.error("加载历史对话失败");
+        message.error(t("aiChat.msg.loadHistoryFailed"));
       } finally {
         setSessionsLoaded(true);
       }
@@ -728,16 +778,16 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       const session = await createChatSession({
         id: createId(),
         user_id: user?.profile.id ?? null,
-        title: "新对话",
+        title: t("aiChat.newConversation"),
       });
       syncSessionId(session.id);
       setActiveConversationId(session.id);
       setMessages([]);
       replaceConversationItem(session);
-      message.success("已新建对话");
+      message.success(t("aiChat.msg.conversationCreated"));
     } catch (error) {
       console.error("新建 AI 对话失败", error);
-      message.error("新建对话失败");
+      message.error(t("aiChat.msg.createFailed"));
     }
   };
 
@@ -748,7 +798,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       await loadConversationMessages(conversationId);
     } catch (error) {
       console.error("读取 AI 对话消息失败", error);
-      message.error("读取对话失败");
+      message.error(t("aiChat.msg.loadConversationFailed"));
     }
   };
 
@@ -769,10 +819,10 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         }
       }
 
-      message.success("已删除对话");
+      message.success(t("aiChat.msg.deleted"));
     } catch (error) {
       console.error("删除 AI 对话失败", error);
-      message.error("删除对话失败");
+      message.error(t("aiChat.msg.deleteFailed"));
     }
   };
 
@@ -783,18 +833,21 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
     }
 
     if (!aiSettings.enabled) {
-      message.warning("AI助手已在系统设置中停用");
+      message.warning(t("aiChat.msg.aiDisabled"));
       return;
     }
 
-    const conversationId = await ensureSession("新对话");
+    const conversationId = await ensureSession(t("aiChat.newConversation"));
     const currentConversation = conversationItems.find(
       (item) => item.id === conversationId,
     );
+    const defaultTitle = t("aiChat.newConversation");
     const shouldRenameFromFirstMessage =
-      (!currentConversation || currentConversation.title === "新对话") &&
+      (!currentConversation ||
+        currentConversation.title === defaultTitle ||
+        currentConversation.title === "新对话") &&
       messages.filter((item) => item.role === "user").length === 0;
-    const nextConversationTitle = summarizeMessagePreview(prompt) || "新对话";
+    const nextConversationTitle = summarizeMessagePreview(prompt) || defaultTitle;
 
     const userMessage: ChatMessage = {
       id: createId(),
@@ -879,13 +932,13 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           const key = `${event.step}:${existingIndex >= 0 ? existingIndex : traceItems.length}`;
           const nextItem: ThoughtChainItemType = {
             key,
-            title: renderThoughtTitle(event.step || event.message),
+            title: renderThoughtTitle(event.step || event.message, t),
             description: isPendingStep(event.message)
               ? event.message
               : undefined,
             content: isPendingStep(event.message)
               ? undefined
-              : formatStepResult(event.data, event.message),
+              : formatStepResult(event.data, event.message, t),
             status: isPendingStep(event.message) ? "loading" : "success",
             blink: isPendingStep(event.message),
           };
@@ -912,14 +965,14 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                   ...item,
                   status: "error",
                   blink: false,
-                  description: "执行失败",
-                  content: event.error || "服务端返回错误。",
+                  description: t("aiChat.error.failed"),
+                  content: event.error || t("aiChat.error.serverError"),
                 }
               : item,
           );
           updateAssistant({
             trace: traceItems,
-            content: event.error || "AI 服务暂时不可用。",
+            content: event.error || t("aiChat.error.unavailable"),
             status: "error",
             sources: [],
           });
@@ -928,7 +981,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
             session_id: conversationId,
             user_id: user?.profile.id ?? null,
             role: "assistant",
-            content: event.error || "AI 服务暂时不可用。",
+            content: event.error || t("aiChat.error.unavailable"),
             status: "error",
             trace_json: traceItems,
             sources_json: [],
@@ -944,7 +997,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                 status: event.status === "error" ? "error" : "success",
                 blink: false,
                 content:
-                  formatStepResult(event.data, "回复已整理") || item.content,
+                  formatStepResult(event.data, "回复已整理", t) || item.content,
               }
             : { ...item, status: "success", blink: false },
         );
@@ -955,7 +1008,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         });
         updateAssistant({
           trace: traceItems,
-          content: event.reply || "已处理所选技能。",
+          content: event.reply || t("aiChat.reply.handled"),
           focus: event.focus,
           route: event.route,
           routeLabel: event.routeLabel,
@@ -967,7 +1020,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           session_id: conversationId,
           user_id: user?.profile.id ?? null,
           role: "assistant",
-          content: event.reply || "已处理所选技能。",
+          content: event.reply || t("aiChat.reply.handled"),
           status: event.status === "error" ? "error" : "success",
           trace_json: traceItems,
           focus_json: event.focus,
@@ -976,7 +1029,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
           route_label: event.routeLabel,
         });
         const updatedSession = await updateChatSession(conversationId, {
-          last_message_preview: summarizeMessagePreview(event.reply || "已处理所选技能。"),
+          last_message_preview: summarizeMessagePreview(event.reply || t("aiChat.reply.handled")),
           last_message_at: new Date().toISOString(),
         });
         replaceConversationItem(updatedSession);
@@ -984,21 +1037,21 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
         if (event.next_questions?.length) {
           message.info(event.next_questions[0]);
         }
-      });
+      }, t);
     } catch (error) {
       const errorText =
         error instanceof Error
           ? error.message
           : typeof error === "string"
             ? error
-            : "AI 服务暂时不可用。";
+            : t("aiChat.error.unavailable");
       traceItems = traceItems.map((item) =>
         item.status === "loading"
           ? {
               ...item,
               status: "error",
               blink: false,
-              description: "请求失败，未完成该步骤",
+              description: t("aiChat.error.requestFailed"),
               content: errorText,
             }
           : item,
@@ -1039,7 +1092,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       width={860}
       open={open}
       onClose={onClose}
-      title="AI 智能对话"
+      title={t("aiChat.title")}
       className="ai-chat-drawer"
       destroyOnHidden={false}
     >
@@ -1061,9 +1114,9 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
               >
                 <Flex vertical gap={12} className="ai-chat-session-inner">
                   <Flex align="center" justify="space-between" gap={8}>
-                    <Typography.Text strong>对话列表</Typography.Text>
+                    <Typography.Text strong>{t("aiChat.sessionsTitle")}</Typography.Text>
                     <Button size="small" type="text" onClick={handleCreateConversation} icon={<PlusOutlined />}>
-                      新建对话
+                      {t("aiChat.createConversation")}
                     </Button>
                   </Flex>
                   <Conversations
@@ -1082,7 +1135,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                       items: [
                         {
                           key: "delete",
-                          label: "删除",
+                          label: t("common.delete"),
                           danger: true,
                           icon: <DeleteOutlined />,
                         },
@@ -1141,13 +1194,15 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                                   {item.sources?.length ? (
                                     <div className="ai-source-list">
                                       <Typography.Text type="secondary" className="ai-source-title">
-                                        引用来源
+                                        {t("aiChat.sources.title")}
                                       </Typography.Text>
                                       {item.sources.map((source, index) => {
                                         const label =
                                           source.title ||
                                           source.sourceType ||
-                                          `来源 ${index + 1}`;
+                                          t("aiChat.sources.fallbackTitle", {
+                                            index: index + 1,
+                                          });
                                         const link = source.sourceRef || "";
                                         return (
                                           <div key={`${label}-${index}`} className="ai-source-item">
@@ -1162,7 +1217,9 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                                               ) : null}
                                               {source.similarity !== undefined ? (
                                                 <Typography.Text type="secondary">
-                                                  相似度 {Math.round(source.similarity * 100)}%
+                                                  {t("aiChat.sources.similarity", {
+                                                    value: Math.round(source.similarity * 100),
+                                                  })}
                                                 </Typography.Text>
                                               ) : null}
                                               {link ? (
@@ -1179,7 +1236,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                                                     }
                                                   }}
                                                 >
-                                                  查看来源
+                                                  {t("aiChat.sources.viewSource")}
                                                 </Button>
                                               ) : null}
                                             </Space>
@@ -1218,11 +1275,11 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                   <Welcome
                     icon={<img src={chatIcon} alt="Chat Icon" />}
                     variant="borderless"
-                    title="你好，我是 OPERP 助手"
-                    description="可以帮你梳理业务流程、生成检查清单，也可以在配置大模型接口后回答更具体的经营和系统问题。"
+                    title={t("aiChat.welcome.title")}
+                    description={t("aiChat.welcome.description")}
                   />
                   <Prompts
-                    title="试试这些问题"
+                    title={t("aiChat.promptsTitle")}
                     items={quickPrompts}
                     vertical={true}
                     onItemClick={(info: { data: { description?: unknown } }) =>
@@ -1286,7 +1343,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                       setMessages([]);
                     }}
                   >
-                    清空
+                    {t("aiChat.clear")}
                   </Button>
                 )}
                 <Button
@@ -1304,29 +1361,29 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
               className="ai-chat-sender"
               onChange={setInputValue}
               onSubmit={() => submitMessage(inputValue)}
-              placeholder={`使用 ${activeProvider.name} 提问`}
+              placeholder={t("aiChat.senderPlaceholder", {
+                name: activeProvider.name,
+              })}
             />
           </Card>
         </Flex>
       </XProvider>
 
       <Modal
-        title="大模型配置"
+        title={t("aiChat.config.title")}
         open={configOpen}
         onCancel={() => setConfigOpen(false)}
         width={600}
         styles={{ body: { height: '600px', overflowY: 'auto' } }}
         footer={[
           <Button icon={<PlusOutlined />} onClick={addProvider} type="primary">
-            新增大模型
+            {t("aiChat.config.addProvider")}
           </Button>
         ]}
       >
         <Flex vertical gap={12}>
           <Typography.Text type="secondary">
-            DeepSeek/OpenAI 兼容接口请选择通用代理，接口地址填写 chat
-            completions 地址；Ollama 选择 Ollama，接口地址填写
-            http://localhost:11434/api/chat。
+            {t("aiChat.config.hint")}
           </Typography.Text>
           {providers.map((provider) => (
             <Card className="ai-provider-card" key={provider.id} size="small">
@@ -1337,7 +1394,7 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                     onChange={(event) =>
                       updateProvider(provider.id, { name: event.target.value })
                     }
-                    placeholder="显示名称，如 Ollama 本地"
+                    placeholder={t("aiChat.config.namePlaceholder")}
                   />
                   <Button
                     danger
@@ -1348,7 +1405,13 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                 </Space>
                 <Select
                   value={provider.apiType}
-                  options={providerTypeOptions}
+                  options={providerTypeOptions.map((option) => ({
+                    ...option,
+                    label:
+                      option.value === "proxy"
+                        ? t("aiChat.config.proxyType")
+                        : option.label,
+                  }))}
                   onChange={(apiType) =>
                     updateProvider(provider.id, { apiType })
                   }
@@ -1360,21 +1423,21 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
                       endpoint: event.target.value,
                     })
                   }
-                  placeholder="接口地址，如 http://localhost:11434/api/chat"
+                  placeholder={t("aiChat.config.endpointPlaceholder")}
                 />
                 <Input
                   value={provider.model}
                   onChange={(event) =>
                     updateProvider(provider.id, { model: event.target.value })
                   }
-                  placeholder="模型 ID，如 qwen2.5、llama3.1、deepseek-r1"
+                  placeholder={t("aiChat.config.modelPlaceholder")}
                 />
                 <Input.Password
                   value={provider.apiKey}
                   onChange={(event) =>
                     updateProvider(provider.id, { apiKey: event.target.value })
                   }
-                  placeholder="可选 API Key，Ollama 本地通常不用填"
+                  placeholder={t("aiChat.config.apiKeyPlaceholder")}
                 />
               </Space>
             </Card>
