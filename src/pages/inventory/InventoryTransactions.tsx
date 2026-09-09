@@ -146,13 +146,13 @@ export function InventoryTransactions() {
       title: t('inventoryTransactions.columns.date'),
       dataIndex: 'transaction_date',
       key: 'transaction_date',
-      width: 120,
+      width: 100,
     },
     {
       title: t('inventoryTransactions.columns.type'),
       dataIndex: 'transaction_type',
       key: 'transaction_type',
-      width: 180,
+      width: 120,
       render: (value: string) => {
         const normalized = normalizeInventoryTransactionType(value) as InventoryTransactionType | string;
         return <Tag color="blue">{getTransactionTypeLabel(normalized)}</Tag>;
@@ -170,7 +170,7 @@ export function InventoryTransactions() {
     {
       title: t('inventoryTransactions.columns.warehouse'),
       key: 'warehouse',
-      width: 180,
+      width: 160,
       render: (_: unknown, record: InventoryTransaction) => {
         const warehouse = getWarehouse(record.warehouse_id);
         return warehouse ? `${warehouse.code} ${warehouse.name}` : '-';
@@ -179,7 +179,7 @@ export function InventoryTransactions() {
     {
       title: t('inventoryTransactions.columns.bin'),
       key: 'bin',
-      width: 180,
+      width: 160,
       render: (_: unknown, record: InventoryTransaction) => {
         const bin = getBin(record.location_id);
         return bin ? `${bin.code} ${bin.name}` : '-';
@@ -300,7 +300,7 @@ export function InventoryTransactions() {
                 value: item.value,
                 label: item.label,
               }))}
-              style={{ width: 220 }}
+              style={{ width: 140 }}
             />
             <Select
               allowClear
