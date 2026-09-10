@@ -7,11 +7,17 @@ import { supabase } from '../utils/supabase';
 
 type WorkflowAction = 'submit' | 'approve' | 'reject' | 'withdraw';
 
+export interface WorkflowActionResult {
+  ok?: boolean;
+  status?: string | null;
+  node_name?: string | null;
+}
+
 type WorkflowActionBarProps = {
   documentType?: string;
   documentId?: string | number | null;
   currentStatus?: string | null;
-  onActionDone?: () => void;
+  onActionDone?: (result?: WorkflowActionResult) => void;
   disabled?: boolean;
 };
 
@@ -65,13 +71,13 @@ export function WorkflowActionBar({ documentType, documentId, currentStatus, onA
     }
 
     try {
-      await runBusinessAction({
+      const result = await runBusinessAction({
         action,
         documentType: documentType as any,
         documentId: Number(documentId),
       });
       message.success(t('workflow.actionBar.success.' + action));
-      onActionDone?.();
+      onActionDone?.(result as WorkflowActionResult);
     } catch (error) {
       const fallback = t('workflow.actionBar.failed.' + action);
       const msg = error instanceof Error ? error.message : fallback;
@@ -97,7 +103,7 @@ export function WorkflowActionBar({ documentType, documentId, currentStatus, onA
           disabled={disabled || checkingWorkflow || hasAvailableWorkflow !== true}
           loading={checkingWorkflow}
           size="small"
-          ghost
+          
         >
           {t('workflow.actionBar.' + ACTION_CONFIG[action].key)}
         </Button>

@@ -221,9 +221,11 @@ export async function runBusinessAction(params: RunBusinessActionParams) {
   }
 
   if (action === 'submit' || action === 'approve' || action === 'reject' || action === 'withdraw') {
-    await runWorkflowRpc(action, documentType, documentId, user, comment);
+    const result = await runWorkflowRpc(action, documentType, documentId, user, comment);
     return {
       ok: true,
+      status: (result as { status?: string } | null | undefined)?.status,
+      node_name: (result as { node_name?: string } | null | undefined)?.node_name,
       message:
         action === 'submit'
           ? '单据已提交审批'

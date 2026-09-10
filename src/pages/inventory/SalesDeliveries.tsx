@@ -725,6 +725,7 @@ export function SalesDeliveries() {
         historyTable={salesDeliveryTable}
         historyRecordId={editingDelivery?.id || selectedDelivery?.id}
         workflowDocumentType="sales_delivery"
+        onDataChanged={fetchDeliveries}
         form={form}
         detailExtra={
           <Button

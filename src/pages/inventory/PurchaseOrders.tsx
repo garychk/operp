@@ -690,6 +690,7 @@ export function PurchaseOrders() {
         detailPanelTitle={t('purchaseOrders.detailPanelTitle')}
         historyTable={purchaseOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
+        onDataChanged={fetchOrders}
         detailExtra={
           <Button
             type="link"

@@ -59,6 +59,8 @@ interface SupaModalProps {
   historyTable?: string;
   historyRecordId?: string | number | null;
   workflowDocumentType?: string;
+  /** Called after a workflow action changed the document, so the page can refetch its list. */
+  onDataChanged?: () => void;
   formTable?: string;
   formDescription?: string;
   width?: string | number;
@@ -83,6 +85,7 @@ export function SupaModal({
   historyTable,
   historyRecordId,
   workflowDocumentType,
+  onDataChanged,
   formTable,
   formDescription,
   width = 1200,
@@ -100,6 +103,7 @@ export function SupaModal({
   const [designerInstanceKey, setDesignerInstanceKey] = useState(0);
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const currentFormName = formTable || historyTable;
   const currentStatus = form?.getFieldValue("status") || "";
@@ -143,7 +147,20 @@ export function SupaModal({
     };
 
     void fetchDocumentHistory();
-  }, [open, historyTable, historyRecordId]);
+  }, [open, historyTable, historyRecordId, historyRefreshKey]);
+
+  // After a workflow action succeeds, keep the modal open and refresh
+  // everything in place: form status, document logs, workflow history,
+  // and the page list (via onDataChanged).
+  const handleWorkflowActionDone = (result?: {
+    status?: string | null;
+  }) => {
+    if (result?.status) {
+      form?.setFieldValue("status", result.status);
+    }
+    setHistoryRefreshKey((key) => key + 1);
+    onDataChanged?.();
+  };
 
   const handleCancel = () => {
     setIsExpand(false);
@@ -325,7 +342,7 @@ export function SupaModal({
               documentType={workflowDocumentType}
               documentId={historyRecordId}
               currentStatus={form?.getFieldValue("status")}
-              onActionDone={combinedOnCancel}
+              onActionDone={handleWorkflowActionDone}
               disabled={resolvedDisabled}
             />
             <Switch
@@ -397,6 +414,7 @@ export function SupaModal({
                           open={open}
                           documentType={workflowDocumentType}
                           documentId={historyRecordId}
+                          refreshKey={historyRefreshKey}
                         />
                       </Splitter.Panel>
                     </Splitter>
