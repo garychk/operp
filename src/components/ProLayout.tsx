@@ -218,6 +218,8 @@ const themeColors: Record<ThemeColorKey, ThemeColor> = {
   },
 };
 
+const borderRadiusOptions = [0, 2, 6, 8];
+
 const themeSurface = (
   themeColor: ThemeColorKey,
   dark: boolean,
@@ -529,6 +531,15 @@ export function ProLayout() {
     const saved = localStorage.getItem("erp-layout-mix");
     return saved !== null ? JSON.parse(saved) : true;
   });
+  const [compact, setCompact] = useState<boolean>(() => {
+    const saved = localStorage.getItem("erp-layout-compact");
+    return saved !== null ? JSON.parse(saved) === true : true;
+  });
+  const [borderRadius, setBorderRadius] = useState<number>(() => {
+    const saved = localStorage.getItem("erp-border-radius");
+    const radius = saved !== null ? Number(saved) : NaN;
+    return Number.isNaN(radius) ? 6 : radius;
+  });
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [databaseMenus, setDatabaseMenus] = useState<MenuRoute[]>([]);
@@ -580,6 +591,14 @@ export function ProLayout() {
   useEffect(() => {
     localStorage.setItem("erp-layout-mix", JSON.stringify(ismix));
   }, [ismix]);
+
+  useEffect(() => {
+    localStorage.setItem("erp-layout-compact", JSON.stringify(compact));
+  }, [compact]);
+
+  useEffect(() => {
+    localStorage.setItem("erp-border-radius", String(borderRadius));
+  }, [borderRadius]);
 
   const mergedMenuData = useMemo(
     () => mergeMenuTrees(menuData, databaseMenus),
@@ -705,11 +724,21 @@ export function ProLayout() {
     label: tab.label,
     closable: tab.closable,
   }));
+  const themeToken = useMemo(
+    () => ({
+      colorPrimary: themeColors[themeColor].color,
+      borderRadius,
+      ...(compact
+        ? { fontSize: 12, controlHeight: 28, margin: 12 }
+        : { fontSize: 14, controlHeight: 32, margin: 16 }),
+    }),
+    [themeColor, compact, borderRadius],
+  );
   return (
     <ConfigProvider
       theme={{
         algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-        token: { colorPrimary: themeColors[themeColor].color },
+        token: themeToken,
       }}
     >
       <AntProLayout
@@ -853,39 +882,119 @@ export function ProLayout() {
             key="theme-color"
             trigger={["click"]}
             menu={{
-              selectable: true,
-              selectedKeys: [themeColor],
-              onClick: ({ key }) => setThemeColor(key as ThemeColorKey),
-              items: Object.entries(themeColors).map(([key, item]) => ({
-                key,
-                label: (
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      minWidth: 72,
-                    }}
-                  >
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        width: 14,
-                        height: 14,
-                        borderRadius: 3,
-                        background: item.secondaryRgb
-                          ? `linear-gradient(135deg, ${item.color}, rgb(${item.secondaryRgb}))`
-                          : (item.surfaceColor ?? item.color),
-                        border: item.surfaceColor
-                          ? "1px solid rgba(0, 0, 0, 0.12)"
-                          : undefined,
-                      }}
-                    />
-                    <span style={{ flex: 1 }}>{item.label}</span>
-                    {themeColor === key ? <CheckOutlined /> : null}
-                  </span>
-                ),
-              })),
+              items: [
+                {
+                  type: "group",
+                  label: t("layout.themeColor"),
+                  children: Object.entries(themeColors).map(([key, item]) => ({
+                    key: `theme-${key}`,
+                    onClick: () => setThemeColor(key as ThemeColorKey),
+                    label: (
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          minWidth: 96,
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 14,
+                            height: 14,
+                            borderRadius: 3,
+                            background: item.secondaryRgb
+                              ? `linear-gradient(135deg, ${item.color}, rgb(${item.secondaryRgb}))`
+                              : (item.surfaceColor ?? item.color),
+                            border: item.surfaceColor
+                              ? "1px solid rgba(0, 0, 0, 0.12)"
+                              : undefined,
+                          }}
+                        />
+                        <span style={{ flex: 1 }}>{item.label}</span>
+                        {themeColor === key ? <CheckOutlined /> : null}
+                      </span>
+                    ),
+                  })),
+                },
+                { type: "divider" },
+                {
+                  type: "group",
+                  label: t("layout.density"),
+                  children: [
+                    {
+                      key: "density-normal",
+                      onClick: () => setCompact(false),
+                      label: (
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            minWidth: 96,
+                          }}
+                        >
+                          <span style={{ flex: 1 }}>
+                            {t("layout.densityNormal")}
+                          </span>
+                          {!compact ? <CheckOutlined /> : null}
+                        </span>
+                      ),
+                    },
+                    {
+                      key: "density-compact",
+                      onClick: () => setCompact(true),
+                      label: (
+                        <span
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 8,
+                            minWidth: 96,
+                          }}
+                        >
+                          <span style={{ flex: 1 }}>
+                            {t("layout.densityCompact")}
+                          </span>
+                          {compact ? <CheckOutlined /> : null}
+                        </span>
+                      ),
+                    },
+                  ],
+                },
+                { type: "divider" },
+                {
+                  type: "group",
+                  label: t("layout.borderRadius"),
+                  children: borderRadiusOptions.map((value) => ({
+                    key: `radius-${value}`,
+                    onClick: () => setBorderRadius(value),
+                    label: (
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          minWidth: 96,
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 16,
+                            height: 16,
+                            border: `1px solid ${themeColors[themeColor].color}`,
+                            borderRadius: value,
+                          }}
+                        />
+                        <span style={{ flex: 1 }}>{value}px</span>
+                        {borderRadius === value ? <CheckOutlined /> : null}
+                      </span>
+                    ),
+                  })),
+                },
+              ],
             }}
           >
             <BgColorsOutlined
