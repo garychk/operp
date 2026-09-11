@@ -25,10 +25,11 @@ interface Menu {
 }
 
 const iconOptions = [
-  'DashboardOutlined', 'BookOutlined', 'ShoppingOutlined', 'ToolOutlined',
+  'DashboardOutlined', 'BookOutlined', 'ShoppingOutlined', 'ShoppingCartOutlined', 'ToolOutlined',
   'TeamOutlined', 'ShopOutlined', 'InboxOutlined', 'AppstoreOutlined',
-  'SettingOutlined', 'BuildOutlined', 'ProfileOutlined', 'CalendarOutlined',
+  'SettingOutlined', 'BuildOutlined', 'BranchesOutlined', 'ProfileOutlined', 'CalendarOutlined',
   'ContainerOutlined', 'FileTextOutlined', 'MenuOutlined', 'SafetyOutlined',
+  'TruckOutlined', 'RiseOutlined', 'FallOutlined', 'TableOutlined', 'UnorderedListOutlined',
 ];
 
 const excludedStaticMenuPaths = new Set(['/', '/system']);

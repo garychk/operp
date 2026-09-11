@@ -86,7 +86,34 @@ interface DatabaseMenu {
   menu_code: string | null;
   menu_type: string | null;
   path: string | null;
+  icon?: string | null;
 }
+
+const menuIconMap: Record<string, ReactNode> = {
+  DashboardOutlined: <DashboardOutlined />,
+  BookOutlined: <BookOutlined />,
+  ShoppingOutlined: <ShoppingOutlined />,
+  ShoppingCartOutlined: <ShoppingCartOutlined />,
+  ToolOutlined: <ToolOutlined />,
+  TeamOutlined: <TeamOutlined />,
+  ShopOutlined: <ShopOutlined />,
+  InboxOutlined: <InboxOutlined />,
+  AppstoreOutlined: <AppstoreOutlined />,
+  SettingOutlined: <SettingOutlined />,
+  BuildOutlined: <BuildOutlined />,
+  BranchesOutlined: <BranchesOutlined />,
+  ProfileOutlined: <ProfileOutlined />,
+  CalendarOutlined: <CalendarOutlined />,
+  ContainerOutlined: <ContainerOutlined />,
+  FileTextOutlined: <FileTextOutlined />,
+  MenuOutlined: <MenuOutlined />,
+  SafetyOutlined: <SafetyOutlined />,
+  TruckOutlined: <TruckOutlined />,
+  RiseOutlined: <RiseOutlined />,
+  FallOutlined: <FallOutlined />,
+  TableOutlined: <TableOutlined />,
+  UnorderedListOutlined: <UnorderedListOutlined />,
+};
 
 const fixedMenuPathByCode: Record<string, string> = {
   finance: "/finance",
@@ -106,8 +133,7 @@ function buildDatabaseMenuTree(records: DatabaseMenu[]): MenuRoute[] {
     nodes.set(record.id, {
       path: normalizedPath,
       name: record.menu_name,
-      icon:
-        record.menu_type === "M" ? <AppstoreOutlined /> : <DashboardOutlined />,
+      icon: (record.icon && menuIconMap[record.icon]) || <DashboardOutlined />,
       routes: [],
     });
   });
@@ -549,7 +575,7 @@ export function ProLayout() {
     const loadDatabaseMenus = async () => {
       const { data, error } = await supabase
         .from("sys_menus")
-        .select("id, parent_id, menu_name, menu_code, menu_type, path")
+        .select("id, parent_id, menu_name, menu_code, menu_type, path, icon")
         .eq("status", "1")
         .eq("is_deleted", "n")
         .order("sort_order");
