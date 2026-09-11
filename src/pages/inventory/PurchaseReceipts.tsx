@@ -713,6 +713,7 @@ export function PurchaseReceipts() {
         historyTable={purchaseReceiptTable}
         historyRecordId={editingReceipt?.id}
         workflowDocumentType="purchase_receipt"
+        onDataChanged={fetchReceipts}
         form={form}
         detailData={details}
         detailExtra={

@@ -182,11 +182,11 @@ interface ThemeColor {
 const themeColors: Record<ThemeColorKey, ThemeColor> = {
   default: { label: "默认", color: "#1677ff", rgb: "22, 119, 255" },
   blue: {
-    label: "星际蓝",
-    color: "#0ea5e9",
-    rgb: "14, 165, 233",
-    secondaryRgb: "99, 102, 241",
-    surfaceRgb: "47, 134, 237",
+    label: "高级黑",
+    color: "#262626",
+    rgb: "38, 38, 38",
+    secondaryRgb: "113, 113, 122",
+    surfaceRgb: "56, 56, 63",
   },
   green: {
     label: "极光绿",
@@ -739,6 +739,16 @@ export function ProLayout() {
       theme={{
         algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: themeToken,
+        components: {
+          Table: {
+            rowSelectedBg: dark
+              ? "rgba(255, 255, 255, 0.12)"
+              : `rgba(${themeColors[themeColor].rgb}, 0.08)`,
+            rowSelectedHoverBg: dark
+              ? "rgba(255, 255, 255, 0.18)"
+              : `rgba(${themeColors[themeColor].rgb}, 0.14)`,
+          },
+        },
       }}
     >
       <AntProLayout

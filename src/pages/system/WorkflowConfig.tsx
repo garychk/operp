@@ -5,7 +5,8 @@ import { Splitter } from 'antd';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
-import { WorkflowDiagram, WorkflowEdgeItem, WorkflowNodeItem } from '../../components/workflow/WorkflowDiagram';
+import { WorkflowDiagram } from '../../components/workflow/WorkflowDiagram';
+import type { WorkflowEdgeItem, WorkflowNodeItem } from '../../components/workflow/WorkflowDiagram';
 import { ConditionEditor } from '../../components/workflow/ConditionEditor';
 
 type WorkflowDefinition = {

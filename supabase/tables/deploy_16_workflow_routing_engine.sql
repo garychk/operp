@@ -1,4 +1,59 @@
 -- Execute workflow routing from persisted graph edges and structured conditions.
+-- workflow_execute_action also writes the document status back to the physical
+-- document table (resolved via sys_document_types), keeping wf_process_instances
+-- and the document's own status column in sync within one transaction.
+
+CREATE OR REPLACE FUNCTION public.workflow_sync_document_status(
+  p_document_type TEXT,
+  p_document_id INTEGER,
+  p_status TEXT
+) RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_table_name TEXT;
+  v_primary_key TEXT;
+  v_columns TEXT[];
+BEGIN
+  SELECT table_name, primary_key_field
+  INTO v_table_name, v_primary_key
+  FROM public.sys_document_types
+  WHERE document_type = p_document_type
+    AND status = '1'
+    AND is_deleted = 'n';
+
+  IF v_table_name IS NULL OR to_regclass(format('public.%I', v_table_name)) IS NULL THEN
+    RAISE EXCEPTION 'Document type % has no valid physical table', p_document_type;
+  END IF;
+
+  SELECT array_agg(column_name) INTO v_columns
+  FROM information_schema.columns
+  WHERE table_schema = 'public' AND table_name = v_table_name;
+
+  EXECUTE format(
+    'UPDATE public.%I t SET status = $1%s%s WHERE t.%I = $2',
+    v_table_name,
+    CASE WHEN 'updated_at' = ANY(COALESCE(v_columns, ARRAY[]::TEXT[])) THEN ', updated_at = NOW()' ELSE '' END,
+    CASE
+      WHEN p_status = 'approved'
+           AND 'approved_by' = ANY(COALESCE(v_columns, ARRAY[]::TEXT[]))
+           AND 'approved_at' = ANY(COALESCE(v_columns, ARRAY[]::TEXT[]))
+        THEN ', approved_by = public.current_sys_user_id(), approved_at = NOW()'
+      WHEN p_status = 'draft'
+           AND 'approved_by' = ANY(COALESCE(v_columns, ARRAY[]::TEXT[]))
+           AND 'approved_at' = ANY(COALESCE(v_columns, ARRAY[]::TEXT[]))
+        THEN ', approved_by = NULL, approved_at = NULL'
+      ELSE ''
+    END,
+    COALESCE(NULLIF(v_primary_key, ''), 'id')
+  ) USING p_status, p_document_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.workflow_sync_document_status(TEXT, INTEGER, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.workflow_sync_document_status(TEXT, INTEGER, TEXT) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.workflow_get_document_json(
   p_document_type TEXT,
@@ -277,11 +332,13 @@ BEGIN
     SELECT * INTO v_next_node FROM public.wf_process_nodes WHERE id = v_next_id;
     IF v_next_id IS NULL OR v_next_node.is_end_node OR v_next_node.node_type = 'end' THEN
       UPDATE public.wf_process_instances SET status = 'approved', current_node_id = NULL, current_node_key = NULL, current_node_name = NULL, finished_at = NOW(), finished_by = v_user_id, updated_at = NOW() WHERE id = v_instance.id;
+      PERFORM public.workflow_sync_document_status(p_document_type, p_document_id, 'approved');
       INSERT INTO public.wf_process_actions(instance_id, node_id, action, action_label, actor_id, actor_username, comment, from_status, to_status, from_node_key, to_node_key)
       VALUES (v_instance.id, v_next_id, 'submit', '提交并完成', v_user_id, v_username, p_comment, 'draft', 'approved', NULL, NULL);
       RETURN jsonb_build_object('ok', TRUE, 'status', 'approved');
     END IF;
     UPDATE public.wf_process_instances SET status = 'pending', current_node_id = v_next_node.id, current_node_key = v_next_node.node_key, current_node_name = v_next_node.node_name, current_step_no = 1, started_by = v_user_id, started_at = COALESCE(started_at, NOW()), updated_at = NOW() WHERE id = v_instance.id;
+    PERFORM public.workflow_sync_document_status(p_document_type, p_document_id, 'pending');
     INSERT INTO public.wf_process_actions(instance_id, node_id, action, action_label, actor_id, actor_username, comment, from_status, to_status, from_node_key, to_node_key)
     VALUES (v_instance.id, v_next_node.id, 'submit', '提交审批', v_user_id, v_username, p_comment, 'draft', 'pending', NULL, v_next_node.node_key);
     RETURN jsonb_build_object('ok', TRUE, 'status', 'pending', 'node_key', v_next_node.node_key, 'node_name', v_next_node.node_name);
@@ -299,11 +356,13 @@ BEGIN
     SELECT * INTO v_next_node FROM public.wf_process_nodes WHERE id = v_next_id;
     IF v_next_id IS NULL OR v_next_node.is_end_node OR v_next_node.node_type = 'end' THEN
       UPDATE public.wf_process_instances SET status = 'approved', current_node_id = NULL, current_node_key = NULL, current_node_name = NULL, finished_at = NOW(), finished_by = v_user_id, updated_at = NOW() WHERE id = v_instance.id;
+      PERFORM public.workflow_sync_document_status(p_document_type, p_document_id, 'approved');
       INSERT INTO public.wf_process_actions(instance_id, node_id, action, action_label, actor_id, actor_username, comment, from_status, to_status, from_node_key, to_node_key)
       VALUES (v_instance.id, v_node.id, 'approve', '最终审核通过', v_user_id, v_username, p_comment, 'pending', 'approved', v_node.node_key, NULL);
       RETURN jsonb_build_object('ok', TRUE, 'status', 'approved');
     END IF;
     UPDATE public.wf_process_instances SET current_node_id = v_next_node.id, current_node_key = v_next_node.node_key, current_node_name = v_next_node.node_name, current_step_no = current_step_no + 1, updated_at = NOW() WHERE id = v_instance.id;
+    PERFORM public.workflow_sync_document_status(p_document_type, p_document_id, 'pending');
     INSERT INTO public.wf_process_actions(instance_id, node_id, action, action_label, actor_id, actor_username, comment, from_status, to_status, from_node_key, to_node_key)
     VALUES (v_instance.id, v_node.id, 'approve', '审核通过', v_user_id, v_username, p_comment, 'pending', 'pending', v_node.node_key, v_next_node.node_key);
     RETURN jsonb_build_object('ok', TRUE, 'status', 'pending', 'node_key', v_next_node.node_key, 'node_name', v_next_node.node_name);
@@ -313,6 +372,7 @@ BEGIN
     SELECT * INTO v_node FROM public.wf_process_nodes WHERE id = v_instance.current_node_id AND is_deleted = 'n';
     IF NOT COALESCE(v_node.allow_reject, FALSE) THEN RAISE EXCEPTION 'Current workflow node does not allow rejection'; END IF;
     UPDATE public.wf_process_instances SET status = 'draft', current_node_id = NULL, current_node_key = NULL, current_node_name = NULL, updated_at = NOW() WHERE id = v_instance.id;
+    PERFORM public.workflow_sync_document_status(p_document_type, p_document_id, 'draft');
     INSERT INTO public.wf_process_actions(instance_id, node_id, action, action_label, actor_id, actor_username, comment, from_status, to_status, from_node_key, to_node_key)
     VALUES (v_instance.id, v_node.id, 'reject', '驳回', v_user_id, v_username, p_comment, 'pending', 'draft', v_node.node_key, NULL);
     RETURN jsonb_build_object('ok', TRUE, 'status', 'draft');
@@ -322,6 +382,7 @@ BEGIN
     SELECT * INTO v_node FROM public.wf_process_nodes WHERE id = v_instance.current_node_id AND is_deleted = 'n';
     IF NOT COALESCE(v_node.allow_withdraw, FALSE) THEN RAISE EXCEPTION 'Current workflow node does not allow withdrawal'; END IF;
     UPDATE public.wf_process_instances SET status = 'draft', current_node_id = NULL, current_node_key = NULL, current_node_name = NULL, updated_at = NOW() WHERE id = v_instance.id;
+    PERFORM public.workflow_sync_document_status(p_document_type, p_document_id, 'draft');
     INSERT INTO public.wf_process_actions(instance_id, node_id, action, action_label, actor_id, actor_username, comment, from_status, to_status, from_node_key, to_node_key)
     VALUES (v_instance.id, v_node.id, 'withdraw', '撤回', v_user_id, v_username, p_comment, 'pending', 'draft', v_node.node_key, NULL);
     RETURN jsonb_build_object('ok', TRUE, 'status', 'draft');
