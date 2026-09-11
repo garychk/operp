@@ -58,6 +58,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { MenuPermissionGuard } from "./ProtectedRoute";
 import { AIChatDrawer } from "./AIChatDrawer";
+import { NotificationBell } from "./NotificationBell";
 import heroLogo from "../assets/opelix.svg";
 import defaultAvatar from "../assets/avatar.png";
 import { supabase } from "../utils/supabase";
@@ -849,6 +850,7 @@ export function ProLayout() {
           },
         }}
         actionsRender={() => [
+          <NotificationBell key="notifications" />,
           dark ? (
             <MoonOutlined key="theme" onClick={() => setDark(false)} />
           ) : (
