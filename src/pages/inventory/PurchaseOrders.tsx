@@ -25,6 +25,7 @@ import {
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
@@ -324,11 +325,11 @@ export function PurchaseOrders() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingOrder(null);
     setSelectedOrder(null);
     form.setFieldsValue({
-      order_no: `PO${Date.now().toString().slice(-8)}`,
+      order_no: await nextDocumentNo("purchase_order"),
       order_date: dayjs(new Date()),
       supplier_id: undefined,
       delivery_date: "",

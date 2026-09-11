@@ -7,6 +7,7 @@ import type { Tables } from '../../utils/supabase';
 import { SupaModal } from '../../components/SupaModal';
 import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
+import { nextDocumentNo } from '../../utils/documentNaming';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -274,12 +275,12 @@ export function Vouchers() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingVoucher(null);
     setSelectedVoucher(null);
     setDetails([]);
     form.setFieldsValue({
-      voucher_no: `V${Date.now().toString().slice(-8)}`,
+      voucher_no: await nextDocumentNo('voucher'),
       voucher_date: dayjs(new Date()),
       type: 'general',
       total_amount: 0,

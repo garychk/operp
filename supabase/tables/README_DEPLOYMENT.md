@@ -167,3 +167,14 @@
 - 如果需要重复部署，请先确认目标库中没有同名角色、用户、菜单编码。
 - `deploy_04_apply_erp_table_rls.sql` 建议在基础权限脚本之后执行，避免 ERP 业务表 RLS 过早开启影响初始化。
 - `deploy_07_system_config.sql` 用于新增系统设置，已有库升级时也可以单独执行。
+
+## 单据统一编号（deploy_32_document_naming.sql）
+
+已有库升级时可单独执行。该脚本启用基于 `sys_document_types.naming_rule` 的统一单号生成：
+
+- 新增计数表 `sys_document_naming_counters`（document_type + period_key 记录流水号，仅通过 RPC 写入）。
+- 新增 RPC `generate_document_no(p_document_type, p_date)`：按命名规则（`{YYYY}` `{YY}` `{MM}` `{DD}` `{####}` 等占位符）原子生成下一单号，例如 `PO{YYYY}{####}` → `PO20260001`。规则中出现 `{DD}` 时按日重置流水，`{MM}` 按月，否则按年。
+- 补充注册 DocType：`production_order`、`material_issue`、`mrp_plan`、`bom`、`routing`。
+- 辅助 RPC `reset_document_no_counter(p_document_type, p_period_key)` 用于测试环境重置计数器。
+
+前端所有单据页面（采购/销售订单、出入库、调拨、盘点、调整、凭证、生产订单、领料、MRP 计划）与 AI 新建单据均改为调用该 RPC 取号；RPC 不可用时自动回退为旧的时间戳单号。注意：打开新增表单即占号，用户放弃保存会产生空号（与 ERPNext 行为一致）。

@@ -8,6 +8,7 @@ import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
+import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
@@ -364,12 +365,12 @@ export function PurchaseReceipts() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingReceipt(null);
     setSelectedOrderId(null);
     setPurchaseOrderDetails([]);
     form.setFieldsValue({
-      receipt_no: `PR${Date.now().toString().slice(-8)}`,
+      receipt_no: await nextDocumentNo('purchase_receipt'),
       receipt_date: dayjs(new Date()),
       order_id: undefined,
       supplier_id: undefined,

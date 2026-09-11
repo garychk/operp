@@ -8,6 +8,7 @@ import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
+import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
@@ -372,13 +373,13 @@ export function SalesDeliveries() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingDelivery(null);
     setSelectedDelivery(null);
     setSelectedOrderId(null);
     setSalesOrderDetails([]);
     form.setFieldsValue({
-      delivery_no: `SD${Date.now().toString().slice(-8)}`,
+      delivery_no: await nextDocumentNo('sales_delivery'),
       delivery_date: dayjs(new Date()),
       order_id: undefined,
       customer_id: undefined,

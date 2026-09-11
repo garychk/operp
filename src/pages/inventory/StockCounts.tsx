@@ -5,6 +5,7 @@ import { PlusOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/i
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
+import { nextDocumentNo } from '../../utils/documentNaming';
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
 import SimpleModal from '../../components/SimpleModal';
@@ -113,10 +114,10 @@ export function StockCounts() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            onClick={() => {
+            onClick={async () => {
               setEditing(null);
               form.setFieldsValue({
-                count_no: `SC${Date.now().toString().slice(-8)}`,
+                count_no: await nextDocumentNo('stock_count'),
                 count_date: dayjs(),
                 location_id: undefined,
                 status: "draft",

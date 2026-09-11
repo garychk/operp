@@ -23,6 +23,7 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import { SuperTable } from "../../components/SuperTable";
 import type { Tables } from "../../utils/supabase";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
 import { useTranslation } from "react-i18next";
@@ -207,10 +208,10 @@ export function ProductionOrders() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingOrder(null);
     form.setFieldsValue({
-      order_no: `MO${Date.now().toString().slice(-8)}`,
+      order_no: await nextDocumentNo("production_order"),
       order_date: dayjs(new Date()),
       product_id: undefined,
       bom_id: undefined,
