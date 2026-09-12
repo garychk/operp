@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker } from 'antd';
 import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
+import { nextDocumentNo } from '../../utils/documentNaming';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import dayjs from 'dayjs';
@@ -105,9 +106,9 @@ export function MrpPlans() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     form.setFieldsValue({
-      plan_no: `MRP${Date.now().toString().slice(-8)}`,
+      plan_no: await nextDocumentNo('mrp_plan'),
       plan_date: dayjs(new Date()),
       start_date: '',
       end_date: '',

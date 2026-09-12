@@ -25,6 +25,7 @@ import {
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
@@ -40,6 +41,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 const purchaseOrderTable = "erp_purchase_orders_s_539dcf81_b";
 const purchaseOrderDetailTable = "erp_purchase_order_details_s_539dcf81_b";
+const docType = "purchase_order";
 
 export function PurchaseOrders() {
   const { t } = useTranslation();
@@ -324,11 +326,12 @@ export function PurchaseOrders() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingOrder(null);
     setSelectedOrder(null);
+    setIsDisabled(false);
     form.setFieldsValue({
-      order_no: `PO${Date.now().toString().slice(-8)}`,
+      order_no: await nextDocumentNo(docType),
       order_date: dayjs(new Date()),
       supplier_id: undefined,
       delivery_date: "",
@@ -628,7 +631,7 @@ export function PurchaseOrders() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        storageKey="purchase-orders"
+        storageKey={docType}
         headerTitle={t('purchaseOrders.title')}
         rowSelection={{
           selectedRowKeys,
@@ -703,7 +706,7 @@ export function PurchaseOrders() {
           </Button>
         }
         form={form}
-        workflowDocumentType="purchase_order"
+        workflowDocumentType={docType}
         detailData={details}
         formEle={
           <Form

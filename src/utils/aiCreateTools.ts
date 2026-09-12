@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { logWithTiming } from './logger';
+import { nextDocumentNo } from './documentNaming';
 
 type CreateEntity =
   | 'customer'
@@ -54,6 +55,18 @@ interface EntityDef {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const serial = (prefix: string) => `${prefix}${Date.now().toString().slice(-8)}`;
+
+// Entities whose document number must come from the DocType naming rule
+// (sys_document_types.naming_rule) via the generate_document_no RPC.
+const documentNoFields: Partial<Record<CreateEntity, { documentType: string; field: string }>> = {
+  purchaseOrder: { documentType: 'purchase_order', field: 'order_no' },
+  salesOrder: { documentType: 'sales_order', field: 'order_no' },
+  purchaseReceipt: { documentType: 'purchase_receipt', field: 'receipt_no' },
+  salesDelivery: { documentType: 'sales_delivery', field: 'delivery_no' },
+  bom: { documentType: 'bom', field: 'bom_no' },
+  routing: { documentType: 'routing', field: 'routing_no' },
+  productionOrder: { documentType: 'production_order', field: 'order_no' },
+};
 
 const statusField = (options = ['active', 'inactive']): FieldDef => ({
   key: 'status',
@@ -547,6 +560,12 @@ const withDefaults = (entity: CreateEntity, data: DraftData) => {
 const insertEntity = async (entity: CreateEntity, data: DraftData) => {
   const def = entityDefs[entity];
   const payload = withDefaults(entity, data);
+  // When the user did not dictate the document number, take it from the
+  // DocType naming rule instead of the client-side timestamp serial.
+  const docNo = documentNoFields[entity];
+  if (docNo && (data[docNo.field] == null || data[docNo.field] === '')) {
+    payload[docNo.field] = await nextDocumentNo(docNo.documentType);
+  }
   const result = await logWithTiming(
     def.operation,
     'INSERT',

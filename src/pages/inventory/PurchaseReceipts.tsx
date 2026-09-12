@@ -8,6 +8,7 @@ import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
+import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
@@ -42,7 +43,7 @@ export function PurchaseReceipts() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
-  const [selectedReceipt] = useState<PurchaseReceipt | null>(null);
+  const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null);
   const [details, setDetails] = useState<PurchaseReceiptDetail[]>([]);
   const [editingDetail, setEditingDetail] = useState<PurchaseReceiptDetail | null>(null);
   const [detailForm] = Form.useForm();
@@ -124,9 +125,7 @@ export function PurchaseReceipts() {
       const { data, error } = await supabase
         .from(purchaseOrderTable)
         .select('*')
-        .eq('is_deleted', 'n')
-        // .in('status', ['approved']);
-        // .in('status', ['approved', 'partially_received']);
+        .eq('is_deleted', 'n');
       if (error) throw error;
       setPurchaseOrders(data || []);
     } catch (error) {
@@ -165,13 +164,21 @@ export function PurchaseReceipts() {
     }
   };
 
+  const calculateReceiptTotal = (detailRows: { amount: number | null }[]) =>
+    detailRows.reduce((sum, d) => sum + (d.amount || 0), 0);
+
   const handleSubmit = async (values: any) => {
     try {
+      const payload = {
+        ...values,
+        total_amount: calculateReceiptTotal(details),
+      };
+
       if (editingReceipt) {
         await logWithTiming('更新采购入库单', 'UPDATE', async () => {
           const { error } = await supabase
             .from(purchaseReceiptTable)
-            .update(values)
+            .update(payload)
             .eq('id', editingReceipt.id);
           if (error) throw error;
         });
@@ -180,7 +187,7 @@ export function PurchaseReceipts() {
         await logWithTiming('新增采购入库单', 'INSERT', async () => {
           const { error } = await supabase
             .from(purchaseReceiptTable)
-            .insert([values]);
+            .insert([payload]);
           if (error) throw error;
         });
         message.success(t('common.createSuccess'));
@@ -297,13 +304,14 @@ export function PurchaseReceipts() {
         .eq('receipt_id', receiptId);
       if (error) throw error;
       
-      const totalAmount = data?.reduce((sum, d) => sum + (d.amount || 0), 0) || 0;
+      const totalAmount = calculateReceiptTotal(data || []);
       
       await supabase
         .from(purchaseReceiptTable)
         .update({ total_amount: totalAmount })
         .eq('id', receiptId);
       
+      form.setFieldsValue({ total_amount: totalAmount });
       fetchReceipts();
     } catch (error) {
       console.error('Error updating receipt total:', error);
@@ -326,14 +334,16 @@ export function PurchaseReceipts() {
       message.error(error?.message || t('purchaseReceipts.actionFailed'));
     }
   };
-  const handleEdit = (record: PurchaseReceipt) => {
+  const handleEdit = async (record: PurchaseReceipt) => {
     setEditingReceipt(record);
+    setSelectedReceipt(record);
     setSelectedOrderId(record.order_id || null);
     if (record.order_id) {
       fetchPurchaseOrderDetails(record.order_id);
     }
     const formValues = { ...record, receipt_date: dayjs(record.receipt_date) };
     form.setFieldsValue(formValues);
+    await fetchDetails(record.id);
     setIsModalOpen(true);
   };
 
@@ -364,12 +374,14 @@ export function PurchaseReceipts() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingReceipt(null);
+    setSelectedReceipt(null);
     setSelectedOrderId(null);
     setPurchaseOrderDetails([]);
+    setDetails([]);
     form.setFieldsValue({
-      receipt_no: `PR${Date.now().toString().slice(-8)}`,
+      receipt_no: await nextDocumentNo('purchase_receipt'),
       receipt_date: dayjs(new Date()),
       order_id: undefined,
       supplier_id: undefined,
@@ -393,7 +405,7 @@ export function PurchaseReceipts() {
       expiry_date: '',
       remark: '',
     });
-    await fetchPurchaseOrderDetails(selectedReceipt?.order_id || 0);
+    await fetchPurchaseOrderDetails(form.getFieldValue('order_id') || 0);
     setIsDetailModalOpen(true);
   };
 
@@ -476,6 +488,7 @@ export function PurchaseReceipts() {
     if (!detail) return null;
     const product = products.find((p) => p.id === detail.product_id);
     return {
+      productId: detail.product_id,
       productName: product?.name || '-',
       unit: product?.unit || '-',
       remainingQty: (detail.quantity || 0) - (detail.received_quantity || 0),
@@ -487,13 +500,31 @@ export function PurchaseReceipts() {
     const info = getOrderDetailInfo(value);
     if (info) {
       detailForm.setFieldsValue({
-        product_id: null,
+        product_id: info.productId,
         quantity: info.remainingQty,
         unit_price: info.unitPrice,
         amount: info.remainingQty * info.unitPrice,
       });
     }
   };
+
+  const getMaxQuantity = () => {
+    const orderDetailId = detailForm.getFieldValue('order_detail_id');
+    if (!orderDetailId) return undefined;
+    const info = getOrderDetailInfo(orderDetailId);
+    if (!info) return undefined;
+    const ownQuantity =
+      editingDetail && editingDetail.order_detail_id === orderDetailId
+        ? editingDetail.quantity || 0
+        : 0;
+    return info.remainingQty + ownQuantity;
+  };
+
+  const receivableOrders = purchaseOrders.filter(
+    (o) =>
+      ['approved', 'partially_received'].includes(o.status || '') ||
+      o.id === editingReceipt?.order_id,
+  );
 
   const filteredReceipts = receipts.filter(
     (r) =>
@@ -705,8 +736,10 @@ export function PurchaseReceipts() {
           setIsModalOpen(false);
           form.resetFields();
           setEditingReceipt(null);
+          setSelectedReceipt(null);
           setSelectedOrderId(null);
           setPurchaseOrderDetails([]);
+          setDetails([]);
         }}
         headerPanelTitle={t('purchaseReceipts.headerPanelTitle')}
         detailPanelTitle={t('purchaseReceipts.detailPanelTitle')}
@@ -739,7 +772,7 @@ export function PurchaseReceipts() {
                     onChange={handleOrderChange}
                     allowClear
                   >
-                    {purchaseOrders.map((o) => (
+                    {receivableOrders.map((o) => (
                       <Option key={o.id} value={o.id}>{o.order_no}</Option>
                     ))}
                   </Select>
@@ -844,16 +877,21 @@ export function PurchaseReceipts() {
               onChange={handleOrderDetailChange}
               allowClear
             >
-              {purchaseOrderDetails.map((d) => {
-                const remaining = (d.quantity || 0) - (d.received_quantity || 0);
-                // if (remaining <= 0) return null;
-                const product = products.find((p) => p.id === d.product_id);
-                return (
-                  <Option key={d.id} value={d.id}>
-                    {product?.code} - {product?.name} {t('purchaseReceipts.remaining', { qty: remaining, unit: product?.unit })}
-                  </Option>
-                );
-              })}
+              {purchaseOrderDetails
+                .filter(
+                  (d) =>
+                    (d.quantity || 0) - (d.received_quantity || 0) > 0 ||
+                    d.id === editingDetail?.order_detail_id,
+                )
+                .map((d) => {
+                  const remaining = (d.quantity || 0) - (d.received_quantity || 0);
+                  const product = products.find((p) => p.id === d.product_id);
+                  return (
+                    <Option key={d.id} value={d.id}>
+                      {product?.code} - {product?.name} {t('purchaseReceipts.remaining', { qty: remaining, unit: product?.unit })}
+                    </Option>
+                  );
+                })}
             </Select>
           </Form.Item>
           <Form.Item
@@ -878,9 +916,30 @@ export function PurchaseReceipts() {
               <Form.Item
                 label={t('purchaseReceipts.quantity')}
                 name="quantity"
-                rules={[{ required: true, message: t('purchaseReceipts.quantityPrompt') }]}
+                rules={[
+                  { required: true, message: t('purchaseReceipts.quantityPrompt') },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      const orderDetailId = getFieldValue('order_detail_id');
+                      if (!orderDetailId || value == null) return Promise.resolve();
+                      const info = getOrderDetailInfo(orderDetailId);
+                      if (!info) return Promise.resolve();
+                      const ownQuantity =
+                        editingDetail && editingDetail.order_detail_id === orderDetailId
+                          ? editingDetail.quantity || 0
+                          : 0;
+                      const max = info.remainingQty + ownQuantity;
+                      if (value > max) {
+                        return Promise.reject(
+                          new Error(t('purchaseReceipts.quantityExceedRemaining', { qty: max })),
+                        );
+                      }
+                      return Promise.resolve();
+                    },
+                  }),
+                ]}
               >
-                <InputNumber min={1} style={{ width: '100%' }} placeholder={t('purchaseReceipts.quantityPrompt')} />
+                <InputNumber min={1} max={getMaxQuantity()} style={{ width: '100%' }} placeholder={t('purchaseReceipts.quantityPrompt')} />
               </Form.Item>
             </Col>
             <Col span={12}>

@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
+import { nextDocumentNo } from '../../utils/documentNaming';
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
 import SimpleModal from '../../components/SimpleModal';
@@ -165,10 +166,10 @@ export function InventoryTransfers() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => {
+              onClick={async () => {
                 setEditing(null);
                 form.setFieldsValue({
-                  transfer_no: `TR${Date.now().toString().slice(-8)}`,
+                  transfer_no: await nextDocumentNo('inventory_transfer'),
                   transfer_date: dayjs(),
                   status: "draft",
                 });

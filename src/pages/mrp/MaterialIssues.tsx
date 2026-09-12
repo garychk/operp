@@ -24,6 +24,7 @@ import {
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
 import { SupaModal } from "../../components/SupaModal";
 import SimpleModal from "../../components/SimpleModal";
@@ -283,12 +284,12 @@ export function MaterialIssues() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     setEditingIssue(null);
     setSelectedIssue(null);
     setDetails([]);
     form.setFieldsValue({
-      issue_no: `MI${Date.now().toString().slice(-8)}`,
+      issue_no: await nextDocumentNo("material_issue"),
       issue_date: dayjs(new Date()),
       production_order_id: undefined,
       warehouse_id: undefined,
