@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from "react";
 import {
@@ -216,6 +216,147 @@ const renderInlineMarkdown = (text: string) => {
   return parts;
 };
 
+type TableAlign = "left" | "center" | "right";
+
+const TABLE_NUMERIC_CELL = /^-?[\d,]+(?:\.\d+)?%?$/;
+const TABLE_DIVIDER_CELL = /^:?-{2,}:?$/;
+const TABLE_TOTAL_LABEL = /^(?:合计|总计|小计|共计|total)$/i;
+const TABLE_IDENTIFIER_HEADER =
+  /(?:编码|编号|单号|料号|序号|代码|凭证|批次|id|code|no\.?|sn|规格|名称|单位|日期)/i;
+const tableNumberFormatter = new Intl.NumberFormat("zh-CN", {
+  maximumFractionDigits: 4,
+});
+
+const isTableRow = (line: string) => /^\s*\|/.test(line);
+
+const splitTableRow = (line: string) =>
+  line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim());
+
+const isTableDivider = (line: string) => {
+  const cells = splitTableRow(line);
+  return cells.length > 0 && cells.every((cell) => TABLE_DIVIDER_CELL.test(cell));
+};
+
+const parseTableAlign = (line: string): TableAlign[] =>
+  splitTableRow(line).map((cell) => {
+    const left = cell.startsWith(":");
+    const right = cell.endsWith(":");
+    if (left && right) return "center";
+    if (right) return "right";
+    return "left";
+  });
+
+const isNumericCell = (text: string) => TABLE_NUMERIC_CELL.test(text.trim());
+
+const isZeroCell = (text: string) => /^0+(?:\.0+)?$/.test(text.replace(/,/g, "").trim());
+
+const formatNumericCell = (text: string) => {
+  const value = Number(text.replace(/,/g, "").trim());
+  return Number.isFinite(value) ? tableNumberFormatter.format(value) : text;
+};
+
+const MarkdownTable = ({ lines }: { lines: string[] }) => {
+  const columns = splitTableRow(lines[0]).length;
+  const hasDivider = lines.length > 1 && isTableDivider(lines[1]);
+  const bodyLines = hasDivider ? lines.slice(2) : lines.slice(1);
+  const explicitAligns = hasDivider ? parseTableAlign(lines[1]) : [];
+
+  const rows = bodyLines
+    .filter((line) => line.trim() && !isTableDivider(line))
+    .map((line) => {
+      const cells = splitTableRow(line);
+      return Array.from({ length: columns }, (_, index) => cells[index] ?? "");
+    });
+
+  const headerCells = Array.from(
+    { length: columns },
+    (_, index) => splitTableRow(lines[0])[index] ?? "",
+  );
+
+  const numericColumns = headerCells.map((header, columnIndex) => {
+    if (TABLE_IDENTIFIER_HEADER.test(header)) return false;
+    const values = rows.map((cells) => cells[columnIndex]).filter(Boolean);
+    return values.length > 0 && values.every(isNumericCell);
+  });
+
+  const resolveAlign = (columnIndex: number): TableAlign => {
+    const explicit = explicitAligns[columnIndex];
+    if (explicit === "center" || explicit === "right") return explicit;
+    return numericColumns[columnIndex] ? "right" : "left";
+  };
+
+  const renderHeader = (header: string) => {
+    const segments = header.match(/[^_\-/]*[_\-/]*/g)?.filter(Boolean) ?? [header];
+    if (segments.length <= 1) {
+      return renderInlineMarkdown(header);
+    }
+    return segments.map((segment, index) => (
+      <Fragment key={`${segment}-${index}`}>
+        {renderInlineMarkdown(segment)}
+        {index < segments.length - 1 ? <wbr /> : null}
+      </Fragment>
+    ));
+  };
+
+  const renderCell = (cell: string, columnIndex: number) => {
+    if (!cell) {
+      return <span className="ai-markdown-table-empty">—</span>;
+    }
+    if (!numericColumns[columnIndex] || !isNumericCell(cell)) {
+      return renderInlineMarkdown(cell);
+    }
+    return (
+      <span
+        className={
+          isZeroCell(cell)
+            ? "ai-markdown-table-num ai-markdown-table-zero"
+            : "ai-markdown-table-num"
+        }
+      >
+        {formatNumericCell(cell)}
+      </span>
+    );
+  };
+
+  return (
+    <div className="ai-markdown-table-wrap">
+      <table className="ai-markdown-table">
+        <thead>
+          <tr>
+            {headerCells.map((header, columnIndex) => (
+              <th key={`head-${columnIndex}`} style={{ textAlign: resolveAlign(columnIndex) }}>
+                {renderHeader(header)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((cells, rowIndex) => (
+            <tr
+              key={`row-${rowIndex}`}
+              className={TABLE_TOTAL_LABEL.test(cells[0]) ? "ai-markdown-table-total" : undefined}
+            >
+              {cells.map((cell, columnIndex) => (
+                <td
+                  key={`cell-${rowIndex}-${columnIndex}`}
+                  style={{ textAlign: resolveAlign(columnIndex) }}
+                >
+                  {renderCell(cell, columnIndex)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const renderMarkdown = (value: string) => {
   const normalized = value.replace(/\r\n/g, "\n");
   const blocks = normalized.split(/\n{2,}/);
@@ -238,6 +379,24 @@ const renderMarkdown = (value: string) => {
     }
 
     const lines = trimmed.split("\n");
+
+    if (isTableRow(lines[0]) && splitTableRow(lines[0]).length > 1) {
+      const firstNonTable = lines.findIndex((line, index) => index > 0 && !isTableRow(line));
+      const tableLines = firstNonTable === -1 ? lines : lines.slice(0, firstNonTable);
+      nodes.push(<MarkdownTable key={`block-${blockIndex}`} lines={tableLines} />);
+
+      const restLines = firstNonTable === -1 ? [] : lines.slice(firstNonTable);
+      const rest = restLines.join("\n").trim();
+      if (rest) {
+        nodes.push(
+          <p key={`block-${blockIndex}-rest`} className="ai-markdown-paragraph">
+            {renderInlineMarkdown(rest)}
+          </p>,
+        );
+      }
+      return;
+    }
+
     if (lines.every((line) => /^[-*+]\s+/.test(line))) {
       nodes.push(
         <ul key={`block-${blockIndex}`} className="ai-markdown-list">

@@ -386,6 +386,7 @@ const zhCN = {
     "purchaseReceipts.unit": "单位",
     "purchaseReceipts.quantity": "数量",
     "purchaseReceipts.quantityPrompt": "请输入数量",
+    "purchaseReceipts.quantityExceedRemaining": "数量不能大于订单未收货数量（{{qty}}）",
     "purchaseReceipts.unitPrice": "单价",
     "purchaseReceipts.unitPricePrompt": "请输入单价",
     "purchaseReceipts.batchNo": "批次号",

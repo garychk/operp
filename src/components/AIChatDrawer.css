@@ -325,15 +325,15 @@
 }
 
 .ai-markdown-h1 {
-  font-size: 20px;
+  font-size: 16px;
 }
 
 .ai-markdown-h2 {
-  font-size: 18px;
+  font-size: 14px;
 }
 
 .ai-markdown-h3 {
-  font-size: 16px;
+  font-size: 12px;
 }
 
 .ai-markdown-paragraph {
@@ -395,6 +395,74 @@
   max-width: 100%;
   border-radius: 10px;
   border: 1px solid var(--border);
+}
+
+.ai-markdown-table-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+}
+
+.ai-markdown-table {
+  width: 100%;
+  min-width: 420px;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ai-markdown-table th,
+.ai-markdown-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.ai-markdown-table th {
+  min-width: 52px;
+  font-weight: 600;
+  color: var(--text-h);
+  background: rgba(0, 0, 0, 0.025);
+  word-break: keep-all;
+  overflow-wrap: break-word;
+}
+
+.ai-markdown-table td {
+  color: var(--text-h);
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+.ai-markdown-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.ai-markdown-table tbody tr:hover td {
+  background: rgba(0, 0, 0, 0.015);
+}
+
+.ai-markdown-table-total td {
+  font-weight: 600;
+  color: var(--text-h);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.ai-markdown-table-num {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-markdown-table-zero {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+.ai-markdown-table-empty {
+  color: rgba(0, 0, 0, 0.22);
 }
 
 .ai-assistant-content {

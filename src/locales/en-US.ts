@@ -386,6 +386,7 @@ const enUS = {
     "purchaseReceipts.unit": "Unit",
     "purchaseReceipts.quantity": "Quantity",
     "purchaseReceipts.quantityPrompt": "Please enter quantity",
+    "purchaseReceipts.quantityExceedRemaining": "Quantity cannot exceed the unreceived quantity ({{qty}})",
     "purchaseReceipts.unitPrice": "Unit Price",
     "purchaseReceipts.unitPricePrompt": "Please enter unit price",
     "purchaseReceipts.batchNo": "Batch No.",
