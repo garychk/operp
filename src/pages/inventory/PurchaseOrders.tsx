@@ -329,6 +329,7 @@ export function PurchaseOrders() {
   const handleAdd = async () => {
     setEditingOrder(null);
     setSelectedOrder(null);
+    setIsDisabled(false);
     form.setFieldsValue({
       order_no: await nextDocumentNo(docType),
       order_date: dayjs(new Date()),
@@ -630,7 +631,7 @@ export function PurchaseOrders() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        storageKey="purchase-orders"
+        storageKey={docType}
         headerTitle={t('purchaseOrders.title')}
         rowSelection={{
           selectedRowKeys,

@@ -125,9 +125,7 @@ export function PurchaseReceipts() {
       const { data, error } = await supabase
         .from(purchaseOrderTable)
         .select('*')
-        .eq('is_deleted', 'n')
-        // .in('status', ['approved']);
-        // .in('status', ['approved', 'partially_received']);
+        .eq('is_deleted', 'n');
       if (error) throw error;
       setPurchaseOrders(data || []);
     } catch (error) {
@@ -496,6 +494,12 @@ export function PurchaseReceipts() {
     }
   };
 
+  const receivableOrders = purchaseOrders.filter(
+    (o) =>
+      ['approved', 'partially_received'].includes(o.status || '') ||
+      o.id === editingReceipt?.order_id,
+  );
+
   const filteredReceipts = receipts.filter(
     (r) =>
       r.receipt_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -740,7 +744,7 @@ export function PurchaseReceipts() {
                     onChange={handleOrderChange}
                     allowClear
                   >
-                    {purchaseOrders.map((o) => (
+                    {receivableOrders.map((o) => (
                       <Option key={o.id} value={o.id}>{o.order_no}</Option>
                     ))}
                   </Select>
@@ -845,16 +849,21 @@ export function PurchaseReceipts() {
               onChange={handleOrderDetailChange}
               allowClear
             >
-              {purchaseOrderDetails.map((d) => {
-                const remaining = (d.quantity || 0) - (d.received_quantity || 0);
-                // if (remaining <= 0) return null;
-                const product = products.find((p) => p.id === d.product_id);
-                return (
-                  <Option key={d.id} value={d.id}>
-                    {product?.code} - {product?.name} {t('purchaseReceipts.remaining', { qty: remaining, unit: product?.unit })}
-                  </Option>
-                );
-              })}
+              {purchaseOrderDetails
+                .filter(
+                  (d) =>
+                    (d.quantity || 0) - (d.received_quantity || 0) > 0 ||
+                    d.id === editingDetail?.order_detail_id,
+                )
+                .map((d) => {
+                  const remaining = (d.quantity || 0) - (d.received_quantity || 0);
+                  const product = products.find((p) => p.id === d.product_id);
+                  return (
+                    <Option key={d.id} value={d.id}>
+                      {product?.code} - {product?.name} {t('purchaseReceipts.remaining', { qty: remaining, unit: product?.unit })}
+                    </Option>
+                  );
+                })}
             </Select>
           </Form.Item>
           <Form.Item

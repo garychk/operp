@@ -40,6 +40,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 const salesOrderTable = "erp_sales_orders_s_539dcf81_b";
 const salesOrderDetailTable = "erp_sales_order_details_s_539dcf81_b";
+const docType = "sales_order";
 
 export function SalesOrders() {
   const { t } = useTranslation();
@@ -130,13 +131,34 @@ export function SalesOrders() {
     }
   };
 
+  const calculateOrderTotals = (
+    detailRows: { amount: number | null; tax_amount: number | null }[],
+    discountAmount = 0,
+  ) => {
+    const totalAmount = detailRows.reduce((sum, d) => sum + (d.amount || 0), 0);
+    const taxAmount = detailRows.reduce(
+      (sum, d) => sum + (d.tax_amount || 0),
+      0,
+    );
+    return {
+      total_amount: totalAmount,
+      tax_amount: taxAmount,
+      receivable_amount: totalAmount + taxAmount - discountAmount,
+    };
+  };
+
   const handleSubmit = async (values: any) => {
     try {
+      const payload = {
+        ...values,
+        ...calculateOrderTotals(details, values.discount_amount || 0),
+      };
+
       if (editingOrder) {
         await logWithTiming(t("salesOrders.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(salesOrderTable)
-            .update(values)
+            .update(payload)
             .eq("id", editingOrder.id);
           if (error) throw error;
         }, { table: salesOrderTable, recordId: editingOrder.id });
@@ -148,7 +170,7 @@ export function SalesOrders() {
         const data = await logWithTiming(t("salesOrders.logCreate"), "INSERT", async () => {
           const { data, error } = await supabase
             .from(salesOrderTable)
-            .insert([values])
+            .insert([payload])
             .select()
             .single();
           if (error) throw error;
@@ -214,21 +236,12 @@ export function SalesOrders() {
         .eq("order_id", orderId);
       if (error) throw error;
 
-      const totalAmount =
-        data?.reduce((sum, d) => sum + (d.amount || 0), 0) || 0;
-      const taxAmount =
-        data?.reduce((sum, d) => sum + (d.tax_amount || 0), 0) || 0;
-
       const order = orders.find((o) => o.id === orderId);
       const discountAmount = order?.discount_amount || 0;
 
       await supabase
         .from(salesOrderTable)
-        .update({
-          total_amount: totalAmount,
-          tax_amount: taxAmount,
-          receivable_amount: totalAmount + taxAmount - discountAmount,
-        })
+        .update(calculateOrderTotals(data || [], discountAmount))
         .eq("id", orderId);
 
       fetchOrders();
@@ -288,8 +301,9 @@ export function SalesOrders() {
   const handleAdd = async () => {
     setEditingOrder(null);
     setSelectedOrder(null);
+    setIsDisabled(false);
     form.setFieldsValue({
-      order_no: await nextDocumentNo("sales_order"),
+      order_no: await nextDocumentNo(docType),
       order_date: dayjs(new Date()),
       customer_id: undefined,
       delivery_date: "",
@@ -452,7 +466,6 @@ export function SalesOrders() {
             type="text"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
-            disabled={['approved', 'partially_delivered', 'delivered', 'closed'].includes(record.status || '')}
           >
             {t("common.edit")}
           </Button>
@@ -567,7 +580,7 @@ export function SalesOrders() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        storageKey="sales-orders"
+        storageKey={docType}
         tableName={salesOrderTable}
         headerTitle={t("salesOrders.title")}
         rowSelection={{
@@ -613,7 +626,7 @@ export function SalesOrders() {
         detailPanelTitle={t("salesOrders.detailPanelTitle")}
         historyTable={salesOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
-        workflowDocumentType="sales_order"
+        workflowDocumentType={docType}
         onDataChanged={fetchOrders}
         detailData={details}
         form={form}

@@ -755,11 +755,20 @@ export function ProLayout() {
     () => ({
       colorPrimary: themeColors[themeColor].color,
       borderRadius,
+      controlItemBgHover: dark
+        ? "rgba(255, 255, 255, 0.08)"
+        : `rgba(${themeColors[themeColor].rgb}, 0.06)`,
+      controlItemBgActive: dark
+        ? "rgba(255, 255, 255, 0.12)"
+        : `rgba(${themeColors[themeColor].rgb}, 0.08)`,
+      controlItemBgActiveHover: dark
+        ? "rgba(255, 255, 255, 0.18)"
+        : `rgba(${themeColors[themeColor].rgb}, 0.14)`,
       ...(compact
         ? { fontSize: 12, controlHeight: 28, margin: 12 }
         : { fontSize: 14, controlHeight: 32, margin: 16 }),
     }),
-    [themeColor, compact, borderRadius],
+    [themeColor, compact, borderRadius, dark],
   );
   return (
     <ConfigProvider
@@ -782,6 +791,16 @@ export function ProLayout() {
             optionActiveBg: dark
               ? "rgba(255, 255, 255, 0.08)"
               : `rgba(${themeColors[themeColor].rgb}, 0.06)`,
+          },
+          Menu: {
+            itemSelectedBg: dark
+              ? "rgba(255, 255, 255, 0.12)"
+              : `rgba(${themeColors[themeColor].rgb}, 0.08)`,
+            itemHoverBg: dark
+              ? "rgba(255, 255, 255, 0.08)"
+              : `rgba(${themeColors[themeColor].rgb}, 0.06)`,
+            darkItemSelectedBg: "rgba(255, 255, 255, 0.12)",
+            darkItemHoverBg: "rgba(255, 255, 255, 0.08)",
           },
         },
       }}
