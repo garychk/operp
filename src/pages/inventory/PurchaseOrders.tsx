@@ -41,6 +41,7 @@ const { Option } = Select;
 const { TextArea } = Input;
 const purchaseOrderTable = "erp_purchase_orders_s_539dcf81_b";
 const purchaseOrderDetailTable = "erp_purchase_order_details_s_539dcf81_b";
+const docType = "purchase_order";
 
 export function PurchaseOrders() {
   const { t } = useTranslation();
@@ -329,7 +330,7 @@ export function PurchaseOrders() {
     setEditingOrder(null);
     setSelectedOrder(null);
     form.setFieldsValue({
-      order_no: await nextDocumentNo("purchase_order"),
+      order_no: await nextDocumentNo(docType),
       order_date: dayjs(new Date()),
       supplier_id: undefined,
       delivery_date: "",
@@ -704,7 +705,7 @@ export function PurchaseOrders() {
           </Button>
         }
         form={form}
-        workflowDocumentType="purchase_order"
+        workflowDocumentType={docType}
         detailData={details}
         formEle={
           <Form
