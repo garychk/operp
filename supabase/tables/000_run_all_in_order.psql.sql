@@ -40,3 +40,4 @@
 \i supabase/tables/deploy_30_fix_rag_dimension_nomic.sql
 \i supabase/tables/deploy_31_notifications.sql
 \i supabase/tables/deploy_32_document_naming.sql
+\i supabase/tables/deploy_33_uom.sql

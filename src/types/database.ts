@@ -1003,6 +1003,59 @@ export interface SysFormsRow {
 export type SysFormsInsert = Omit<SysFormsRow, 'id' | 'corp_id' | 'emp_id' | 'created_at'>;
 export type SysFormsUpdate = Partial<SysFormsInsert>;
 
+export interface ErpUomGroupsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  code: string;
+  name: string;
+  base_uom_id: number | null;  // FK -> erp_uoms_s_539dcf81_b.id
+  sort_order: number | null;
+  status: string | null;
+}
+export type ErpUomGroupsS539Dcf81BInsert = Omit<ErpUomGroupsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpUomGroupsS539Dcf81BUpdate = Partial<ErpUomGroupsS539Dcf81BInsert>;
+
+export interface ErpUomsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  group_id: number;  // FK -> erp_uom_groups_s_539dcf81_b.id
+  code: string;
+  name: string;
+  symbol: string | null;
+  factor: number | null;
+  rounding: number | null;
+  is_base: boolean | null;
+  is_active: boolean | null;
+}
+export type ErpUomsS539Dcf81BInsert = Omit<ErpUomsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpUomsS539Dcf81BUpdate = Partial<ErpUomsS539Dcf81BInsert>;
+
+export interface ErpProductUomsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  product_id: number;  // FK -> erp_products_s_539dcf81_b.id
+  uom_id: number;  // FK -> erp_uoms_s_539dcf81_b.id
+  usage_type: string;
+  conversion_factor: number | null;
+  is_default: boolean | null;
+  barcode: string | null;
+  remark: string | null;
+}
+export type ErpProductUomsS539Dcf81BInsert = Omit<ErpProductUomsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpProductUomsS539Dcf81BUpdate = Partial<ErpProductUomsS539Dcf81BInsert>;
+
 export interface SysLogsRow {
   id: number;
   corp_id: string | null;

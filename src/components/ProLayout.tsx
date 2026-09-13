@@ -426,6 +426,11 @@ export const menuData: MenuRoute[] = [
         name: "数据字典",
         icon: <BookOutlined />,
       },
+      {
+        path: "/system/uoms",
+        name: "计量单位",
+        icon: <UnorderedListOutlined />,
+      },
       { path: "/system/logs", name: "系统日志", icon: <FileTextOutlined /> },
       {
         path: "/system/page-designer",
@@ -453,6 +458,7 @@ const pathToNameMap: Record<string, string> = {
   "/inventory/suppliers": "供应商管理",
   "/inventory/products": "物料管理",
   "/inventory/warehouses": "仓库管理",
+  "/system/uoms": "计量单位",
   "/inventory/stock": "库存查询",
   "/inventory/transactions": "库存流水",
   "/inventory/purchase": "采购订单",
@@ -502,6 +508,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/inventory/suppliers": "menu.suppliers",
   "/inventory/products": "menu.products",
   "/inventory/warehouses": "menu.warehouses",
+  "/system/uoms": "menu.uoms",
   "/inventory/stock": "menu.stock",
   "/inventory/transactions": "menu.transactions",
   "/inventory/purchase": "menu.purchase",
