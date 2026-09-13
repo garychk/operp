@@ -684,6 +684,7 @@ export interface ErpPurchaseReceiptDetailsS539Dcf81BRow {
   amount: number | null;
   batch_no: string | null;
   expiry_date: string | null;
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
   remark: string | null;
 }
 export type ErpPurchaseReceiptDetailsS539Dcf81BInsert = Omit<ErpPurchaseReceiptDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
@@ -701,6 +702,7 @@ export interface ErpPurchaseReceiptsS539Dcf81BRow {
   order_id: number | null;  // FK -> erp_purchase_orders_s_539dcf81_b.id
   supplier_id: number | null;  // FK -> erp_suppliers_s_539dcf81_b.id
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（默认库位）
   total_amount: number | null;
   remark: string | null;
   status: string | null;
@@ -787,6 +789,7 @@ export interface ErpSalesDeliveriesS539Dcf81BRow {
   order_id: number | null;  // FK -> erp_sales_orders_s_539dcf81_b.id
   customer_id: number | null;  // FK -> erp_customers_s_539dcf81_b.id
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（默认库位）
   total_amount: number | null;
   remark: string | null;
   status: string | null;
@@ -813,6 +816,7 @@ export interface ErpSalesDeliveryDetailsS539Dcf81BRow {
   unit_price: number | null;
   amount: number | null;
   batch_no: string | null;
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
   remark: string | null;
 }
 export type ErpSalesDeliveryDetailsS539Dcf81BInsert = Omit<ErpSalesDeliveryDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;

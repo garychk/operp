@@ -15,6 +15,8 @@ import { SuperTable } from '../../components/SuperTable';
 import { ProductUnit } from '../../components/ProductUnit';
 import { InventoryInfo, invalidateInventoryCache } from '../../components/InventoryInfo';
 import SimpleModal from '../../components/SimpleModal';
+import { WarehouseBinSelect } from '../../components/WarehouseBinSelect';
+import { BinName } from '../../components/BinName';
 
 type SalesDelivery = Tables['erp_sales_deliveries_s_539dcf81_b']['Row'];
 type SalesDeliveryDetail = Tables['erp_sales_delivery_details_s_539dcf81_b']['Row'];
@@ -439,6 +441,7 @@ export function SalesDeliveries() {
       unit_price: 0,
       amount: 0,
       batch_no: '',
+      location_id: undefined,
       remark: '',
     });
     setIsDetailModalOpen(true);
@@ -644,6 +647,7 @@ export function SalesDeliveries() {
   // 明细可用库存的仓库维度：优先取表头当前选择的仓库，其次取已保存单据的仓库。
   const currentWarehouseId = watchedWarehouseId ?? selectedDelivery?.warehouse_id ?? null;
 
+
   const detailColumns = [
     {
       title: t('salesDeliveries.lineNo'),
@@ -694,6 +698,12 @@ export function SalesDeliveries() {
       dataIndex: 'batch_no',
       key: 'batch_no',
       render: (text: string) => text || '-',
+    },
+    {
+      title: t('salesDeliveries.location'),
+      dataIndex: 'location_id',
+      key: 'location_id',
+      render: (locationId: number) => <BinName binId={locationId} />,
     },
     {
       title: t('salesDeliveries.availableStock'),
@@ -806,22 +816,7 @@ export function SalesDeliveries() {
                   rules={[{ required: true, message: t('salesDeliveries.deliveryNoRequired') }]}
                 >
                   <Input placeholder={t('salesDeliveries.deliveryNoPlaceholder')} disabled={!!editingDelivery} />
-                </Form.Item>
-                <Form.Item
-                  label={t('salesDeliveries.relatedSalesOrder')}
-                  name="order_id"
-                >
-                  <Select
-                    placeholder={t('salesDeliveries.salesOrderPlaceholder')}
-                    onChange={handleOrderChange}
-                    allowClear
-                    disabled={isDisabled}
-                  >
-                    {orderSelectOptions.map((o) => (
-                      <Option key={o.value} value={o.value}>{o.label}</Option>
-                    ))}
-                  </Select>
-                </Form.Item>
+                </Form.Item>                
                 <Form.Item
                   label={t('salesDeliveries.customer')}
                   name="customer_id"
@@ -838,20 +833,45 @@ export function SalesDeliveries() {
                   name="warehouse_id"
                   rules={[{ required: true, message: t('salesDeliveries.warehouseRequired') }]}
                 >
-                  <Select placeholder={t('salesDeliveries.warehousePlaceholder')} disabled={isDisabled}>
+                  <Select
+                    placeholder={t('salesDeliveries.warehousePlaceholder')}
+                    disabled={isDisabled}
+                    onChange={() => form.setFieldsValue({ location_id: undefined })}
+                  >
                     {warehouses.map((w) => (
                       <Option key={w.id} value={w.id}>{w.name}</Option>
                     ))}
                   </Select>
                 </Form.Item>
+                <Form.Item
+                  label={t('salesDeliveries.defaultLocation')}
+                  name="location_id"
+                >
+                  <WarehouseBinSelect warehouseId={watchedWarehouseId} disabled={isDisabled} />
+                </Form.Item>
               </Col>
               <Col span={12}>
+                <Form.Item
+                  label={t('salesDeliveries.relatedSalesOrder')}
+                  name="order_id"
+                >
+                  <Select
+                    placeholder={t('salesDeliveries.salesOrderPlaceholder')}
+                    onChange={handleOrderChange}
+                    allowClear
+                    disabled={isDisabled}
+                  >
+                    {orderSelectOptions.map((o) => (
+                      <Option key={o.value} value={o.value}>{o.label}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
                 <Form.Item
                   label={t('salesDeliveries.deliveryDate')}
                   name="delivery_date"
                   rules={[{ required: true, message: t('salesDeliveries.deliveryDateRequired') }]}
                 >
-                  <DatePicker disabled={isDisabled} />
+                  <DatePicker disabled={isDisabled} style={{ width: '100%' }} />
                 </Form.Item>
                 <Form.Item label={t('salesDeliveries.totalAmount')} name="total_amount" initialValue={0}>
                   <InputNumber disabled style={{ width: '100%' }} />
@@ -880,7 +900,7 @@ export function SalesDeliveries() {
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>{t('salesDeliveries.totalText')}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
-              <Table.Summary.Cell index={2} colSpan={3}></Table.Summary.Cell>
+              <Table.Summary.Cell index={2} colSpan={4}></Table.Summary.Cell>
             </Table.Summary.Row>
           )}
         />}
@@ -892,7 +912,7 @@ export function SalesDeliveries() {
             </Button>
           </Space>
         }
-        width={'60%'}
+        width={'70%'}
         height={680}
       />
 
@@ -977,6 +997,9 @@ export function SalesDeliveries() {
           </Row>
           <Form.Item label={t('salesDeliveries.batchNo')} name="batch_no">
             <Input placeholder={t('salesDeliveries.batchNoPlaceholder')} disabled={isDisabled} />
+          </Form.Item>
+          <Form.Item label={t('salesDeliveries.location')} name="location_id">
+            <WarehouseBinSelect warehouseId={currentWarehouseId} disabled={isDisabled} />
           </Form.Item>
           <Form.Item label={t('salesDeliveries.remark')} name="remark">
             <Input placeholder={t('salesDeliveries.remarkPlaceholder')} disabled={isDisabled} />

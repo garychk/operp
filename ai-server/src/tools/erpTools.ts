@@ -56,6 +56,7 @@ interface EntityDef {
   defaults: () => Record<string, unknown>;
   createTitle: string;
   requiredFields: Array<{ key: string; label: string }>;
+  optionalFields?: Array<{ key: string; label: string }>;
 }
 
 const nowIso = () => new Date().toISOString();
@@ -260,14 +261,17 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     tableName: "erp_purchase_receipts_s_539dcf81_b",
     codeField: "receipt_no",
     nameField: "receipt_no",
-    keywords: ["采购入库单", "采购入库", "入库单"],
-    defaults: () => ({ receipt_no: `PR${Date.now().toString().slice(-8)}`, receipt_date: today(), total_amount: 0, status: "draft" }),
+    keywords: ["采购入库单", "采购入库", "入库单", "库位"],
+    defaults: () => ({ receipt_no: `PR${Date.now().toString().slice(-8)}`, receipt_date: today(), total_amount: 0, status: "draft", location_id: null }),
     createTitle: "AI新增采购入库单",
     requiredFields: [
       { key: "receipt_no", label: "入库单号" },
       { key: "receipt_date", label: "入库日期" },
       { key: "supplier_id", label: "供应商ID" },
       { key: "warehouse_id", label: "仓库ID" },
+    ],
+    optionalFields: [
+      { key: "location_id", label: "默认库位ID（库位表 erp_bins 的 id，整单入库的默认货位）" },
     ],
   },
   salesDelivery: {
@@ -276,14 +280,17 @@ const entityDefs: Record<EntityKey, EntityDef> = {
     tableName: "erp_sales_deliveries_s_539dcf81_b",
     codeField: "delivery_no",
     nameField: "delivery_no",
-    keywords: ["销售出货单", "销售出货", "出货单"],
-    defaults: () => ({ delivery_no: `SD${Date.now().toString().slice(-8)}`, delivery_date: today(), total_amount: 0, status: "draft" }),
+    keywords: ["销售出货单", "销售出货", "出货单", "库位"],
+    defaults: () => ({ delivery_no: `SD${Date.now().toString().slice(-8)}`, delivery_date: today(), total_amount: 0, status: "draft", location_id: null }),
     createTitle: "AI新增销售出货单",
     requiredFields: [
       { key: "delivery_no", label: "出货单号" },
       { key: "delivery_date", label: "出货日期" },
       { key: "customer_id", label: "客户ID" },
       { key: "warehouse_id", label: "仓库ID" },
+    ],
+    optionalFields: [
+      { key: "location_id", label: "默认库位ID（库位表 erp_bins 的 id，整单出货的默认货位）" },
     ],
   },
   productionOrder: {
@@ -418,6 +425,9 @@ async function extractEntityPayload(
     `实体表：${entity.tableName}`,
     `允许字段：${Object.keys(entity.defaults()).join(", ")}`,
     `必填字段：${entity.requiredFields.map((field) => field.label).join(", ")}`,
+    entity.optionalFields?.length
+      ? `可选字段：${entity.optionalFields.map((field) => field.label).join(", ")}`
+      : "",
     current ? `当前记录：${JSON.stringify(current)}` : "当前记录：无",
     `用户原话：${text}`,
     "返回格式：{\"fields\":{...},\"need_more\":[],\"summary\":\"\"}",
