@@ -53,6 +53,12 @@ interface SupaModalProps {
   headerPanelTitle?: string;
   detailPanelTitle?: string;
   detailExtra?: ReactNode;
+  detailItems?: {
+    key?: string;
+    label: ReactNode;
+    children: ReactNode;
+    disabled?: boolean;
+  }[];
   tableEle?: ReactNode;
   disabled?: boolean;
   detailData?: any[];
@@ -79,6 +85,7 @@ export function SupaModal({
   headerPanelTitle,
   detailPanelTitle,
   detailExtra,
+  detailItems,
   tableEle,
   disabled,
   detailData,
@@ -444,6 +451,12 @@ export function SupaModal({
                       },
                     ]
                   : []),
+                ...(detailItems?.map((item, index) => ({
+                  key: item.key ?? `detail-${index + 1}`,
+                  label: item.label,
+                  children: item.children,
+                  disabled: item.disabled,
+                })) ?? []),
               ]}
             />
           )}

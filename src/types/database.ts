@@ -603,6 +603,7 @@ export interface ErpProductsS539Dcf81BRow {
   category_id: number | null;  // FK -> erp_product_categories_s_539dcf81_b.id
   specification: string | null;
   unit: string | null;
+  base_uom_id: number | null;  // FK -> erp_uoms_s_539dcf81_b.id
   barcode: string | null;
   purchase_price: number | null;
   sale_price: number | null;
