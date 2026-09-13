@@ -13,6 +13,7 @@ import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
 import { ProductUnit } from '../../components/ProductUnit';
+import { InventoryInfo, invalidateInventoryCache } from '../../components/InventoryInfo';
 import SimpleModal from '../../components/SimpleModal';
 
 type SalesDelivery = Tables['erp_sales_deliveries_s_539dcf81_b']['Row'];
@@ -35,6 +36,7 @@ export function SalesDeliveries() {
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [salesOrders, setSalesOrders] = useState<SalesOrder[]>([]);
+  const [orderNoMap, setOrderNoMap] = useState<Map<number, string>>(new Map());
   const [salesOrderDetails, setSalesOrderDetails] = useState<SalesOrderDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,6 +51,9 @@ export function SalesDeliveries() {
   const [form] = Form.useForm();
   const [isDisabled, setIsDisabled] = useState(false);
   const [, setSelectedOrderId] = useState<number | null>(null);
+  const watchedOrderId = Form.useWatch('order_id', form);
+  const watchedOrderDetailId = Form.useWatch('order_detail_id', detailForm);
+  const watchedWarehouseId = Form.useWatch('warehouse_id', form);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -57,6 +62,7 @@ export function SalesDeliveries() {
     fetchProducts();
     fetchWarehouses();
     fetchSalesOrders();
+    fetchOrderNoMap();
   }, []);
 
   const fetchDeliveries = async () => {
@@ -134,6 +140,20 @@ export function SalesDeliveries() {
     }
   };
 
+  // 订单号展示用的映射：不按状态过滤，保证订单已出货/关闭后仍能查到单号。
+  const fetchOrderNoMap = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('erp_sales_orders_s_539dcf81_b')
+        .select('id, order_no')
+        .eq('is_deleted', 'n');
+      if (error) throw error;
+      setOrderNoMap(new Map((data || []).map((o) => [o.id, o.order_no])));
+    } catch (error) {
+      console.error('Error fetching sales order numbers:', error);
+    }
+  };
+
   const fetchSalesOrderDetails = async (orderId: number) => {
     try {
       const { data, error } = await supabase
@@ -164,13 +184,21 @@ export function SalesDeliveries() {
     }
   };
 
+  const calculateDeliveryTotal = (detailRows: { amount: number | null }[]) =>
+    detailRows.reduce((sum, d) => sum + (d.amount || 0), 0);
+
   const handleSubmit = async (values: any) => {
     try {
+      const payload = {
+        ...values,
+        total_amount: calculateDeliveryTotal(details),
+      };
+
       if (editingDelivery) {
         await logWithTiming(t('salesDeliveries.logUpdate'), 'UPDATE', async () => {
           const { error } = await supabase
             .from(salesDeliveryTable)
-            .update(values)
+            .update(payload)
             .eq('id', editingDelivery.id);
           if (error) throw error;
         }, { table: salesDeliveryTable, recordId: editingDelivery.id });
@@ -182,7 +210,7 @@ export function SalesDeliveries() {
         const data = await logWithTiming(t('salesDeliveries.logCreate'), 'INSERT', async () => {
           const { data, error } = await supabase
             .from(salesDeliveryTable)
-            .insert([values])
+            .insert([payload])
             .select()
             .single();
           if (error) throw error;
@@ -304,13 +332,14 @@ export function SalesDeliveries() {
         .eq('delivery_id', deliveryId);
       if (error) throw error;
 
-      const totalAmount = data?.reduce((sum, d) => sum + (d.amount || 0), 0) || 0;
+      const totalAmount = calculateDeliveryTotal(data || []);
 
       await supabase
         .from('erp_sales_deliveries_s_539dcf81_b')
         .update({ total_amount: totalAmount })
         .eq('id', deliveryId);
 
+      form.setFieldsValue({ total_amount: totalAmount });
       fetchDeliveries();
     } catch (error) {
       console.error('Error updating delivery total:', error);
@@ -324,6 +353,8 @@ export function SalesDeliveries() {
       await runBusinessAction({ action, documentType: 'sales_delivery', documentId: record.id, user: businessUser });
       const successText = action === 'submit' ? t('salesDeliveries.submitSuccess') : action === 'approve' ? t('salesDeliveries.approveSuccess') : action === 'post' ? t('salesDeliveries.postSuccess') : t('salesDeliveries.reversePostSuccess');
       message.success(successText);
+      // 过账/冲销会改变库存，清缓存以便明细的可用库存重新拉取。
+      invalidateInventoryCache();
       fetchDeliveries();
       if (selectedDelivery?.id === record.id) {
         fetchDetails(record.id);
@@ -333,7 +364,7 @@ export function SalesDeliveries() {
       message.error(error?.message || t('salesDeliveries.actionFailed'));
     }
   };
-  const handleEdit = (record: SalesDelivery) => {
+  const handleEdit = async (record: SalesDelivery) => {
     setEditingDelivery(record);
     setSelectedDelivery(record);
     setIsDisabled(record.status === 'posted');
@@ -343,6 +374,7 @@ export function SalesDeliveries() {
     }
     const formValues = { ...record, delivery_date: dayjs(record.delivery_date) };
     form.setFieldsValue(formValues);
+    await fetchDetails(record.id);
     setIsModalOpen(true);
   };
 
@@ -476,8 +508,8 @@ export function SalesDeliveries() {
   };
 
   const getOrderNo = (orderId: number | null) => {
-    const order = salesOrders.find((o) => o.id === orderId);
-    return order?.order_no || '-';
+    if (orderId === null || orderId === undefined) return '-';
+    return orderNoMap.get(orderId) || '-';
   };
 
   const getOrderDetailInfo = (orderDetailId: number | null) => {
@@ -485,6 +517,7 @@ export function SalesDeliveries() {
     if (!detail) return null;
     const product = products.find((p) => p.id === detail.product_id);
     return {
+      productId: detail.product_id,
       productName: product?.name || '-',
       unit: product?.unit || '-',
       remainingQty: (detail.quantity || 0) - (detail.delivered_quantity || 0),
@@ -496,7 +529,7 @@ export function SalesDeliveries() {
     const info = getOrderDetailInfo(value);
     if (info) {
       detailForm.setFieldsValue({
-        product_id: null,
+        product_id: info.productId,
         quantity: info.remainingQty,
         unit_price: info.unitPrice,
         amount: info.remainingQty * info.unitPrice,
@@ -510,6 +543,20 @@ export function SalesDeliveries() {
       getCustomerName(d.customer_id).toLowerCase().includes(searchTerm.toLowerCase()) ||
       getOrderNo(d.order_id).toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // 下拉候选为可选的销售订单；若当前单据关联的订单已出货/关闭而不在候选内，
+  // 用 orderNoMap 补一个选项，避免编辑态显示原始 id。
+  const orderSelectOptions = salesOrders.map((o) => ({
+    value: o.id,
+    label: o.order_no,
+  }));
+  if (
+    watchedOrderId != null &&
+    !orderSelectOptions.some((o) => o.value === watchedOrderId)
+  ) {
+    const orderNo = orderNoMap.get(watchedOrderId as number);
+    if (orderNo) orderSelectOptions.unshift({ value: watchedOrderId, label: orderNo });
+  }
 
   const statusLabels: Record<string, { text: string; color: string }> = {
     draft: { text: t('salesDeliveries.statusDraft'), color: 'default' },
@@ -594,6 +641,9 @@ export function SalesDeliveries() {
     },
   ];
 
+  // 明细可用库存的仓库维度：优先取表头当前选择的仓库，其次取已保存单据的仓库。
+  const currentWarehouseId = watchedWarehouseId ?? selectedDelivery?.warehouse_id ?? null;
+
   const detailColumns = [
     {
       title: t('salesDeliveries.lineNo'),
@@ -644,6 +694,17 @@ export function SalesDeliveries() {
       dataIndex: 'batch_no',
       key: 'batch_no',
       render: (text: string) => text || '-',
+    },
+    {
+      title: t('salesDeliveries.availableStock'),
+      key: 'available_stock',
+      render: (_: any, record: SalesDeliveryDetail) => (
+        <InventoryInfo
+          productId={record.product_id}
+          warehouseId={currentWarehouseId}
+          batchNo={record.batch_no}
+        />
+      ),
     },
     {
       title: t('common.actions'),
@@ -756,8 +817,8 @@ export function SalesDeliveries() {
                     allowClear
                     disabled={isDisabled}
                   >
-                    {salesOrders.map((o) => (
-                      <Option key={o.id} value={o.id}>{o.order_no}</Option>
+                    {orderSelectOptions.map((o) => (
+                      <Option key={o.value} value={o.value}>{o.label}</Option>
                     ))}
                   </Select>
                 </Form.Item>
@@ -819,7 +880,7 @@ export function SalesDeliveries() {
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>{t('salesDeliveries.totalText')}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
-              <Table.Summary.Cell index={2} colSpan={2}></Table.Summary.Cell>
+              <Table.Summary.Cell index={2} colSpan={3}></Table.Summary.Cell>
             </Table.Summary.Row>
           )}
         />}
@@ -864,7 +925,9 @@ export function SalesDeliveries() {
             >
               {salesOrderDetails.map((d) => {
                 const remaining = (d.quantity || 0) - (d.delivered_quantity || 0);
-                if (remaining <= 0) return null;
+                // 已发完的订单行不再作为候选，但当前明细已关联的那一行要保留，
+                // 否则编辑态会显示原始 id。
+                if (remaining <= 0 && d.id !== watchedOrderDetailId) return null;
                 const product = products.find((p) => p.id === d.product_id);
                 return (
                   <Option key={d.id} value={d.id}>

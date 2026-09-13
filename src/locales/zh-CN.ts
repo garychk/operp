@@ -605,6 +605,7 @@ const zhCN = {
     "salesDeliveries.quantity": "数量",
     "salesDeliveries.unitPrice": "单价",
     "salesDeliveries.batchNo": "批次号",
+    "salesDeliveries.availableStock": "可用库存",
     "salesDeliveries.relatedSalesOrder": "关联销售订单",
     "salesDeliveries.relatedOrderDetail": "关联订单明细",
     "salesDeliveries.remark": "备注",

@@ -605,6 +605,7 @@ const enUS = {
     "salesDeliveries.quantity": "Quantity",
     "salesDeliveries.unitPrice": "Unit Price",
     "salesDeliveries.batchNo": "Batch No.",
+    "salesDeliveries.availableStock": "Available Stock",
     "salesDeliveries.relatedSalesOrder": "Linked Sales Order",
     "salesDeliveries.relatedOrderDetail": "Linked Order Detail",
     "salesDeliveries.remark": "Remark",
