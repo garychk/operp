@@ -28,6 +28,7 @@ import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
+import { ProductUnit } from "../../components/ProductUnit";
 import dayjs from "dayjs";
 import SimpleModal from "../../components/SimpleModal";
 
@@ -402,11 +403,6 @@ export function PurchaseOrders() {
     return product?.name || "-";
   };
 
-  const getProductUnit = (productId: number | null) => {
-    const product = products.find((p) => p.id === productId);
-    return product?.unit || "-";
-  };
-
   const getProductPrice = (productId: number | null) => {
     const product = products.find((p) => p.id === productId);
     return product?.purchase_price || 0;
@@ -550,7 +546,9 @@ export function PurchaseOrders() {
       title: t('purchaseOrders.unit'),
       dataIndex: "product_id",
       key: "unit",
-      render: (productId: number) => getProductUnit(productId),
+      render: (productId: number) => (
+        <ProductUnit productId={productId} usageType="purchase" />
+      ),
     },
     {
       title: t('purchaseOrders.quantity'),

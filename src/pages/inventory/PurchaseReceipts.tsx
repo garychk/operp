@@ -12,6 +12,7 @@ import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
+import { ProductUnit } from '../../components/ProductUnit';
 import SimpleModal from '../../components/SimpleModal';
 
 type PurchaseReceipt = Tables['erp_purchase_receipts_s_539dcf81_b']['Row'];
@@ -463,11 +464,6 @@ export function PurchaseReceipts() {
     return product?.name || '-';
   };
 
-  const getProductUnit = (productId: number | null) => {
-    const product = products.find((p) => p.id === productId);
-    return product?.unit || '-';
-  };
-
   const getProductPrice = (productId: number | null) => {
     const product = products.find((p) => p.id === productId);
     return product?.purchase_price || 0;
@@ -645,7 +641,9 @@ export function PurchaseReceipts() {
       title: t('purchaseReceipts.unit'),
       dataIndex: 'product_id',
       key: 'unit',
-      render: (productId: number) => getProductUnit(productId),
+      render: (productId: number) => (
+        <ProductUnit productId={productId} usageType="purchase" />
+      ),
     },
     {
       title: t('purchaseReceipts.quantity'),

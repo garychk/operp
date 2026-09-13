@@ -12,6 +12,7 @@ import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
+import { ProductUnit } from '../../components/ProductUnit';
 import SimpleModal from '../../components/SimpleModal';
 
 type SalesDelivery = Tables['erp_sales_deliveries_s_539dcf81_b']['Row'];
@@ -464,11 +465,6 @@ export function SalesDeliveries() {
     return product?.name || '-';
   };
 
-  const getProductUnit = (productId: number | null) => {
-    const product = products.find((p) => p.id === productId);
-    return product?.unit || '-';
-  };
-
   const getProductPrice = (productId: number | null) => {
     const product = products.find((p) => p.id === productId);
     return product?.sale_price || 0;
@@ -623,7 +619,7 @@ export function SalesDeliveries() {
       title: t('salesDeliveries.unit'),
       dataIndex: 'product_id',
       key: 'unit',
-      render: (productId: number) => getProductUnit(productId),
+      render: (productId: number) => <ProductUnit productId={productId} />,
     },
     {
       title: t('salesDeliveries.quantity'),

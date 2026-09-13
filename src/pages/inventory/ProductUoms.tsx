@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import SimpleModal from "../../components/SimpleModal";
+import { invalidateProductUnitCache } from "../../components/ProductUnit";
 
 type Uom = Tables["erp_uoms_s_539dcf81_b"]["Row"];
 type UomGroup = Tables["erp_uom_groups_s_539dcf81_b"]["Row"];
@@ -160,6 +161,7 @@ export function ProductUoms({ productId, baseUomId, uoms, groups }: ProductUomsP
       setIsUnitModalOpen(false);
       unitForm.resetFields();
       setEditingProductUom(null);
+      invalidateProductUnitCache();
       fetchProductUoms(productId);
     } catch (error: any) {
       console.error("Error saving product uom:", error);
@@ -179,6 +181,7 @@ export function ProductUoms({ productId, baseUomId, uoms, groups }: ProductUomsP
             .eq("id", id);
           if (error) throw error;
           message.success(t("common.deleteSuccess"));
+          invalidateProductUnitCache();
           if (productId) fetchProductUoms(productId);
         } catch (error) {
           console.error("Error deleting product uom:", error);
