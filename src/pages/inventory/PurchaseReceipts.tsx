@@ -233,9 +233,7 @@ export function PurchaseReceipts() {
         if (error) throw error;
         message.success(t('common.createSuccess'));
         
-        if (values.order_detail_id) {
-          await updateOrderDetailReceivedQuantity(values.order_detail_id, values.quantity || 0);
-        }
+        // Progress is written by the database ledger trigger; see note above.
       }
       setIsDetailModalOpen(false);
       detailForm.resetFields();
@@ -248,56 +246,10 @@ export function PurchaseReceipts() {
     }
   };
 
-  const updateOrderDetailReceivedQuantity = async (orderDetailId: number, quantity: number) => {
-    try {
-      const { data, error } = await supabase
-        .from(purchaseOrderDetailTable)
-        .select('received_quantity, quantity, order_id')
-        .eq('id', orderDetailId)
-        .single();
-      if (error) throw error;
-      
-      const newReceivedQty = (data.received_quantity || 0) + quantity;
-      await supabase
-        .from(purchaseOrderDetailTable)
-        .update({ received_quantity: newReceivedQty as number })
-        .eq('id', orderDetailId);
-      
-      if (data.order_id) {
-        await updatePurchaseOrderStatus(data.order_id);
-      }
-    } catch (error) {
-      console.error('Error updating order detail:', error);
-    }
-  };
-
-  const updatePurchaseOrderStatus = async (orderId: number) => {
-    try {
-      const { data, error } = await supabase
-        .from(purchaseOrderDetailTable)
-        .select('quantity, received_quantity')
-        .eq('order_id', orderId)
-        .eq('is_deleted', 'n');
-      if (error) throw error;
-      
-      const allReceived = data.every(d => (d.received_quantity || 0) >= (d.quantity || 0));
-      const someReceived = data.some(d => (d.received_quantity || 0) > 0);
-      
-      let status = 'approved';
-      if (allReceived) {
-        status = 'received';
-      } else if (someReceived) {
-        status = 'partially_received';
-      }
-      
-      await supabase
-        .from(purchaseOrderTable)
-        .update({ status })
-        .eq('id', orderId);
-    } catch (error) {
-      console.error('Error updating order status:', error);
-    }
-  };
+  // received_quantity and the purchase order status are now maintained exclusively by
+  // the document-conversion ledger trigger (doc_flow_ledger_on_receipt_detail) in the
+  // database. Keeping a client-side increment here would race with it and overwrite
+  // the recomputed value, so it has been removed on purpose.
 
   const updateReceiptTotal = async (receiptId: number) => {
     try {
