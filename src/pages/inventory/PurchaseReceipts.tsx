@@ -12,7 +12,10 @@ import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
+import { ProductUnit } from '../../components/ProductUnit';
 import SimpleModal from '../../components/SimpleModal';
+import { WarehouseBinSelect } from '../../components/WarehouseBinSelect';
+import { BinName } from '../../components/BinName';
 
 type PurchaseReceipt = Tables['erp_purchase_receipts_s_539dcf81_b']['Row'];
 type PurchaseReceiptDetail = Tables['erp_purchase_receipt_details_s_539dcf81_b']['Row'];
@@ -50,6 +53,7 @@ export function PurchaseReceipts() {
   const [form] = Form.useForm();
   const [, setSelectedOrderId] = useState<number | null>(null);
   const { user } = useAuth();
+  const watchedWarehouseId = Form.useWatch('warehouse_id', form);
 
   useEffect(() => {
     fetchReceipts();
@@ -402,6 +406,7 @@ export function PurchaseReceipts() {
       unit_price: 0,
       amount: 0,
       batch_no: '',
+      location_id: undefined,
       expiry_date: '',
       remark: '',
     });
@@ -461,11 +466,6 @@ export function PurchaseReceipts() {
   const getProductName = (productId: number | null) => {
     const product = products.find((p) => p.id === productId);
     return product?.name || '-';
-  };
-
-  const getProductUnit = (productId: number | null) => {
-    const product = products.find((p) => p.id === productId);
-    return product?.unit || '-';
   };
 
   const getProductPrice = (productId: number | null) => {
@@ -620,6 +620,10 @@ export function PurchaseReceipts() {
     },
   ];
 
+  // 当前仓库（表头选择或已保存单据），用于明细库位下拉与库位名展示。
+  const currentWarehouseId = watchedWarehouseId ?? selectedReceipt?.warehouse_id ?? null;
+
+
   const detailColumns = [
     {
       title: t('purchaseReceipts.lineNo'),
@@ -645,7 +649,9 @@ export function PurchaseReceipts() {
       title: t('purchaseReceipts.unit'),
       dataIndex: 'product_id',
       key: 'unit',
-      render: (productId: number) => getProductUnit(productId),
+      render: (productId: number) => (
+        <ProductUnit productId={productId} usageType="purchase" />
+      ),
     },
     {
       title: t('purchaseReceipts.quantity'),
@@ -670,6 +676,12 @@ export function PurchaseReceipts() {
       dataIndex: 'batch_no',
       key: 'batch_no',
       render: (text: string) => text || '-',
+    },
+    {
+      title: t('purchaseReceipts.location'),
+      dataIndex: 'location_id',
+      key: 'location_id',
+      render: (locationId: number) => <BinName binId={locationId} />,
     },
     {
       title: t('purchaseReceipts.expiryDate'),
@@ -764,6 +776,36 @@ export function PurchaseReceipts() {
                   <Input placeholder={t('purchaseReceipts.receiptNoPrompt')} disabled={!!editingReceipt} />
                 </Form.Item>
                 <Form.Item
+                  label={t('purchaseReceipts.receiptDate')}
+                  name="receipt_date"
+                  rules={[{ required: true, message: t('purchaseReceipts.receiptDatePrompt') }]}
+                >
+                  <DatePicker style={{ width: '100%' }} />
+                </Form.Item>                
+                <Form.Item
+                  label={t('purchaseReceipts.warehouse')}
+                  name="warehouse_id"
+                  rules={[{ required: true, message: t('purchaseReceipts.warehousePrompt') }]}
+                >
+                  <Select
+                    placeholder={t('purchaseReceipts.warehousePrompt')}
+                    onChange={() => form.setFieldsValue({ location_id: undefined })}
+                  >
+                    {warehouses.map((w) => (
+                      <Option key={w.id} value={w.id}>{w.name}</Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label={t('purchaseReceipts.defaultLocation')}
+                  name="location_id"
+                >
+                  <WarehouseBinSelect warehouseId={watchedWarehouseId} />
+                </Form.Item>
+                
+              </Col>
+              <Col span={12}>
+                    <Form.Item
                   label={t('purchaseReceipts.orderLabel')}
                   name="order_id"
                 >
@@ -788,32 +830,10 @@ export function PurchaseReceipts() {
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item
-                  label={t('purchaseReceipts.warehouse')}
-                  name="warehouse_id"
-                  rules={[{ required: true, message: t('purchaseReceipts.warehousePrompt') }]}
-                >
-                  <Select placeholder={t('purchaseReceipts.warehousePrompt')}>
-                    {warehouses.map((w) => (
-                      <Option key={w.id} value={w.id}>{w.name}</Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-                <Form.Item
-                  label={t('purchaseReceipts.receiptDate')}
-                  name="receipt_date"
-                  rules={[{ required: true, message: t('purchaseReceipts.receiptDatePrompt') }]}
-                >
-                  <DatePicker />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
                 <Form.Item label={t('purchaseReceipts.totalAmount')} name="total_amount" initialValue={0}>
                   <InputNumber disabled style={{ width: '100%' }} />
                 </Form.Item>
-                <Form.Item label={t('purchaseReceipts.remark')} name="remark">
-                  <TextArea rows={4} placeholder={t('purchaseReceipts.remarkPrompt')} />
-                </Form.Item>
+                
                 <Form.Item label={t('common.status')} name="status" initialValue="draft">
                   <Select>
                     <Option value="draft">{t('purchaseReceipts.statusDraft')}</Option>
@@ -824,6 +844,9 @@ export function PurchaseReceipts() {
                 </Form.Item>
               </Col>
             </Row>
+            <Form.Item label={t('purchaseReceipts.remark')} name="remark">
+                  <TextArea rows={2} placeholder={t('purchaseReceipts.remarkPrompt')} />
+                </Form.Item>
           </Form>
         }
         tableEle={<Table
@@ -835,7 +858,7 @@ export function PurchaseReceipts() {
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>{t('purchaseReceipts.totalText')}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
-              <Table.Summary.Cell index={2} colSpan={3}></Table.Summary.Cell>
+              <Table.Summary.Cell index={2} colSpan={4}></Table.Summary.Cell>
             </Table.Summary.Row>
           )}
         />}
@@ -958,6 +981,13 @@ export function PurchaseReceipts() {
                 <Input placeholder={t('purchaseReceipts.batchNoPrompt')} />
               </Form.Item>
             </Col>
+            <Col span={12}>
+              <Form.Item label={t('purchaseReceipts.location')} name="location_id">
+                <WarehouseBinSelect warehouseId={currentWarehouseId} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
             <Col span={12}>
               <Form.Item label={t('purchaseReceipts.expiryDate')} name="expiry_date">
                 <DatePicker />

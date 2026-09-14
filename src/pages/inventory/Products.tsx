@@ -24,34 +24,54 @@ import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import { Categories } from "./Categories";
+import { ProductUoms } from "./ProductUoms";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
-import DictSelect from "../../components/DictSelect";
 import SimpleModal from "../../components/SimpleModal";
 import { useTranslation } from "react-i18next";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
+type Uom = Tables["erp_uoms_s_539dcf81_b"]["Row"];
+type UomGroup = Tables["erp_uom_groups_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 const productTable = "erp_products_s_539dcf81_b";
+const uomTable = "erp_uoms_s_539dcf81_b";
 
 export function Products() {
   const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
+  const [uoms, setUoms] = useState<Uom[]>([]);
+  const [groups, setGroups] = useState<UomGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [, setActiveTab] = useState("basic");
   const [form] = Form.useForm();
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
+    fetchUoms();
   }, []);
+
+  const fetchUoms = async () => {
+    try {
+      const [{ data: g }, { data: u }] = await Promise.all([
+        supabase.from("erp_uom_groups_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("status", "active"),
+        supabase.from(uomTable).select("*").eq("is_deleted", "n").eq("is_active", true),
+      ]);
+      setGroups(g || []);
+      setUoms(u || []);
+    } catch (error) {
+      console.error("Error fetching uoms:", error);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -85,35 +105,48 @@ export function Products() {
     }
   };
 
+  const groupNameMap = new Map<number, string>(groups.map((g) => [g.id, g.name]));
+  const uomMap = new Map<number, Uom>(uoms.map((u) => [u.id, u]));
+
+  const uomOptions = uoms.map((u) => ({
+    value: u.id,
+    label: `${u.name}${u.symbol ? ` (${u.symbol})` : ""} · ${groupNameMap.get(u.group_id) || ""}`,
+  }));
+
   const handleSubmit = async (values: any) => {
     try {
+      const payload = { ...values };
+      if (payload.base_uom_id) {
+        const u = uomMap.get(payload.base_uom_id);
+        payload.unit = u?.symbol || u?.name || payload.unit;
+      }
       if (editingProduct) {
         await logWithTiming(t("products.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(productTable)
-            .update(values)
+            .update(payload)
             .eq("id", editingProduct.id);
           if (error) throw error;
         }, { table: productTable, recordId: editingProduct.id });
         message.success(t("common.updateSuccess"));
       } else {
-        const logParams: { table: string; recordId?: number } = {
-          table: productTable,
-        };
+        const logParams: { table: string; recordId?: number } = { table: productTable };
         await logWithTiming(t("products.logCreate"), "INSERT", async () => {
           const { data, error } = await supabase
             .from(productTable)
-            .insert([values])
+            .insert([payload])
             .select("id")
             .single();
           if (error) throw error;
           logParams.recordId = data.id;
+          setEditingProduct({ id: data.id } as Product);
         }, logParams);
         message.success(t("common.createSuccess"));
       }
       setIsModalOpen(false);
       form.resetFields();
       setEditingProduct(null);
+      setActiveTab("basic");
       fetchProducts();
     } catch (error) {
       console.error("Error saving product:", error);
@@ -146,10 +179,12 @@ export function Products() {
     setEditingProduct(record);
     form.setFieldsValue({
       ...record,
+      base_uom_id: record.base_uom_id ?? undefined,
       is_purchased: record.is_purchased ?? true,
       is_sold: record.is_sold ?? true,
       is_manufactured: record.is_manufactured ?? false,
     });
+    setActiveTab("basic");
     setIsModalOpen(true);
   };
 
@@ -161,7 +196,7 @@ export function Products() {
       short_name: "",
       category_id: undefined,
       specification: "",
-      unit: t("products.unitDefault"),
+      base_uom_id: undefined,
       barcode: "",
       purchase_price: 0,
       sale_price: 0,
@@ -174,12 +209,19 @@ export function Products() {
       is_manufactured: false,
       status: "active",
     });
+    setActiveTab("basic");
     setIsModalOpen(true);
   };
 
   const getCategoryName = (categoryId: number | null) => {
     const category = categories.find((c) => c.id === categoryId);
     return category?.name || "-";
+  };
+
+  const renderUnitCell = (record: Product) => {
+    const u = record.base_uom_id ? uomMap.get(record.base_uom_id) : undefined;
+    if (u) return `${u.name}${u.symbol ? ` (${u.symbol})` : ""}`;
+    return record.unit || "-";
   };
 
   const filteredProducts = products.filter(
@@ -215,10 +257,10 @@ export function Products() {
       render: (text: string) => text || "-",
     },
     {
-      title: t("products.unit"),
-      dataIndex: "unit",
-      key: "unit",
-      width: 120,
+      title: t("products.baseUnit"),
+      key: "base_uom_id",
+      width: 140,
+      render: (_: any, record: Product) => renderUnitCell(record),
     },
     {
       title: t("products.purchasePrice"),
@@ -318,6 +360,7 @@ export function Products() {
           setIsModalOpen(false);
           form.resetFields();
           setEditingProduct(null);
+          setActiveTab("basic");
         }}
         headerPanelTitle={t("products.masterTitle")}
         historyTable={productTable}
@@ -331,136 +374,152 @@ export function Products() {
             style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
-              <Col span={8}>
-                <Form.Item
-                  label={t("products.code")}
-                  name="code"
-                  rules={[{ required: true, message: t("products.codeRequired") }]}
-                >
-                  <Input
-                    placeholder={t("products.codePlaceholder")}
-                    disabled={!!editingProduct}
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={t("products.name")}
-                  name="name"
-                  rules={[{ required: true, message: t("products.nameRequired") }]}
-                >
-                  <Input placeholder={t("products.namePlaceholder")} />
-                </Form.Item>
-                <Form.Item label={t("products.shortName")} name="short_name">
-                  <Input placeholder={t("products.shortNamePlaceholder")} />
-                </Form.Item>
-                <Form.Item label={t("products.category")} name="category_id">
-                  <Select placeholder={t("products.categoryPlaceholder")}>
-                    {categories.map((c) => (
-                      <Option key={c.id} value={c.id}>
-                        {c.name}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-                <Form.Item label={t("products.spec")} name="specification">
-                  <Input placeholder={t("products.specPlaceholder")} />
-                </Form.Item>
-                <Form.Item
-                  label={t("products.unit")}
-                  name="unit"
-                  initialValue={t("products.unitDefault")}
-                  tooltip={t("products.unitTooltip")}
-                >
-                  <DictSelect
-                    dictType="uom"
-                    placeholder={t("products.unitPlaceholder")}
-                    allowClear
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={8}>
-                <Form.Item label={t("products.barcode")} name="barcode">
-                  <Input placeholder={t("products.barcodePlaceholder")} />
-                </Form.Item>
-                <Form.Item
-                  label={t("products.purchasePrice")}
-                  name="purchase_price"
-                  initialValue={0}
-                >
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    placeholder={t("products.purchasePricePlaceholder")}
-                  />
-                </Form.Item>
-                <Form.Item label={t("products.salePrice")} name="sale_price" initialValue={0}>
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    placeholder={t("products.salePricePlaceholder")}
-                  />
-                </Form.Item>
-                <Form.Item label={t("products.costPrice")} name="cost_price" initialValue={0}>
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    placeholder={t("products.costPricePlaceholder")}
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={t("products.safetyStock")}
-                  name="safety_stock"
-                  initialValue={0}
-                >
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    placeholder={t("products.safetyStockPlaceholder")}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={8}>
-                <Form.Item label={t("products.maxStock")} name="max_stock" initialValue={0}>
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    placeholder={t("products.maxStockPlaceholder")}
-                  />
-                </Form.Item>
-                <Form.Item label={t("products.minStock")} name="min_stock" initialValue={0}>
-                  <InputNumber
-                    style={{ width: "100%" }}
-                    placeholder={t("products.minStockPlaceholder")}
-                  />
-                </Form.Item>
-                <Form.Item
-                  label={t("products.purchasable")}
-                  name="is_purchased"
-                  valuePropName="checked"
-                  initialValue={true}
-                >
-                  <Checkbox />
-                </Form.Item>
-                <Form.Item
-                  label={t("products.sellable")}
-                  name="is_sold"
-                  valuePropName="checked"
-                  initialValue={true}
-                >
-                  <Checkbox />
-                </Form.Item>
-                <Form.Item
-                  label={t("products.manufacturable")}
-                  name="is_manufactured"
-                  valuePropName="checked"
-                  initialValue={false}
-                >
-                  <Checkbox />
-                </Form.Item>
-                <Form.Item label={t("common.status")} name="status" initialValue="active">
-                  <Select>
-                    <Option value="active">{t("common.enabled")}</Option>
-                    <Option value="inactive">{t("products.disabled")}</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
+                      <Col span={8}>
+                        <Form.Item
+                          label={t("products.code")}
+                          name="code"
+                          rules={[{ required: true, message: t("products.codeRequired") }]}
+                        >
+                          <Input
+                            placeholder={t("products.codePlaceholder")}
+                            disabled={!!editingProduct}
+                          />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.name")}
+                          name="name"
+                          rules={[{ required: true, message: t("products.nameRequired") }]}
+                        >
+                          <Input placeholder={t("products.namePlaceholder")} />
+                        </Form.Item>
+                        <Form.Item label={t("products.shortName")} name="short_name">
+                          <Input placeholder={t("products.shortNamePlaceholder")} />
+                        </Form.Item>
+                        <Form.Item label={t("products.category")} name="category_id">
+                          <Select placeholder={t("products.categoryPlaceholder")}>
+                            {categories.map((c) => (
+                              <Option key={c.id} value={c.id}>
+                                {c.name}
+                              </Option>
+                            ))}
+                          </Select>
+                        </Form.Item>
+                        <Form.Item label={t("products.spec")} name="specification">
+                          <Input placeholder={t("products.specPlaceholder")} />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.baseUnit")}
+                          name="base_uom_id"
+                          rules={[{ required: true, message: t("products.baseUnitRequired") }]}
+                          tooltip={t("products.unitConvHint")}
+                        >
+                          <Select
+                            showSearch
+                            placeholder={t("products.baseUnitPlaceholder")}
+                            optionFilterProp="label"
+                            options={uomOptions}
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item label={t("products.barcode")} name="barcode">
+                          <Input placeholder={t("products.barcodePlaceholder")} />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.purchasePrice")}
+                          name="purchase_price"
+                          initialValue={0}
+                        >
+                          <InputNumber
+                            style={{ width: "100%" }}
+                            placeholder={t("products.purchasePricePlaceholder")}
+                          />
+                        </Form.Item>
+                        <Form.Item label={t("products.salePrice")} name="sale_price" initialValue={0}>
+                          <InputNumber
+                            style={{ width: "100%" }}
+                            placeholder={t("products.salePricePlaceholder")}
+                          />
+                        </Form.Item>
+                        <Form.Item label={t("products.costPrice")} name="cost_price" initialValue={0}>
+                          <InputNumber
+                            style={{ width: "100%" }}
+                            placeholder={t("products.costPricePlaceholder")}
+                          />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.safetyStock")}
+                          name="safety_stock"
+                          initialValue={0}
+                        >
+                          <InputNumber
+                            style={{ width: "100%" }}
+                            placeholder={t("products.safetyStockPlaceholder")}
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col span={8}>
+                        <Form.Item label={t("products.maxStock")} name="max_stock" initialValue={0}>
+                          <InputNumber
+                            style={{ width: "100%" }}
+                            placeholder={t("products.maxStockPlaceholder")}
+                          />
+                        </Form.Item>
+                        <Form.Item label={t("products.minStock")} name="min_stock" initialValue={0}>
+                          <InputNumber
+                            style={{ width: "100%" }}
+                            placeholder={t("products.minStockPlaceholder")}
+                          />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.purchasable")}
+                          name="is_purchased"
+                          valuePropName="checked"
+                          initialValue={true}
+                        >
+                          <Checkbox />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.sellable")}
+                          name="is_sold"
+                          valuePropName="checked"
+                          initialValue={true}
+                        >
+                          <Checkbox />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.manufacturable")}
+                          name="is_manufactured"
+                          valuePropName="checked"
+                          initialValue={false}
+                        >
+                          <Checkbox />
+                        </Form.Item>
+                        <Form.Item label={t("common.status")} name="status" initialValue="active">
+                          <Select>
+                            <Option value="active">{t("common.enabled")}</Option>
+                            <Option value="inactive">{t("products.disabled")}</Option>
+                          </Select>
+                        </Form.Item>
+                      </Col>
+                    </Row>
           </Form>
         }
+        detailItems={[
+          {
+            key: "units",
+            label: t("products.unitConversions"),
+            disabled: !editingProduct,
+            children: (
+              <ProductUoms
+                productId={editingProduct?.id}
+                baseUomId={editingProduct?.base_uom_id}
+                uoms={uoms}
+                groups={groups}
+              />
+            ),
+          },
+        ]}
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>{t("common.cancel")}</Button>
@@ -472,6 +531,7 @@ export function Products() {
         width={"70%"}
         height={650}
       />
+
       <SimpleModal
         title={t("products.categoryManageTitle")}
         open={isCategoryModalOpen}
@@ -481,7 +541,7 @@ export function Products() {
         destroyOnHidden
       >
         <Categories />
-      </SimpleModal>  
+      </SimpleModal>
     </div>
   );
 }

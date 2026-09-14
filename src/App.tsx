@@ -18,6 +18,7 @@ import { Customers } from './pages/inventory/Customers';
 import { Suppliers } from './pages/inventory/Suppliers';
 import { Products } from './pages/inventory/Products';
 import { Warehouses } from './pages/inventory/Warehouses';
+import { Uoms } from './pages/system/Uoms';
 import { Inventory } from './pages/inventory/Inventory';
 import { PurchaseOrders } from './pages/inventory/PurchaseOrders';
 import { SalesOrders } from './pages/inventory/SalesOrders';
@@ -136,6 +137,7 @@ function AppContent() {
           <Route path="menus" element={<Menus />} />
           <Route path="settings" element={<Settings />} />
           <Route path="dictionaries" element={<Dictionaries />} />
+          <Route path="uoms" element={<Uoms />} />
           <Route path="workflow" element={<WorkflowConfig />} />
           <Route path="document-types" element={<DocumentTypeBuilder />} />
           <Route path="logs" element={<Logs />} />

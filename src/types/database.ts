@@ -603,6 +603,7 @@ export interface ErpProductsS539Dcf81BRow {
   category_id: number | null;  // FK -> erp_product_categories_s_539dcf81_b.id
   specification: string | null;
   unit: string | null;
+  base_uom_id: number | null;  // FK -> erp_uoms_s_539dcf81_b.id
   barcode: string | null;
   purchase_price: number | null;
   sale_price: number | null;
@@ -683,6 +684,7 @@ export interface ErpPurchaseReceiptDetailsS539Dcf81BRow {
   amount: number | null;
   batch_no: string | null;
   expiry_date: string | null;
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
   remark: string | null;
 }
 export type ErpPurchaseReceiptDetailsS539Dcf81BInsert = Omit<ErpPurchaseReceiptDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
@@ -700,6 +702,7 @@ export interface ErpPurchaseReceiptsS539Dcf81BRow {
   order_id: number | null;  // FK -> erp_purchase_orders_s_539dcf81_b.id
   supplier_id: number | null;  // FK -> erp_suppliers_s_539dcf81_b.id
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（默认库位）
   total_amount: number | null;
   remark: string | null;
   status: string | null;
@@ -786,6 +789,7 @@ export interface ErpSalesDeliveriesS539Dcf81BRow {
   order_id: number | null;  // FK -> erp_sales_orders_s_539dcf81_b.id
   customer_id: number | null;  // FK -> erp_customers_s_539dcf81_b.id
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（默认库位）
   total_amount: number | null;
   remark: string | null;
   status: string | null;
@@ -812,6 +816,7 @@ export interface ErpSalesDeliveryDetailsS539Dcf81BRow {
   unit_price: number | null;
   amount: number | null;
   batch_no: string | null;
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
   remark: string | null;
 }
 export type ErpSalesDeliveryDetailsS539Dcf81BInsert = Omit<ErpSalesDeliveryDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
@@ -1002,6 +1007,59 @@ export interface SysFormsRow {
 }
 export type SysFormsInsert = Omit<SysFormsRow, 'id' | 'corp_id' | 'emp_id' | 'created_at'>;
 export type SysFormsUpdate = Partial<SysFormsInsert>;
+
+export interface ErpUomGroupsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  code: string;
+  name: string;
+  base_uom_id: number | null;  // FK -> erp_uoms_s_539dcf81_b.id
+  sort_order: number | null;
+  status: string | null;
+}
+export type ErpUomGroupsS539Dcf81BInsert = Omit<ErpUomGroupsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpUomGroupsS539Dcf81BUpdate = Partial<ErpUomGroupsS539Dcf81BInsert>;
+
+export interface ErpUomsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  group_id: number;  // FK -> erp_uom_groups_s_539dcf81_b.id
+  code: string;
+  name: string;
+  symbol: string | null;
+  factor: number | null;
+  rounding: number | null;
+  is_base: boolean | null;
+  is_active: boolean | null;
+}
+export type ErpUomsS539Dcf81BInsert = Omit<ErpUomsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpUomsS539Dcf81BUpdate = Partial<ErpUomsS539Dcf81BInsert>;
+
+export interface ErpProductUomsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  product_id: number;  // FK -> erp_products_s_539dcf81_b.id
+  uom_id: number;  // FK -> erp_uoms_s_539dcf81_b.id
+  usage_type: string;
+  conversion_factor: number | null;
+  is_default: boolean | null;
+  barcode: string | null;
+  remark: string | null;
+}
+export type ErpProductUomsS539Dcf81BInsert = Omit<ErpProductUomsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpProductUomsS539Dcf81BUpdate = Partial<ErpProductUomsS539Dcf81BInsert>;
 
 export interface SysLogsRow {
   id: number;
