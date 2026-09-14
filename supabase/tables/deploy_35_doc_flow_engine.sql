@@ -113,7 +113,11 @@ SELECT public.install_role_table_rls('doc_flow_field_maps');
 SELECT public.install_role_table_rls('doc_flow_transfers');
 
 -- Derive the physical child (detail) table name from the parent DocType table.
--- erp_purchase_orders_s_539dcf81_b -> erp_purchase_order_details_s_539dcf81_b
+-- Header tables are plural while detail tables drop that trailing "s":
+--   erp_purchase_orders_s_539dcf81_b  -> erp_purchase_order_details_s_539dcf81_b
+--   erp_boms_s_539dcf81_b             -> erp_bom_details_s_539dcf81_b
+-- Several candidates are probed so a future naming exception does not silently
+-- produce a NULL detail table (which used to leave every line-level dropdown empty).
 CREATE OR REPLACE FUNCTION public.doc_flow_detail_table(p_document_type TEXT)
 RETURNS TEXT
 LANGUAGE plpgsql
@@ -123,7 +127,10 @@ SET search_path = public
 AS $$
 DECLARE
   v_table_name TEXT;
-  v_detail TEXT;
+  v_suffix TEXT := '_s_539dcf81_b';
+  v_base TEXT;
+  v_candidate TEXT;
+  v_candidates TEXT[] := ARRAY[]::TEXT[];
 BEGIN
   SELECT table_name INTO v_table_name
   FROM public.sys_document_types
@@ -134,15 +141,30 @@ BEGIN
     RAISE EXCEPTION 'Document type % is not registered', p_document_type;
   END IF;
 
-  v_detail := replace(v_table_name, '_s_539dcf81_b', '_details_s_539dcf81_b');
-  IF v_detail = v_table_name THEN
-    v_detail := v_table_name || '_details';
+  v_base := v_table_name;
+  IF v_base LIKE '%' || v_suffix THEN
+    v_base := left(v_base, length(v_base) - length(v_suffix));
   END IF;
 
-  IF to_regclass(format('public.%I', v_detail)) IS NULL THEN
-    RETURN NULL;
-  END IF;
-  RETURN v_detail;
+  -- Plural forms seen in this schema: trailing "s" (orders -> order) and
+  -- "ies" -> "y" (deliveries -> delivery). Probe every candidate against the catalog.
+  v_candidates := ARRAY[
+    CASE WHEN v_base LIKE '%ies' THEN left(v_base, length(v_base) - 3) || 'y' ELSE NULL END,
+    CASE WHEN v_base LIKE '%s' THEN left(v_base, length(v_base) - 1) ELSE NULL END,
+    v_base
+  ];
+
+  FOREACH v_candidate IN ARRAY v_candidates LOOP
+    CONTINUE WHEN v_candidate IS NULL;
+    IF to_regclass(format('public.%I', v_candidate || '_details' || v_suffix)) IS NOT NULL THEN
+      RETURN v_candidate || '_details' || v_suffix;
+    END IF;
+    IF to_regclass(format('public.%I', v_candidate || '_details')) IS NOT NULL THEN
+      RETURN v_candidate || '_details';
+    END IF;
+  END LOOP;
+
+  RETURN NULL;
 END;
 $$;
 
@@ -222,6 +244,41 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.doc_flow_resolve_value(TEXT, TEXT, TEXT, JSONB, JSONB) TO authenticated;
+
+-- Resolves a single already-stored mapping by target field name. Used when one field's value
+-- is needed while building another (unit price feeds the recomputed line amount).
+CREATE OR REPLACE FUNCTION public.doc_flow_get_map_value(
+  p_rule_id INTEGER,
+  p_map_level TEXT,
+  p_target_field TEXT,
+  p_source_row JSONB,
+  p_context JSONB DEFAULT '{}'::jsonb
+)
+RETURNS TEXT
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_map RECORD;
+BEGIN
+  SELECT source_type, source_field, const_value INTO v_map
+  FROM public.doc_flow_field_maps
+  WHERE rule_id = p_rule_id
+    AND is_deleted = 'n'
+    AND map_level = p_map_level
+    AND target_field = p_target_field
+  LIMIT 1;
+
+  IF NOT FOUND THEN RETURN NULL; END IF;
+
+  RETURN public.doc_flow_resolve_value(
+    v_map.source_type, v_map.source_field, v_map.const_value, p_source_row, p_context);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.doc_flow_get_map_value(INTEGER, TEXT, TEXT, JSONB, JSONB) TO authenticated;
 
 CREATE OR REPLACE FUNCTION public.doc_flow_quote_value(p_value TEXT)
 RETURNS TEXT
@@ -402,6 +459,14 @@ GRANT EXECUTE ON FUNCTION public.doc_flow_reverse_document(TEXT, INTEGER, TEXT) 
 ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS source_detail_parent_field VARCHAR(100) NOT NULL DEFAULT 'order_id';
 ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS target_no_field VARCHAR(100) NOT NULL DEFAULT 'document_no';
 ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS target_detail_parent_field VARCHAR(100) NOT NULL DEFAULT 'receipt_id';
+
+-- Amount fields cannot be copied by a same-name mapping: on a partial conversion the target
+-- would inherit the SOURCE total. They are recomputed from the planned quantity instead.
+ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS target_unit_price_field VARCHAR(100) NOT NULL DEFAULT 'unit_price';
+ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS target_line_amount_field VARCHAR(100) NOT NULL DEFAULT 'amount';
+ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS target_total_amount_field VARCHAR(100) NOT NULL DEFAULT 'total_amount';
+ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS recalc_line_amount BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS sync_header_total BOOLEAN NOT NULL DEFAULT TRUE;
 
 -- Records one conversion (or one quantity adjustment) against the ledger and then
 -- validates the line still fits inside the source quantity. Positive quantities are
@@ -587,6 +652,10 @@ DECLARE
   v_line_vals TEXT[] := ARRAY[]::TEXT[];
   v_ref_mapped BOOLEAN := FALSE;
   v_status_mapped BOOLEAN := FALSE;
+  v_unit_price NUMERIC;
+  v_price_text TEXT;
+  v_price_map RECORD;
+  v_has_total BOOLEAN;
   v_sql TEXT;
 BEGIN
   SELECT * INTO v_rule
@@ -716,6 +785,13 @@ BEGIN
     v_line_vals := ARRAY[v_target_id::TEXT, v_line_no::TEXT, 'n'];
     v_ref_mapped := FALSE;
 
+    v_unit_price := NULL;
+    v_price_text := public.doc_flow_get_map_value(
+      v_rule.id, 'line', v_rule.target_unit_price_field, v_line.row_data, v_context);
+    IF COALESCE(v_price_text, '') ~ '^-?[0-9]+(\.[0-9]+)?$' THEN
+      v_unit_price := v_price_text::NUMERIC;
+    END IF;
+
     FOR v_map IN
       SELECT * FROM public.doc_flow_field_maps
       WHERE rule_id = v_rule.id AND is_deleted = 'n' AND map_level = 'line'
@@ -728,6 +804,10 @@ BEGIN
 
       IF v_map.target_field = v_rule.target_quantity_field THEN
         v_value := trim(to_char(v_planned, 'FM9999999999990.9999'));
+      ELSIF v_rule.recalc_line_amount
+            AND v_map.target_field = v_rule.target_line_amount_field
+            AND v_unit_price IS NOT NULL THEN
+        v_value := trim(to_char(v_planned * v_unit_price, 'FM9999999999990.9999'));
       ELSE
         v_value := public.doc_flow_resolve_value(v_map.source_type, v_map.source_field, v_map.const_value, v_line.row_data, v_context);
       END IF;
@@ -759,6 +839,36 @@ BEGIN
   IF v_line_count = 0 THEN
     RAISE EXCEPTION 'Nothing left to convert for %/%: every source line is already fully converted',
       v_rule.source_document_type, p_source_document_id;
+  END IF;
+
+  IF v_rule.sync_header_total THEN
+    SELECT
+      EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = v_target_table
+          AND column_name = v_rule.target_total_amount_field
+      )
+      AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = v_target_detail_table
+          AND column_name = v_rule.target_line_amount_field
+      )
+    INTO v_has_total;
+
+    IF v_has_total THEN
+      EXECUTE format(
+        'UPDATE public.%I h SET %I = COALESCE((
+           SELECT SUM(d.%I) FROM public.%I d
+           WHERE d.%I = $1 AND d.is_deleted = %L
+         ), 0) WHERE h.id = $1',
+        v_target_table,
+        v_rule.target_total_amount_field,
+        v_rule.target_line_amount_field,
+        v_target_detail_table,
+        v_rule.target_detail_parent_field,
+        'n'
+      ) USING v_target_id;
+    END IF;
   END IF;
 
   RETURN jsonb_build_object(

@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  Alert,
   Button,
   Col,
+  ConfigProvider,
   Form,
   Input,
   InputNumber,
@@ -21,7 +23,7 @@ import type { ColumnsType } from "antd/es/table";
 import { supabase } from "../../utils/supabase";
 import { useTranslation } from "react-i18next";
 
-type FieldOption = { label: string; value: string };
+type FieldOption = { label: string; value: string; required?: boolean };
 
 type RuleRow = {
   id: number;
@@ -92,17 +94,53 @@ function MapEditor({
   rows,
   targetOptions,
   sourceOptions,
+  reservedFields,
   onChange,
 }: {
   rows: MapRow[];
   targetOptions: FieldOption[];
   sourceOptions: FieldOption[];
+  reservedFields: string[];
   onChange: (next: MapRow[]) => void;
 }) {
   const { t } = useTranslation();
 
   const patch = (index: number, changes: Partial<MapRow>) => {
     onChange(rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
+  };
+
+  // Pairs up fields whose target name matches a source name. Reserved columns are the
+  // ones the engine writes itself (id, line_no, is_deleted, parent FK, target no.),
+  // so mapping them would make the generated INSERT name the same column twice.
+  const handleAutoMap = () => {
+    const reserved = new Set(reservedFields.map((field) => field.toLowerCase()));
+    const sourceNames = new Set(sourceOptions.map((option) => option.value));
+    const alreadyMapped = new Set(rows.map((row) => row.target_field));
+    let sequence = rows.reduce((max, row) => Math.max(max, row.sequence_no), 0);
+    const added: MapRow[] = [];
+
+    targetOptions.forEach((option) => {
+      const name = option.value;
+      if (reserved.has(name.toLowerCase())) return;
+      if (alreadyMapped.has(name)) return;
+      if (!sourceNames.has(name)) return;
+      sequence += 10;
+      added.push({
+        target_field: name,
+        source_type: "field",
+        source_field: name,
+        const_value: null,
+        is_required: Boolean(option.required),
+        sequence_no: sequence,
+      });
+    });
+
+    if (added.length === 0) {
+      message.info(t("docFlow.autoMapNone"));
+      return;
+    }
+    onChange([...rows, ...added]);
+    message.success(t("docFlow.autoMapDone", { count: added.length }));
   };
 
   const columns: ColumnsType<MapRow> = [
@@ -206,9 +244,14 @@ function MapEditor({
 
   return (
     <Space direction="vertical" style={{ width: "100%" }}>
-      <Button size="small" icon={<PlusOutlined />} onClick={() => onChange([...rows, { ...EMPTY_MAP }])}>
-        {t("docFlow.addMap")}
-      </Button>
+      <Space size={8}>
+        <Button icon={<PlusOutlined />} onClick={() => onChange([...rows, { ...EMPTY_MAP }])}>
+          {t("docFlow.addMap")}
+        </Button>
+        <Button onClick={handleAutoMap} disabled={targetOptions.length === 0 || sourceOptions.length === 0}>
+          {t("docFlow.autoMap")}
+        </Button>
+      </Space>
       <Table<MapRow>
         rowKey={(_record: MapRow, index?: number) => String(index)}
         size="small"
@@ -239,6 +282,24 @@ export function DocFlowConfig() {
 
   const sourceDoc = Form.useWatch("source_document_type", form);
   const targetDoc = Form.useWatch("target_document_type", form);
+  const targetNoField = Form.useWatch("target_no_field", form);
+  const targetDetailParentField = Form.useWatch("target_detail_parent_field", form);
+
+  const headerReservedFields = useMemo(
+    () =>
+      ["id", "created_at", "updated_at", "is_deleted", "corp_id", "emp_id", "status", targetNoField].filter(
+        Boolean,
+      ) as string[],
+    [targetNoField],
+  );
+
+  const lineReservedFields = useMemo(
+    () =>
+      ["id", "created_at", "updated_at", "is_deleted", "corp_id", "emp_id", "line_no", targetDetailParentField].filter(
+        Boolean,
+      ) as string[],
+    [targetDetailParentField],
+  );
 
   const fetchDocumentTypes = useCallback(async () => {
     const { data, error } = await supabase
@@ -280,9 +341,10 @@ export function DocFlowConfig() {
       message.error(error.message);
       return [];
     }
-    return (data ?? []).map((item: { field_name: string; data_type: string }) => ({
+    return (data ?? []).map((item: { field_name: string; data_type: string; is_required: boolean }) => ({
       label: `${item.field_name} (${item.data_type})`,
       value: item.field_name,
+      required: Boolean(item.is_required),
     }));
   }, []);
 
@@ -374,6 +436,9 @@ export function DocFlowConfig() {
       allow_partial: true,
       require_source_approved: true,
       is_active: true,
+      target_unit_price_field: "unit_price",
+      recalc_line_amount: true,
+      sync_header_total: true,
     });
     setHeaderMaps([]);
     setLineMaps([]);
@@ -447,7 +512,7 @@ export function DocFlowConfig() {
     {
       title: t("docFlow.sourceDoc"),
       dataIndex: "source_document_type",
-      width: 170,
+      width: 240,
       render: (value: string, record: RuleRow) => `${value} → ${record.target_document_type}`,
     },
   ];
@@ -502,6 +567,16 @@ export function DocFlowConfig() {
             {!hasRule ? (
               <div style={{ padding: 40, textAlign: "center", color: "#888" }}>{t("docFlow.pickRule")}</div>
             ) : (
+              <>
+              {((sourceDoc && sourceLineFields.length === 0) || (targetDoc && targetLineFields.length === 0)) && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  style={{ marginBottom: 12 }}
+                  message={t("docFlow.noLineFields")}
+                  description={t("docFlow.noLineFieldsDesc")}
+                />
+              )}
               <Tabs
                 defaultActiveKey="basic"
                 items={[
@@ -509,6 +584,7 @@ export function DocFlowConfig() {
                     key: "basic",
                     label: t("docFlow.basicTab"),
                     children: (
+                      <ConfigProvider variant="underlined">
                       <Form form={form} layout="vertical">
                         <Row gutter={16}>
                           <Col span={8}>
@@ -600,7 +676,25 @@ export function DocFlowConfig() {
                             </Form.Item>
                           </Col>
                         </Row>
+                        <Row gutter={16}>
+                          <Col span={8}>
+                            <Form.Item name="target_unit_price_field" label={t("docFlow.unitPriceField")}>
+                              <Select options={targetLineFields} showSearch />
+                            </Form.Item>
+                          </Col>
+                          <Col span={8}>
+                            <Form.Item name="recalc_line_amount" label={t("docFlow.recalcAmount")} valuePropName="checked">
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                          <Col span={8}>
+                            <Form.Item name="sync_header_total" label={t("docFlow.syncTotal")} valuePropName="checked">
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                        </Row>
                       </Form>
+                      </ConfigProvider>
                     ),
                   },
                   {
@@ -611,6 +705,7 @@ export function DocFlowConfig() {
                         rows={headerMaps}
                         targetOptions={targetHeaderFields}
                         sourceOptions={sourceHeaderFields}
+                        reservedFields={headerReservedFields}
                         onChange={setHeaderMaps}
                       />
                     ) : (
@@ -625,6 +720,7 @@ export function DocFlowConfig() {
                         rows={lineMaps}
                         targetOptions={targetLineFields}
                         sourceOptions={sourceLineFields}
+                        reservedFields={lineReservedFields}
                         onChange={setLineMaps}
                       />
                     ) : (
@@ -646,6 +742,7 @@ export function DocFlowConfig() {
                   },
                 ]}
               />
+              </>
             )}
           </div>
         </Splitter.Panel>
