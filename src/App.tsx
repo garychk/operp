@@ -44,6 +44,7 @@ import { Logs } from './pages/system/Logs';
 import { Settings } from './pages/system/Settings';
 import { Dictionaries } from './pages/system/Dictionaries';
 import { WorkflowConfig } from './pages/system/WorkflowConfig';
+import { DocFlowConfig } from './pages/system/DocFlowConfig';
 import { DocumentTypeBuilder } from './pages/system/DocumentTypeBuilder';
 import { KnowledgeBase } from './pages/system/KnowledgeBase';
 import { PageDesigner } from './features/page-builder/PageDesigner';
@@ -139,6 +140,7 @@ function AppContent() {
           <Route path="dictionaries" element={<Dictionaries />} />
           <Route path="uoms" element={<Uoms />} />
           <Route path="workflow" element={<WorkflowConfig />} />
+          <Route path="doc-flow" element={<DocFlowConfig />} />
           <Route path="document-types" element={<DocumentTypeBuilder />} />
           <Route path="logs" element={<Logs />} />
           <Route path="page-designer" element={<PageDesigner />} />
