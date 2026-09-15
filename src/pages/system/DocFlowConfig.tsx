@@ -167,7 +167,7 @@ function MapEditor({
         <Select
           style={{ width: "100%" }}
           value={row.source_type}
-          onChange={(value: SourceType) => patch(index, { source_type: value })}
+          onChange={(value: SourceType) => patch(index, { source_type: value, source_field: null, const_value: null })}
           options={[
             { label: t("docFlow.typeField"), value: "field" },
             { label: t("docFlow.typeConst"), value: "const" },
@@ -259,6 +259,12 @@ function MapEditor({
         dataSource={rows}
         columns={columns}
       />
+      <div style={{ color: "#888", fontSize: 12, marginTop: 10, lineHeight: 1.7 }}>
+        <div>
+          {t("docFlow.autoFields")}：{reservedFields.join("、")}
+        </div>
+        <div style={{ marginTop: 4 }}>{t("docFlow.sysHint")}</div>
+      </div>
     </Space>
   );
 }
@@ -460,7 +466,7 @@ export function DocFlowConfig() {
           map_level: level,
           target_field: row.target_field,
           source_type: row.source_type,
-          source_field: row.source_type === "field" ? row.source_field : null,
+          source_field: row.source_type === "const" ? null : row.source_field,
           const_value: row.source_type === "const" ? row.const_value : null,
           is_required: row.is_required,
           sequence_no: row.sequence_no,

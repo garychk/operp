@@ -1619,6 +1619,8 @@ const enUS = {
     "docFlow.syncTotal": "Roll up header total",
     "docFlow.sortOrder": "Order",
     "docFlow.addMap": "Add mapping",
+    "docFlow.sysHint": "System values: today / now / current_user_id / source_id (source document primary key) / source_no (source document number). source_id and source_no always resolve from the source document HEADER, even on the line level — to reference the source detail row key, use Source field + id instead.",
+    "docFlow.autoFields": "These fields are written by the engine — no mapping needed (and mapping them breaks the INSERT)",
     "docFlow.autoMap": "Auto-map same-name fields",
     "docFlow.autoMapNone": "No new same-name fields found",
     "docFlow.autoMapDone": "Mapped {{count}} field(s) automatically — review before saving",

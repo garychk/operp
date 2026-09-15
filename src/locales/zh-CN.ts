@@ -1619,6 +1619,8 @@ const zhCN = {
     "docFlow.syncTotal": "汇总表头金额",
     "docFlow.sortOrder": "排序",
     "docFlow.addMap": "新增映射",
+    "docFlow.sysHint": "系统值说明：today 当前日期 / now 当前时间 / current_user_id 当前登录用户 / source_id 源单据主键ID / source_no 源单据编号。注意 source_id 与 source_no 在表头和明细层都只取源单据头的值；明细层若需要源明细行主键，请改用「源字段」并选择 id。",
+    "docFlow.autoFields": "以下字段由引擎自动写入，无需（也不应）映射",
     "docFlow.autoMap": "自动映射同名字段",
     "docFlow.autoMapNone": "没有发现新的同名可映射字段",
     "docFlow.autoMapDone": "已自动映射 {{count}} 个字段，请复核后保存",
