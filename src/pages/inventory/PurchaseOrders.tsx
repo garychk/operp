@@ -21,7 +21,6 @@ import {
   DeleteOutlined,
   EditOutlined,
   ShoppingCartOutlined,
-  ImportOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
@@ -30,7 +29,6 @@ import { nextDocumentNo } from "../../utils/documentNaming";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
 import { ProductUnit } from "../../components/ProductUnit";
-import { DocFlowGenerateModal } from "../../components/DocFlowGenerateModal";
 import dayjs from "dayjs";
 import SimpleModal from "../../components/SimpleModal";
 
@@ -67,11 +65,6 @@ export function PurchaseOrders() {
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
   const [isDisabled, setIsDisabled] = useState(false);
-  const [generateTarget, setGenerateTarget] = useState<PurchaseOrder | null>(
-    null,
-  );
-
-  const convertibleStatuses = ["approved", "partially_received"];
 
   useEffect(() => {
     fetchOrders();
@@ -511,19 +504,11 @@ export function PurchaseOrders() {
     {
       title: t('common.actions'),
       key: "action",
-      width: 280,
+      width: 160,
       defaultFixed: "right" as const,
       lockWidth: true,
       render: (_: any, record: PurchaseOrder) => (
         <Space size="small">
-          <Button
-            type="text"
-            icon={<ImportOutlined />}
-            onClick={() => setGenerateTarget(record)}
-            disabled={!convertibleStatuses.includes(record.status || "")}
-          >
-            {t('purchaseOrders.generateReceipt')}
-          </Button>
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -717,7 +702,10 @@ export function PurchaseOrders() {
         detailPanelTitle={t('purchaseOrders.detailPanelTitle')}
         historyTable={purchaseOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
-        onDataChanged={fetchOrders}
+        onDataChanged={() => {
+          fetchOrders();
+          if (selectedOrder) fetchDetails(selectedOrder.id);
+        }}
         detailExtra={
           <Button
             type="link"
@@ -731,6 +719,8 @@ export function PurchaseOrders() {
         }
         form={form}
         workflowDocumentType={docType}
+        documentNo={editingOrder?.order_no}
+        docFlowUsageType="purchase"
         detailData={details}
         formEle={
           <Form
@@ -910,21 +900,8 @@ export function PurchaseOrders() {
             </Button>
           </Space>
         }
+        width={'80%'}
         height={680}
-      />
-      <DocFlowGenerateModal
-        open={!!generateTarget}
-        sourceDocumentType={docType}
-        sourceDocumentId={generateTarget?.id ?? null}
-        sourceDocumentNo={generateTarget?.order_no}
-        ruleCode="purchase_order_to_receipt"
-        usageType="purchase"
-        onCancel={() => setGenerateTarget(null)}
-        onSuccess={() => {
-          setGenerateTarget(null);
-          fetchOrders();
-          if (selectedOrder) fetchDetails(selectedOrder.id);
-        }}
       />
       <SimpleModal
         title={

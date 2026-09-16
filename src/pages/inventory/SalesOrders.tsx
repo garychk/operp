@@ -534,6 +534,15 @@ export function SalesOrders() {
       render: (qty: number) => qty?.toLocaleString() || "0",
     },
     {
+      title: t("salesOrders.remainingQuantity"),
+      key: "remaining_quantity",
+      render: (_: any, record: SalesOrderDetail) =>
+        Math.max(
+          0,
+          (record.quantity || 0) - (record.delivered_quantity || 0),
+        ).toLocaleString(),
+    },
+    {
       title: t("common.actions"),
       key: "action",
       render: (_: any, record: SalesOrderDetail) => (
@@ -623,7 +632,12 @@ export function SalesOrders() {
         historyTable={salesOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
         workflowDocumentType={docType}
-        onDataChanged={fetchOrders}
+        documentNo={editingOrder?.order_no}
+        docFlowUsageType="sales"
+        onDataChanged={() => {
+          fetchOrders();
+          if (selectedOrder) fetchDetails(selectedOrder.id);
+        }}
         detailData={details}
         form={form}
         detailExtra={
@@ -762,7 +776,7 @@ export function SalesOrders() {
                 <Table.Summary.Cell index={3} align="left">
                   <strong>¥{detailTotal.taxAmount.toFixed(2)}</strong>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={4} colSpan={2}></Table.Summary.Cell>
+                <Table.Summary.Cell index={4} colSpan={3}></Table.Summary.Cell>
               </Table.Summary.Row>
             )}
           />

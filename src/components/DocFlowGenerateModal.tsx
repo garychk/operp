@@ -13,6 +13,7 @@ import {
 } from "antd";
 import { supabase } from "../utils/supabase";
 import { ProductUnit } from "./ProductUnit";
+import { loadDocFlowRules, type DocFlowRuleRow } from "../utils/docFlowRules";
 
 type GenerateResult = {
   ok: boolean;
@@ -20,17 +21,6 @@ type GenerateResult = {
   target_document_id: number;
   target_document_no: string;
   lines: number;
-};
-
-type RuleRow = {
-  id: number;
-  rule_code: string;
-  rule_name: string;
-  source_document_type: string;
-  target_document_type: string;
-  source_quantity_field: string;
-  source_detail_key_field: string;
-  source_detail_parent_field: string;
 };
 
 interface LineRow {
@@ -69,7 +59,7 @@ export function DocFlowGenerateModal({
   onSuccess,
 }: DocFlowGenerateModalProps) {
   const { t } = useTranslation();
-  const [rules, setRules] = useState<RuleRow[]>([]);
+  const [rules, setRules] = useState<DocFlowRuleRow[]>([]);
   const [ruleCode, setRuleCode] = useState<string | undefined>(fixedRuleCode);
   const [lines, setLines] = useState<LineRow[]>([]);
   const [productNames, setProductNames] = useState<Record<number, string>>({});
@@ -89,26 +79,23 @@ export function DocFlowGenerateModal({
 
   useEffect(() => {
     if (!open) return;
-    const loadRules = async () => {
-      const { data, error } = await supabase
-        .from("doc_flow_rules")
-        .select("*")
-        .eq("is_deleted", "n")
-        .eq("is_active", true)
-        .eq("source_document_type", sourceDocumentType)
-        .order("id");
-      if (error) {
-        message.error(error.message);
-        return;
-      }
-      const rows = (data || []) as unknown as RuleRow[];
-      setRules(rows);
-      if (!fixedRuleCode) {
-        setRuleCode((current) => current ?? rows[0]?.rule_code);
-      }
+    let alive = true;
+    loadDocFlowRules(sourceDocumentType)
+      .then((rows) => {
+        if (!alive) return;
+        setRules(rows);
+        if (!fixedRuleCode) {
+          setRuleCode((current) => current ?? rows[0]?.rule_code);
+        }
+      })
+      .catch((error: any) => {
+        console.error("Failed to load conversion rules:", error);
+        message.error(error?.message || t("common.fetchFailed"));
+      });
+    return () => {
+      alive = false;
     };
-    loadRules();
-  }, [open, sourceDocumentType, fixedRuleCode]);
+  }, [open, sourceDocumentType, fixedRuleCode, t]);
 
   const fetchProductNames = useCallback(async (ids: number[]) => {
     const unique = Array.from(new Set(ids.filter((id) => !!id)));
@@ -128,7 +115,7 @@ export function DocFlowGenerateModal({
   }, []);
 
   const loadLines = useCallback(
-    async (rule: RuleRow) => {
+    async (rule: DocFlowRuleRow) => {
       if (!sourceDocumentId) return;
       setLoading(true);
       try {

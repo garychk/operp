@@ -21,6 +21,7 @@ import {
 import { DeleteOutlined, PlusOutlined, ReloadOutlined } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { supabase } from "../../utils/supabase";
+import { invalidateDocFlowRuleCache } from "../../utils/docFlowRules";
 import { useTranslation } from "react-i18next";
 
 type FieldOption = { label: string; value: string; required?: boolean };
@@ -500,6 +501,7 @@ export function DocFlowConfig() {
       }
       await persistMaps(ruleId, "header", headerMaps);
       await persistMaps(ruleId, "line", lineMaps);
+      invalidateDocFlowRuleCache();
       message.success(t("docFlow.saveSuccess"));
       setIsNew(false);
       setSelectedId(ruleId);

@@ -247,7 +247,7 @@ export function PurchaseReceipts() {
   };
 
   // received_quantity and the purchase order status are now maintained exclusively by
-  // the document-conversion ledger trigger (doc_flow_ledger_on_receipt_detail) in the
+  // the document-conversion ledger trigger (doc_flow_ledger_on_target_detail) in the
   // database. Keeping a client-side increment here would race with it and overwrite
   // the recomputed value, so it has been removed on purpose.
 
