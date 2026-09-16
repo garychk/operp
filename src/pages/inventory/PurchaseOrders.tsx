@@ -21,6 +21,7 @@ import {
   DeleteOutlined,
   EditOutlined,
   ShoppingCartOutlined,
+  ImportOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
@@ -29,6 +30,7 @@ import { nextDocumentNo } from "../../utils/documentNaming";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
 import { ProductUnit } from "../../components/ProductUnit";
+import { DocFlowGenerateModal } from "../../components/DocFlowGenerateModal";
 import dayjs from "dayjs";
 import SimpleModal from "../../components/SimpleModal";
 
@@ -65,6 +67,11 @@ export function PurchaseOrders() {
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
   const [isDisabled, setIsDisabled] = useState(false);
+  const [generateTarget, setGenerateTarget] = useState<PurchaseOrder | null>(
+    null,
+  );
+
+  const convertibleStatuses = ["approved", "partially_received"];
 
   useEffect(() => {
     fetchOrders();
@@ -504,11 +511,19 @@ export function PurchaseOrders() {
     {
       title: t('common.actions'),
       key: "action",
-      width: 160,
+      width: 280,
       defaultFixed: "right" as const,
       lockWidth: true,
       render: (_: any, record: PurchaseOrder) => (
         <Space size="small">
+          <Button
+            type="text"
+            icon={<ImportOutlined />}
+            onClick={() => setGenerateTarget(record)}
+            disabled={!convertibleStatuses.includes(record.status || "")}
+          >
+            {t('purchaseOrders.generateReceipt')}
+          </Button>
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -585,6 +600,17 @@ export function PurchaseOrders() {
       dataIndex: "received_quantity",
       key: "received_quantity",
       render: (qty: number) => qty?.toLocaleString() || "0",
+    },
+    {
+      title: t('purchaseOrders.remainingQuantity'),
+      key: "remaining_quantity",
+      render: (_: any, record: PurchaseOrderDetail) => {
+        const remaining = Math.max(
+          0,
+          (record.quantity || 0) - (record.received_quantity || 0),
+        );
+        return remaining.toLocaleString();
+      },
     },
     {
       title: t('common.actions'),
@@ -865,7 +891,7 @@ export function PurchaseOrders() {
                 <Table.Summary.Cell index={3} align="left">
                   <strong>¥{detailTotal.taxAmount.toFixed(2)}</strong>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={4} colSpan={2}></Table.Summary.Cell>
+                <Table.Summary.Cell index={4} colSpan={3}></Table.Summary.Cell>
               </Table.Summary.Row>
             )}
           />
@@ -885,6 +911,20 @@ export function PurchaseOrders() {
           </Space>
         }
         height={680}
+      />
+      <DocFlowGenerateModal
+        open={!!generateTarget}
+        sourceDocumentType={docType}
+        sourceDocumentId={generateTarget?.id ?? null}
+        sourceDocumentNo={generateTarget?.order_no}
+        ruleCode="purchase_order_to_receipt"
+        usageType="purchase"
+        onCancel={() => setGenerateTarget(null)}
+        onSuccess={() => {
+          setGenerateTarget(null);
+          fetchOrders();
+          if (selectedOrder) fetchDetails(selectedOrder.id);
+        }}
       />
       <SimpleModal
         title={
