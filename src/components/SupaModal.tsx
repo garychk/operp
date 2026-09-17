@@ -22,6 +22,7 @@ import {
   LeftOutlined,
   RightOutlined,
   PrinterOutlined,
+  ApartmentOutlined,
 } from "@ant-design/icons";
 import type { FormInstance } from "antd/es/form";
 import PrintDesigner from "operp-print-designer";
@@ -32,6 +33,7 @@ import type { PrintDesignerDataSource } from "operp-print-designer";
 import { WorkflowHistoryCard } from "./WorkflowHistoryCard";
 import { WorkflowActionBar } from "./WorkflowActionBar";
 import { DocFlowGenerateButton } from "./DocFlowGenerateButton";
+import { DocFlowConnectionsModal } from "./DocFlowConnectionsModal";
 
 interface HistoryLog {
   id: number;
@@ -121,6 +123,7 @@ export function SupaModal({
   const [historyLogs, setHistoryLogs] = useState<HistoryLog[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
 
   const currentFormName = formTable || historyTable;
   const currentStatus = form?.getFieldValue("status") || "";
@@ -181,6 +184,7 @@ export function SupaModal({
 
   const handleCancel = () => {
     setIsExpand(false);
+    setConnectionsOpen(false);
     onCancel();
   };
 
@@ -374,6 +378,15 @@ export function SupaModal({
                 onSuccess={onDataChanged}
               />
             )}
+            {workflowDocumentType && historyRecordId != null && (
+              <Button
+                type="text"
+                icon={<ApartmentOutlined />}
+                onClick={() => setConnectionsOpen(true)}
+              >
+                {t("docFlow.connections.button")}
+              </Button>
+            )}
             <Switch
               checked={isPreview}
               onChange={setIsPreview}
@@ -484,6 +497,12 @@ export function SupaModal({
           )}
         </div>
       </Modal>
+      <DocFlowConnectionsModal
+        open={connectionsOpen}
+        documentType={workflowDocumentType}
+        documentId={historyRecordId}
+        onCancel={() => setConnectionsOpen(false)}
+      />
       <Modal
         title={t("modal.printDesigner")}
         open={openDesigner}
