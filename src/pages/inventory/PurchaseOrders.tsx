@@ -587,6 +587,17 @@ export function PurchaseOrders() {
       render: (qty: number) => qty?.toLocaleString() || "0",
     },
     {
+      title: t('purchaseOrders.remainingQuantity'),
+      key: "remaining_quantity",
+      render: (_: any, record: PurchaseOrderDetail) => {
+        const remaining = Math.max(
+          0,
+          (record.quantity || 0) - (record.received_quantity || 0),
+        );
+        return remaining.toLocaleString();
+      },
+    },
+    {
       title: t('common.actions'),
       key: "action",
       render: (_: any, record: PurchaseOrderDetail) => (
@@ -691,7 +702,10 @@ export function PurchaseOrders() {
         detailPanelTitle={t('purchaseOrders.detailPanelTitle')}
         historyTable={purchaseOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
-        onDataChanged={fetchOrders}
+        onDataChanged={() => {
+          fetchOrders();
+          if (selectedOrder) fetchDetails(selectedOrder.id);
+        }}
         detailExtra={
           <Button
             type="link"
@@ -705,6 +719,8 @@ export function PurchaseOrders() {
         }
         form={form}
         workflowDocumentType={docType}
+        documentNo={editingOrder?.order_no}
+        docFlowUsageType="purchase"
         detailData={details}
         formEle={
           <Form
@@ -865,7 +881,7 @@ export function PurchaseOrders() {
                 <Table.Summary.Cell index={3} align="left">
                   <strong>¥{detailTotal.taxAmount.toFixed(2)}</strong>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={4} colSpan={2}></Table.Summary.Cell>
+                <Table.Summary.Cell index={4} colSpan={3}></Table.Summary.Cell>
               </Table.Summary.Row>
             )}
           />
@@ -884,6 +900,7 @@ export function PurchaseOrders() {
             </Button>
           </Space>
         }
+        width={'80%'}
         height={680}
       />
       <SimpleModal

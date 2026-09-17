@@ -31,6 +31,7 @@ import type { SysFormsInsert } from "../types/database";
 import type { PrintDesignerDataSource } from "operp-print-designer";
 import { WorkflowHistoryCard } from "./WorkflowHistoryCard";
 import { WorkflowActionBar } from "./WorkflowActionBar";
+import { DocFlowGenerateButton } from "./DocFlowGenerateButton";
 
 interface HistoryLog {
   id: number;
@@ -67,6 +68,12 @@ interface SupaModalProps {
   workflowDocumentType?: string;
   /** Called after a workflow action changed the document, so the page can refetch its list. */
   onDataChanged?: () => void;
+  /** 单据号，仅用于下推弹窗标题。 */
+  documentNo?: string;
+  /** 下推弹窗里物料单位的用途，默认 purchase。 */
+  docFlowUsageType?: string;
+  /** 下推源明细里的物料字段名，默认 product_id。 */
+  docFlowProductField?: string;
   formTable?: string;
   formDescription?: string;
   width?: string | number;
@@ -93,6 +100,9 @@ export function SupaModal({
   historyRecordId,
   workflowDocumentType,
   onDataChanged,
+  documentNo,
+  docFlowUsageType,
+  docFlowProductField,
   formTable,
   formDescription,
   width = 1200,
@@ -352,12 +362,24 @@ export function SupaModal({
               onActionDone={handleWorkflowActionDone}
               disabled={resolvedDisabled}
             />
+            {workflowDocumentType && historyRecordId != null && (
+              <DocFlowGenerateButton
+                sourceDocumentType={workflowDocumentType}
+                sourceDocumentId={Number(historyRecordId)}
+                sourceDocumentNo={documentNo}
+                sourceStatus={form?.getFieldValue("status")}
+                label={t("docFlow.button.push")}
+                usageType={docFlowUsageType}
+                productField={docFlowProductField}
+                onSuccess={onDataChanged}
+              />
+            )}
             <Switch
               checked={isPreview}
               onChange={setIsPreview}
               checkedChildren="P"
               unCheckedChildren="D"
-              size="middle"
+              size="small"
               disabled={resolvedDisabled}
             />
             <Button

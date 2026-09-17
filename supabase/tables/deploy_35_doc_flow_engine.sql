@@ -468,6 +468,13 @@ ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS target_total_amount_f
 ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS recalc_line_amount BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS sync_header_total BOOLEAN NOT NULL DEFAULT TRUE;
 
+-- A source document rarely keeps the "approved" status after the first partial conversion:
+-- the progress trigger moves a purchase order to "partially_received". Requiring plain
+-- "approved" therefore blocks the second and every later conversion of the same order,
+-- which defeats the whole point of a partial-conversion engine.
+ALTER TABLE public.doc_flow_rules ADD COLUMN IF NOT EXISTS allowed_source_statuses TEXT[] NOT NULL
+  DEFAULT ARRAY['approved', 'partially_received'];
+
 -- Records one conversion (or one quantity adjustment) against the ledger and then
 -- validates the line still fits inside the source quantity. Positive quantities are
 -- checked for overrun; negative ones always pass because they release room back.
@@ -696,9 +703,10 @@ BEGIN
   END IF;
 
   IF v_rule.require_source_approved
-     AND COALESCE(v_source_row ->> 'status', 'draft') <> 'approved' THEN
-    RAISE EXCEPTION 'Source document must be approved first; current status: %',
-      COALESCE(v_source_row ->> 'status', 'draft');
+     AND NOT (COALESCE(v_source_row ->> 'status', 'draft') = ANY (v_rule.allowed_source_statuses)) THEN
+    RAISE EXCEPTION 'Source document status % is not convertible; allowed: %',
+      COALESCE(v_source_row ->> 'status', 'draft'),
+      array_to_string(v_rule.allowed_source_statuses, ', ');
   END IF;
 
   v_context := jsonb_build_object(
