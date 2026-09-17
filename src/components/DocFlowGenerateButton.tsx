@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button, Dropdown, Space } from "antd";
-import { ArrowDownOutlined, DownOutlined } from "@ant-design/icons";
+import { ArrowDownOutlined } from "@ant-design/icons";
 import { DocFlowGenerateModal } from "./DocFlowGenerateModal";
 import {
   isStatusAllowed,
