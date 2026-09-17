@@ -44,3 +44,5 @@
 \i supabase/tables/deploy_34_outbound_inbound_location.sql
 \i supabase/tables/deploy_35_doc_flow_engine.sql
 \i supabase/tables/deploy_36_doc_flow_generalization.sql
+\i supabase/tables/deploy_37_doc_flow_ledger_rule_ref.sql
+\i supabase/tables/deploy_38_doc_flow_connections.sql

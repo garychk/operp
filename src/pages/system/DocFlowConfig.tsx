@@ -406,26 +406,40 @@ export function DocFlowConfig() {
     setLineMaps(records.filter((item) => item.map_level === "line").map(toRow));
   }, []);
 
-  const loadLedger = useCallback(async (ruleId: number) => {
-    const { data, error } = await supabase
-      .from("doc_flow_transfers")
-      .select("id, source_detail_id, target_detail_id, quantity, transfer_kind, reversed_transfer_id, reason, created_at")
-      .eq("rule_id", ruleId)
-      .eq("is_deleted", "n")
-      .order("id", { ascending: false })
-      .limit(200);
-    if (error) {
-      message.error(error.message);
-      return;
-    }
-    setLedger((data ?? []) as TransferRow[]);
-  }, []);
+  // Rows written before deploy_37 have no rule_id, so fall back to the
+  // (source, target) pair the rule describes. Without that fallback the ledger
+  // tab stays empty for every historic conversion.
+  const loadLedger = useCallback(
+    async (rule: {
+      id: number;
+      source_document_type: string;
+      target_document_type: string;
+    }) => {
+      const { data, error } = await supabase
+        .from("doc_flow_transfers")
+        .select(
+          "id, rule_id, source_document_type, source_document_id, source_detail_id, target_document_type, target_document_id, target_detail_id, quantity, transfer_kind, reversed_transfer_id, reason, created_at",
+        )
+        .eq("is_deleted", "n")
+        .or(
+          `rule_id.eq.${rule.id},and(source_document_type.eq.${rule.source_document_type},target_document_type.eq.${rule.target_document_type})`,
+        )
+        .order("id", { ascending: false })
+        .limit(200);
+      if (error) {
+        message.error(error.message);
+        return;
+      }
+      setLedger((data ?? []) as TransferRow[]);
+    },
+    [],
+  );
 
   const handleSelect = async (record: RuleRow) => {
     setSelectedId(record.id);
     setIsNew(false);
     form.setFieldsValue(record);
-    await Promise.all([loadMaps(record.id), loadLedger(record.id)]);
+    await Promise.all([loadMaps(record.id), loadLedger(record)]);
   };
 
   const handleAdd = () => {
@@ -506,7 +520,11 @@ export function DocFlowConfig() {
       setIsNew(false);
       setSelectedId(ruleId);
       await fetchRules();
-      await loadLedger(ruleId);
+      await loadLedger({
+        id: ruleId,
+        source_document_type: values.source_document_type,
+        target_document_type: values.target_document_type,
+      });
     } catch (error) {
       const err = error as { message?: string };
       message.error(err.message ?? t("docFlow.saveFailed"));
