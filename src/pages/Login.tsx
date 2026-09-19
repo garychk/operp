@@ -225,14 +225,16 @@ export const Login: React.FC = () => {
     <div
       className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-8"
       style={{
-        background: `
-          radial-gradient(circle at 12% 18%, rgba(125, 211, 252, 0.45), transparent 28%),
-          radial-gradient(circle at 86% 16%, rgba(196, 181, 253, 0.38), transparent 30%),
-          radial-gradient(circle at 50% 96%, rgba(167, 243, 208, 0.34), transparent 36%),
-          linear-gradient(135deg, #f8fafc 0%, #e2e8f0 35%, #eef2ff 100%)
-        `,
+        background: 'linear-gradient(135deg, #f8fafc 0%, #e2e8f0 35%, #eef2ff 100%)',
       }}
     >
+      <div className="login-bg" aria-hidden>
+        <span className="login-bg__blob login-bg__blob--sky" />
+        <span className="login-bg__blob login-bg__blob--violet" />
+        <span className="login-bg__blob login-bg__blob--mint" />
+        <span className="login-bg__sheen" />
+      </div>
+
       <div style={{ position: 'absolute', top: 24, right: 24, zIndex: 20 }}>
         <Dropdown
           trigger={['click']}
