@@ -22,7 +22,7 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
   }
 
   if (tool?.tool === "entity.upsert") {
-    const result = await createOrUpdateEntityTool(state, undefined, state.action === "update" ? "update" : "create");
+    const result = await createOrUpdateEntityTool(state, state.action === "update" ? "update" : "create");
     return {
       ...state,
       toolResults: [result],
@@ -36,7 +36,7 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
   }
 
   if (tool?.tool === "entity.create") {
-    const result = await createOrUpdateEntityTool(state, undefined, "create");
+    const result = await createOrUpdateEntityTool(state, "create");
     return {
       ...state,
       toolResults: [result],
@@ -50,7 +50,7 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
   }
 
   if (tool?.tool === "entity.update") {
-    const result = await createOrUpdateEntityTool(state, undefined, "update");
+    const result = await createOrUpdateEntityTool(state, "update");
     return {
       ...state,
       toolResults: [result],

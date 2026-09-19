@@ -6,7 +6,7 @@ import { PlusOutlined, EditOutlined, DeleteOutlined, ArrowUpOutlined, ArrowDownO
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
-import { menuData } from '../../components/ProLayout';
+import { menuData, staticComponentByPath } from '../../components/ProLayout';
 import SimpleModal from '../../components/SimpleModal';
 
 interface Menu {
@@ -30,9 +30,10 @@ const iconOptions = [
   'SettingOutlined', 'BuildOutlined', 'BranchesOutlined', 'ProfileOutlined', 'CalendarOutlined',
   'ContainerOutlined', 'FileTextOutlined', 'MenuOutlined', 'SafetyOutlined',
   'TruckOutlined', 'RiseOutlined', 'FallOutlined', 'TableOutlined', 'UnorderedListOutlined',
+  'SwapOutlined', 'ExperimentOutlined', 'LineChartOutlined', 'BarChartOutlined',
 ];
 
-const excludedStaticMenuPaths = new Set(['/', '/system']);
+const excludedStaticMenuPaths = new Set(['/']);
 
 const getIconName = (icon: any) => icon?.type?.displayName || icon?.type?.name || 'MenuOutlined';
 
@@ -144,26 +145,24 @@ export function Menus() {
 
       let insertedCount = 0;
 
-      const importRoute = async (route: any, parentId: number) => {
-        if (excludedStaticMenuPaths.has(route.path)) return;
+      const importRoute = async (route: any, parentId: number, index = 0) => {
         const children = route.routes || [];
-        const payload = {
-          parent_id: parentId,
-          menu_name: route.name,
-          menu_code: route.path.replace(/^\//, '').replace(/\//g, '_') || 'home',
-          menu_type: children.length > 0 ? 'M' : 'C',
-          icon: getIconName(route.icon),
-          path: route.path,
-          component: children.length > 0 ? '' : '.' + route.path,
-          sort_order: 0,
-          status: '1',
-        };
-
-        let currentId = parentId;
         const existingId = existingPaths.get(route.path);
-        if (existingId) {
-          currentId = existingId;
-        } else {
+        let currentId = existingId ?? parentId;
+
+        if (!existingId && !excludedStaticMenuPaths.has(route.path)) {
+          const payload = {
+            parent_id: parentId,
+            menu_name: route.name,
+            menu_code: route.path.replace(/^\//, '').replace(/\//g, '_') || 'home',
+            menu_type: children.length > 0 ? 'M' : 'C',
+            icon: getIconName(route.icon),
+            path: route.path,
+            component: staticComponentByPath[route.path] || '',
+            sort_order: index + 1,
+            status: '1',
+          };
+
           const { data, error } = await supabase
             .from('sys_menus')
             .insert([payload])
@@ -175,13 +174,13 @@ export function Menus() {
           insertedCount += 1;
         }
 
-        for (const child of children) {
-          await importRoute(child, currentId);
+        for (const [childIndex, child] of children.entries()) {
+          await importRoute(child, currentId, childIndex);
         }
       };
 
-      for (const route of menuData) {
-        await importRoute(route, 0);
+      for (const [index, route] of menuData.entries()) {
+        await importRoute(route, 0, index);
       }
 
       message.success(insertedCount > 0 ? t('menus.importCompleted', { count: insertedCount }) : t('menus.importEmpty'));
