@@ -90,3 +90,122 @@ body {
   margin-top: 0px;
   overflow: hidden;
 }
+
+/* 登录页流动背景——三个大面积色斑缓慢漂移，形成极光流动感 */
+.login-bg {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.login-bg__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: 0.55;
+  will-change: transform;
+}
+
+.login-bg__blob--sky {
+  top: -14%;
+  left: -8%;
+  width: 46vw;
+  height: 46vw;
+  min-width: 420px;
+  min-height: 420px;
+  background: radial-gradient(circle at 50% 50%, #7dd3fc 0%, rgba(125, 211, 252, 0) 70%);
+  animation: loginDriftSky 24s ease-in-out infinite;
+}
+
+.login-bg__blob--violet {
+  top: -18%;
+  right: -10%;
+  width: 44vw;
+  height: 44vw;
+  min-width: 400px;
+  min-height: 400px;
+  background: radial-gradient(circle at 50% 50%, #c4b5fd 0%, rgba(196, 181, 253, 0) 70%);
+  animation: loginDriftViolet 30s ease-in-out infinite;
+}
+
+.login-bg__blob--mint {
+  bottom: -22%;
+  left: 26%;
+  width: 52vw;
+  height: 52vw;
+  min-width: 460px;
+  min-height: 460px;
+  background: radial-gradient(circle at 50% 50%, #a7f3d0 0%, rgba(167, 243, 208, 0) 70%);
+  animation: loginDriftMint 27s ease-in-out infinite;
+}
+
+/* 叠一层缓慢平移的柔光，让整片背景也在呼吸 */
+.login-bg__sheen {
+  position: absolute;
+  inset: -30%;
+  background: linear-gradient(115deg, rgba(255, 255, 255, 0) 20%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 80%);
+  animation: loginSheen 18s linear infinite;
+}
+
+@keyframes loginDriftSky {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(16vw, 14vh, 0) scale(1.16);
+  }
+  66% {
+    transform: translate3d(4vw, 26vh, 0) scale(0.9);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes loginDriftViolet {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+  40% {
+    transform: translate3d(-18vw, 18vh, 0) scale(0.92);
+  }
+  70% {
+    transform: translate3d(-6vw, 4vh, 0) scale(1.2);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1.05);
+  }
+}
+
+@keyframes loginDriftMint {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  35% {
+    transform: translate3d(-20vw, -16vh, 0) scale(1.14);
+  }
+  70% {
+    transform: translate3d(14vw, -6vh, 0) scale(0.88);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes loginSheen {
+  0% {
+    transform: translate3d(-30%, 0, 0);
+  }
+  100% {
+    transform: translate3d(30%, 0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-bg__blob,
+  .login-bg__sheen {
+    animation: none;
+  }
+}

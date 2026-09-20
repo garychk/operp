@@ -325,15 +325,15 @@
 }
 
 .ai-markdown-h1 {
-  font-size: 16px;
-}
-
-.ai-markdown-h2 {
   font-size: 14px;
 }
 
-.ai-markdown-h3 {
+.ai-markdown-h2 {
   font-size: 12px;
+}
+
+.ai-markdown-h3 {
+  font-size: 11px;
 }
 
 .ai-markdown-paragraph {

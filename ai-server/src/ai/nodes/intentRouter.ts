@@ -6,6 +6,7 @@ import type {
   AiResponseMode,
 } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
+import { describeWritableObjects } from "../../tools/entityRegistry.js";
 
 const CREATE_WORDS = /(创建|新建|新增|生成|录入|保存|写入|建立)/i;
 const UPDATE_WORDS = /(修改|更新|编辑|调整|补充|修订|改一下|改成|变更|替换|优化)/i;
@@ -20,10 +21,12 @@ const ANALYSIS_WORDS = /(分析|统计|汇总|报表|经营|财务|采购|销售
 const MRP_WORDS = /(mrp|物料需求计划|产能|净需求)/i;
 
 const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }> = [
+  // 系统字典优先：与业务表（如 erp_uoms）同名概念共存，必须优先区分
+  { target: "dictItem", pattern: /(数据字典|字典项|字典值|字典数据|字典)/i, domain: "system" },
   { target: "customer", pattern: /(客户|客商)/i, domain: "master_data" },
   { target: "supplier", pattern: /(供应商)/i, domain: "master_data" },
   { target: "product", pattern: /(物料|产品|商品)/i, domain: "master_data" },
-  { target: "warehouse", pattern: /(仓库|库位)/i, domain: "master_data" },
+  { target: "warehouse", pattern: /(仓库)/i, domain: "master_data" },
   { target: "department", pattern: /(部门)/i, domain: "master_data" },
   { target: "workCenter", pattern: /(工作中心)/i, domain: "master_data" },
   { target: "operation", pattern: /(工序)/i, domain: "master_data" },
@@ -34,6 +37,18 @@ const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }
   { target: "salesOrder", pattern: /(销售订单|销售单)/i, domain: "sales" },
   { target: "salesDelivery", pattern: /(销售出货|出货单)/i, domain: "sales" },
   { target: "productionOrder", pattern: /(生产订单|生产单|工单)/i, domain: "production" },
+  { target: "uom", pattern: /(计量单位|单位|uom)/i, domain: "master_data" },
+  { target: "bin", pattern: /(库位|货位)/i, domain: "inventory" },
+  { target: "company", pattern: /(公司|组织)/i, domain: "master_data" },
+  { target: "employee", pattern: /(员工|职员)/i, domain: "master_data" },
+  { target: "productCategory", pattern: /(物料类别|物料分类|产品分类)/i, domain: "master_data" },
+  { target: "inventoryTransfer", pattern: /(调拨)/i, domain: "inventory" },
+  { target: "stockAdjustment", pattern: /(库存调整|调整单)/i, domain: "inventory" },
+  { target: "stockCount", pattern: /(盘点)/i, domain: "inventory" },
+  { target: "materialIssue", pattern: /(领料)/i, domain: "production" },
+  { target: "productionReceipt", pattern: /(生产入库|完工入库)/i, domain: "production" },
+  { target: "salesReturn", pattern: /(销售退货|退货单)/i, domain: "sales" },
+  { target: "qualityInspection", pattern: /(质检|质量检验|检验单)/i, domain: "production" },
   { target: "finance", pattern: /(财务|应收|应付|凭证|利润|现金流|费用)/i, domain: "finance" },
   { target: "inventory", pattern: /(库存|存货|现存量)/i, domain: "inventory" },
   { target: "mrp", pattern: /(mrp|物料需求计划|净需求|缺料)/i, domain: "production" },
@@ -169,11 +184,15 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
     })
     .join("\n");
 
+  // 业务对象清单来自数据库目录（sys_tables），新增表无需改代码
+  const writableObjects = await describeWritableObjects().catch(() => "");
+
   const prompt = [
     "你是 ERP 智能路由器，只能输出 JSON。",
     "你要判断：intent、target、queryMode、responseMode、action、domain、confidence。",
     "intent 只能是：chat, knowledge, create, update, baq, analysis。",
-    "target 尽量从这些值中选择：customer, supplier, product, warehouse, department, workCenter, operation, bom, routing, purchaseOrder, purchaseReceipt, salesOrder, salesDelivery, productionOrder, finance, inventory, mrp, baq, general。",
+    "target 优先从下面的业务对象清单中选择，也可以用历史值：dictItem, customer, supplier, product, warehouse, department, workCenter, operation, bom, routing, purchaseOrder, purchaseReceipt, salesOrder, salesDelivery, productionOrder, uom, bin, company, employee, finance, inventory, mrp, baq, general。",
+    "重要：dictItem 指系统字典项（sys_dict_items，挂在 sys_dict_types 类型下的枚举值）。用户说“在字典 XX 里加 / 加个字典项 / 字典值”时用 dictItem；说“加个计量单位、加个客户”这种业务数据时用对应业务 target。两者是不同的数据，不要混淆。",
     "queryMode 只能是：count, list, summary, detail, trend, compare, exception, definition, answer。",
     "responseMode 只能是：text, table, card, link, follow_up。",
     "如果用户要新增记录，用 create；如果要修改已有记录，用 update。",
@@ -184,6 +203,7 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
     "如果用户问的是经营、库存、采购、销售、生产、财务分析，用 analysis，并根据对象选择 target 和 domain。",
     "confidence 输出 0 到 1 的小数。",
     '输出格式：{"intent":"analysis","target":"customer","queryMode":"count","responseMode":"text","action":"chat","domain":"master_data","confidence":0.92}',
+    writableObjects ? `可新增 / 修改的业务对象：${writableObjects}` : "",
     state.currentFocus ? `当前焦点：${JSON.stringify(state.currentFocus)}` : "当前焦点：无",
     recentMessages ? `最近对话：\n${recentMessages}` : "最近对话：无",
     `用户原话：${state.text}`,

@@ -1,6 +1,14 @@
 import { supabase } from "../config/supabase.js";
 import { callChatModel } from "../config/llm.js";
 import type { AiChatRequest, AiGraphState } from "../ai/state.js";
+import {
+  baseTableName,
+  evaluateDeletePolicy,
+  loadDictTypeOptions,
+  resolveEntityForState,
+  resolveForeignKeyValues,
+  type EntityDef,
+} from "./entityRegistry.js";
 
 type ToolStatus = "success" | "needs_more" | "error";
 
@@ -30,57 +38,14 @@ interface AnalysisPlan {
   queryMode?: string;
 }
 
-type EntityKey =
-  | "customer"
-  | "supplier"
-  | "product"
-  | "warehouse"
-  | "department"
-  | "workCenter"
-  | "operation"
-  | "bom"
-  | "routing"
-  | "purchaseOrder"
-  | "salesOrder"
-  | "purchaseReceipt"
-  | "salesDelivery"
-  | "productionOrder";
-
-interface EntityDef {
-  key: EntityKey;
-  label: string;
-  tableName: string;
-  codeField?: string;
-  nameField?: string;
-  keywords: string[];
-  defaults: () => Record<string, unknown>;
-  createTitle: string;
-  requiredFields: Array<{ key: string; label: string }>;
-  optionalFields?: Array<{ key: string; label: string }>;
-}
-
 const nowIso = () => new Date().toISOString();
 const today = () => new Date().toISOString().slice(0, 10);
 
-const entityRouteHints: Record<EntityKey, string[]> = {
-  customer: ["客户管理", "客户"],
-  supplier: ["供应商管理", "供应商"],
-  product: ["物料管理", "物料", "产品"],
-  warehouse: ["仓库管理", "仓库"],
-  department: ["部门管理", "部门"],
-  workCenter: ["工作中心", "工作中心管理"],
-  operation: ["工序", "工序管理"],
-  bom: ["BOM", "BOM管理", "物料清单"],
-  routing: ["工艺路线", "工艺路线管理"],
-  purchaseOrder: ["采购订单", "采购单"],
-  salesOrder: ["销售订单", "销售单"],
-  purchaseReceipt: ["采购入库", "采购入库单"],
-  salesDelivery: ["销售出货", "销售出货单"],
-  productionOrder: ["生产订单", "工单"],
-};
-
+/**
+ * 实体路由：从 sys_menus 找到该业务对象对应的页面，供前端跳转。
+ */
 async function findEntityRoute(entity: EntityDef) {
-  const hints = entityRouteHints[entity.key] || [entity.label];
+  const hints = entity.routeHints?.length ? entity.routeHints : [entity.label];
   for (const hint of hints) {
     const { data, error } = await supabase
       .from("sys_menus")
@@ -98,221 +63,7 @@ async function findEntityRoute(entity: EntityDef) {
   return null;
 }
 
-const entityDefs: Record<EntityKey, EntityDef> = {
-  customer: {
-    key: "customer",
-    label: "客户",
-    tableName: "erp_customers_s_539dcf81_b",
-    codeField: "code",
-    nameField: "name",
-    keywords: ["客户", "客戶"],
-    defaults: () => ({ type: "enterprise", level: "normal", credit_limit: 0, status: "active" }),
-    createTitle: "AI新增客户",
-    requiredFields: [
-      { key: "code", label: "客户编码" },
-      { key: "name", label: "客户名称" },
-    ],
-  },
-  supplier: {
-    key: "supplier",
-    label: "供应商",
-    tableName: "erp_suppliers_s_539dcf81_b",
-    codeField: "code",
-    nameField: "name",
-    keywords: ["供应商", "供應商"],
-    defaults: () => ({ type: "manufacturer", level: "normal", credit_limit: 0, status: "active" }),
-    createTitle: "AI新增供应商",
-    requiredFields: [
-      { key: "code", label: "供应商编码" },
-      { key: "name", label: "供应商名称" },
-    ],
-  },
-  product: {
-    key: "product",
-    label: "物料",
-    tableName: "erp_products_s_539dcf81_b",
-    codeField: "code",
-    nameField: "name",
-    keywords: ["物料", "产品", "商品"],
-    defaults: () => ({ unit: "件", purchase_price: 0, sale_price: 0, cost_price: 0, safety_stock: 0, max_stock: 0, min_stock: 0, is_purchased: true, is_sold: true, is_manufactured: false, status: "active" }),
-    createTitle: "AI新增物料",
-    requiredFields: [
-      { key: "code", label: "物料编码" },
-      { key: "name", label: "物料名称" },
-    ],
-  },
-  warehouse: {
-    key: "warehouse",
-    label: "仓库",
-    tableName: "erp_warehouses_s_539dcf81_b",
-    codeField: "code",
-    nameField: "name",
-    keywords: ["仓库", "倉庫"],
-    defaults: () => ({ type: "raw_material", is_negative_stock_allowed: false, status: "active" }),
-    createTitle: "AI新增仓库",
-    requiredFields: [
-      { key: "code", label: "仓库编码" },
-      { key: "name", label: "仓库名称" },
-    ],
-  },
-  department: {
-    key: "department",
-    label: "部门",
-    tableName: "erp_departments_s_539dcf81_b",
-    codeField: "code",
-    nameField: "name",
-    keywords: ["部门"],
-    defaults: () => ({ status: "active" }),
-    createTitle: "AI新增部门",
-    requiredFields: [
-      { key: "code", label: "部门编码" },
-      { key: "name", label: "部门名称" },
-    ],
-  },
-  workCenter: {
-    key: "workCenter",
-    label: "工作中心",
-    tableName: "erp_work_centers_s_539dcf81_b",
-    codeField: "code",
-    nameField: "name",
-    keywords: ["工作中心"],
-    defaults: () => ({ type: "machine", capacity_per_day: 8, labor_rate: 0, overhead_rate: 0, status: "active" }),
-    createTitle: "AI新增工作中心",
-    requiredFields: [
-      { key: "code", label: "工作中心编码" },
-      { key: "name", label: "工作中心名称" },
-    ],
-  },
-  operation: {
-    key: "operation",
-    label: "工序",
-    tableName: "erp_operations_s_539dcf81_b",
-    codeField: "code",
-    nameField: "name",
-    keywords: ["工序"],
-    defaults: () => ({ standard_hours: 0, setup_hours: 0, labor_rate: 0, overhead_rate: 0, status: "active" }),
-    createTitle: "AI新增工序",
-    requiredFields: [
-      { key: "code", label: "工序编码" },
-      { key: "name", label: "工序名称" },
-    ],
-  },
-  bom: {
-    key: "bom",
-    label: "BOM",
-    tableName: "erp_boms_s_539dcf81_b",
-    codeField: "bom_no",
-    nameField: "bom_no",
-    keywords: ["BOM", "bom"],
-    defaults: () => ({ bom_no: `BOM${Date.now().toString().slice(-8)}`, version: "1.0", quantity: 1, unit: "件", is_default: true, is_active: true, effective_date: today() }),
-    createTitle: "AI新增BOM",
-    requiredFields: [
-      { key: "bom_no", label: "BOM编号" },
-      { key: "product_id", label: "产品ID" },
-    ],
-  },
-  routing: {
-    key: "routing",
-    label: "工艺路线",
-    tableName: "erp_routing_operations_s_539dcf81_b",
-    codeField: "routing_no",
-    nameField: "routing_no",
-    keywords: ["工艺路线", "路线"],
-    defaults: () => ({ routing_no: `RT${Date.now().toString().slice(-8)}`, version: "1.0", is_default: true, is_active: true, effective_date: today(), total_standard_hours: 0 }),
-    createTitle: "AI新增工艺路线",
-    requiredFields: [
-      { key: "routing_no", label: "工艺路线编号" },
-      { key: "product_id", label: "产品ID" },
-    ],
-  },
-  purchaseOrder: {
-    key: "purchaseOrder",
-    label: "采购订单",
-    tableName: "erp_purchase_orders_s_539dcf81_b",
-    codeField: "order_no",
-    nameField: "order_no",
-    keywords: ["采购订单", "采购单"],
-    defaults: () => ({ order_no: `PO${Date.now().toString().slice(-8)}`, order_date: today(), total_amount: 0, tax_amount: 0, payable_amount: 0, currency: "CNY", status: "draft" }),
-    createTitle: "AI新增采购订单",
-    requiredFields: [
-      { key: "order_no", label: "采购单号" },
-      { key: "supplier_id", label: "供应商ID" },
-      { key: "order_date", label: "订单日期" },
-    ],
-  },
-  salesOrder: {
-    key: "salesOrder",
-    label: "销售订单",
-    tableName: "erp_sales_orders_s_539dcf81_b",
-    codeField: "order_no",
-    nameField: "order_no",
-    keywords: ["销售订单", "销售单"],
-    defaults: () => ({ order_no: `SO${Date.now().toString().slice(-8)}`, order_date: today(), total_amount: 0, tax_amount: 0, discount_amount: 0, receivable_amount: 0, currency: "CNY", status: "draft" }),
-    createTitle: "AI新增销售订单",
-    requiredFields: [
-      { key: "order_no", label: "销售单号" },
-      { key: "customer_id", label: "客户ID" },
-      { key: "order_date", label: "订单日期" },
-    ],
-  },
-  purchaseReceipt: {
-    key: "purchaseReceipt",
-    label: "采购入库单",
-    tableName: "erp_purchase_receipts_s_539dcf81_b",
-    codeField: "receipt_no",
-    nameField: "receipt_no",
-    keywords: ["采购入库单", "采购入库", "入库单", "库位"],
-    defaults: () => ({ receipt_no: `PR${Date.now().toString().slice(-8)}`, receipt_date: today(), total_amount: 0, status: "draft", location_id: null }),
-    createTitle: "AI新增采购入库单",
-    requiredFields: [
-      { key: "receipt_no", label: "入库单号" },
-      { key: "receipt_date", label: "入库日期" },
-      { key: "supplier_id", label: "供应商ID" },
-      { key: "warehouse_id", label: "仓库ID" },
-    ],
-    optionalFields: [
-      { key: "location_id", label: "默认库位ID（库位表 erp_bins 的 id，整单入库的默认货位）" },
-    ],
-  },
-  salesDelivery: {
-    key: "salesDelivery",
-    label: "销售出货单",
-    tableName: "erp_sales_deliveries_s_539dcf81_b",
-    codeField: "delivery_no",
-    nameField: "delivery_no",
-    keywords: ["销售出货单", "销售出货", "出货单", "库位"],
-    defaults: () => ({ delivery_no: `SD${Date.now().toString().slice(-8)}`, delivery_date: today(), total_amount: 0, status: "draft", location_id: null }),
-    createTitle: "AI新增销售出货单",
-    requiredFields: [
-      { key: "delivery_no", label: "出货单号" },
-      { key: "delivery_date", label: "出货日期" },
-      { key: "customer_id", label: "客户ID" },
-      { key: "warehouse_id", label: "仓库ID" },
-    ],
-    optionalFields: [
-      { key: "location_id", label: "默认库位ID（库位表 erp_bins 的 id，整单出货的默认货位）" },
-    ],
-  },
-  productionOrder: {
-    key: "productionOrder",
-    label: "生产订单",
-    tableName: "erp_production_orders_s_539dcf81_b",
-    codeField: "order_no",
-    nameField: "order_no",
-    keywords: ["生产订单", "生产单", "工单"],
-    defaults: () => ({ order_no: `MO${Date.now().toString().slice(-8)}`, order_date: today(), planned_quantity: 1, completed_quantity: 0, scrapped_quantity: 0, priority: 1, status: "draft" }),
-    createTitle: "AI新增生产订单",
-    requiredFields: [
-      { key: "order_no", label: "生产单号" },
-      { key: "order_date", label: "订单日期" },
-      { key: "product_id", label: "产品ID" },
-      { key: "planned_quantity", label: "计划数量" },
-    ],
-  },
-};
-
 const normalize = (value: string) => value.toLowerCase().replace(/\s+/g, "");
-const containsAny = (text: string, words: string[]) => words.some((word) => text.includes(word.toLowerCase()));
 const stripJsonFence = (text: string) => text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim() || text.trim();
 const parseJson = <T>(text: string): T | null => {
   try {
@@ -320,13 +71,6 @@ const parseJson = <T>(text: string): T | null => {
   } catch {
     return null;
   }
-};
-
-const entityFromText = (text: string): EntityKey | null => {
-  const normalized = normalize(text);
-  return (Object.keys(entityDefs) as EntityKey[]).find((key) =>
-    entityDefs[key].keywords.some((word) => normalized.includes(normalize(word))),
-  ) || null;
 };
 
 const hasPronounReference = (text: string) => /(?:它|这个|那个|刚才|刚刚|上一个|上次|最近|继续|改一下|帮我改|修改一下)/.test(text);
@@ -341,12 +85,13 @@ const extractExplicitFields = (entity: EntityDef, text: string): Record<string, 
   const fields: Record<string, unknown> = {};
   const codeField = entity.codeField || "code";
   const nameField = entity.nameField || "name";
+  const label = entity.label;
 
   const codeMatch = text.match(
-    /(?:物料|产品|客户|供应商|仓库|部门|工作中心|工序|采购订单|销售订单|采购入库单|销售出货单|生产订单)?\s*(?:编码|编号|单号)\s*[:：=]?\s*([A-Za-z0-9_-]+)/i,
+    new RegExp(`(?:${label})?\\s*(?:编码|编号|单号)\\s*[:：=]?\\s*([A-Za-z0-9_-]+)`, "i"),
   );
   const nameMatch = text.match(
-    /(?:物料|产品|客户|供应商|仓库|部门|工作中心|工序)\s*名称\s*[:：=]?\s*([^，,。；;\n]+)/i,
+    new RegExp(`(?:${label})?\\s*名称\\s*[:：=]?\\s*([^，,。；;\\n]+)`, "i"),
   );
 
   if (codeMatch?.[1]) fields[codeField] = codeMatch[1].trim();
@@ -359,34 +104,28 @@ const normalizeEntityFields = (
   entity: EntityDef,
   fields: Record<string, unknown>,
 ): Record<string, unknown> => {
+  const codeField = entity.codeField || "code";
+  const nameField = entity.nameField || "name";
   const aliases: Record<string, string> = {
-    物料编码: "code",
-    物料名称: "name",
-    产品编码: "code",
-    产品名称: "name",
-    客户编码: "code",
-    客户名称: "name",
-    供应商编码: "code",
-    供应商名称: "name",
-    仓库编码: "code",
-    仓库名称: "name",
-    部门编码: "code",
-    部门名称: "name",
-    工作中心编码: "code",
-    工作中心名称: "name",
-    工序编码: "code",
-    工序名称: "name",
-    编码: entity.codeField || "code",
-    编号: entity.codeField || "code",
-    名称: entity.nameField || "name",
+    编码: codeField,
+    编号: codeField,
+    单号: codeField,
+    名称: nameField,
+    [`${entity.label}编码`]: codeField,
+    [`${entity.label}编号`]: codeField,
+    [`${entity.label}名称`]: nameField,
   };
-  const allowedFields = new Set([
-    "code",
-    "name",
-    ...Object.keys(entity.defaults()),
-    entity.codeField || "code",
-    entity.nameField || "name",
-  ]);
+  for (const field of [...entity.requiredFields, ...(entity.optionalFields || [])]) {
+    // 带括号说明的标签不适合做别名，其余中文标签可直接映射到列名
+    if (!field.label.includes("（") && !field.label.includes("(")) {
+      aliases[field.label] = field.key;
+    }
+  }
+  const allowedFields = new Set(
+    entity.insertableFields.length
+      ? entity.insertableFields
+      : [codeField, nameField, ...Object.keys(entity.defaults())],
+  );
   const normalized: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(fields)) {
@@ -399,10 +138,13 @@ const normalizeEntityFields = (
   return normalized;
 };
 
+const hasColumn = (entity: EntityDef, name: string) => entity.columns.some((column) => column.name === name);
+
 async function runEntitySearch(entity: EntityDef, text: string) {
   const codeField = entity.codeField || "code";
   const nameField = entity.nameField || "name";
-  const query = supabase.from(entity.tableName).select("*").eq("is_deleted", "n");
+  let query = supabase.from(entity.tableName).select("*");
+  if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
   const keywords = [...new Set(text.split(/[\s,，。；;]+/).filter(Boolean))];
   const { data, error } = await query.or(
     [
@@ -414,20 +156,86 @@ async function runEntitySearch(entity: EntityDef, text: string) {
   return data?.[0] || null;
 }
 
+/** 精确查找编码或名称是否已存在，用于避免 create 时触发唯一约束错误。 */
+async function findDuplicate(entity: EntityDef, draft: Record<string, unknown>) {
+  const codeField = entity.codeField || "code";
+  const nameField = entity.nameField || "name";
+  const code = draft[codeField];
+  const name = draft[nameField];
+  if ((code === undefined || code === null || code === "") && (name === undefined || name === null || name === "")) {
+    return null;
+  }
+  let query = supabase.from(entity.tableName).select("*");
+  if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
+  const conditions: string[] = [];
+  if (code !== undefined && code !== null && code !== "") conditions.push(`${codeField}.eq.${code}`);
+  if (name !== undefined && name !== null && name !== "") conditions.push(`${nameField}.eq.${name}`);
+  const { data, error } = await query.or(conditions.join(",")).limit(1);
+  if (error) throw error;
+  return data?.[0] || null;
+}
+
+/**
+ * 取该表最近的几条真实记录作为「取值风格样本」，喂给 LLM，让它能照着
+ * 现有编码规则、枚举取值、常用默认值去推断，而不是凭空猜。
+ */
+interface EntityProfile {
+  rows: Array<Record<string, unknown>>;
+  /** 针对特定实体的额外上下文（如字典项要给出可用字典类型清单） */
+  extra: string;
+}
+
+async function loadEntityProfile(entity: EntityDef, limit = 8): Promise<EntityProfile> {
+  try {
+    const columns = entity.insertableFields.filter((name) => name !== "corp_id" && name !== "emp_id");
+    const select = (columns.length ? columns : ["*"]).join(",");
+    let query = supabase.from(entity.tableName).select(select).limit(limit);
+    if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
+    if (hasColumn(entity, "id")) query = query.order("id", { ascending: false });
+    const { data, error } = await query;
+    if (error) return { rows: [], extra: "" };
+    const rows = (data || []) as unknown as Array<Record<string, unknown>>;
+    // 新增字典项必须知道有哪些字典类型，否则 type_id 只能靠猜
+    let extra = "";
+    if (entity.key === "dict_items") {
+      const types = await loadDictTypeOptions();
+      if (types.length) {
+        extra = `可用字典类型（type_id 只能取这些 id，也可填 code 或 name，服务端会自动解析）：${JSON.stringify(types)}`;
+      }
+    }
+    return { rows, extra };
+  } catch {
+    return { rows: [], extra: "" };
+  }
+}
+
+const formatProfile = (profile: EntityProfile) => {
+  const sample = profile.rows.length
+    ? `已有记录示例（照着这个风格推断编码规则、枚举取值、常用默认值）：${JSON.stringify(profile.rows)}`
+    : "已有记录示例：无（该表还没有数据，请按通用业务常识推断）";
+  return profile.extra ? `${sample}\n${profile.extra}` : sample;
+};
+
 async function extractEntityPayload(
   entity: EntityDef,
   text: string,
-  current?: Record<string, unknown> | null,
-  provider?: AiChatRequest["provider"],
+  current: Record<string, unknown> | null | undefined,
+  provider: AiChatRequest["provider"] | undefined,
+  profile: EntityProfile,
 ) {
+  const fieldHints = [...entity.requiredFields, ...(entity.optionalFields || [])]
+    .map((field) => `${field.key}(${field.label})`)
+    .join("; ");
   const prompt = [
     `你是ERP数据录入助手。请从用户描述中提取${entity.label}的字段值，只返回JSON，不要解释。`,
     `实体表：${entity.tableName}`,
-    `允许字段：${Object.keys(entity.defaults()).join(", ")}`,
-    `必填字段：${entity.requiredFields.map((field) => field.label).join(", ")}`,
-    entity.optionalFields?.length
-      ? `可选字段：${entity.optionalFields.map((field) => field.label).join(", ")}`
-      : "",
+    `允许字段：${entity.insertableFields.join(", ")}`,
+    fieldHints ? `字段说明：${fieldHints}` : "",
+    `必填字段：${entity.requiredFields.map((field) => `${field.key}(${field.label})`).join(", ")}`,
+    "如果用户只给了一个名词（例如'帮我加一个单位毫升'），请把它当作'名称'字段。",
+    "对于用户没有明确给出的必填字段，请根据字段含义、中文常识、业务常识以及已有记录示例直接给出最合理的值，填在 fields 里；只有完全无法推断时才放进 need_more。",
+    "外键字段如果只知道名称或编码，也按用户原话填写，服务端会自动解析成 id。",
+    formatProfile(profile),
     current ? `当前记录：${JSON.stringify(current)}` : "当前记录：无",
     `用户原话：${text}`,
     "返回格式：{\"fields\":{...},\"need_more\":[],\"summary\":\"\"}",
@@ -443,6 +251,172 @@ async function extractEntityPayload(
     summary: parsed?.summary || "",
   };
 }
+
+/**
+ * 基于业务常识的启发式补全（不走 LLM，快且确定）。
+ * 目前覆盖：计量单位 → 根据名称推断所属单位组。
+ */
+async function applyEntityHeuristics(
+  entity: EntityDef,
+  draft: Record<string, unknown>,
+): Promise<{ draft: Record<string, unknown>; reasoning: string[] }> {
+  const reasoning: string[] = [];
+  const base = entity.tableName.replace(/_s_[0-9a-f]{6,}_[a-z]$/i, "");
+
+  if (base === "erp_uoms") {
+    const name = String(draft.name || "").trim();
+    if (name) {
+      if (draft.group_id === undefined) {
+        const groupName = inferUomGroupByName(name);
+        if (groupName) {
+          draft = { ...draft, group_id: groupName };
+          reasoning.push(`group_id：根据名称"${name}"推断属于"${groupName}"`);
+        }
+      }
+      if (draft.code === undefined) {
+        const code = inferUomCodeByName(name);
+        if (code) {
+          draft = { ...draft, code };
+          reasoning.push(`code：根据名称"${name}"推断编码为"${code}"`);
+        }
+      }
+    }
+  }
+
+  return { draft, reasoning };
+}
+
+const UOM_CODE_MAP: Record<string, string> = {
+  毫升: "ML",
+  升: "L",
+  立方厘米: "CM3",
+  立方分米: "DM3",
+  立方米: "M3",
+  加仑: "GAL",
+  克: "G",
+  千克: "KG",
+  公斤: "KG",
+  斤: "JIN",
+  吨: "T",
+  米: "M",
+  厘米: "CM",
+  毫米: "MM",
+  千米: "KM",
+  个: "PC",
+  件: "PC",
+  只: "PC",
+  条: "PC",
+  台: "SET",
+  套: "SET",
+  箱: "BOX",
+  包: "PAC",
+  瓶: "BOT",
+  盒: "BOX",
+  支: "PCS",
+  张: "SHT",
+  把: "PCS",
+  双: "PR",
+  对: "PR",
+  卷: "ROL",
+  桶: "BAR",
+  袋: "BAG",
+  小时: "H",
+  分钟: "MIN",
+  秒: "S",
+  天: "D",
+  周: "W",
+  月: "MON",
+  年: "Y",
+};
+
+function inferUomCodeByName(name: string): string | null {
+  const n = name.trim();
+  if (UOM_CODE_MAP[n]) return UOM_CODE_MAP[n];
+  if (/^[A-Za-z0-9_-]+$/.test(n)) return n.toUpperCase();
+  return null;
+}
+
+function inferUomGroupByName(name: string): string | null {
+  const n = name.toLowerCase();
+  if (/^(毫升|升|l|ml|立方米|立方厘米|cc|加仑|gal)/.test(n)) return "体积";
+  if (/^(克|千克|kg|公斤|斤|吨|t|g)$/.test(n) || /^克|千克|公斤/.test(name)) return "重量";
+  if (/^(米|厘米|cm|毫米|mm|千米|km|尺|寸)/.test(n)) return "长度";
+  if (/^(小时|分钟|秒|天|周|月|年)/.test(name)) return "时间";
+  if (/^(个|件|只|条|台|套|箱|包|瓶|盒|支|张|把|双|对|卷|桶|袋)/.test(name)) return "数量";
+  return null;
+}
+
+/**
+ * 通用补全：对仍缺失的必填字段，交给 LLM 结合「字段定义 + 已有真实记录样本」
+ * 去推断。只有当 LLM 明确表示推不出或存在歧义时，才把该字段交给用户确认。
+ */
+async function inferMissingFields(
+  entity: EntityDef,
+  text: string,
+  draft: Record<string, unknown>,
+  action: "create" | "update",
+  provider: AiChatRequest["provider"] | undefined,
+  profile: EntityProfile,
+): Promise<{ fields: Record<string, unknown>; reasoning: string[]; ambiguous: string[] }> {
+  const missing = missingRequiredFields(entity, draft);
+  if (missing.length === 0) return { fields: {}, reasoning: [], ambiguous: [] };
+
+  const columnDefs = entity.columns
+    .map((column) => {
+      const flags = [
+        column.isNullable ? "可空" : "非空",
+        column.refTable ? `引用${column.refTable}` : "",
+      ].filter(Boolean);
+      return `${column.name}(${column.dataType}${flags.length ? `,${flags.join(",")}` : ""})`;
+    })
+    .join("; ");
+
+  const prompt = [
+    `你是ERP数据补全专家。用户想${action === "update" ? "修改" : "创建"}一个${entity.label}，但还缺少一些必填字段。`,
+    `实体表：${entity.tableName}`,
+    `字段定义：${columnDefs}`,
+    `必填字段：${entity.requiredFields.map((field) => `${field.key}(${field.label})`).join(", ")}`,
+    `当前已确定的字段：${JSON.stringify(draft)}`,
+    formatProfile(profile),
+    `用户原话：${text}`,
+    `请为以下缺失字段给出最合理的值：${missing.map((field) => `${field.key}(${field.label})`).join(", ")}`,
+    "推断规则：",
+    "1. 优先照抄已有记录的取值风格（编码规则、枚举取值、状态、单位、默认值等）。",
+    "2. 外键字段填编码或名称即可，服务端会自动解析成 id。",
+    "3. 只有当某个字段确实没有任何线索、或多个取值明显都同样合理时，才把它放进 ambiguous，并说明理由，绝对不要瞎猜。",
+    "只返回 JSON：{\"fields\":{...}, \"reasoning\":[\"字段名：推断理由\", ...], \"ambiguous\":[\"字段名\", ...]}",
+  ].join("\n");
+
+  const { content } = await callChatModel(
+    [
+      { role: "system", content: "你只返回JSON。" },
+      { role: "user", content: prompt },
+    ],
+    provider,
+  );
+  const parsed = parseJson<{
+    fields?: Record<string, unknown>;
+    reasoning?: string[];
+    ambiguous?: string[];
+  }>(content);
+  const fields: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(parsed?.fields || {})) {
+    if (value !== null && value !== undefined) fields[key] = value;
+  }
+  return { fields, reasoning: parsed?.reasoning || [], ambiguous: parsed?.ambiguous || [] };
+}
+
+/** 把 LLM 返回的字段名/标签统一映射到列 key */
+const toFieldKey = (entity: EntityDef, value: string) => {
+  const v = String(value || "").trim();
+  if (!v) return null;
+  const byKey = entity.requiredFields.find((field) => field.key === v);
+  if (byKey) return byKey.key;
+  const byLabel = entity.requiredFields.find(
+    (field) => field.label === v || field.label.startsWith(v) || v.startsWith(field.key),
+  );
+  return byLabel?.key || null;
+};
 
 async function upsertEntity(
   entity: EntityDef,
@@ -460,37 +434,63 @@ async function upsertEntity(
           ? current
           : await runEntitySearch(entity, text)
       : null;
-  const extracted = await extractEntityPayload(entity, text, existing, provider);
-  const mergedDraft = {
+  // 取真实记录样本，让 LLM 能照着现有编码规则和枚举取值去推断
+  const profile = await loadEntityProfile(entity);
+  const extracted = await extractEntityPayload(entity, text, existing, provider, profile);
+  let mergedDraft = {
     ...entity.defaults(),
     ...(existing || {}),
     ...normalizeEntityFields(entity, extracted.fields),
     // Explicit values from the user's message must win over model extraction.
     ...extractExplicitFields(entity, text),
   };
-  const missingRequired = missingRequiredFields(entity, mergedDraft);
-  const missingLabels = [
-    ...new Set([
-      ...extracted.need_more,
-      ...missingRequired.map((field) => field.label),
-    ]),
-  ];
+  // 轻量启发式（仅作为提示，不影响 LLM 通用推断）
+  const heuristic = await applyEntityHeuristics(entity, mergedDraft);
+  mergedDraft = heuristic.draft;
+  // 外键字段允许用户只给编码或名称，这里统一解析成 id
+  let fkResult = await resolveForeignKeyValues(entity, mergedDraft).catch(() => ({
+    payload: mergedDraft,
+    resolved: [] as string[],
+  }));
+  let draft = fkResult.payload;
+  // 通用补全：交给 LLM 推断剩余必填字段，推不出或有歧义的字段才回问用户
+  const inferred = await inferMissingFields(entity, text, draft, action, provider, profile);
+  if (Object.keys(inferred.fields).length > 0) {
+    draft = { ...draft, ...normalizeEntityFields(entity, inferred.fields) };
+    fkResult = await resolveForeignKeyValues(entity, draft).catch(() => ({ payload: draft, resolved: [] as string[] }));
+    draft = fkResult.payload;
+  }
+  const missingRequired = missingRequiredFields(entity, draft);
+  const ambiguousKeys = new Set(
+    inferred.ambiguous.map((value) => toFieldKey(entity, String(value))).filter(Boolean) as string[],
+  );
+  const ambiguousLabels = missingRequired
+    .filter((field) => ambiguousKeys.has(field.key))
+    .map((field) => field.label);
+  // 只按「LLM 补完之后仍然缺失」的字段追问，避免把已经推断出来的字段又问一遍
+  const missingLabels = [...new Set(missingRequired.map((field) => field.label))];
 
   if (missingLabels.length > 0 && !existing) {
     return {
       status: "needs_more" as const,
-      reply: `${action === "update" ? "修改" : "创建"}${entity.label}还缺少这些信息：${missingLabels.join("、")}`,
-      nextQuestions: missingLabels,
+      reply: ambiguousLabels.length
+        ? `${action === "update" ? "修改" : "创建"}${entity.label}时，这些字段有多种可能的取值，需要你确认：${ambiguousLabels.join("、")}`
+        : `${action === "update" ? "修改" : "创建"}${entity.label}还缺少这些信息：${missingLabels.join("、")}`,
+      nextQuestions: ambiguousLabels.length ? ambiguousLabels : missingLabels,
     };
   }
 
-  const payload = {
-    ...mergedDraft,
-    updated_at: nowIso(),
-  };
-
-  delete (payload as Record<string, unknown>).id;
-  delete (payload as Record<string, unknown>).created_at;
+  // 只写入允许插入的列，避免把 id / 审计字段带进 payload
+  const insertable = new Set(
+    entity.insertableFields.length ? entity.insertableFields : Object.keys(draft),
+  );
+  const payload: Record<string, unknown> = { updated_at: nowIso() };
+  for (const [key, value] of Object.entries(draft)) {
+    if (insertable.has(key)) payload[key] = value;
+  }
+  if (hasColumn(entity, "is_deleted") && payload.is_deleted === undefined) {
+    payload.is_deleted = "n";
+  }
 
   const isUpdate = !!existing?.id;
   if (action === "update" && !isUpdate) {
@@ -500,6 +500,25 @@ async function upsertEntity(
       nextQuestions: [`请提供要修改的${entity.label}名称或编码`],
     };
   }
+  const tableTag = baseTableName(entity.tableName);
+  if (!isUpdate) {
+    const duplicate = await findDuplicate(entity, draft);
+    if (duplicate) {
+      const dupName = String(
+        duplicate[entity.nameField || entity.codeField || "id"] || duplicate.id || "-",
+      );
+      // 系统字典与业务表是两套数据，命中重复时提示用户可能选错了表
+      const crossHint =
+        tableTag === "sys_dict_items"
+          ? "如果你要加的是物料级业务数据（如 erp_uoms），请去掉“字典”二字再说一次。"
+          : "如果你说的是系统字典（sys_dict_items 下的数据），请明确说“在字典里加”。";
+      return {
+        status: "error" as const,
+        reply: `${entity.label}「${dupName}」已存在于表 ${tableTag}，无法重复创建。${crossHint}如需修改，请说“修改${entity.label} ${dupName}”。`,
+      };
+    }
+  }
+
   const response = isUpdate
     ? await supabase.from(entity.tableName).update(payload).eq("id", existing.id).select().single()
     : await supabase.from(entity.tableName).insert(payload).select().single();
@@ -507,9 +526,12 @@ async function upsertEntity(
   const row = response.data as Record<string, unknown>;
   const displayName = String(row[entity.nameField || entity.codeField || "id"] || row.id || "-");
   const routeInfo = await findEntityRoute(entity).catch(() => null);
+  const autoFillNotes = [...heuristic.reasoning, ...inferred.reasoning];
   return {
     status: "success" as const,
-    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${displayName}${extracted.summary ? `\n${extracted.summary}` : ""}`,
+    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${displayName}（写入表 ${tableTag}）${extracted.summary ? `\n${extracted.summary}` : ""}${
+      fkResult.resolved.length ? `\n已自动解析关联字段：${fkResult.resolved.join("、")}` : ""
+    }${autoFillNotes.length ? `\n自动补全：${autoFillNotes.join("；")}` : ""}`,
     data: row,
     route: routeInfo?.route,
     routeLabel: routeInfo?.routeLabel,
@@ -815,12 +837,28 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
 
 export async function createOrUpdateEntityTool(
   state: AiGraphState,
-  entityKey?: EntityKey,
   action: "create" | "update" = "create",
 ): Promise<ToolResult> {
-  const detected = entityFromText(state.text);
-  const entity = entityKey ? entityDefs[entityKey] : (detected ? entityDefs[detected] : null);
-  if (!entity) return { status: "error", reply: "未识别出要处理的业务对象。" };
+  // 实体来自数据库目录（sys_tables），target 由意图路由给出，
+  // 文本与焦点作为兜底，最后再让模型从真实表清单里挑一张。
+  const resolution = await resolveEntityForState(state);
+  if (resolution.error) {
+    return { status: "error", reply: resolution.error };
+  }
+  const entity = resolution.def as EntityDef;
+  if (!entity) {
+    return { status: "error", reply: "未识别出要处理的业务对象。" };
+  }
+  if (!entity.writable) {
+    return {
+      status: "error",
+      reply: `${entity.label}（${entity.tableName}）是只读对象：${entity.readOnlyReason}。我可以帮你查询、统计或分析，不能新增、修改、删除。`,
+    };
+  }
+  if (/删除|删掉|移除|清空/.test(state.text)) {
+    const policy = evaluateDeletePolicy();
+    return { status: "error", reply: `${entity.label}不支持 AI 删除：${policy.reason}。` };
+  }
   return upsertEntity(entity, state.text, state.currentFocus, state.provider, action);
 }
 
@@ -925,21 +963,21 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
 }
 
 export async function countMasterDataTool(state: AiGraphState): Promise<ToolResult> {
-  const text = state.text;
-  const detected = entityFromText(text);
-  const entity = detected ? entityDefs[detected] : null;
-  if (!entity) {
+  const resolution = await resolveEntityForState(state);
+  if (resolution.error || !resolution.def) {
     return {
       status: "needs_more",
-      reply: "请明确要统计哪类主数据，比如客户、物料、供应商、仓库。",
-      nextQuestions: ["客户", "物料", "供应商", "仓库"],
+      reply: "请明确要统计哪类数据，比如客户、物料、计量单位、仓库、采购订单。",
+      nextQuestions: ["客户", "物料", "计量单位", "供应商", "仓库"],
     };
   }
+  const entity = resolution.def as EntityDef;
 
-  const { count, error } = await supabase
+  let query = supabase
     .from(entity.tableName)
-    .select("*", { count: "exact", head: true })
-    .eq("is_deleted", "n");
+    .select("*", { count: "exact", head: true });
+  if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
+  const { count, error } = await query;
 
   if (error) throw error;
 
@@ -949,6 +987,7 @@ export async function countMasterDataTool(state: AiGraphState): Promise<ToolResu
     data: {
       entity: entity.key,
       label: entity.label,
+      table: entity.tableName,
       count: count || 0,
     },
     focus: {

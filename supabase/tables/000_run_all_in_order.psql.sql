@@ -46,3 +46,4 @@
 \i supabase/tables/deploy_36_doc_flow_generalization.sql
 \i supabase/tables/deploy_37_doc_flow_ledger_rule_ref.sql
 \i supabase/tables/deploy_38_doc_flow_connections.sql
+\i supabase/tables/deploy_39_ai_entity_catalog.sql
