@@ -901,7 +901,7 @@ export function PurchaseOrders() {
           </Space>
         }
         width={'80%'}
-        height={680}
+        height={'80%'}
       />
       <SimpleModal
         title={

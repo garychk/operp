@@ -669,7 +669,7 @@ export function Boms() {
           </Space>
         }
         width={"60%"}
-        height={680}
+        height={'80%'}
       />
 
       <SimpleModal

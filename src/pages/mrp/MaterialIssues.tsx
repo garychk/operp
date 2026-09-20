@@ -671,7 +671,7 @@ export function MaterialIssues() {
           </Space>
         }
         width={"60%"}
-        height={680}
+        height={"80%"}
       />
 
       <SimpleModal

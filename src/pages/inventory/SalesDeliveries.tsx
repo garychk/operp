@@ -913,7 +913,7 @@ export function SalesDeliveries() {
           </Space>
         }
         width={'70%'}
-        height={680}
+        height={'80%'}
       />
 
       <SimpleModal  

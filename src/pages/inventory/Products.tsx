@@ -529,7 +529,7 @@ export function Products() {
           </Space>
         }
         width={"70%"}
-        height={650}
+        height={'80%'}
       />
 
       <SimpleModal

@@ -540,7 +540,7 @@ export function ProductionOrders() {
           </Space>
         }
         width={'60%'}
-        height={680}
+        height={'80%'}
       />
     </div>
   );

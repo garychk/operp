@@ -790,7 +790,7 @@ export function SalesOrders() {
           </Space>
         }
         width={'70%'}
-        height={680}
+        height={'80%'}
       />
 
       <SimpleModal

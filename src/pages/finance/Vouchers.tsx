@@ -598,7 +598,7 @@ export function Vouchers() {
             <Button type="primary" onClick={() => form.submit()}>{t('common.save')}</Button>
           </Space>
         }
-        height={680}
+        height={'80%'}
       />
 
       <SupaModal
