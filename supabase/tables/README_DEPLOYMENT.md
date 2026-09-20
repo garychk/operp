@@ -178,3 +178,25 @@
 - 辅助 RPC `reset_document_no_counter(p_document_type, p_period_key)` 用于测试环境重置计数器。
 
 前端所有单据页面（采购/销售订单、出入库、调拨、盘点、调整、凭证、生产订单、领料、MRP 计划）与 AI 新建单据均改为调用该 RPC 取号；RPC 不可用时自动回退为旧的时间戳单号。注意：打开新增表单即占号，用户放弃保存会产生空号（与 ERPNext 行为一致）。
+
+## 库存业务流水类型 DocType 化（deploy_40_inventory_transaction_types.sql）
+
+已有库升级时可单独执行（需在 `deploy_24` / `deploy_34` 之后）。
+
+背景：`erp_inventory_transactions.transaction_type` 之前只是 `VARCHAR(50)`，枚举硬编码在前端
+`src/constants/inventoryTransactionTypes.ts`，过账 RPC 里直接写字面量，新增业务类型要改三处。
+
+脚本内容：
+
+- 新增 `sys_inventory_transaction_types`：业务类型字典（code / name / direction / affects_stock / name_en），
+  也是前端下拉与标签的数据源，种子 20 条标准类型。
+- 新增 `sys_document_transaction_types`：DocType × 业务类型映射（direction / is_default / condition_note），
+  唯一约束 `(document_type_id, transaction_type_code)`。一个 DocType 可映射多条（调拨出/入、盘点盈/亏）。
+- 新增 RPC `resolve_inventory_transaction_type(p_document_type, p_direction)`：`SECURITY DEFINER`，
+  按方向解析；查不到时回落到内置默认值，配置缺失不会导致过账失败。
+- 过账写入点改为调用该 RPC：`deploy_34`（采购入库/销售出货）、`deploy_24`（调拨出/入、盘点、调整）。
+- 回填历史数据：`transfer_out/transfer_in` → `inventory_transfer_out/in`，`inbound/outbound` →
+  `purchase_receipt_in/sales_delivery_out`。
+
+配置入口：系统 → DocType Builder，打开某个 DocType 后的「业务流水类型」页签可增删关联、指定默认类型与触发条件；
+也可在该页签直接新建业务类型字典条目。

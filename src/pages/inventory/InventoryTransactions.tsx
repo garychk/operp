@@ -6,11 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import {
-  INVENTORY_TRANSACTION_TYPE_LABELS,
-  INVENTORY_TRANSACTION_TYPE_OPTIONS,
   normalizeInventoryTransactionType,
-  type InventoryTransactionType,
 } from '../../constants/inventoryTransactionTypes';
+import { useInventoryTransactionTypes } from '../../hooks/useInventoryTransactionTypes';
 import { SuperTable } from '../../components/SuperTable';
 
 type InventoryTransaction = Tables['erp_inventory_transactions_s_539dcf81_b']['Row'];
@@ -33,6 +31,7 @@ export function InventoryTransactions() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<number | undefined>();
   const [selectedBin, setSelectedBin] = useState<number | undefined>();
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
+  const { options: typeOptions, getLabel: getTypeLabel } = useInventoryTransactionTypes();
 
   useEffect(() => {
     void fetchAll();
@@ -86,13 +85,8 @@ export function InventoryTransactions() {
     warehouses.find((w) => w.id === warehouseId);
   const getBin = (binId: number | null) => bins.find((b) => b.id === binId);
 
-  const getTransactionTypeLabel = (value: string | null) => {
-    if (!value) return '-';
-    const normalized = normalizeInventoryTransactionType(value) as InventoryTransactionType | string;
-    return INVENTORY_TRANSACTION_TYPE_LABELS[
-      normalized as InventoryTransactionType
-    ] || value;
-  };
+  const getTransactionTypeLabel = (value: string | null) =>
+    getTypeLabel(normalizeInventoryTransactionType(value));
 
   const availableBins = useMemo(
     () =>
@@ -153,10 +147,9 @@ export function InventoryTransactions() {
       dataIndex: 'transaction_type',
       key: 'transaction_type',
       width: 120,
-      render: (value: string) => {
-        const normalized = normalizeInventoryTransactionType(value) as InventoryTransactionType | string;
-        return <Tag color="blue">{getTransactionTypeLabel(normalized)}</Tag>;
-      },
+      render: (value: string) => (
+        <Tag color="blue">{getTransactionTypeLabel(normalizeInventoryTransactionType(value))}</Tag>
+      ),
     },
     {
       title: t('inventoryTransactions.columns.product'),
@@ -296,7 +289,7 @@ export function InventoryTransactions() {
               placeholder={t("inventoryTransactions.typePlaceholder")}
               value={selectedType}
               onChange={(value) => setSelectedType(value)}
-              options={INVENTORY_TRANSACTION_TYPE_OPTIONS.map((item) => ({
+              options={typeOptions.map((item) => ({
                 value: item.value,
                 label: item.label,
               }))}

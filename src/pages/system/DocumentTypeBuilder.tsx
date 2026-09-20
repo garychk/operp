@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button, Card, Col, Drawer, Form, Input, InputNumber, Row, Select, Space, Splitter, Switch, Table, Tag, message } from 'antd';
+import { Alert, Button, Card, Col, Drawer, Form, Input, InputNumber, Modal, Row, Select, Space, Splitter, Switch, Table, Tabs, Tag, Typography, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, SaveOutlined, ArrowDownOutlined, ArrowUpOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { supabase } from '../../utils/supabase';
@@ -53,6 +53,36 @@ type DocumentField = {
   sort_order: number;
 };
 
+type TransactionType = {
+  id: number;
+  code: string;
+  name: string;
+  direction: string;
+  affects_stock: boolean;
+  status: string;
+  sort_order: number;
+};
+
+type TransactionTypeMapping = {
+  id: number;
+  document_type_id: number;
+  transaction_type_code: string;
+  direction: string;
+  is_default: boolean;
+  condition_note: string | null;
+  status: string;
+  sort_order: number;
+};
+
+const DIRECTIONS = ['in', 'out', 'neutral'];
+
+/** DocTypes that actually have a posting RPC today (post_stock_document /
+ *  post_inventory_document). Mapping business types on any other DocType is
+ *  metadata only: no inventory transaction will ever be written from it. */
+const POSTABLE_DOC_TYPES = [
+  'purchase_receipt', 'sales_delivery',
+  'inventory_transfer', 'stock_count', 'stock_adjustment',
+];
 const FIELD_TYPES = ['Data', 'Text', 'LongText', 'Int', 'Float', 'Currency', 'Date', 'DateTime', 'Check', 'Select', 'Link', 'DynamicLink', 'Table', 'Attach', 'Image', 'HTML', 'SectionBreak', 'ColumnBreak'];
 const emptyDocument = (): Partial<DocumentType> => ({ document_type: '', document_name: '', module_code: '', route_path: '', table_name: '', primary_key_field: 'id', naming_rule: '', is_submittable: true, is_single: false, is_child: false, is_tree: false, quick_entry: false, track_changes: true, status: '1', sort_order: 0 });
 
@@ -67,6 +97,35 @@ export function DocumentTypeBuilder() {
   const [editingField, setEditingField] = useState<DocumentField | null>(null);
   const [documentForm] = Form.useForm();
   const [fieldForm] = Form.useForm();
+  const [mappingForm] = Form.useForm();
+  const [businessTypeForm] = Form.useForm();
+  const [transactionTypes, setTransactionTypes] = useState<TransactionType[]>([]);
+  const [mappings, setMappings] = useState<TransactionTypeMapping[]>([]);
+  const [mappingOpen, setMappingOpen] = useState(false);
+  const [editingMapping, setEditingMapping] = useState<TransactionTypeMapping | null>(null);
+  const [businessTypeOpen, setBusinessTypeOpen] = useState(false);
+
+  const loadTransactionTypes = async () => {
+    const { data, error } = await supabase
+      .from('sys_inventory_transaction_types')
+      .select('*')
+      .eq('is_deleted', 'n')
+      .order('sort_order')
+      .order('id');
+    if (error) message.error(error.message);
+    else setTransactionTypes((data || []) as TransactionType[]);
+  };
+  const loadMappings = async (documentId: number) => {
+    const { data, error } = await supabase
+      .from('sys_document_transaction_types')
+      .select('*')
+      .eq('document_type_id', documentId)
+      .eq('is_deleted', 'n')
+      .order('sort_order')
+      .order('id');
+    if (error) message.error(error.message);
+    else setMappings((data || []) as TransactionTypeMapping[]);
+  };
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -78,13 +137,14 @@ export function DocumentTypeBuilder() {
     const { data, error } = await supabase.from('sys_document_type_fields').select('*').eq('document_type_id', documentId).eq('is_deleted', 'n').order('sort_order').order('id');
     if (error) message.error(error.message); else setFields((data || []) as DocumentField[]);
   };
-  useEffect(() => { void loadDocuments(); }, []);
+  useEffect(() => { void loadDocuments(); void loadTransactionTypes(); }, []);
 
   const openDocument = (record?: DocumentType) => {
     setSelected(record || null);
     documentForm.setFieldsValue(record || emptyDocument());
     setFields([]);
-    if (record) void loadFields(record.id);
+    setMappings([]);
+    if (record) { void loadFields(record.id); void loadMappings(record.id); }
     setDrawerOpen(true);
   };
   const saveDocument = async () => {
@@ -133,6 +193,90 @@ export function DocumentTypeBuilder() {
     setFields(next);
     await Promise.all(next.map((field, order) => supabase.from('sys_document_type_fields').update({ sort_order: order + 1 }).eq('id', field.id)));
   };
+  const openMapping = (record?: TransactionTypeMapping) => {
+    if (!selected) return;
+    setEditingMapping(record || null);
+    mappingForm.setFieldsValue(record || {
+      transaction_type_code: undefined,
+      direction: 'in',
+      is_default: mappings.length === 0,
+      condition_note: '',
+      sort_order: mappings.length + 1,
+      status: '1',
+    });
+    setMappingOpen(true);
+  };
+  const saveMapping = async () => {
+    if (!selected) return;
+    const values = await mappingForm.validateFields();
+    const payload = { ...values, document_type_id: selected.id, updated_at: new Date().toISOString() };
+    const result = editingMapping
+      ? await supabase.from('sys_document_transaction_types').update(payload).eq('id', editingMapping.id).select().single()
+      : await supabase.from('sys_document_transaction_types').insert(payload).select().single();
+    if (result.error) { message.error(result.error.message); return; }
+    setMappingOpen(false);
+    setEditingMapping(null);
+    await loadMappings(selected.id);
+    message.success(t('documentTypes.mappingSaved'));
+  };
+  const removeMapping = async (mapping: TransactionTypeMapping) => {
+    if (!selected) return;
+    const { error } = await supabase.from('sys_document_transaction_types')
+      .update({ is_deleted: 'y', updated_at: new Date().toISOString() }).eq('id', mapping.id);
+    if (error) message.error(error.message);
+    else void loadMappings(selected.id);
+  };
+  const saveBusinessType = async () => {
+    const values = await businessTypeForm.validateFields();
+    const payload = { ...values, status: '1', updated_at: new Date().toISOString() };
+    const { data, error } = await supabase.from('sys_inventory_transaction_types').insert(payload).select().single();
+    if (error) { message.error(error.message); return; }
+    await loadTransactionTypes();
+    setBusinessTypeOpen(false);
+    businessTypeForm.resetFields();
+    const created = data as TransactionType;
+    mappingForm.setFieldsValue({ transaction_type_code: created.code, direction: created.direction });
+    message.success(t('documentTypes.businessTypeSaved'));
+  };
+
+  const mappingColumns: ColumnsType<TransactionTypeMapping> = useMemo(() => [
+    { title: t('documentTypes.transactionTypeCode'), dataIndex: 'transaction_type_code', width: 180 },
+    {
+      title: t('documentTypes.transactionTypeName'),
+      width: 150,
+      render: (_: unknown, mapping: TransactionTypeMapping) =>
+        transactionTypes.find((x) => x.code === mapping.transaction_type_code)?.name || '-',
+    },
+    {
+      title: t('documentTypes.direction'),
+      dataIndex: 'direction',
+      width: 120,
+      render: (value: string) => (
+        <Tag color={value === 'in' ? 'green' : value === 'out' ? 'volcano' : 'default'}>
+          {value === 'in' ? t('documentTypes.directionIn') : value === 'out' ? t('documentTypes.directionOut') : t('documentTypes.directionNeutral')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('documentTypes.attributes'),
+      width: 200,
+      render: (_: unknown, mapping: TransactionTypeMapping) => (
+        <Space>{mapping.is_default && <Tag color="blue">{t('documentTypes.defaultType')}</Tag>}{mapping.status === '0' && <Tag>{t('documentTypes.inactive')}</Tag>}</Space>
+      ),
+    },
+    { title: t('documentTypes.conditionNote'), dataIndex: 'condition_note', render: (value: string | null) => value || '-' },
+    {
+      title: t('common.actions'),
+      width: 130,
+      render: (_: unknown, mapping: TransactionTypeMapping) => (
+        <Space>
+          <Button type="link" icon={<EditOutlined />} onClick={() => openMapping(mapping)}>{t('common.edit')}</Button>
+          <Button type="link" danger icon={<DeleteOutlined />} onClick={() => void removeMapping(mapping)} />
+        </Space>
+      ),
+    },
+  ], [mappingForm, openMapping, removeMapping, t, transactionTypes]);
+
   const fieldColumns: ColumnsType<DocumentField> = useMemo(() => [
     { title: t('documentTypes.order'), width: 70, render: (_: unknown, _field: DocumentField, index: number) => <Space><Button type="text" size="small" icon={<ArrowUpOutlined />} disabled={!index} onClick={() => void moveField(index, -1)} /><Button type="text" size="small" icon={<ArrowDownOutlined />} disabled={index === fields.length - 1} onClick={() => void moveField(index, 1)} /></Space> },
     { title: t('documentTypes.fieldName'), dataIndex: 'field_name', width: 150 },
@@ -154,7 +298,7 @@ export function DocumentTypeBuilder() {
       <Drawer title={selected ? t('documentTypes.editDocType', { name: selected.document_name }) : t('documentTypes.newDocType')} width="94%" open={drawerOpen} onClose={() => setDrawerOpen(false)} extra={<Button type="primary" icon={<SaveOutlined />} onClick={() => void saveDocument()}>{t('common.save')}</Button>}>
         <Splitter style={{ height: "calc(100vh - 150px)" }}>
           <Splitter.Panel defaultSize="34%" min="28%">
-            <Card size="small" title={t('documentTypes.docTypeAttributes')}>
+            <Card size="small" title={t('documentTypes.docTypeAttributes')} variant="borderless">
               <Form form={documentForm} layout="vertical">
                 <Row gutter={12}><Col span={12}><Form.Item name="document_type" label={t('documentTypes.typeCode')} rules={[{ required: true }]}><Input disabled={!!selected} /></Form.Item></Col><Col span={12}><Form.Item name="document_name" label={t('common.name')} rules={[{ required: true }]}><Input /></Form.Item></Col></Row>
                 <Row gutter={12}><Col span={12}><Form.Item name="module_code" label={t('documentTypes.module')}><Input /></Form.Item></Col><Col span={12}><Form.Item name="table_name" label={t('documentTypes.businessTable')}><Input /></Form.Item></Col></Row>
@@ -167,8 +311,34 @@ export function DocumentTypeBuilder() {
             </Card>
           </Splitter.Panel>
           <Splitter.Panel>
-            <Card size="small" title={t('documentTypes.fieldDefinitions')} extra={<Space><Button icon={<SaveOutlined />} disabled={!selected} onClick={() => void syncDatabaseFields()}>{t('documentTypes.syncDatabaseFields')}</Button><Button type="primary" icon={<PlusOutlined />} disabled={!selected} onClick={() => { setEditingField(null); fieldForm.resetFields(); fieldForm.setFieldsValue({ field_type: "Data", column_index: 1, sort_order: fields.length + 1 }); setFieldOpen(true); }}>{t('documentTypes.newField')}</Button></Space>}>
-              <Table size="small" rowKey="id" dataSource={fields} columns={fieldColumns} pagination={false} />
+            <Card size="small"  variant="borderless">
+            <Tabs
+              defaultActiveKey="fields"
+              items={[
+                {
+                  key: "fields",
+                  label: t('documentTypes.fieldDefinitions'),
+                  children: (
+                    <Card size="small" extra={<Space><Button icon={<SaveOutlined />} disabled={!selected} onClick={() => void syncDatabaseFields()}>{t('documentTypes.syncDatabaseFields')}</Button><Button type="primary" icon={<PlusOutlined />} disabled={!selected} onClick={() => { setEditingField(null); fieldForm.resetFields(); fieldForm.setFieldsValue({ field_type: "Data", column_index: 1, sort_order: fields.length + 1 }); setFieldOpen(true); }}>{t('documentTypes.newField')}</Button></Space>}>
+                      <Table size="small" rowKey="id" dataSource={fields} columns={fieldColumns} pagination={false} />
+                    </Card>
+                  ),
+                },
+                {
+                  key: "transactionTypes",
+                  label: t('documentTypes.transactionTypes'),
+                  children: (
+                    <Card size="small" extra={<Space><Typography.Text type="secondary">{t('documentTypes.mappingHint')}</Typography.Text><Button type="primary" icon={<PlusOutlined />} disabled={!selected} onClick={() => openMapping()}>{t('documentTypes.newMapping')}</Button></Space>}>
+                      {selected && !POSTABLE_DOC_TYPES.includes(selected.document_type) && (
+                        <Alert type="warning" showIcon style={{ marginBottom: 12 }}
+                          message={t('documentTypes.noPostingRpc', { docType: selected.document_type })} />
+                      )}
+                      <Table size="small" rowKey="id" dataSource={mappings} columns={mappingColumns} pagination={false} />
+                    </Card>
+                  ),
+                },
+              ]}
+            />
             </Card>
           </Splitter.Panel>
         </Splitter>
@@ -183,6 +353,37 @@ export function DocumentTypeBuilder() {
             <Form.Item name="description" label={t('documentTypes.description')}><Input.TextArea rows={3} /></Form.Item>
           </Form>
         </Drawer>
+        <Drawer title={editingMapping ? t('documentTypes.editMapping') : t('documentTypes.newMapping')} width={560} open={mappingOpen} onClose={() => setMappingOpen(false)} extra={<Button type="primary" icon={<SaveOutlined />} onClick={() => void saveMapping()}>{t('documentTypes.saveMapping')}</Button>}>
+          <Form form={mappingForm} layout="vertical">
+            <Form.Item name="transaction_type_code" label={t('documentTypes.transactionTypeCode')} rules={[{ required: true }]}
+              extra={<Button type="link" style={{ padding: 0 }} onClick={() => { businessTypeForm.resetFields(); setBusinessTypeOpen(true); }}>{t('documentTypes.newBusinessType')}</Button>}>
+              <Select
+                showSearch
+                optionFilterProp="label"
+                options={transactionTypes
+                  .filter((x) => editingMapping?.transaction_type_code === x.code
+                    || !mappings.some((m) => m.transaction_type_code === x.code))
+                  .map((x) => ({ value: x.code, label: `${x.name} (${x.code})` }))}
+              />
+            </Form.Item>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item name="direction" label={t('documentTypes.direction')} rules={[{ required: true }]}><Select options={DIRECTIONS.map((value) => ({ value, label: value === 'in' ? t('documentTypes.directionIn') : value === 'out' ? t('documentTypes.directionOut') : t('documentTypes.directionNeutral') }))} /></Form.Item></Col>
+              <Col span={12}><Form.Item name="sort_order" label={t('documentTypes.order')}><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col>
+            </Row>
+            <Form.Item name="condition_note" label={t('documentTypes.conditionNote')}><Input placeholder="实盘 > 账面" /></Form.Item>
+            <Row gutter={12}>
+              <Col span={12}><Form.Item name="is_default" label={t('documentTypes.defaultType')} valuePropName="checked"><Switch /></Form.Item></Col>
+              <Col span={12}><Form.Item name="status" label={t('common.status')}><Select options={[{ label: t('common.enabled'), value: "1" }, { label: t('documentTypes.inactive'), value: "0" }]} /></Form.Item></Col>
+            </Row>
+          </Form>
+        </Drawer>
+        <Modal title={t('documentTypes.newBusinessType')} open={businessTypeOpen} onCancel={() => setBusinessTypeOpen(false)} onOk={() => void saveBusinessType()} okText={t('documentTypes.saveBusinessType')}>
+          <Form form={businessTypeForm} layout="vertical" initialValues={{ direction: "in", affects_stock: true, sort_order: 999 }}>
+            <Row gutter={12}><Col span={12}><Form.Item name="code" label={t('documentTypes.transactionTypeCode')} rules={[{ required: true }]}><Input placeholder="purchase_receipt_in" /></Form.Item></Col><Col span={12}><Form.Item name="name" label={t('documentTypes.transactionTypeName')} rules={[{ required: true }]}><Input placeholder="采购入库" /></Form.Item></Col></Row>
+            <Row gutter={12}><Col span={12}><Form.Item name="direction" label={t('documentTypes.direction')} rules={[{ required: true }]}><Select options={DIRECTIONS.map((value) => ({ value, label: value === 'in' ? t('documentTypes.directionIn') : value === 'out' ? t('documentTypes.directionOut') : t('documentTypes.directionNeutral') }))} /></Form.Item></Col><Col span={12}><Form.Item name="sort_order" label={t('documentTypes.order')}><InputNumber min={0} style={{ width: "100%" }} /></Form.Item></Col></Row>
+            <Form.Item name="affects_stock" label={t('documentTypes.affectsStock')} valuePropName="checked"><Switch /></Form.Item>
+          </Form>
+        </Modal>
       </Drawer>
     </Card>
   );

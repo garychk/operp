@@ -1166,6 +1166,39 @@ export interface SysUsersRow {
 export type SysUsersInsert = Omit<SysUsersRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type SysUsersUpdate = Partial<SysUsersInsert>;
 
+export interface SysInventoryTransactionTypesRow {
+  id: number;
+  code: string;
+  name: string;
+  direction: string;
+  affects_stock: boolean;
+  name_en: string | null;
+  description: string | null;
+  status: string;
+  sort_order: number;
+  is_deleted: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export type SysInventoryTransactionTypesInsert = Omit<SysInventoryTransactionTypesRow, 'id' | 'created_at' | 'updated_at'>;
+export type SysInventoryTransactionTypesUpdate = Partial<SysInventoryTransactionTypesInsert>;
+
+export interface SysDocumentTransactionTypesRow {
+  id: number;
+  document_type_id: number;
+  transaction_type_code: string;
+  direction: string;
+  is_default: boolean;
+  condition_note: string | null;
+  status: string;
+  sort_order: number;
+  is_deleted: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export type SysDocumentTransactionTypesInsert = Omit<SysDocumentTransactionTypesRow, 'id' | 'created_at' | 'updated_at'>;
+export type SysDocumentTransactionTypesUpdate = Partial<SysDocumentTransactionTypesInsert>;
+
 
 
 
