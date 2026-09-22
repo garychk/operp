@@ -30,6 +30,7 @@ import {
 } from "@ant-design/icons";
 import type { ColumnsType } from "antd/es/table";
 import { supabase } from "../../utils/supabase";
+import { listTableLabels } from "../../features/baq/api";
 import { useTranslation } from "react-i18next";
 
 type DocumentType = {
@@ -172,6 +173,9 @@ export function DocumentTypeBuilder() {
   const [editingMapping, setEditingMapping] =
     useState<TransactionTypeMapping | null>(null);
   const [businessTypeOpen, setBusinessTypeOpen] = useState(false);
+  const [businessTableOptions, setBusinessTableOptions] = useState<
+    { value: string; label: string }[]
+  >([]);
 
   const loadTransactionTypes = async () => {
     const { data, error } = await supabase
@@ -193,6 +197,26 @@ export function DocumentTypeBuilder() {
       .order("id");
     if (error) message.error(error.message);
     else setMappings((data || []) as TransactionTypeMapping[]);
+  };
+
+  const loadBusinessTables = async () => {
+    try {
+      const rows = await listTableLabels();
+      setBusinessTableOptions(
+        rows
+          .filter(
+            (row) =>
+              !row.table_name.startsWith("sys_") &&
+              !row.table_name.startsWith("doc_flow"),
+          )
+          .map((row) => ({
+            value: row.table_name,
+            label: row.table_label || row.table_name,
+          })),
+      );
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const loadDocuments = async () => {
@@ -221,6 +245,7 @@ export function DocumentTypeBuilder() {
   useEffect(() => {
     void loadDocuments();
     void loadTransactionTypes();
+    void loadBusinessTables();
   }, []);
 
   const openDocument = (record?: DocumentType) => {
@@ -666,7 +691,19 @@ export function DocumentTypeBuilder() {
                       name="table_name"
                       label={t("documentTypes.businessTable")}
                     >
-                      <Input />
+                      <Select
+                        showSearch
+                        allowClear
+                        optionFilterProp="label"
+                        options={businessTableOptions}
+                        onChange={(value?: string) => {
+                          const label = businessTableOptions.find(
+                            (option) => option.value === value,
+                          )?.label;
+                          if (label)
+                            documentForm.setFieldValue("document_name", label);
+                        }}
+                      />
                     </Form.Item>
                   </Col>
                 </Row>

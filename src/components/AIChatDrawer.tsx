@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from 'react-i18next';
 import type { ReactNode } from "react";
 import {
@@ -290,18 +290,7 @@ const MarkdownTable = ({ lines }: { lines: string[] }) => {
     return numericColumns[columnIndex] ? "right" : "left";
   };
 
-  const renderHeader = (header: string) => {
-    const segments = header.match(/[^_\-/]*[_\-/]*/g)?.filter(Boolean) ?? [header];
-    if (segments.length <= 1) {
-      return renderInlineMarkdown(header);
-    }
-    return segments.map((segment, index) => (
-      <Fragment key={`${segment}-${index}`}>
-        {renderInlineMarkdown(segment)}
-        {index < segments.length - 1 ? <wbr /> : null}
-      </Fragment>
-    ));
-  };
+  const renderHeader = (header: string) => renderInlineMarkdown(header);
 
   const renderCell = (cell: string, columnIndex: number) => {
     if (!cell) {

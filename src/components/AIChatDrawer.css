@@ -409,8 +409,8 @@
 }
 
 .ai-markdown-table {
-  width: 100%;
-  min-width: 420px;
+  width: max-content;
+  min-width: 100%;
   border-collapse: collapse;
   font-size: 13px;
   line-height: 1.6;
@@ -428,8 +428,7 @@
   font-weight: 600;
   color: var(--text-h);
   background: rgba(0, 0, 0, 0.025);
-  word-break: keep-all;
-  overflow-wrap: break-word;
+  white-space: nowrap;
 }
 
 .ai-markdown-table td {
