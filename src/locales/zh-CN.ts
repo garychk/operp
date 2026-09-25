@@ -1840,6 +1840,7 @@ const zhCN = {
     "aiChat.error.requestFailed": "请求失败，未完成该步骤",
     "aiChat.error.requestPrefix": "AI 服务请求失败：{{detail}}",
     "aiChat.msg.aiDisabled": "AI助手已在系统设置中停用",
+    "aiChat.msg.noTenant": "当前账号未分配租户，暂时无法使用 AI 助手，请联系管理员。",
     "aiChat.msg.conversationCreated": "已新建对话",
     "aiChat.msg.createFailed": "新建对话失败",
     "aiChat.msg.loadHistoryFailed": "加载历史对话失败",

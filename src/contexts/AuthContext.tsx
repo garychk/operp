@@ -24,7 +24,33 @@ export interface AppUser {
   roles: Role[];
   menuPaths: string[];
   isSuperAdmin: boolean;
+  tenantId: number | null;
 }
+
+// 租户解析：优先用 sys_users.tenant_id（权威，且当前一定查得到），
+// 退回 JWT 的 app_metadata.tenant_id（deploy_43 的 Custom Access Token Hook 写入）。
+// 两者都没有就是「未分配租户」，RLS 会 fail-closed —— 调 AI 时会被 403 拒绝。
+// bigint 经 PostgREST 可能以数字或字符串回来，统一收敛成 number
+const normalizeTenantId = (value: unknown): number | null => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const resolveTenantId = (profile: SysUser | null, authUser: User): number | null => {
+  const fromProfile = normalizeTenantId(profile?.tenant_id);
+  if (fromProfile !== null) {
+    return fromProfile;
+  }
+  // JWT 的 app_metadata 由 deploy_43 的 Custom Access Token Hook 写入
+  const fromJwt = (authUser.app_metadata as { tenant_id?: unknown } | undefined)?.tenant_id;
+  return normalizeTenantId(fromJwt);
+};
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -167,6 +193,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       roles,
       menuPaths,
       isSuperAdmin,
+      tenantId: resolveTenantId(profile, authUser),
     };
   }, []);
 

@@ -1840,6 +1840,7 @@ const enUS = {
     "aiChat.error.requestFailed": "Request failed; this step was not completed",
     "aiChat.error.requestPrefix": "AI service request failed: {{detail}}",
     "aiChat.msg.aiDisabled": "The AI assistant is disabled in system settings",
+    "aiChat.msg.noTenant": "Your account is not assigned to a tenant, so the AI assistant is unavailable. Please contact an administrator.",
     "aiChat.msg.conversationCreated": "New conversation created",
     "aiChat.msg.createFailed": "Failed to create a new conversation",
     "aiChat.msg.loadHistoryFailed": "Failed to load conversation history",

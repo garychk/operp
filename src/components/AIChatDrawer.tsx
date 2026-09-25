@@ -985,6 +985,13 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       return;
     }
 
+    // 多租户：没有租户上下文时 ai-server 会直接 403（fail-closed），
+    // 与其让用户看到一个含糊的「请求失败」，不如在这里拦下来讲清楚。
+    if (!user?.tenantId) {
+      message.warning(t("aiChat.msg.noTenant"));
+      return;
+    }
+
     const conversationId = await ensureSession(t("aiChat.newConversation"));
     const currentConversation = conversationItems.find(
       (item) => item.id === conversationId,
@@ -1039,6 +1046,8 @@ export function AIChatDrawer({ open, onClose }: AIChatDrawerProps) {
       const payload = {
         session_id: conversationId,
         user_id: user?.profile.id,
+        // ai-server 走 service_role，绕过 RLS，必须显式告诉它查哪个租户
+        tenant_id: user?.tenantId ?? null,
         text: prompt,
         skill: selectedSkill,
         context: {
