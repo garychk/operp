@@ -294,7 +294,8 @@ export function Users() {
 
   const handleSave = async (values: any) => {
     try {
-      const { role_ids = [], ...userValues } = values;
+      // password 只用于创建登录账号，不是 sys_users 的列，必须剔掉再写库
+      const { role_ids = [], password, ...userValues } = values;
       let savedUserId = editingUser?.id;
 
       if (editingUser) {
@@ -307,45 +308,115 @@ export function Users() {
         });
         message.success(t('common.updateSuccess'));
       } else {
-        const { data: currentSessionData } = await supabase.auth.getSession();
-        const currentSession = currentSessionData.session;
+        // 首选 Edge Function：service_role 建 auth 账号，不会把当前管理员的会话顶掉，
+        // 也能明确识别「邮箱已注册」。浏览器端 signUp 做不到第二点 ——
+        // 邮箱重复时它返回一个混淆的假 user，建出的账号永远登不上且无报错。
+        let createdViaFunction = false;
 
-        const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-          email: values.email,
-          password: 'admin123',
-        });
+        try {
+          const { data, error } = await supabase.functions.invoke(
+            'create-tenant-user',
+            {
+              body: {
+                email: values.email,
+                password,
+                username: values.username,
+                real_name: values.real_name,
+                phone: values.phone,
+                status: values.status ?? '1',
+                role_ids: Array.isArray(role_ids) ? role_ids : [],
+                tenant_id: userValues.tenant_id ?? currentTenantId,
+              },
+            },
+          );
 
-        if (signUpError) {
-          message.error(`${t('users.createAuthUserFailed')}: ${signUpError.message}`);
-          return;
+          // 函数没部署 / 网关不可用时才回退，其它错误一律直接反馈给用户
+          const fnMissing =
+            !!error &&
+            /not found|404|FunctionsRelay|Failed to send a request|fetch/i.test(
+              String(error.message || ''),
+            );
+
+          if (!error && data && data.success === true) {
+            savedUserId = data.userId as number;
+            createdViaFunction = true;
+
+            await logWithTiming(t('users.logCreateUser'), 'INSERT', async () => {
+              /* Edge Function 已完成落库，这里只补一条审计日志 */
+            });
+
+            if (data.partial) {
+              message.warning(String(data.warning || t('users.createFailed')));
+            }
+          } else if (!fnMissing) {
+            message.error(
+              String(data?.error || error?.message || t('users.createFailed')),
+            );
+            return;
+          }
+        } catch (fnError) {
+          console.warn(
+            '[Users] create-tenant-user unavailable, falling back to browser signUp',
+            fnError,
+          );
         }
 
-        await logWithTiming(t('users.logCreateUser'), 'INSERT', async () => {
-          const { data: insertedUser, error } = await supabase
-            .from('sys_users')
-            .insert([{ 
-              ...userValues, 
-              auth_id: signUpData.user?.id,
-              password_hash: '$2a$10$using_supabase_auth' 
-            }])
-            .select('id')
-            .single();
-          if (error) throw error;
-          savedUserId = insertedUser.id;
-        });
+        if (!createdViaFunction) {
+          const { data: currentSessionData } = await supabase.auth.getSession();
+          const currentSession = currentSessionData.session;
 
-        if (currentSession) {
-          const { error: restoreSessionError } = await supabase.auth.setSession({
-            access_token: currentSession.access_token,
-            refresh_token: currentSession.refresh_token,
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+            email: values.email,
+            password,
           });
 
-          if (restoreSessionError) {
-            message.warning(t('users.sessionRestoreFailed'));
+          if (signUpError) {
+            message.error(`${t('users.createAuthUserFailed')}: ${signUpError.message}`);
+            return;
+          }
+
+          // 邮箱已注册时 Supabase 会返回一个 identities 为空的混淆 user，
+          // 拿它的 id 建档案 = 建出一个登不上的账号，必须拦掉
+          if (
+            signUpData.user &&
+            Array.isArray(signUpData.user.identities) &&
+            signUpData.user.identities.length === 0
+          ) {
+            message.error(t('users.emailAlreadyRegistered'));
+            return;
+          }
+
+          await logWithTiming(t('users.logCreateUser'), 'INSERT', async () => {
+            const { data: insertedUser, error } = await supabase
+              .from('sys_users')
+              .insert([{ 
+                ...userValues, 
+                auth_id: signUpData.user?.id,
+                password_hash: '$2a$10$using_supabase_auth' 
+              }])
+              .select('id')
+              .single();
+            if (error) throw error;
+            savedUserId = insertedUser.id;
+          });
+
+          if (currentSession) {
+            const { error: restoreSessionError } = await supabase.auth.setSession({
+              access_token: currentSession.access_token,
+              refresh_token: currentSession.refresh_token,
+            });
+
+            if (restoreSessionError) {
+              message.warning(t('users.sessionRestoreFailed'));
+            }
           }
         }
 
-        message.success(t('users.createSuccessDefaultPassword'));
+        message.success(
+          createdViaFunction
+            ? t('users.createSuccess')
+            : t('users.createSuccessWithPassword', { password }),
+        );
       }
 
       if (savedUserId) {
@@ -526,6 +597,21 @@ const columns: ColumnsType<User> = [
               <Form.Item name="email" label={t('users.email')} rules={[{ required: true, type: 'email' }]}>
                 <Input />
               </Form.Item>
+              {!editingUser && (
+                <Form.Item
+                  name="password"
+                  label={t('users.password')}
+                  rules={[
+                    { required: true, message: t('users.passwordRequired') },
+                    { min: 6, message: t('users.passwordTooShort') },
+                  ]}
+                >
+                  <Input.Password
+                    placeholder={t('users.passwordPlaceholder')}
+                    autoComplete="new-password"
+                  />
+                </Form.Item>
+              )}
               <Form.Item name="phone" label={t('users.phone')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>

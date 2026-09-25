@@ -215,6 +215,8 @@
 | `deploy_46_ai_chat_tenant.sql` | AI 会话与消息隔离 | 租户私有 |
 | `deploy_47_naming_counter_tenant.sql` | 单号计数器按租户独立（改主键，会锁表，单独跑） | 租户私有 |
 | `deploy_48_platform_metadata_tenant.sql` | 角色/菜单/系统设置/字典/DocType/单据转换/页面设计/知识库/工作流定义/通知共 24 张表 | **平台基线（NULL）+ 租户私有** |
+| `deploy_49_workflow_runtime_tenant.sql` | `wf_process_instances` / `wf_process_actions` | fail-closed（含 `document_no`，属业务运行数据） |
+| `deploy_50_tenant_signup.sql` | 租户自助注册链路：`tenant_admin` 基线角色、`bootstrap_tenant()`、`sys_users.username` 改租户内唯一 | — |
 
 ### deploy_48 的隔离模型
 
@@ -241,3 +243,63 @@
   三个 `SECURITY DEFINER` 函数内部补了租户谓词 —— RLS 管不到 definer 函数，漏了等于没隔离。
 - 唯一键从全局唯一改成「基线内唯一 + 租户内唯一」两条部分索引。因此 `sys_forms` 的
   `upsert(onConflict: form_name)` 失效，改为先查后写（`SupaModal.tsx`）。
+
+### deploy_50：租户自助注册
+
+开通流程：登录页「注册租户」→ 填租户名称/编码 + 管理员信息 + 邮箱/密码 →
+建 auth 账号 → `bootstrap_tenant()` 建租户、在该租户下建默认管理员、赋 `tenant_admin` 角色 →
+刷新 token → 登录进自己的租户 → 在「用户管理」里加人。
+
+为什么建租户必须走 `bootstrap_tenant()`（`SECURITY DEFINER`）：
+`sys_tenants` 的 INSERT 策略是 `WITH CHECK (current_user_is_super_admin())`，
+刚注册的账号没有任何角色，直接插表会被 RLS 拒掉。
+
+函数内的四道校验（definer 等于临时提权，不能信任入参）：
+
+1. `auth.uid()` 必须存在 —— 只认真实登录会话，不给 `anon` 授权
+2. 该 auth_id 若已绑定 `sys_users` 且 `tenant_id` 非空 → 拒绝。一个 auth 账号只能开一个租户，
+   想开第二个必须再注册一个 auth 账号（受 GoTrue 邮箱唯一性约束），不能靠反复调 RPC 刷库
+3. 租户编码白名单 `^[a-z][a-z0-9_-]{1,30}$` + 占用检查
+4. 管理员邮箱只从 JWT 取，不接受入参 —— 否则可以拿别人的邮箱建管理员
+
+**竞态兜底（重要）**：`signUp` 后 `AuthProvider` 的 `onAuthStateChange` 会立刻跑
+`loadAppUser()`，它发现没有 profile 就自动建一条 `tenant_id` 为空的记录，可能抢在
+`bootstrap_tenant()` 之前落库。所以函数遇到「已绑定但 `tenant_id` 为空」时不报错，
+而是把这条空租户 profile 收编进新租户。副作用是好处：存量里 `tenant_id` 为空的老账号
+登录后也能自助开通租户补上归属。
+
+**`sys_users.username` 改成租户内唯一**：原来是 `NOT NULL UNIQUE`（全表唯一），
+多租户下两个租户都想要叫 `admin` 的管理员会直接撞约束。已确认没有外键引用
+`sys_users(username)`（只有 `sys_user_roles.user_id` 引 id），所以拆成两条部分索引：
+`UNIQUE(username) WHERE tenant_id IS NULL` + `UNIQUE(tenant_id, username) WHERE tenant_id IS NOT NULL`。
+`email` 不设唯一 —— GoTrue 层一个邮箱本来就只能有一个 auth 账号。
+
+`tenant_admin`（租户管理员）是新建的**基线角色**，不是 `super_admin`：
+`super_admin` 一旦赋出去，`current_user_is_super_admin()` 为真会让 RLS 的租户谓词整体放行，
+等于发出一张能看全部租户数据的全局通行证。`tenant_admin` 的菜单以 `finance_manager` 为模板
+（实测已覆盖除 `/system/tenants` 外的全部系统菜单和 38 条业务菜单），
+再补 `/system` 父节点；表权限同样复制模板 89 条，并把系统管理相关表提到全权限。
+
+### 配套：create-tenant-user（Edge Function）
+
+位置 `supabase/functions/create-tenant-user/index.ts`，需单独部署：
+
+```bash
+supabase functions deploy create-tenant-user
+```
+
+租户内新建用户走它而不是浏览器端 `signUp`，原因：
+
+- `signUp` 会把当前管理员的会话顶掉，只能靠 `setSession` 恢复
+- 邮箱已注册时 Supabase 返回一个「混淆的」user（`identities` 为空数组），
+  拿它建出的 `sys_users` 永远登不上且无任何报错
+- `signUp` 只能给自己建，没法顺手写对 `tenant_id` 和角色
+
+实现要点：校验调用方 token → 用**调用方 token** 跑 `current_user_is_super_admin()`
+（该函数依赖 `auth.uid()`，用 service_role 调会恒为 false）→ 用 service_role 反查调用方租户 →
+非超管只能用自己租户、且不能赋 `super_admin` → admin API 建号（`email_confirm: true`）→
+插 `sys_users`（**显式带 tenant_id**，service_role 下 DEFAULT 会解析成 NULL）→ 赋角色 →
+任一步失败回滚 auth 账号。
+
+未部署时前端自动回退到浏览器端 `signUp`（`Users.tsx`），所以不部署也能用，
+只是拿不到上面那三个好处。

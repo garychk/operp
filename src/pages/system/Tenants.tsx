@@ -83,7 +83,9 @@ export function Tenants() {
             .insert([{ ...values, status: values.status ?? '1', is_deleted: 'n' }]);
           if (error) throw error;
         });
-        message.success(t('common.createSuccess'));
+        // 建租户不会自动带出管理员：管理员账号要在「用户管理」里建（可指定本租户）。
+        // 不提示的话，新租户会变成一个谁都进不去的空壳。
+        message.success(t('tenants.createdNeedAdmin'));
       }
       setModalVisible(false);
       form.resetFields();
