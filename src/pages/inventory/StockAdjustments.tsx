@@ -35,6 +35,7 @@ export function StockAdjustments() {
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [posting, setPosting] = useState(false);
 
   useEffect(() => { void fetchAll(); }, []);
   const fetchAll = async () => {
@@ -48,32 +49,64 @@ export function StockAdjustments() {
     setRows((h || []) as Header[]); setWarehouses((w || []) as Warehouse[]); setBins((b || []) as Bin[]); setProducts((p || []) as Product[]); setLoading(false);
   };
   const fetchDetails = async (id: number) => { const { data } = await supabase.from(detailTable).select('*').eq('is_deleted', 'n').eq('adjust_id', id).order('line_no'); setDetails((data || []) as Detail[]); };
-  const handlePost = async (id: number) => {
+  const postStockAdjustment = async (id: number) => {
+    const approvedAt = new Date().toISOString();
+    const { error: approveError } = await supabase
+      .from(tableName)
+      .update({ status: 'approved', approved_at: approvedAt })
+      .eq('id', id);
+    if (approveError) throw approveError;
+
+    const { error } = await supabase.rpc('post_inventory_document', {
+      p_document_type: 'stock_adjustment',
+      p_document_id: id,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) throw error;
+  };
+
+  // 审核并过账走工具栏按钮，作用于当前勾选的调整单（支持多选批量）。
+  const handleBatchPost = () => {
+    const selectedIds = new Set(selectedRowKeys.map((key) => Number(key)));
+    const targets = rows.filter((row) => selectedIds.has(row.id) && row.status !== 'posted');
+    if (targets.length === 0) {
+      message.warning(t('stockAdjustments.messages.postNoTarget'));
+      return;
+    }
     Modal.confirm({
       title: t('stockAdjustments.approveAndPost'),
-      content: t('stockAdjustments.postConfirmContent'),
+      content: t('stockAdjustments.postConfirmContentMany', { count: targets.length }),
       okText: t('stockAdjustments.continue'),
       cancelText: t('common.cancel'),
       onOk: async () => {
+        setPosting(true);
+        let success = 0;
+        const failures: string[] = [];
         try {
-          const approvedAt = new Date().toISOString();
-          const { error: approveError } = await supabase
-            .from(tableName)
-            .update({ status: 'approved', approved_at: approvedAt })
-            .eq('id', id);
-          if (approveError) throw approveError;
-
-          const { error } = await supabase.rpc('post_inventory_document', {
-            p_document_type: 'stock_adjustment',
-            p_document_id: id,
-            p_idempotency_key: crypto.randomUUID(),
-          });
-          if (error) throw error;
-          message.success(t('stockAdjustments.messages.postSuccess'));
+          for (const record of targets) {
+            try {
+              await postStockAdjustment(record.id);
+              success += 1;
+            } catch (error: any) {
+              console.error('Error posting stock adjustment:', error);
+              failures.push(`${record.adjust_no}：${error?.message || t('stockAdjustments.messages.postFailed')}`);
+            }
+          }
+          if (failures.length === 0) {
+            message.success(t('stockAdjustments.messages.postSuccessMany', { count: success }));
+          } else {
+            message.error(
+              t('stockAdjustments.messages.postPartialFailed', {
+                success,
+                failed: failures.length,
+                detail: failures.join('；'),
+              }),
+            );
+          }
+          setSelectedRowKeys([]);
           await fetchAll();
-        } catch (error: any) {
-          console.error('Error posting stock adjustment:', error);
-          message.error(error?.message || t('stockAdjustments.messages.postFailed'));
+        } finally {
+          setPosting(false);
         }
       },
     });
@@ -87,7 +120,6 @@ export function StockAdjustments() {
     { title: t('common.status'), key: 'status', dataIndex: 'status' },
     { title: t('common.actions'), key: 'action', render: (_: any, record: Header) => <Space>
       <Button onClick={async () => { setSelected(record); await fetchDetails(record.id); setDetailOpen(true); }}>{t('stockAdjustments.detail')}</Button>
-      {record.status !== 'posted' && <Button type="primary" icon={<ThunderboltOutlined />} onClick={() => void handlePost(record.id)}>{record.status === 'draft' ? t('stockAdjustments.approveAndPost') : t('stockAdjustments.post')}</Button>}
       <Button onClick={() => { setEditing(record); form.setFieldsValue({ ...record, adjust_date: dayjs(record.adjust_date) }); setOpen(true); }}>{t('common.edit')}</Button>
       <Button danger icon={<DeleteOutlined />} onClick={async () => { await supabase.from(tableName).update({ is_deleted: 'y' }).eq('id', record.id); await fetchAll(); }}>{t('common.delete')}</Button>
     </Space>},
@@ -103,22 +135,34 @@ export function StockAdjustments() {
         headerTitle={t('stockAdjustments.title')}
         rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         queryBar={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={async () => {
-              setEditing(null);
-              form.setFieldsValue({
-                adjust_no: await nextDocumentNo('stock_adjustment'),
-                adjust_date: dayjs(),
-                location_id: undefined,
-                status: "draft",
-              });
-              setOpen(true);
-            }}
-          >
-            {t('stockAdjustments.add')}
-          </Button>
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={async () => {
+                setEditing(null);
+                form.setFieldsValue({
+                  adjust_no: await nextDocumentNo('stock_adjustment'),
+                  adjust_date: dayjs(),
+                  location_id: undefined,
+                  status: "draft",
+                });
+                setOpen(true);
+              }}
+            >
+              {t('stockAdjustments.add')}
+            </Button>
+            <Button
+              type="primary"
+              icon={<ThunderboltOutlined />}
+              loading={posting}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchPost}
+            >
+              {t('stockAdjustments.approveAndPost')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
+          </Space>
         }
       />
       <SimpleModal
