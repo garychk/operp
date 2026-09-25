@@ -1,6 +1,6 @@
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, Card } from 'antd';
-import { TeamOutlined, SafetyOutlined, MenuOutlined, FileTextOutlined, SettingOutlined, BookOutlined, BranchesOutlined } from '@ant-design/icons';
+import { TeamOutlined, SafetyOutlined, MenuOutlined, FileTextOutlined, SettingOutlined, BookOutlined, BranchesOutlined, ApartmentOutlined } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,7 @@ export function SystemModule() {
 
   const menuItems: MenuProps['items'] = [
     { key: 'users', label: t('systemModule.users'), icon: <TeamOutlined /> },
+    { key: 'tenants', label: t('systemModule.tenants'), icon: <ApartmentOutlined /> },
     { key: 'roles', label: t('systemModule.roles'), icon: <SafetyOutlined /> },
     { key: 'menus', label: t('systemModule.menus'), icon: <MenuOutlined /> },
     { key: 'settings', label: t('systemModule.settings'), icon: <SettingOutlined /> },

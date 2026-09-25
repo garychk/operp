@@ -7,6 +7,7 @@ import type { RcFile } from 'antd/es/upload/interface';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import SimpleModal from '../../components/SimpleModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface User {
   id: number;
@@ -21,12 +22,20 @@ interface User {
   auth_id?: string;
   roles?: Role[];
   role_ids?: number[];
+  tenant_id?: number | null;
 }
 
 interface Role {
   id: number;
   role_code: string;
   role_name: string;
+  status: string;
+}
+
+interface Tenant {
+  id: number;
+  code: string;
+  name: string;
   status: string;
 }
 
@@ -40,8 +49,13 @@ const AVATAR_BUCKET = 'avatars';
 
 export function Users() {
   const { t } = useTranslation();
+  const { user: currentUser } = useAuth();
+  // 后台开通模式：租户由 super_admin 建，普通管理员只能往自己所属租户里加人
+  const currentTenantId = currentUser?.tenantId ?? null;
+  const canPickTenant = Boolean(currentUser?.isSuperAdmin);
   const [users, setUsers] = useState<User[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
   const [loading, setLoading] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -186,14 +200,33 @@ export function Users() {
     }
   };
 
+  const fetchTenants = async () => {
+    try {
+      // RLS 已按租户收口：超管看到全部，普通管理员只看到自己所属的那条
+      const { data, error } = await supabase
+        .from('sys_tenants')
+        .select('id, code, name, status')
+        .eq('is_deleted', 'n')
+        .order('id', { ascending: true });
+
+      if (error) throw error;
+      setTenants(data || []);
+    } catch (error) {
+      message.error(t('users.fetchTenantsFailed'));
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchRoles();
+    fetchTenants();
   }, []);
 
   const handleAdd = () => {
     setEditingUser(null);
     form.resetFields();
+    // 默认落到当前管理员所属租户，超管可以在下拉里改成别的租户
+    form.setFieldsValue({ tenant_id: currentTenantId });
     setModalVisible(true);
   };
 
@@ -415,6 +448,15 @@ const columns: ColumnsType<User> = [
       ),
     },
     {
+      title: t('users.tenant'),
+      dataIndex: 'tenant_id',
+      width: 140,
+      render: (tenantId: number | null | undefined) => {
+        const tenant = tenants.find((item) => item.id === tenantId);
+        return tenant ? `${tenant.name}（${tenant.code}）` : '-';
+      },
+    },
+    {
       title: t('common.status'),
       dataIndex: 'status',
       width: 100,
@@ -494,6 +536,20 @@ const columns: ColumnsType<User> = [
                   options={roles.map((role) => ({
                     label: role.role_name,
                     value: role.id,
+                  }))}
+                />
+              </Form.Item>
+              <Form.Item
+                name="tenant_id"
+                label={t('users.tenant')}
+                rules={[{ required: true, message: t('users.selectTenantRequired') }]}
+              >
+                <Select
+                  disabled={!canPickTenant}
+                  placeholder={t('users.selectTenantPlaceholder')}
+                  options={tenants.map((tenant) => ({
+                    label: `${tenant.name}（${tenant.code}）`,
+                    value: tenant.id,
                   }))}
                 />
               </Form.Item>

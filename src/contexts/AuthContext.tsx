@@ -1,7 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { message } from 'antd';
 import { supabase } from '../utils/supabase';
+import i18n from '../i18n';
 import { logOperation } from '../utils/logger';
 import type { SysRolesRow, SysUsersRow } from '../types/database';
 
@@ -57,6 +59,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
+  // 只提示一次，避免每次 onAuthStateChange 都弹；登出后重置，换账号登录才会再提示
+  const tenantWarnedRef = useRef(false);
 
   const loadAppUser = useCallback(async (authUser: User): Promise<AppUser> => {
     const { data: existingProfile, error: profileError } = await supabase
@@ -187,13 +191,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       ));
     }
 
+    const tenantId = resolveTenantId(profile, authUser);
+
+    // 未分配租户是 fail-closed 状态：RLS 会挡掉全部 erp 数据、AI 也会被拒。
+    // 用户看到的只是一堆空页面，不提示的话根本不知道发生了什么。
+    if (tenantId === null && !tenantWarnedRef.current) {
+      tenantWarnedRef.current = true;
+      message.warning(i18n.t('auth.noTenantAssigned'));
+    }
+
     return {
       auth: authUser,
       profile,
       roles,
       menuPaths,
       isSuperAdmin,
-      tenantId: resolveTenantId(profile, authUser),
+      tenantId,
     };
   }, []);
 
@@ -274,6 +287,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = async () => {
+    tenantWarnedRef.current = false;
     await supabase.auth.signOut();
     setUser(null);
   };
