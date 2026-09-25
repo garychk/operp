@@ -9,7 +9,7 @@
 --
 --   1. sys_baq_queries / sys_ai_chat_memory 补 tenant_id 列（erp_* 已在 deploy_41 完成）
 --   2. 这两张表补 RESTRICTIVE 策略，让前端直连时也受租户约束
---   3. execute_ai_analysis 增加带租户校验的重载，给任意 SQL 加一层数据库侧兜底
+--   3. 新增 execute_ai_analysis_for_tenant（独立函数名），给任意 SQL 加一层数据库侧兜底
 --
 -- 执行方式（建议先在事务里干跑）：
 --   BEGIN;  ... 本文件 ...  ROLLBACK;   -- 看 NOTICE 输出
@@ -161,20 +161,22 @@ WITH CHECK (
 
 
 -- ============================================================================
--- 4. execute_ai_analysis 的租户安全重载
+-- 4. execute_ai_analysis 的租户安全版本
 --
 --    原函数 execute_ai_analysis(sql_text) 是 SECURITY DEFINER，
 --    service_role 调用时 RLS 不生效，它执行的 SQL 必须自己带 tenant_id。
 --
---    这里新增一个两参数重载（不动原函数，避免破坏现有调用方）：
---      execute_ai_analysis(sql_text text, p_tenant_id bigint)
---    内部做文本级兜底校验后再委托给原函数。
+--    这里新增 execute_ai_analysis_for_tenant(sql_text, p_tenant_id)，
+--    内部做文本级兜底校验后再委托给原函数。**刻意用独立函数名而不是同名
+--    重载**，原因与 deploy_47 一致：PostgREST 对同名重载的支持不稳定，
+--    schema cache 里只暴露一个 /rpc/<name> 端点，选错重载的表现是
+--    运行时报缺参数，排查成本高。
 --
 --    这层是「兜底」不是「强隔离」：文本校验挡不住语义正确但条件写错表的 SQL。
 --    真正的强隔离方向是让分析走 BAQ 结构化查询——SQL 由服务端拼装，可 100% 注入租户条件。
 -- ============================================================================
 
-CREATE OR REPLACE FUNCTION public.execute_ai_analysis(sql_text text, p_tenant_id bigint)
+CREATE OR REPLACE FUNCTION public.execute_ai_analysis_for_tenant(sql_text text, p_tenant_id bigint)
 RETURNS json
 LANGUAGE plpgsql
 SECURITY INVOKER
@@ -210,10 +212,13 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.execute_ai_analysis(text, bigint) IS
-    '带租户校验的重载：引用业务表时强制要求 tenant_id 条件，随后委托给单参数版本执行';
+COMMENT ON FUNCTION public.execute_ai_analysis_for_tenant(text, bigint) IS
+    '带租户校验的版本：引用业务表时强制要求 tenant_id 条件，随后委托给 execute_ai_analysis 执行';
 
--- 让 PostgREST 重新加载 schema cache，否则新重载对 REST 不可见
+REVOKE ALL ON FUNCTION public.execute_ai_analysis_for_tenant(text, bigint) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.execute_ai_analysis_for_tenant(text, bigint) TO service_role;
+
+-- 让 PostgREST 重新加载 schema cache，否则新函数对 REST 不可见
 NOTIFY pgrst, 'reload schema';
 
 

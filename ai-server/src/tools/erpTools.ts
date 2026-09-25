@@ -755,21 +755,26 @@ const validateAnalysisSql = (sql: string, catalog: BaqTable[], tenantId: number)
 /**
  * 执行分析 SQL。
  *
- * 优先调带 p_tenant_id 的重载（deploy_42 提供，数据库侧再做一层兜底校验）。
- * 若该重载尚未部署（PGRST202），退回单参数版本——此时仅靠本文件的静态校验保护。
+ * 优先调 execute_ai_analysis_for_tenant（deploy_42 提供，数据库侧再做一层兜底校验）。
+ * 该函数是独立名字而非同名重载：PostgREST 的 schema cache 对同名重载只暴露一个
+ * /rpc/<name> 端点，选错的表现是运行时报缺参数，排查成本高。
+ * 若它尚未部署（PGRST202），退回原版本——此时仅靠本文件的静态校验保护。
  */
 const executeAiAnalysisSql = async (sql: string, tenantId: number) => {
   console.log("[ai-server] execute AI analysis SQL:", sql);
-  const scoped = await supabase.rpc("execute_ai_analysis", { sql_text: sql, p_tenant_id: tenantId });
+  const scoped = await supabase.rpc("execute_ai_analysis_for_tenant", {
+    sql_text: sql,
+    p_tenant_id: tenantId,
+  });
   if (!scoped.error) {
     return scoped.data as { rows?: Array<Record<string, unknown>>; rowCount?: number } | null;
   }
 
-  const isMissingOverload = String((scoped.error as { code?: string }).code || "") === "PGRST202";
-  if (!isMissingOverload) throw scoped.error;
+  const isMissingFunction = String((scoped.error as { code?: string }).code || "") === "PGRST202";
+  if (!isMissingFunction) throw scoped.error;
 
   console.warn(
-    "[ai-server] execute_ai_analysis(p_tenant_id) 未部署，退回单参数版本。" +
+    "[ai-server] execute_ai_analysis_for_tenant 未部署，退回无租户校验的版本。" +
       "请执行 supabase/tables/deploy_42_ai_tenant.sql 以启用数据库侧租户校验。",
   );
   const fallback = await supabase.rpc("execute_ai_analysis", { sql_text: sql });

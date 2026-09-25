@@ -1040,6 +1040,7 @@ const zhCN = {
     "logs.batchDeleteSuccess": "批量删除成功",
     "logs.batchDeleteFailed": "批量删除失败",
     "logs.operator": "操作用户",
+    "logs.tenant": "所属租户",
     "logs.operationType": "操作类型",
     "logs.requestMethod": "请求方法",
     "logs.requestParams": "请求参数",

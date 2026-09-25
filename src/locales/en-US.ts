@@ -1040,6 +1040,7 @@ const enUS = {
     "logs.batchDeleteSuccess": "Logs batch deleted successfully",
     "logs.batchDeleteFailed": "Failed to batch delete logs",
     "logs.operator": "Operator",
+    "logs.tenant": "Tenant",
     "logs.operationType": "Operation Type",
     "logs.requestMethod": "Request Method",
     "logs.requestParams": "Request Parameters",
