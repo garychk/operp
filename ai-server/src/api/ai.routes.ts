@@ -3,12 +3,14 @@ import { z } from "zod";
 import { supabase } from "../config/supabase.js";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
 import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
+import { TenantScopeError } from "../config/tenantContext.js";
 
 export const aiRouter = Router();
 
 const chatSchema = z.object({
   session_id: z.string().min(1),
   user_id: z.number().int().optional(),
+  tenant_id: z.number().int().optional(),
   text: z.string().min(1),
   skill: z.enum(["auto", "analysis", "create", "action", "baq", "chat"]).optional(),
   provider: z
@@ -156,6 +158,14 @@ aiRouter.post("/chat", async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (error) {
     if (!res.headersSent) {
+      // 租户解析失败属于「拒绝访问」，不是服务端故障，别让前端看到 500
+      if (error instanceof TenantScopeError) {
+        res.status(403).json({
+          ok: false,
+          error: errorToMessage(error),
+        });
+        return;
+      }
       res.status(500).json({
         ok: false,
         error: errorToMessage(error),
