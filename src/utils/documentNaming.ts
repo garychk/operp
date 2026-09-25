@@ -1,49 +1,27 @@
 import { supabase } from './supabase';
 
-// Fallback prefixes per document type, used when the naming RPC is unavailable
-// (offline / rule not configured) so the UI still gets a usable unique number.
-const DOC_NO_PREFIX: Record<string, string> = {
-  purchase_order: 'PO',
-  sales_order: 'SO',
-  purchase_receipt: 'PR',
-  sales_delivery: 'SD',
-  inventory_transfer: 'TR',
-  stock_count: 'SC',
-  stock_adjustment: 'SA',
-  voucher: 'V',
-  production_order: 'MO',
-  material_issue: 'MI',
-  mrp_plan: 'MRP',
-  bom: 'BOM',
-  routing: 'RT',
-};
-
-const timestampFallback = (documentType: string) => {
-  const prefix = DOC_NO_PREFIX[documentType] ?? documentType.slice(0, 2).toUpperCase();
-  return `${prefix}${Date.now().toString().slice(-8)}`;
-};
-
 /**
  * Ask the database for the next document number of `documentType`,
  * rendered from sys_document_types.naming_rule (e.g. PO{YYYY}{####} -> PO20260001).
- * Falls back to the legacy timestamp-based number when the RPC fails.
+ *
+ * 失败一律抛错，不做降级。以前 RPC 出错会退回时间戳编号（形如 PO12345678），
+ * 表面能用，实际绕开了编号规则和计数器：号段出现两套规则、序列被跳过，
+ * 而且计数器已按租户隔离、时间戳编号不属于任何租户 —— 等于写出一条
+ * 编号不合规且无租户归属的单据。宁可让操作失败并明确提示。
+ *
+ * 调用方必须自己兜住错误（多数是「新增」按钮：拿不到号就不开弹窗），
+ * 否则会变成未捕获的 Promise rejection。
  *
  * Note: the RPC consumes a sequence number even if the user abandons the form,
  * so gaps are possible — same behaviour as ERPNext's naming series.
  */
 export const nextDocumentNo = async (documentType: string): Promise<string> => {
-  try {
-    const { data, error } = await supabase.rpc('generate_document_no', {
-      p_document_type: documentType,
-    });
-    if (error) throw error;
-    if (typeof data === 'string' && data.trim() !== '') return data;
-    throw new Error('generate_document_no returned an empty result');
-  } catch (error) {
-    console.warn(
-      `[documentNaming] generate_document_no failed for "${documentType}", falling back to timestamp number`,
-      error,
-    );
-    return timestampFallback(documentType);
-  }
+  const { data, error } = await supabase.rpc('generate_document_no', {
+    p_document_type: documentType,
+  });
+
+  if (error) throw error;
+  if (typeof data === 'string' && data.trim() !== '') return data;
+
+  throw new Error(`generate_document_no returned an empty result for "${documentType}"`);
 };

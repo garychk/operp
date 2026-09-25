@@ -140,9 +140,16 @@ export function StockAdjustments() {
               type="primary"
               icon={<PlusOutlined />}
               onClick={async () => {
+                let adjustNo: string;
+                try {
+                  adjustNo = await nextDocumentNo('stock_adjustment');
+                } catch (error) {
+                  message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
+                  return;
+                }
                 setEditing(null);
                 form.setFieldsValue({
-                  adjust_no: await nextDocumentNo('stock_adjustment'),
+                  adjust_no: adjustNo,
                   adjust_date: dayjs(),
                   location_id: undefined,
                   status: "draft",

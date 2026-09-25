@@ -259,10 +259,11 @@ export function Settings() {
   const fetchConfigs = async () => {
     setLoading(true);
     try {
+      // 读覆盖视图：同一 category_code 可能同时有平台基线行和本租户私有行，
+      // 查原表会拿到 2 行；视图保证私有行覆盖基线行，每个编码只有一条。
       const { data, error } = await supabase
-        .from('sys_config')
+        .from('vw_sys_config_effective')
         .select('id, category_code, category_name, config_json, description, status, sort_order')
-        .eq('is_deleted', 'n')
         .order('sort_order', { ascending: true });
 
       if (error) throw error;
@@ -290,24 +291,23 @@ export function Settings() {
     const canonicalCategory = settingCategories.find((category) => category.code === activeCategory.code) || settingCategories[0];
     const zh = i18n.getFixedT('zh-CN');
     const payload = {
-      category_code: activeCategory.code,
-      category_name: zh(canonicalCategory.name),
-      description: zh(canonicalCategory.description),
-      config_json: configJson,
-      status: '1',
-      sort_order: settingCategories.findIndex((item) => item.code === activeCategory.code) + 1,
-      is_deleted: 'n',
+      p_category_code: activeCategory.code,
+      p_category_name: zh(canonicalCategory.name),
+      p_description: zh(canonicalCategory.description),
+      p_config_json: configJson,
+      p_status: '1',
+      p_sort_order: settingCategories.findIndex((item) => item.code === activeCategory.code) + 1,
     };
 
     setSaving(true);
     try {
       await logWithTiming(
         t('settings.messages.saveAction'),
-        'UPSERT sys_config',
+        'RPC save_tenant_config',
         async () => {
-          const { error } = await supabase
-            .from('sys_config')
-            .upsert(payload, { onConflict: 'category_code' });
+          // 不用 upsert：唯一键已改成 (tenant_id, category_code) 的部分索引，
+          // onConflict 命中不了。RPC 内部按「有私有行更新 / 无则基于基线建副本」处理。
+          const { error } = await supabase.rpc('save_tenant_config', payload);
           if (error) throw error;
         },
         { category_code: activeCategory.code },

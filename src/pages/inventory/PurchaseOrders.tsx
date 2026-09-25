@@ -328,11 +328,18 @@ export function PurchaseOrders() {
   };
 
   const handleAdd = async () => {
+    let orderNo: string;
+    try {
+      orderNo = await nextDocumentNo(docType);
+    } catch (error) {
+      message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
+      return;
+    }
     setEditingOrder(null);
     setSelectedOrder(null);
     setIsDisabled(false);
     form.setFieldsValue({
-      order_no: await nextDocumentNo(docType),
+      order_no: orderNo,
       order_date: dayjs(new Date()),
       supplier_id: undefined,
       delivery_date: "",

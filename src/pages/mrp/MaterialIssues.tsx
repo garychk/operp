@@ -285,11 +285,18 @@ export function MaterialIssues() {
   };
 
   const handleAdd = async () => {
+    let issueNo: string;
+    try {
+      issueNo = await nextDocumentNo("material_issue");
+    } catch (error) {
+      message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
+      return;
+    }
     setEditingIssue(null);
     setSelectedIssue(null);
     setDetails([]);
     form.setFieldsValue({
-      issue_no: await nextDocumentNo("material_issue"),
+      issue_no: issueNo,
       issue_date: dayjs(new Date()),
       production_order_id: undefined,
       warehouse_id: undefined,

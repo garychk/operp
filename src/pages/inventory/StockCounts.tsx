@@ -148,9 +148,16 @@ export function StockCounts() {
               type="primary"
               icon={<PlusOutlined />}
               onClick={async () => {
+                let countNo: string;
+                try {
+                  countNo = await nextDocumentNo('stock_count');
+                } catch (error) {
+                  message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
+                  return;
+                }
                 setEditing(null);
                 form.setFieldsValue({
-                  count_no: await nextDocumentNo('stock_count'),
+                  count_no: countNo,
                   count_date: dayjs(),
                   location_id: undefined,
                   status: "draft",

@@ -5,6 +5,7 @@ const zhCN = {
     "common.unnamed": "未命名",
     "common.refresh": "刷新",
     "common.reset": "重置",
+    "common.documentNoFailed": "获取单据编号失败，请检查该单据类型的编号规则配置",
     "common.code": "编码",
     "common.name": "名称",
     "common.type": "类型",

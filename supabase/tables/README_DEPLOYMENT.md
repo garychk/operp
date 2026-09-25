@@ -200,3 +200,44 @@
 
 配置入口：系统 → DocType Builder，打开某个 DocType 后的「业务流水类型」页签可增删关联、指定默认类型与触发条件；
 也可在该页签直接新建业务类型字典条目。
+
+## 多租户改造脚本（deploy_41 起）
+
+已有库升级，按以下顺序单独执行（都建议在 `BEGIN; ... ROLLBACK;` 里先干跑一遍看 NOTICE）：
+
+| 脚本 | 内容 | 隔离模型 |
+|---|---|---|
+| `deploy_41_tenant_isolation.sql` | `sys_tenants`、`sys_users.tenant_id`、`current_tenant_id()`、59 张 `erp_*` 表加列 + RLS | fail-closed：NULL 一律不可见 |
+| `deploy_42_ai_tenant.sql` | `sys_baq_queries` / `sys_ai_chat_memory`、`execute_ai_analysis_for_tenant()` | 租户私有 |
+| `deploy_43_custom_access_token_hook.sql` | GoTrue Custom Access Token Hook，把 tenant_id 写进 JWT | — |
+| `deploy_44_tenant_menu.sql` | 租户管理菜单与授权 | — |
+| `deploy_45_sys_logs_tenant.sql` | `sys_logs` 隔离 | fail-soft（可空，不因解析失败丢日志） |
+| `deploy_46_ai_chat_tenant.sql` | AI 会话与消息隔离 | 租户私有 |
+| `deploy_47_naming_counter_tenant.sql` | 单号计数器按租户独立（改主键，会锁表，单独跑） | 租户私有 |
+| `deploy_48_platform_metadata_tenant.sql` | 角色/菜单/系统设置/字典/DocType/单据转换/页面设计/知识库/工作流定义/通知共 24 张表 | **平台基线（NULL）+ 租户私有** |
+
+### deploy_48 的隔离模型
+
+与 `erp_*` 的 fail-closed 不同，平台元数据采用「基线共享」：`tenant_id IS NULL` 是平台基线，
+所有租户可见；`tenant_id = 租户` 是租户私有。存量数据保持 NULL 当基线 —— 若回填给默认租户，
+第二个租户登录后菜单/角色/字典/DocType 会是空的，系统直接不可用。
+
+基线能否修改按表分两类：
+
+- **可改基线**：菜单、角色、字典、DocType、单据转换规则、工作流定义。有该表的写权限即可改。
+  代价是多租户规模化后，任一有权限的管理员改的是共享基线（租户间隐含信任）。
+  要收紧就把第 6 节对应表从 `baseline_writable_tables` 挪到 `private_only_tables` 重跑。
+- **不可改基线**：系统设置、通知、知识库、页面设计、单据转换记录。基线对这些表没有意义，
+  允许写基线等于能发全员可见的通知。
+
+配套改动：
+
+- 系统设置新增覆盖视图 `vw_sys_config_effective`（私有行覆盖基线行，永远单行）与
+  RPC `save_tenant_config()` / `get_tenant_config()`。前端读视图、存 RPC，
+  ai-server 用 `get_tenant_config(p_tenant_id)` 显式传租户。
+- 向量检索新增 `match_ai_knowledge_chunks_for_tenant(..., p_tenant_id)`；
+  原 `match_ai_knowledge_chunks` 是 `SECURITY DEFINER`，会把所有租户的知识一起召回。
+- `current_user_menu_paths()` / `current_user_role_codes()` / `has_table_permission()`
+  三个 `SECURITY DEFINER` 函数内部补了租户谓词 —— RLS 管不到 definer 函数，漏了等于没隔离。
+- 唯一键从全局唯一改成「基线内唯一 + 租户内唯一」两条部分索引。因此 `sys_forms` 的
+  `upsert(onConflict: form_name)` 失效，改为先查后写（`SupaModal.tsx`）。

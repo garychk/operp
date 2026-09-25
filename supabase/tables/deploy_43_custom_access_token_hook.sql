@@ -36,6 +36,14 @@
 --   确认无误后把 ROLLBACK; 换成 COMMIT; 再跑一次。
 --   注意：auth.hooks 的写入建议单独提交并立即验证一次登录，
 --   不要和业务 DDL 混在同一个大事务里 —— 出问题影响面太大。
+--
+-- 怎么确认「到底启用没有」：
+--   看 auth.hooks 表，不要只看 GUC —— 不同部署方式配置位置不一样
+--   （auth.hooks 表 / 环境变量 / Dashboard 三选一），查 GUC 返回 NULL
+--   并不代表没启用。
+--     SELECT hook, value FROM auth.hooks;
+--     SELECT to_regproc('public.custom_access_token_hook') IS NOT NULL AS fn_exists;
+--   两处都有值才算真正生效。
 -- ============================================================================
 
 
@@ -169,7 +177,9 @@ BEGIN
 
     SELECT value INTO v_current FROM auth.hooks WHERE hook = 'custom_access_token';
 
-    INSERT INTO auth.hooks (hook, value) VALUES ('custom_access_token', v_hook_value);
+    -- upsert：重复执行本脚本时不会撞唯一约束而误报 WARNING
+    INSERT INTO auth.hooks (hook, value) VALUES ('custom_access_token', v_hook_value)
+    ON CONFLICT (hook) DO UPDATE SET value = EXCLUDED.value;
     RAISE NOTICE '已启用 custom_access_token hook: %', v_hook_value;
 
     RAISE NOTICE '验证：SELECT hook, value FROM auth.hooks;';

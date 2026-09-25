@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { tenantScopeFilter } from "../config/tenantContext.js";
 import { callChatModel } from "../config/llm.js";
 import type { AiGraphState } from "../ai/state.js";
 
@@ -855,18 +856,24 @@ export async function resolveForeignKeyValues(
  * 取系统字典类型清单（含每个类型下已有的几个字典项样例）。
  * 新增字典项时喂给 LLM，让它能准确给出 type_id，而不是猜数字。
  */
-export async function loadDictTypeOptions(): Promise<Array<Record<string, unknown>>> {
+export async function loadDictTypeOptions(
+  tenantId?: number | null,
+): Promise<Array<Record<string, unknown>>> {
+  // service_role 绕过 RLS，这里显式拼租户条件：基线字典 + 本租户的私有字典
+  const scope = tenantScopeFilter(tenantId);
   try {
     const { data: types } = await supabase
       .from("sys_dict_types")
       .select("id,code,name")
       .eq("is_deleted", "n")
+      .or(scope)
       .order("id");
     if (!Array.isArray(types) || !types.length) return [];
     const { data: items } = await supabase
       .from("sys_dict_items")
       .select("type_id,code,label")
       .eq("is_deleted", "n")
+      .or(scope)
       .limit(300);
     const samples = new Map<number, string[]>();
     for (const row of (items || []) as Array<Record<string, unknown>>) {

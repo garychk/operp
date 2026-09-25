@@ -233,7 +233,7 @@ async function loadEntityProfile(entity: EntityDef, tenantId: number, limit = 8)
     // 新增字典项必须知道有哪些字典类型，否则 type_id 只能靠猜
     let extra = "";
     if (entity.key === "dict_items") {
-      const types = await loadDictTypeOptions();
+      const types = await loadDictTypeOptions(tenantId);
       if (types.length) {
         extra = `可用字典类型（type_id 只能取这些 id，也可填 code 或 name，服务端会自动解析）：${JSON.stringify(types)}`;
       }

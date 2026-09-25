@@ -5,6 +5,7 @@ const enUS = {
     "common.unnamed": "Untitled",
     "common.refresh": "Refresh",
     "common.reset": "Reset",
+    "common.documentNoFailed": "Failed to generate document number. Check the naming rule for this document type",
     "common.code": "Code",
     "common.name": "Name",
     "common.type": "Type",

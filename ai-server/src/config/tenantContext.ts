@@ -128,6 +128,19 @@ export async function resolveTenantContext(
 }
 
 /**
+ * 平台元数据表的租户过滤条件（PostgREST or 表达式）。
+ *
+ * ai-server 用 service_role 直连，绕过 RLS，所以查 sys_* 这类表时必须自己拼。
+ * 平台基线行 tenant_id IS NULL 对所有租户可见，私有行只归所属租户。
+ * 拿不到租户时退化成「只看基线」——绝不退化成「看全部」。
+ */
+export function tenantScopeFilter(tenantId?: number | null): string {
+  return tenantId && Number.isFinite(tenantId)
+    ? `tenant_id.is.null,tenant_id.eq.${tenantId}`
+    : "tenant_id.is.null";
+}
+
+/**
  * 判断是否为超级管理员。
  *
  * 注意：没有复用数据库里的 public.current_user_is_super_admin()，

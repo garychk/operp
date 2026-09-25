@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { tenantScopeFilter } from "../config/tenantContext.js";
 import { callEmbeddingModel, type LlmProviderConfig } from "../config/llm.js";
 
 export interface KnowledgeDoc {
@@ -9,6 +10,7 @@ export interface KnowledgeDoc {
   source_type?: string | null;
   source_ref?: string | null;
   category?: string | null;
+  tenant_id?: number | null;
 }
 
 export interface KnowledgeChunkHit {
@@ -57,6 +59,7 @@ const formatErrorMessage = (error: unknown) => {
   }
 };
 
+
 const EMBEDDING_MODEL_PATTERN =
   /(embed|embedding|nomic-embed|bge-|mxbai-embed|text-embedding|gte-|e5-)/i;
 
@@ -71,20 +74,24 @@ const isEmbeddingCapableProvider = (provider?: LlmProviderConfig | null) => {
   );
 };
 
-export async function resolveEmbeddingProvider(preferred?: LlmProviderConfig | null) {
+export async function resolveEmbeddingProvider(
+  preferred?: LlmProviderConfig | null,
+  tenantId?: number | null,
+) {
   if (isEmbeddingCapableProvider(preferred)) {
     return preferred as LlmProviderConfig;
   }
 
-  const { data, error } = await supabase
-    .from("sys_config")
-    .select("config_json")
-    .eq("category_code", "ai")
-    .eq("is_deleted", "n")
-    .maybeSingle();
+  // 走 RPC 而不是直接查表：sys_config 里同一 category_code 可能同时有平台基线行
+  // 和租户私有行，直接查会拿到多行。RPC 内部私有优先、回退基线，且接受显式
+  // tenant_id（service_role 没有 JWT，视图里的 current_tenant_id() 解析不出来）。
+  const { data, error } = await supabase.rpc("get_tenant_config", {
+    p_category_code: "ai",
+    p_tenant_id: tenantId ?? null,
+  });
   if (error) throw error;
 
-  const config = (data?.config_json || {}) as {
+  const config = (data || {}) as {
     providers?: LlmProviderConfig[];
   };
   const providers = Array.isArray(config.providers) ? config.providers : [];
@@ -92,7 +99,7 @@ export async function resolveEmbeddingProvider(preferred?: LlmProviderConfig | n
   return found || null;
 }
 
-export async function searchKnowledgeDocs(query: string, limit = 8) {
+export async function searchKnowledgeDocs(query: string, limit = 8, tenantId?: number | null) {
   const terms = normalizeTerms(query);
   const orExpr =
     terms.length > 0
@@ -109,6 +116,7 @@ export async function searchKnowledgeDocs(query: string, limit = 8) {
     .select("id, title, content, tags, source_type, source_ref, category")
     .eq("is_active", true)
     .or(orExpr)
+    .or(tenantScopeFilter(tenantId))
     .limit(limit);
 
   if (error) throw error;
@@ -119,20 +127,42 @@ export async function searchKnowledgeRag(
   query: string,
   provider: LlmProviderConfig | undefined,
   limit = 8,
+  tenantId?: number | null,
 ) {
   try {
-    const embeddingProvider = await resolveEmbeddingProvider(provider);
+    const embeddingProvider = await resolveEmbeddingProvider(provider, tenantId);
     if (!embeddingProvider) {
       throw new Error("No embedding provider configured");
     }
 
     const embedding = await callEmbeddingModel(query, embeddingProvider);
     if (embedding.length) {
-      const { data, error } = await supabase.rpc("match_ai_knowledge_chunks", {
+      // 带租户的向量检索：原 match_ai_knowledge_chunks 是 SECURITY DEFINER，
+      // 会把所有租户的知识一起召回。deploy_48 还没执行时回退到原函数并告警。
+      let data: Record<string, unknown>[] | null = null;
+      let error: { message?: string } | null = null;
+
+      const scoped = await supabase.rpc("match_ai_knowledge_chunks_for_tenant", {
         query_embedding: toVectorLiteral(embedding),
         match_threshold: 0.2,
         match_count: limit,
+        p_tenant_id: tenantId ?? null,
       });
+      data = scoped.data;
+      error = scoped.error;
+
+      if (error && /PGRST202|Could not find the function/i.test(error.message || "")) {
+        console.warn(
+          "[ai-server] match_ai_knowledge_chunks_for_tenant 不存在，回退到未做租户过滤的旧函数（请先执行 deploy_48）",
+        );
+        const fallback = await supabase.rpc("match_ai_knowledge_chunks", {
+          query_embedding: toVectorLiteral(embedding),
+          match_threshold: 0.2,
+          match_count: limit,
+        });
+        data = fallback.data;
+        error = fallback.error;
+      }
 
       if (error) throw error;
       if (data?.length) {
@@ -152,7 +182,7 @@ export async function searchKnowledgeRag(
     console.warn("[ai-server] knowledge vector search failed, fallback to keyword search:", error);
   }
 
-  const docs = await searchKnowledgeDocs(query, limit);
+  const docs = await searchKnowledgeDocs(query, limit, tenantId);
   return docs.map((doc) => ({
     docId: doc.id,
     title: doc.title,
@@ -187,6 +217,9 @@ export async function indexKnowledgeDocument(
       chunk_index: index,
       content: chunks[index],
       embedding: toVectorLiteral(embedding),
+      // service_role 下 current_user 不是真实用户，列的 DEFAULT current_tenant_id()
+      // 会解析成 NULL，把分片变成「全局基线」对所有租户可见。这里显式带上归属。
+      tenant_id: doc.tenant_id ?? null,
       metadata: {
         title: doc.title,
         category: doc.category,
@@ -202,11 +235,12 @@ export async function indexKnowledgeDocument(
   return { docId: doc.id, chunkCount: payload.length };
 }
 
-export async function fetchKnowledgeDocuments(docId?: number) {
+export async function fetchKnowledgeDocuments(docId?: number, tenantId?: number | null) {
   let query = supabase
     .from("sys_ai_knowledge_docs")
-    .select("id, title, content, tags, source_type, source_ref, category")
+    .select("id, title, content, tags, source_type, source_ref, category, tenant_id")
     .eq("is_active", true)
+    .or(tenantScopeFilter(tenantId))
     .order("updated_at", { ascending: false });
 
   if (Number.isFinite(docId)) {
@@ -218,8 +252,12 @@ export async function fetchKnowledgeDocuments(docId?: number) {
   return (data || []) as KnowledgeDoc[];
 }
 
-export async function reindexKnowledgeDocuments(provider: LlmProviderConfig, docId?: number) {
-  const docs = await fetchKnowledgeDocuments(docId);
+export async function reindexKnowledgeDocuments(
+  provider: LlmProviderConfig,
+  docId?: number,
+  tenantId?: number | null,
+) {
+  const docs = await fetchKnowledgeDocuments(docId, tenantId);
   const result: KnowledgeReindexResult = {
     total: docs.length,
     success: 0,

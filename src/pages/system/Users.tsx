@@ -451,6 +451,7 @@ const columns: ColumnsType<User> = [
       title: t('users.tenant'),
       dataIndex: 'tenant_id',
       width: 140,
+      ellipsis: true,
       render: (tenantId: number | null | undefined) => {
         const tenant = tenants.find((item) => item.id === tenantId);
         return tenant ? `${tenant.name}（${tenant.code}）` : '-';
