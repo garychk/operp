@@ -192,17 +192,33 @@ Deno.serve(async (req: Request) => {
   // 5) 角色校验：非超管不能把 super_admin 发出去
   //    super_admin 是基线角色，拿到它等于拿到跨租户看数据的全局通行证。
   // --------------------------------------------------------------------------
-  let roleIds: number[] = Array.isArray(payload.role_ids) ? payload.role_ids : [];
+  // 先做数字规范化：role_ids 走 HTTP 进来的可能是字符串或负数，
+  // 拼进 URL 前必须干净，否则 PostgREST 会报 22P02（invalid input syntax for type integer）。
+  //
+  // 注意 in. 过滤器的语法是 in.(2,5) —— 不能写成 in.((2),(5))。
+  // 那种嵌套括号是给「值本身含逗号」的字符串用的，对整数列会被当成字面量解析，
+  // 直接 400。踩过一次，别再改回去。
+  const roleIds: number[] = Array.from(
+    new Set(
+      (Array.isArray(payload.role_ids) ? payload.role_ids : [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0),
+    ),
+  );
 
   if (roleIds.length > 0) {
     const rolesRes = await fetch(
-      `${supabaseUrl}/rest/v1/sys_roles?select=id,role_code,status&is_deleted=eq.n&id=in.(${roleIds
-        .map((id) => `(${id})`)
-        .join(",")})`,
+      `${supabaseUrl}/rest/v1/sys_roles?select=id,role_code,status&is_deleted=eq.n&id=in.(${roleIds.join(
+        ",",
+      )})`,
       { headers: { Authorization: `Bearer ${serviceRoleKey}`, apikey: serviceRoleKey } },
     );
     if (!rolesRes.ok) {
-      return json({ success: false, error: "角色校验失败" }, 400);
+      const detail = await rolesRes.text().catch(() => "");
+      return json(
+        { success: false, error: `角色校验失败: ${detail || rolesRes.status}` },
+        400,
+      );
     }
     const roles = await rolesRes.json();
     const validIds: number[] = (roles || []).map((r: { id: number }) => r.id);
