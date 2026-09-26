@@ -2,33 +2,42 @@
   padding: 0;
 }
 
+/* 整页形态（Dashboard）：外层 Card 铺满 .mainContent 的 90vh */
+.ant-card-body {
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
+.ai-chat-page {
+  height: 80%;
+  width: 50%;
+  margin: 20px auto;
+}
+
+.ai-chat-panel-page .ai-chat-messages {
+  padding: 24px 28px;
+}
+
+.ai-chat-panel-page .ai-chat-assistant-wrap {
+  max-width: min(100%, 720px);
+}
+
+.ai-chat-panel-page .ai-thought-chain {
+  width: min(100%, 640px);
+}
+
 .ai-chat-panel {
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 
-.ai-chat-workbench {
-  flex: 1;
-  width: 100%;
-  min-height: 0;
-  overflow: hidden;
+.ai-chat-history-drawer .ant-drawer-body {
+  padding: 12px;
 }
 
-.ai-chat-workbench .ant-splitter {
-  width: 100%;
-  height: 100%;
-}
-
-.ai-chat-session-panel {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-  padding: 12px 8px 12px 12px;
-  border-right: 1px solid var(--border);
-}
-
-.ai-chat-session-inner {
+.ai-chat-history {
   height: 100%;
   min-height: 0;
 }
@@ -125,6 +134,13 @@
   flex-direction: column;
   overflow: hidden;
   padding: 20px;
+}
+
+.ai-chat-messages > .ant-card-head {
+  flex: 0 0 auto;
+  min-height: auto;
+  padding: 0 0 12px;
+  border-bottom: none;
 }
 
 .ai-chat-messages .ant-card-body {
@@ -224,7 +240,7 @@
 
 .ai-chat-footer {
   flex: 0 0 auto;
-  border-top: 1px solid var(--border);
+  
   padding: 12px 16px 16px;
 }
 
@@ -291,13 +307,8 @@
 }
 
 @media (max-width: 900px) {
-  .ai-chat-workbench {
-    flex-direction: column;
-  }
-
-  .ai-chat-session-panel {
-    max-height: 240px;
-    border-right: none;
+  .ai-chat-panel-page .ai-chat-messages {
+    padding: 16px;
   }
 }
 

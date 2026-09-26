@@ -1805,6 +1805,8 @@ const enUS = {
     "aiChat.createConversation": "New Chat",
     "aiChat.newConversation": "New conversation",
     "aiChat.noMessages": "No messages",
+    "aiChat.history": "History",
+    "aiChat.historyEmpty": "No conversations yet",
     "aiChat.clear": "Clear",
     "aiChat.senderPlaceholder": "Ask with {{name}}",
     "aiChat.welcome.title": "Hello, I am the OPERP assistant",

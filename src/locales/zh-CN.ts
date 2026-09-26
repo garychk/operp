@@ -1805,6 +1805,8 @@ const zhCN = {
     "aiChat.createConversation": "新建对话",
     "aiChat.newConversation": "新对话",
     "aiChat.noMessages": "暂无消息",
+    "aiChat.history": "对话历史",
+    "aiChat.historyEmpty": "暂无历史对话",
     "aiChat.clear": "清空",
     "aiChat.senderPlaceholder": "使用 {{name}} 提问",
     "aiChat.welcome.title": "你好，我是 OPERP 助手",
