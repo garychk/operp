@@ -18,7 +18,7 @@ import {
   Conversations,
   Prompts,
   Sender,
-  ThoughtChain,
+  Think,
   Welcome,
   XProvider,
 } from "@ant-design/x";
@@ -479,6 +479,22 @@ const renderThoughtTitle = (
   return value;
 };
 
+const resolveThinkTitle = (
+  trace: ThoughtChainItemType[],
+  t: (key: string, options?: Record<string, unknown>) => string,
+) => {
+  const pending = trace.find((step) => step.status === "loading");
+  if (pending) {
+    return t("aiChat.think.runningStep", {
+      step: pending.title || t("aiChat.think.running"),
+    });
+  }
+  if (trace.some((step) => step.status === "error")) {
+    return t("aiChat.think.failed");
+  }
+  return t("aiChat.think.done", { count: trace.length });
+};
+
 const formatStepContent = (data: unknown): string => {
   if (data === null || data === undefined) return "";
   if (typeof data === "string") return data;
@@ -669,6 +685,7 @@ export function AIChatPanel({
   const [selectedSkill, setSelectedSkill] = useState<AiSkill>("auto");
   const [configOpen, setConfigOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [expandedThinks, setExpandedThinks] = useState<Record<string, boolean>>({});
   const [aiSettings, setAISettings] =
     useState<AISettingsConfig>(defaultAISettings);
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -1297,16 +1314,43 @@ export function AIChatPanel({
                     {item.role === "assistant" ? (
                       <div className="ai-chat-assistant-wrap">
                         {item.trace?.length ? (
-                          <ThoughtChain
-                            className="ai-thought-chain"
-                            items={item.trace}
-                            line="solid"
-                            defaultExpandedKeys={
-                              item.trace
-                                .map((traceItem) => traceItem.key)
-                                .filter(Boolean) as string[]
+                          <Think
+                            title={resolveThinkTitle(item.trace, t)}
+                            loading={item.trace.some((step) => step.status === "loading")}
+                            blink={item.trace.some((step) => step.status === "loading")}
+                            expanded={
+                              expandedThinks[item.id] ??
+                              item.trace.some((step) => step.status === "loading")
                             }
-                          />
+                            onExpand={(next) =>
+                              setExpandedThinks((prev) => ({
+                                ...prev,
+                                [item.id]: next,
+                              }))
+                            }
+                          >
+                            <Flex vertical gap={8}>
+                              {item.trace.map((step, stepIndex) => {
+                                const detail =
+                                  (typeof step.content === "string" && step.content) ||
+                                  (typeof step.description === "string"
+                                    ? step.description
+                                    : "");
+                                return (
+                                  <Flex vertical key={String(step.key ?? stepIndex)}>
+                                    <Typography.Text strong>
+                                      {`${stepIndex + 1}. ${String(step.title ?? "")}`}
+                                    </Typography.Text>
+                                    {detail ? (
+                                      <Typography.Text type="secondary">
+                                        {detail}
+                                      </Typography.Text>
+                                    ) : null}
+                                  </Flex>
+                                );
+                              })}
+                            </Flex>
+                          </Think>
                         ) : null}
                         {item.content ? (
                           <Bubble
