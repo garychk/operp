@@ -209,9 +209,16 @@ export function ProductionOrders() {
   };
 
   const handleAdd = async () => {
+    let orderNo: string;
+    try {
+      orderNo = await nextDocumentNo("production_order");
+    } catch (error) {
+      message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
+      return;
+    }
     setEditingOrder(null);
     form.setFieldsValue({
-      order_no: await nextDocumentNo("production_order"),
+      order_no: orderNo,
       order_date: dayjs(new Date()),
       product_id: undefined,
       bom_id: undefined,
@@ -540,7 +547,7 @@ export function ProductionOrders() {
           </Space>
         }
         width={'60%'}
-        height={680}
+        height={'80%'}
       />
     </div>
   );

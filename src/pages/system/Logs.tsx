@@ -5,6 +5,7 @@ import { SearchOutlined, ReloadOutlined, DeleteOutlined, EyeOutlined } from '@an
 import type { ColumnsType } from 'antd/es/table';
 import { Dayjs } from 'dayjs';
 import { supabase } from '../../utils/supabase';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface Log {
   id: number;
@@ -18,11 +19,19 @@ interface Log {
   status: string;
   error_msg: string;
   created_at: string;
+  tenant_id?: number | null;
+}
+
+interface TenantOption {
+  id: number;
+  name: string;
 }
 
 export function Logs() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [logs, setLogs] = useState<Log[]>([]);
+  const [tenants, setTenants] = useState<TenantOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [total, setTotal] = useState(0);
   const [searchUsername, setSearchUsername] = useState('');
@@ -67,8 +76,32 @@ export function Logs() {
     }
   };
 
+  // 只有 super_admin 能看到跨租户日志，其余人看到的全是自己租户的，
+  // 加这列反而占宽度，所以按角色决定是否展示。
+  const showTenantColumn = user?.isSuperAdmin === true;
+
+  const fetchTenants = async () => {
+    if (!showTenantColumn) return;
+    const { data, error } = await supabase
+      .from('sys_tenants')
+      .select('id, name')
+      .eq('is_deleted', 'n')
+      .order('id');
+    if (error) {
+      console.error('Failed to fetch tenants:', error);
+      return;
+    }
+    setTenants((data as TenantOption[]) || []);
+  };
+
+  const tenantName = (id?: number | null) => {
+    if (!id) return '-';
+    return tenants.find((item) => item.id === id)?.name || `#${id}`;
+  };
+
   useEffect(() => {
     fetchLogs(pagination.current, pagination.pageSize);
+    fetchTenants();
   }, []);
 
   const handleSearch = () => {
@@ -139,7 +172,7 @@ export function Logs() {
     return typeof params === 'string' ? params : JSON.stringify(params);
   };
 
-  const columns: ColumnsType<Log> = [
+  const allColumns: ColumnsType<Log> = [
     {
       title: 'ID',
       dataIndex: 'id',
@@ -150,6 +183,13 @@ export function Logs() {
       dataIndex: 'username',
       width: 120,
       ellipsis: true,
+    },
+    {
+      title: t('logs.tenant'),
+      dataIndex: 'tenant_id',
+      width: 130,
+      ellipsis: true,
+      render: (tenantId) => tenantName(tenantId),
     },
     {
       title: t('logs.operationType'),
@@ -217,6 +257,14 @@ export function Logs() {
       ),
     },
   ];
+
+  // 先声明成 ColumnsType<Log> 再过滤，直接在字面量数组上 .filter()
+  // 会让 render 回调的参数丢失上下文类型，下面 6 个 render 全部变成隐式 any。
+  const columns = (
+    showTenantColumn
+      ? allColumns
+      : allColumns.filter((col) => !('dataIndex' in col && col.dataIndex === 'tenant_id'))
+  ) as ColumnsType<Log>;
 
   const rowSelection = {
     selectedRowKeys,

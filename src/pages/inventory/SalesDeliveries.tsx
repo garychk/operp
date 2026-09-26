@@ -409,12 +409,19 @@ export function SalesDeliveries() {
   };
 
   const handleAdd = async () => {
+    let deliveryNo: string;
+    try {
+      deliveryNo = await nextDocumentNo('sales_delivery');
+    } catch (error) {
+      message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
+      return;
+    }
     setEditingDelivery(null);
     setSelectedDelivery(null);
     setSelectedOrderId(null);
     setSalesOrderDetails([]);
     form.setFieldsValue({
-      delivery_no: await nextDocumentNo('sales_delivery'),
+      delivery_no: deliveryNo,
       delivery_date: dayjs(new Date()),
       order_id: undefined,
       customer_id: undefined,
@@ -913,7 +920,7 @@ export function SalesDeliveries() {
           </Space>
         }
         width={'70%'}
-        height={680}
+        height={'80%'}
       />
 
       <SimpleModal  

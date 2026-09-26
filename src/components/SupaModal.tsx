@@ -304,9 +304,28 @@ export function SupaModal({
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase
+    // 唯一键已改成 (tenant_id, form_name) 的部分索引，upsert 的 onConflict
+    // 命中不了，改成「先查后写」：查得到（本租户私有行或平台基线行）就更新，
+    // 查不到就新建一条归属本租户的。
+    const { data: existing, error: lookupError } = await supabase
       .from("sys_forms")
-      .upsert(formSettings, { onConflict: "form_name" });
+      .select("id")
+      .eq("form_name", formName)
+      .limit(1)
+      .maybeSingle();
+
+    if (lookupError) {
+      console.error("Failed to lookup print template:", lookupError);
+      message.error(
+        t("modal.messages.saveTemplateFailed", { message: lookupError.message }),
+      );
+      return;
+    }
+
+    const { error } = existing?.id
+      ? await supabase.from("sys_forms").update(formSettings).eq("id", existing.id)
+      : await supabase.from("sys_forms").insert(formSettings);
+
     if (error) {
       console.error("Failed to save print template:", error);
       message.error(

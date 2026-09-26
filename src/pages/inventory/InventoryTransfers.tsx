@@ -167,9 +167,16 @@ export function InventoryTransfers() {
               type="primary"
               icon={<PlusOutlined />}
               onClick={async () => {
+                let transferNo: string;
+                try {
+                  transferNo = await nextDocumentNo('inventory_transfer');
+                } catch (error) {
+                  message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
+                  return;
+                }
                 setEditing(null);
                 form.setFieldsValue({
-                  transfer_no: await nextDocumentNo('inventory_transfer'),
+                  transfer_no: transferNo,
                   transfer_date: dayjs(),
                   status: "draft",
                 });

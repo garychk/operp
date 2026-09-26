@@ -246,8 +246,9 @@ BEGIN
       reference_detail_id, posting_idempotency_key, remark
     ) VALUES (
       h.corp_id, actor_id::TEXT, 'n', LEFT(v_transaction_no, 50),
-      CASE WHEN p_document_type = 'purchase_receipt'
-           THEN 'purchase_receipt_in' ELSE 'sales_delivery_out' END,
+      public.resolve_inventory_transaction_type(
+        p_document_type,
+        CASE WHEN p_document_type = 'purchase_receipt' THEN 'in' ELSE 'out' END),
       h.document_date, d.product_id, h.warehouse_id, NULL, normalized_batch,
       CASE WHEN p_document_type = 'purchase_receipt'
            THEN d.quantity ELSE -d.quantity END,

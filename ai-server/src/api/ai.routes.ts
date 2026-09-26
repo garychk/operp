@@ -3,12 +3,14 @@ import { z } from "zod";
 import { supabase } from "../config/supabase.js";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
 import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
+import { TenantScopeError } from "../config/tenantContext.js";
 
 export const aiRouter = Router();
 
 const chatSchema = z.object({
   session_id: z.string().min(1),
   user_id: z.number().int().optional(),
+  tenant_id: z.number().int().optional(),
   text: z.string().min(1),
   skill: z.enum(["auto", "analysis", "create", "action", "baq", "chat"]).optional(),
   provider: z
@@ -47,19 +49,23 @@ const aiSettingsSchema = z.object({
 
 const reindexSchema = z.object({
   doc_id: z.number().int().optional(),
+  tenant_id: z.number().int().optional(),
 });
 
-async function resolveProviderConfig(provider?: { id?: string; name?: string }) {
-  const { data, error } = await supabase
-    .from("sys_config")
-    .select("config_json")
-    .eq("category_code", "ai")
-    .eq("is_deleted", "n")
-    .maybeSingle();
+async function resolveProviderConfig(
+  provider?: { id?: string; name?: string },
+  tenantId?: number | null,
+) {
+  // sys_config 里同一 category_code 可能同时有平台基线行和租户私有行，
+  // 直接查表会拿到多行。RPC 内部「私有优先、回退基线」并接受显式 tenant_id。
+  const { data, error } = await supabase.rpc("get_tenant_config", {
+    p_category_code: "ai",
+    p_tenant_id: tenantId ?? null,
+  });
 
   if (error) throw error;
 
-  const settings = aiSettingsSchema.parse(data?.config_json || {});
+  const settings = aiSettingsSchema.parse(data || {});
   const matched = settings.providers.find((item) => {
     if (!provider?.id) return false;
     if (item.id === provider.id) return true;
@@ -110,7 +116,7 @@ aiRouter.post("/chat", async (req, res) => {
 
   try {
     const resolvedProvider = parsed.data.provider
-      ? await resolveProviderConfig(parsed.data.provider)
+      ? await resolveProviderConfig(parsed.data.provider, parsed.data.tenant_id)
       : undefined;
 
     const requestBody = {
@@ -156,6 +162,14 @@ aiRouter.post("/chat", async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (error) {
     if (!res.headersSent) {
+      // 租户解析失败属于「拒绝访问」，不是服务端故障，别让前端看到 500
+      if (error instanceof TenantScopeError) {
+        res.status(403).json({
+          ok: false,
+          error: errorToMessage(error),
+        });
+        return;
+      }
       res.status(500).json({
         ok: false,
         error: errorToMessage(error),
@@ -187,30 +201,32 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
   }
 
   try {
-    const resolvedProvider = await resolveProviderConfig({ id: "ollama" }).catch(async () => {
-      const { data, error } = await supabase
-        .from("sys_config")
-        .select("config_json")
-        .eq("category_code", "ai")
-        .eq("is_deleted", "n")
-        .maybeSingle();
-      if (error) throw error;
-      const settings = aiSettingsSchema.parse(data?.config_json || {});
-      const candidates = settings.providers.filter(
-        (item) =>
-          item.apiType === "ollama" ||
-          /embed/i.test(String(item.model || "")) ||
-          /embeddings/i.test(String(item.endpoint || "")),
-      );
-      if (!candidates.length) {
-        throw new Error("未找到可用于知识库向量化的 embedding provider");
-      }
-      return candidates[0];
-    });
+    const tenantId = parsed.data.tenant_id ?? null;
+    const resolvedProvider = await resolveProviderConfig({ id: "ollama" }, tenantId).catch(
+      async () => {
+        const { data, error } = await supabase.rpc("get_tenant_config", {
+          p_category_code: "ai",
+          p_tenant_id: tenantId,
+        });
+        if (error) throw error;
+        const settings = aiSettingsSchema.parse(data || {});
+        const candidates = settings.providers.filter(
+          (item) =>
+            item.apiType === "ollama" ||
+            /embed/i.test(String(item.model || "")) ||
+            /embeddings/i.test(String(item.endpoint || "")),
+        );
+        if (!candidates.length) {
+          throw new Error("未找到可用于知识库向量化的 embedding provider");
+        }
+        return candidates[0];
+      },
+    );
 
     const result = await reindexKnowledgeDocuments(
       resolvedProvider,
       parsed.data.doc_id,
+      tenantId,
     );
     res.json({ ok: true, ...result });
   } catch (error) {

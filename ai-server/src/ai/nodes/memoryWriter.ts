@@ -8,6 +8,7 @@ export async function memoryWriterNode(state: AiGraphState): Promise<AiGraphStat
   await saveSessionMemory({
     session_id: state.sessionId,
     user_id: state.userId,
+    tenant_id: state.tenantId,
     recent_messages: recentMessages,
     last_intent: state.intent,
     last_target: state.target,

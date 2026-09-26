@@ -213,7 +213,7 @@ BEGIN
       new_cost := old_cost - d.quantity * v_unit_cost;
       UPDATE public.erp_inventory_s_539dcf81_b SET quantity = new_qty, available_quantity = new_available, unit_cost = CASE WHEN new_qty = 0 THEN v_unit_cost ELSE ABS(new_cost / new_qty) END, total_cost = new_cost, updated_at = NOW() WHERE id = i.id;
       INSERT INTO public.erp_inventory_transactions_s_539dcf81_b(corp_id, emp_id, is_deleted, transaction_no, transaction_type, transaction_date, product_id, warehouse_id, location_id, batch_no, quantity, unit_cost, total_cost, reference_type, reference_id, reference_detail_id, posting_idempotency_key, remark)
-      VALUES (h.corp_id, actor_id::TEXT, 'n', LEFT('IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || LPAD(d.id::TEXT, 6, '0'), 50), 'transfer_out', h.transfer_date, d.product_id, h.from_warehouse_id, COALESCE(d.from_location_id, h.from_location_id), normalized_batch, -d.quantity, v_unit_cost, -(d.quantity * v_unit_cost), 'inventory_transfer_out', p_document_id, d.id, p_idempotency_key, '库存调拨出库');
+      VALUES (h.corp_id, actor_id::TEXT, 'n', LEFT('IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || LPAD(d.id::TEXT, 6, '0'), 50), public.resolve_inventory_transaction_type(p_document_type, 'out'), h.transfer_date, d.product_id, h.from_warehouse_id, COALESCE(d.from_location_id, h.from_location_id), normalized_batch, -d.quantity, v_unit_cost, -(d.quantity * v_unit_cost), 'inventory_transfer_out', p_document_id, d.id, p_idempotency_key, '库存调拨出库');
 
       SELECT x.* INTO i FROM public.erp_inventory_s_539dcf81_b x
         WHERE x.product_id = d.product_id AND x.warehouse_id = h.to_warehouse_id
@@ -237,7 +237,7 @@ BEGIN
         VALUES (h.corp_id, actor_id::TEXT, 'n', d.product_id, h.to_warehouse_id, COALESCE(d.to_location_id, h.to_location_id), new_qty, new_available, 0, v_unit_cost, new_cost, normalized_batch);
       END IF;
       INSERT INTO public.erp_inventory_transactions_s_539dcf81_b(corp_id, emp_id, is_deleted, transaction_no, transaction_type, transaction_date, product_id, warehouse_id, location_id, batch_no, quantity, unit_cost, total_cost, reference_type, reference_id, reference_detail_id, posting_idempotency_key, remark)
-      VALUES (h.corp_id, actor_id::TEXT, 'n', LEFT('IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || LPAD(d.id::TEXT, 6, '0') || 'T', 50), 'transfer_in', h.transfer_date, d.product_id, h.to_warehouse_id, COALESCE(d.to_location_id, h.to_location_id), normalized_batch, d.quantity, v_unit_cost, d.quantity * v_unit_cost, 'inventory_transfer_in', p_document_id, d.id, p_idempotency_key, '库存调拨入库');
+      VALUES (h.corp_id, actor_id::TEXT, 'n', LEFT('IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || LPAD(d.id::TEXT, 6, '0') || 'T', 50), public.resolve_inventory_transaction_type(p_document_type, 'in'), h.transfer_date, d.product_id, h.to_warehouse_id, COALESCE(d.to_location_id, h.to_location_id), normalized_batch, d.quantity, v_unit_cost, d.quantity * v_unit_cost, 'inventory_transfer_in', p_document_id, d.id, p_idempotency_key, '库存调拨入库');
     END LOOP;
     UPDATE public.erp_inventory_transfers_s_539dcf81_b SET status = 'posted', posted_at = NOW(), posting_idempotency_key = p_idempotency_key, updated_at = NOW() WHERE id = p_document_id;
   ELSIF p_document_type = 'stock_count' THEN
@@ -267,7 +267,7 @@ BEGIN
         VALUES (h.corp_id, actor_id::TEXT, 'n', d.product_id, h.warehouse_id, h.location_id, new_qty, new_available, 0, v_unit_cost, new_cost, normalized_batch);
       END IF;
       INSERT INTO public.erp_inventory_transactions_s_539dcf81_b(corp_id, emp_id, is_deleted, transaction_no, transaction_type, transaction_date, product_id, warehouse_id, location_id, batch_no, quantity, unit_cost, total_cost, reference_type, reference_id, reference_detail_id, posting_idempotency_key, remark)
-      VALUES (h.corp_id, actor_id::TEXT, 'n', LEFT('IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || LPAD(d.id::TEXT, 6, '0'), 50), CASE WHEN new_qty >= old_qty THEN 'stock_count_increase' ELSE 'stock_count_decrease' END, h.count_date, d.product_id, h.warehouse_id, COALESCE(d.location_id, h.location_id), normalized_batch, new_qty - old_qty, v_unit_cost, (new_qty - old_qty) * v_unit_cost, p_document_type, p_document_id, d.id, p_idempotency_key, '库存盘点差异');
+      VALUES (h.corp_id, actor_id::TEXT, 'n', LEFT('IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || LPAD(d.id::TEXT, 6, '0'), 50), public.resolve_inventory_transaction_type(p_document_type, CASE WHEN new_qty >= old_qty THEN 'in' ELSE 'out' END), h.count_date, d.product_id, h.warehouse_id, COALESCE(d.location_id, h.location_id), normalized_batch, new_qty - old_qty, v_unit_cost, (new_qty - old_qty) * v_unit_cost, p_document_type, p_document_id, d.id, p_idempotency_key, '库存盘点差异');
     END LOOP;
     UPDATE public.erp_stock_counts_s_539dcf81_b SET status = 'posted', posted_at = NOW(), posting_idempotency_key = p_idempotency_key, updated_at = NOW() WHERE id = p_document_id;
   ELSE
@@ -302,7 +302,7 @@ BEGIN
         VALUES (h.corp_id, actor_id::TEXT, 'n', d.product_id, h.warehouse_id, h.location_id, new_qty, new_available, 0, v_unit_cost, new_cost, normalized_batch);
       END IF;
       INSERT INTO public.erp_inventory_transactions_s_539dcf81_b(corp_id, emp_id, is_deleted, transaction_no, transaction_type, transaction_date, product_id, warehouse_id, location_id, batch_no, quantity, unit_cost, total_cost, reference_type, reference_id, reference_detail_id, posting_idempotency_key, remark)
-      VALUES (h.corp_id, actor_id::TEXT, 'n', LEFT('IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || LPAD(d.id::TEXT, 6, '0'), 50), CASE WHEN d.direction = 'out' THEN 'stock_adjust_out' ELSE 'stock_adjust_in' END, h.adjust_date, d.product_id, h.warehouse_id, COALESCE(d.location_id, h.location_id), normalized_batch, CASE WHEN d.direction = 'out' THEN -d.quantity ELSE d.quantity END, v_unit_cost, CASE WHEN d.direction = 'out' THEN -(d.quantity * v_unit_cost) ELSE d.quantity * v_unit_cost END, p_document_type, p_document_id, d.id, p_idempotency_key, '库存调整');
+      VALUES (h.corp_id, actor_id::TEXT, 'n', LEFT('IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS') || LPAD(d.id::TEXT, 6, '0'), 50), public.resolve_inventory_transaction_type(p_document_type, CASE WHEN d.direction = 'out' THEN 'out' ELSE 'in' END), h.adjust_date, d.product_id, h.warehouse_id, COALESCE(d.location_id, h.location_id), normalized_batch, CASE WHEN d.direction = 'out' THEN -d.quantity ELSE d.quantity END, v_unit_cost, CASE WHEN d.direction = 'out' THEN -(d.quantity * v_unit_cost) ELSE d.quantity * v_unit_cost END, p_document_type, p_document_id, d.id, p_idempotency_key, '库存调整');
     END LOOP;
     UPDATE public.erp_stock_adjustments_s_539dcf81_b SET status = 'posted', posted_at = NOW(), posting_idempotency_key = p_idempotency_key, updated_at = NOW() WHERE id = p_document_id;
   END IF;

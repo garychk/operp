@@ -1162,9 +1162,46 @@ export interface SysUsersRow {
   status: string | null;
   last_login_at: string | null;
   login_ip: string | null;
+  tenant_id: number | null;  // FK -> sys_tenants.id，多租户隔离列（deploy_41 加）
 }
-export type SysUsersInsert = Omit<SysUsersRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+// tenant_id 故意从 Insert 里 Omit：该列由 deploy_41 的迁移脚本维护，
+// 业务代码的 upsert 不该显式指定，否则会让「首次登录自动建档」这条路径
+// 需要知道默认租户 id。要显式传时改用 SysUsersUpdate。
+export type SysUsersInsert = Omit<SysUsersRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'tenant_id'>;
 export type SysUsersUpdate = Partial<SysUsersInsert>;
+
+export interface SysInventoryTransactionTypesRow {
+  id: number;
+  code: string;
+  name: string;
+  direction: string;
+  affects_stock: boolean;
+  name_en: string | null;
+  description: string | null;
+  status: string;
+  sort_order: number;
+  is_deleted: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export type SysInventoryTransactionTypesInsert = Omit<SysInventoryTransactionTypesRow, 'id' | 'created_at' | 'updated_at'>;
+export type SysInventoryTransactionTypesUpdate = Partial<SysInventoryTransactionTypesInsert>;
+
+export interface SysDocumentTransactionTypesRow {
+  id: number;
+  document_type_id: number;
+  transaction_type_code: string;
+  direction: string;
+  is_default: boolean;
+  condition_note: string | null;
+  status: string;
+  sort_order: number;
+  is_deleted: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+export type SysDocumentTransactionTypesInsert = Omit<SysDocumentTransactionTypesRow, 'id' | 'created_at' | 'updated_at'>;
+export type SysDocumentTransactionTypesUpdate = Partial<SysDocumentTransactionTypesInsert>;
 
 
 

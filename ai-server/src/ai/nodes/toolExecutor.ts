@@ -92,7 +92,9 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
   }
 
   if (tool?.tool === "knowledge.search") {
-    const docs = await searchKnowledgeRag(state.text, state.provider, 5).catch(() => []);
+    const docs = await searchKnowledgeRag(state.text, state.provider, 5, state.tenantId).catch(
+      () => [],
+    );
     if (!docs.length) {
       return {
         ...state,

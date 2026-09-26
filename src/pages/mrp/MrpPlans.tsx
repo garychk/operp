@@ -107,8 +107,15 @@ export function MrpPlans() {
   };
 
   const handleAdd = async () => {
+    let planNo: string;
+    try {
+      planNo = await nextDocumentNo('mrp_plan');
+    } catch (error) {
+      message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
+      return;
+    }
     form.setFieldsValue({
-      plan_no: await nextDocumentNo('mrp_plan'),
+      plan_no: planNo,
       plan_date: dayjs(new Date()),
       start_date: '',
       end_date: '',

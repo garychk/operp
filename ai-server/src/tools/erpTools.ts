@@ -1,5 +1,6 @@
 import { supabase } from "../config/supabase.js";
 import { callChatModel } from "../config/llm.js";
+import { TenantScopeError } from "../config/tenantContext.js";
 import type { AiChatRequest, AiGraphState } from "../ai/state.js";
 import {
   baseTableName,
@@ -140,11 +141,42 @@ const normalizeEntityFields = (
 
 const hasColumn = (entity: EntityDef, name: string) => entity.columns.some((column) => column.name === name);
 
-async function runEntitySearch(entity: EntityDef, text: string) {
+/**
+ * 该表是否需要租户过滤。
+ *
+ * 刻意按「表名前缀」判断，而不是查 entity.columns：
+ * 列元数据来自 ai_entity_catalog()，一旦目录滞后于物理表，
+ * 按列判断的结果就是「静默跳过过滤」，等于跨租户泄露。
+ * 按前缀判断则相反 —— 表若真没有 tenant_id 列，.eq() 会直接报 HTTP 400，
+ * 把问题显式暴露出来，而不是默默放行。宁可报错也不要漏。
+ */
+/**
+ * 需要租户隔离的系统表。erp_* 由前缀判定，这里列的是 sys_ 里属于租户私有的表
+ * （BAQ 查询定义、AI 会话记忆）。它们依赖 deploy_42 补出来的 tenant_id 列。
+ */
+const TENANT_SCOPED_SYSTEM_TABLES = new Set(["sys_baq_queries", "sys_ai_chat_memory"]);
+
+const isTenantScopedTable = (tableName: string) =>
+  tableName.startsWith("erp_") || TENANT_SCOPED_SYSTEM_TABLES.has(tableName);
+
+/**
+ * 取本次请求的租户。拿不到就抛错（fail-closed）。
+ * ai-server 用 service_role，RLS 对它无效，这里是唯一的隔离点。
+ */
+function requireTenantId(state: AiGraphState | { tenantId?: number }): number {
+  const tenantId = state.tenantId;
+  if (typeof tenantId !== "number" || !Number.isInteger(tenantId)) {
+    throw new TenantScopeError("缺少租户上下文，已拒绝本次业务数据访问。");
+  }
+  return tenantId;
+}
+
+async function runEntitySearch(entity: EntityDef, text: string, tenantId: number) {
   const codeField = entity.codeField || "code";
   const nameField = entity.nameField || "name";
   let query = supabase.from(entity.tableName).select("*");
   if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
+  if (isTenantScopedTable(entity.tableName)) query = query.eq("tenant_id", tenantId);
   const keywords = [...new Set(text.split(/[\s,，。；;]+/).filter(Boolean))];
   const { data, error } = await query.or(
     [
@@ -157,7 +189,7 @@ async function runEntitySearch(entity: EntityDef, text: string) {
 }
 
 /** 精确查找编码或名称是否已存在，用于避免 create 时触发唯一约束错误。 */
-async function findDuplicate(entity: EntityDef, draft: Record<string, unknown>) {
+async function findDuplicate(entity: EntityDef, draft: Record<string, unknown>, tenantId: number) {
   const codeField = entity.codeField || "code";
   const nameField = entity.nameField || "name";
   const code = draft[codeField];
@@ -167,6 +199,7 @@ async function findDuplicate(entity: EntityDef, draft: Record<string, unknown>) 
   }
   let query = supabase.from(entity.tableName).select("*");
   if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
+  if (isTenantScopedTable(entity.tableName)) query = query.eq("tenant_id", tenantId);
   const conditions: string[] = [];
   if (code !== undefined && code !== null && code !== "") conditions.push(`${codeField}.eq.${code}`);
   if (name !== undefined && name !== null && name !== "") conditions.push(`${nameField}.eq.${name}`);
@@ -185,12 +218,14 @@ interface EntityProfile {
   extra: string;
 }
 
-async function loadEntityProfile(entity: EntityDef, limit = 8): Promise<EntityProfile> {
+async function loadEntityProfile(entity: EntityDef, tenantId: number, limit = 8): Promise<EntityProfile> {
   try {
     const columns = entity.insertableFields.filter((name) => name !== "corp_id" && name !== "emp_id");
     const select = (columns.length ? columns : ["*"]).join(",");
     let query = supabase.from(entity.tableName).select(select).limit(limit);
     if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
+    // 样本只能取自当前租户，否则会把别人的编码规则喂给 LLM
+    if (isTenantScopedTable(entity.tableName)) query = query.eq("tenant_id", tenantId);
     if (hasColumn(entity, "id")) query = query.order("id", { ascending: false });
     const { data, error } = await query;
     if (error) return { rows: [], extra: "" };
@@ -198,7 +233,7 @@ async function loadEntityProfile(entity: EntityDef, limit = 8): Promise<EntityPr
     // 新增字典项必须知道有哪些字典类型，否则 type_id 只能靠猜
     let extra = "";
     if (entity.key === "dict_items") {
-      const types = await loadDictTypeOptions();
+      const types = await loadDictTypeOptions(tenantId);
       if (types.length) {
         extra = `可用字典类型（type_id 只能取这些 id，也可填 code 或 name，服务端会自动解析）：${JSON.stringify(types)}`;
       }
@@ -420,6 +455,7 @@ const toFieldKey = (entity: EntityDef, value: string) => {
 
 async function upsertEntity(
   entity: EntityDef,
+  tenantId: number,
   text: string,
   currentFocus?: unknown,
   provider?: AiChatRequest["provider"],
@@ -432,10 +468,10 @@ async function upsertEntity(
         ? current
         : hasPronounReference(text)
           ? current
-          : await runEntitySearch(entity, text)
+          : await runEntitySearch(entity, text, tenantId)
       : null;
   // 取真实记录样本，让 LLM 能照着现有编码规则和枚举取值去推断
-  const profile = await loadEntityProfile(entity);
+  const profile = await loadEntityProfile(entity, tenantId);
   const extracted = await extractEntityPayload(entity, text, existing, provider, profile);
   let mergedDraft = {
     ...entity.defaults(),
@@ -491,6 +527,13 @@ async function upsertEntity(
   if (hasColumn(entity, "is_deleted") && payload.is_deleted === undefined) {
     payload.is_deleted = "n";
   }
+  // 写入必须显式带 tenant_id。
+  // 不能指望表上的 DEFAULT current_tenant_id()：那个函数靠 auth.uid() 解析，
+  // ai-server 走 service_role 时 auth.uid() 恒为 NULL，默认值会解析成 NULL，
+  // 撞上 NOT NULL 直接报错；就算不报错，service_role 也绕过了那条 RLS 校验。
+  if (isTenantScopedTable(entity.tableName)) {
+    payload.tenant_id = tenantId;
+  }
 
   const isUpdate = !!existing?.id;
   if (action === "update" && !isUpdate) {
@@ -502,7 +545,7 @@ async function upsertEntity(
   }
   const tableTag = baseTableName(entity.tableName);
   if (!isUpdate) {
-    const duplicate = await findDuplicate(entity, draft);
+    const duplicate = await findDuplicate(entity, draft, tenantId);
     if (duplicate) {
       const dupName = String(
         duplicate[entity.nameField || entity.codeField || "id"] || duplicate.id || "-",
@@ -519,8 +562,12 @@ async function upsertEntity(
     }
   }
 
+  // UPDATE 同样要限定租户：只按 id 更新等于可以改到别的租户的行
   const response = isUpdate
-    ? await supabase.from(entity.tableName).update(payload).eq("id", existing.id).select().single()
+    ? await (isTenantScopedTable(entity.tableName)
+        ? supabase.from(entity.tableName).update(payload).eq("id", existing.id).eq("tenant_id", tenantId)
+        : supabase.from(entity.tableName).update(payload).eq("id", existing.id)
+      ).select().single()
     : await supabase.from(entity.tableName).insert(payload).select().single();
   if (response.error) throw response.error;
   const row = response.data as Record<string, unknown>;
@@ -659,7 +706,36 @@ const parseAnalysisPlan = (value: string): AnalysisPlan | null => {
   }
 };
 
-const validateAnalysisSql = (sql: string, catalog: BaqTable[]) => {
+/** 找出 SQL 里实际引用的业务表（erp_*）。 */
+const referencedErpTables = (sql: string, catalog: BaqTable[]) =>
+  catalog
+    .map((item) => item.table)
+    .filter((table) => isTenantScopedTable(table))
+    .filter((table) => new RegExp(`\\b${table}\\b`, "i").test(sql));
+
+/**
+ * 租户过滤的静态校验。
+ *
+ * execute_ai_analysis 是 SECURITY DEFINER，service_role 调用时 RLS 完全不生效，
+ * 它执行的 SQL 必须自己带 tenant_id。这里做启发式校验：
+ * 引用了 N 张业务表，就必须至少出现 N 处 tenant_id 条件。
+ *
+ * 这不是万能的（挡不住「条件写给了别的表」这类错误），但能挡住绝大多数漏写。
+ * 真正的收敛方向是让分析走 BAQ 结构化查询——那种 SQL 由服务端拼装，可 100% 注入。
+ */
+const assertAnalysisSqlTenantScoped = (sql: string, catalog: BaqTable[], tenantId: number) => {
+  const referenced = referencedErpTables(sql, catalog);
+  if (referenced.length === 0) return;
+  const hits = (sql.match(/tenant_id/gi) || []).length;
+  if (hits < referenced.length) {
+    throw new Error(
+      `分析 SQL 缺少租户过滤：引用了 ${referenced.length} 张业务表（${referenced.join("、")}），` +
+        `但只出现 ${hits} 处 tenant_id 条件。每张 erp_ 表都必须带 tenant_id = ${tenantId}。`,
+    );
+  }
+};
+
+const validateAnalysisSql = (sql: string, catalog: BaqTable[], tenantId: number) => {
   const text = normalizeAnalysisSql(sql);
   if (!text) throw new Error("分析 SQL 不能为空");
   if (!/^\s*(select|with)\b/i.test(text)) throw new Error("分析 SQL 只能是 SELECT/WITH");
@@ -672,17 +748,47 @@ const validateAnalysisSql = (sql: string, catalog: BaqTable[]) => {
   if (!tableNames.some((table) => new RegExp(`\\b${table.replace(/_/g, "_")}\\b`, "i").test(text))) {
     throw new Error("分析 SQL 必须引用 sys_tables/baq_catalog 中的真实业务表");
   }
+
+  assertAnalysisSqlTenantScoped(text, catalog, tenantId);
 };
 
-const executeAiAnalysisSql = async (sql: string) => {
+/**
+ * 执行分析 SQL。
+ *
+ * 优先调 execute_ai_analysis_for_tenant（deploy_42 提供，数据库侧再做一层兜底校验）。
+ * 该函数是独立名字而非同名重载：PostgREST 的 schema cache 对同名重载只暴露一个
+ * /rpc/<name> 端点，选错的表现是运行时报缺参数，排查成本高。
+ * 若它尚未部署（PGRST202），退回原版本——此时仅靠本文件的静态校验保护。
+ */
+const executeAiAnalysisSql = async (sql: string, tenantId: number) => {
   console.log("[ai-server] execute AI analysis SQL:", sql);
-  const { data, error } = await supabase.rpc("execute_ai_analysis", { sql_text: sql });
-  if (error) throw error;
-  return data as { rows?: Array<Record<string, unknown>>; rowCount?: number } | null;
+  const scoped = await supabase.rpc("execute_ai_analysis_for_tenant", {
+    sql_text: sql,
+    p_tenant_id: tenantId,
+  });
+  if (!scoped.error) {
+    return scoped.data as { rows?: Array<Record<string, unknown>>; rowCount?: number } | null;
+  }
+
+  const isMissingFunction = String((scoped.error as { code?: string }).code || "") === "PGRST202";
+  if (!isMissingFunction) throw scoped.error;
+
+  console.warn(
+    "[ai-server] execute_ai_analysis_for_tenant 未部署，退回无租户校验的版本。" +
+      "请执行 supabase/tables/deploy_42_ai_tenant.sql 以启用数据库侧租户校验。",
+  );
+  const fallback = await supabase.rpc("execute_ai_analysis", { sql_text: sql });
+  if (fallback.error) throw fallback.error;
+  return fallback.data as { rows?: Array<Record<string, unknown>>; rowCount?: number } | null;
 };
 
-async function findBaqTarget(text: string, focus?: unknown) {
-  const { data, error } = await supabase.from("sys_baq_queries").select("*").eq("is_deleted", "n").order("updated_at", { ascending: false });
+async function findBaqTarget(text: string, tenantId: number, focus?: unknown) {
+  const { data, error } = await supabase
+    .from("sys_baq_queries")
+    .select("*")
+    .eq("is_deleted", "n")
+    .eq("tenant_id", tenantId)
+    .order("updated_at", { ascending: false });
   if (error) throw error;
   const items = (data || []) as Array<Record<string, unknown>>;
   const normalized = normalize(text);
@@ -769,8 +875,9 @@ const validateBaqDefinition = (definition: Record<string, unknown>, catalog: Baq
 };
 
 export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolResult> {
+  const tenantId = requireTenantId(state);
   const catalog = await loadBaqCatalog();
-  const target = await findBaqTarget(state.text, state.currentFocus);
+  const target = await findBaqTarget(state.text, tenantId, state.currentFocus);
   const current = target || null;
   const prompt = [
     "你是 OPERP BAQ 设计助手。请根据用户的完整需求设计真正可执行的 BAQ，不要只创建一条空记录。",
@@ -819,10 +926,11 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
     description: baq.description || null,
     status: "draft",
     definition: baq.definition,
+    tenant_id: tenantId,
     updated_at: nowIso(),
   };
   const response = baq.id
-    ? await supabase.from("sys_baq_queries").update(payload).eq("id", baq.id).select().single()
+    ? await supabase.from("sys_baq_queries").update(payload).eq("id", baq.id).eq("tenant_id", tenantId).select().single()
     : await supabase.from("sys_baq_queries").insert(payload).select().single();
   if (response.error) throw response.error;
   const saved = response.data as Record<string, unknown>;
@@ -859,10 +967,12 @@ export async function createOrUpdateEntityTool(
     const policy = evaluateDeletePolicy();
     return { status: "error", reply: `${entity.label}不支持 AI 删除：${policy.reason}。` };
   }
-  return upsertEntity(entity, state.text, state.currentFocus, state.provider, action);
+  const tenantId = requireTenantId(state);
+  return upsertEntity(entity, tenantId, state.text, state.currentFocus, state.provider, action);
 }
 
 export async function businessAnalysisTool(state: AiGraphState): Promise<ToolResult> {
+  const tenantId = requireTenantId(state);
   const catalog = await loadBaqCatalog();
   const selectedCatalog = pickAnalysisCatalog(catalog, state);
   const prompt = [
@@ -873,6 +983,10 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
     "只返回 JSON，不要 Markdown，不要解释。",
     "输出格式：{\"title\":\"...\",\"sql\":\"...\",\"explanation\":\"...\",\"responseMode\":\"text|table|card\",\"target\":\"...\",\"queryMode\":\"count|list|summary|detail|trend|compare|exception|answer\"}",
     "sql 必须是单条 SELECT 或 WITH 查询，只读，不允许 INSERT/UPDATE/DELETE。",
+    `本次查询的租户 tenant_id = ${tenantId}。`,
+    `【强制】SQL 中每引用一张 erp_ 业务表，都必须给该表加过滤条件 tenant_id = ${tenantId}；`,
+    `多表 JOIN 时每张表都要各加一次，用表别名限定，例如 t0.tenant_id = ${tenantId} AND t1.tenant_id = ${tenantId}。`,
+    "缺少该条件的 SQL 会被服务端直接拒绝执行，请务必不要遗漏。",
     "你可以使用下面的数据目录来选择真实业务表和字段。",
     `用户原话：${state.text}`,
     state.target ? `路由目标：${state.target}` : "路由目标：无",
@@ -909,8 +1023,8 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
   });
   plan.sql = normalizeAnalysisSql(plan.sql);
   console.log("[ai-server] analysis plan normalized SQL:", plan.sql);
-  validateAnalysisSql(plan.sql, selectedCatalog.length ? selectedCatalog : catalog);
-  const executed = await executeAiAnalysisSql(plan.sql);
+  validateAnalysisSql(plan.sql, selectedCatalog.length ? selectedCatalog : catalog, tenantId);
+  const executed = await executeAiAnalysisSql(plan.sql, tenantId);
   const rows = Array.isArray(executed?.rows) ? executed!.rows! : [];
 
   const previewRows = rows.slice(0, 20);
@@ -972,11 +1086,13 @@ export async function countMasterDataTool(state: AiGraphState): Promise<ToolResu
     };
   }
   const entity = resolution.def as EntityDef;
+  const tenantId = requireTenantId(state);
 
   let query = supabase
     .from(entity.tableName)
     .select("*", { count: "exact", head: true });
   if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
+  if (isTenantScopedTable(entity.tableName)) query = query.eq("tenant_id", tenantId);
   const { count, error } = await query;
 
   if (error) throw error;
@@ -998,11 +1114,12 @@ export async function countMasterDataTool(state: AiGraphState): Promise<ToolResu
 }
 
 export async function financeSummaryTool(state: AiGraphState): Promise<ToolResult> {
+  const tenantId = requireTenantId(state);
   const [receivablesRes, payablesRes, vouchersRes, assetsRes] = await Promise.all([
-    supabase.from("erp_receivables_s_539dcf81_b").select("*").eq("is_deleted", "n"),
-    supabase.from("erp_payables_s_539dcf81_b").select("*").eq("is_deleted", "n"),
-    supabase.from("erp_vouchers_s_539dcf81_b").select("*").eq("is_deleted", "n"),
-    supabase.from("erp_fixed_assets_s_539dcf81_b").select("*").eq("is_deleted", "n"),
+    supabase.from("erp_receivables_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("tenant_id", tenantId),
+    supabase.from("erp_payables_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("tenant_id", tenantId),
+    supabase.from("erp_vouchers_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("tenant_id", tenantId),
+    supabase.from("erp_fixed_assets_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("tenant_id", tenantId),
   ]);
   if (receivablesRes.error) throw receivablesRes.error;
   if (payablesRes.error) throw payablesRes.error;

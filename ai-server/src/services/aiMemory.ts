@@ -3,6 +3,7 @@ import { supabase } from "../config/supabase.js";
 export interface AiSessionMemory {
   session_id: string;
   user_id?: number;
+  tenant_id?: number;
   recent_messages: unknown[];
   last_intent?: string;
   last_target?: string;
@@ -32,6 +33,7 @@ export async function saveSessionMemory(memory: AiSessionMemory) {
       {
         session_id: memory.session_id,
         user_id: memory.user_id,
+        tenant_id: memory.tenant_id ?? null,
         recent_messages: memory.recent_messages,
         last_intent: memory.last_intent,
         last_target: memory.last_target,

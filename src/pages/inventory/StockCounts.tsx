@@ -35,6 +35,7 @@ export function StockCounts() {
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [posting, setPosting] = useState(false);
   const watchedWarehouseId = Form.useWatch('warehouse_id', form);
 
   useEffect(() => { void fetchAll(); }, []);
@@ -53,32 +54,64 @@ export function StockCounts() {
     setLoading(false);
   };
   const fetchDetails = async (id: number) => { const { data } = await supabase.from(detailTable).select('*').eq('is_deleted', 'n').eq('count_id', id).order('line_no'); setDetails((data || []) as Detail[]); };
-  const handlePost = async (id: number) => {
+  const postStockCount = async (id: number) => {
+    const approvedAt = new Date().toISOString();
+    const { error: approveError } = await supabase
+      .from(tableName)
+      .update({ status: 'approved', approved_at: approvedAt })
+      .eq('id', id);
+    if (approveError) throw approveError;
+
+    const { error } = await supabase.rpc('post_inventory_document', {
+      p_document_type: 'stock_count',
+      p_document_id: id,
+      p_idempotency_key: crypto.randomUUID(),
+    });
+    if (error) throw error;
+  };
+
+  // 审核并过账走工具栏按钮，作用于当前勾选的盘点单（支持多选批量）。
+  const handleBatchPost = () => {
+    const selectedIds = new Set(selectedRowKeys.map((key) => Number(key)));
+    const targets = rows.filter((row) => selectedIds.has(row.id) && row.status !== 'posted');
+    if (targets.length === 0) {
+      message.warning(t('stockCounts.messages.postNoTarget'));
+      return;
+    }
     Modal.confirm({
       title: t('stockCounts.approveAndPost'),
-      content: t('stockCounts.postConfirmContent'),
+      content: t('stockCounts.postConfirmContentMany', { count: targets.length }),
       okText: t('stockCounts.continue'),
       cancelText: t('common.cancel'),
       onOk: async () => {
+        setPosting(true);
+        let success = 0;
+        const failures: string[] = [];
         try {
-          const approvedAt = new Date().toISOString();
-          const { error: approveError } = await supabase
-            .from(tableName)
-            .update({ status: 'approved', approved_at: approvedAt })
-            .eq('id', id);
-          if (approveError) throw approveError;
-
-          const { error } = await supabase.rpc('post_inventory_document', {
-            p_document_type: 'stock_count',
-            p_document_id: id,
-            p_idempotency_key: crypto.randomUUID(),
-          });
-          if (error) throw error;
-          message.success(t('stockCounts.messages.postSuccess'));
+          for (const record of targets) {
+            try {
+              await postStockCount(record.id);
+              success += 1;
+            } catch (error: any) {
+              console.error('Error posting stock count:', error);
+              failures.push(`${record.count_no}：${error?.message || t('stockCounts.messages.postFailed')}`);
+            }
+          }
+          if (failures.length === 0) {
+            message.success(t('stockCounts.messages.postSuccessMany', { count: success }));
+          } else {
+            message.error(
+              t('stockCounts.messages.postPartialFailed', {
+                success,
+                failed: failures.length,
+                detail: failures.join('；'),
+              }),
+            );
+          }
+          setSelectedRowKeys([]);
           await fetchAll();
-        } catch (error: any) {
-          console.error('Error posting stock count:', error);
-          message.error(error?.message || t('stockCounts.messages.postFailed'));
+        } finally {
+          setPosting(false);
         }
       },
     });
@@ -91,7 +124,6 @@ export function StockCounts() {
     { title: t('common.status'), key: 'status', dataIndex: 'status' },
     { title: t('common.actions'), key: 'action', render: (_: any, record: Header) => <Space>
       <Button onClick={async () => { setSelected(record); await fetchDetails(record.id); setDetailOpen(true); }}>{t('stockCounts.detail')}</Button>
-      {record.status !== 'posted' && <Button type="primary" icon={<ThunderboltOutlined />} onClick={() => void handlePost(record.id)}>{record.status === 'draft' ? t('stockCounts.approveAndPost') : t('stockCounts.post')}</Button>}
       {record.status !== 'posted' ? (
         <Button onClick={() => { setEditing(record); form.setFieldsValue({ ...record, count_date: dayjs(record.count_date) }); setOpen(true); }}>{t('common.edit')}</Button>
       ) : (
@@ -111,22 +143,41 @@ export function StockCounts() {
         headerTitle={t('stockCounts.title')}
         rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         queryBar={
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={async () => {
-              setEditing(null);
-              form.setFieldsValue({
-                count_no: await nextDocumentNo('stock_count'),
-                count_date: dayjs(),
-                location_id: undefined,
-                status: "draft",
-              });
-              setOpen(true);
-            }}
-          >
-            {t('stockCounts.add')}
-          </Button>
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={async () => {
+                let countNo: string;
+                try {
+                  countNo = await nextDocumentNo('stock_count');
+                } catch (error) {
+                  message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
+                  return;
+                }
+                setEditing(null);
+                form.setFieldsValue({
+                  count_no: countNo,
+                  count_date: dayjs(),
+                  location_id: undefined,
+                  status: "draft",
+                });
+                setOpen(true);
+              }}
+            >
+              {t('stockCounts.add')}
+            </Button>
+            <Button
+              type="primary"
+              icon={<ThunderboltOutlined />}
+              loading={posting}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchPost}
+            >
+              {t('stockCounts.approveAndPost')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
+          </Space>
         }
       />
       <SimpleModal

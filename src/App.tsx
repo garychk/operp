@@ -38,6 +38,7 @@ import { MaterialIssues } from './pages/mrp/MaterialIssues';
 import { MrpPlans } from './pages/mrp/MrpPlans';
 import { QualityInspections } from './pages/mrp/QualityInspections';
 import { Users } from './pages/system/Users';
+import { Tenants } from './pages/system/Tenants';
 import { Roles } from './pages/system/Roles';
 import { Menus } from './pages/system/Menus';
 import { Logs } from './pages/system/Logs';
@@ -134,6 +135,7 @@ function AppContent() {
         <Route path="system">
           <Route index element={<Navigate to="users" replace />} />
           <Route path="users" element={<Users />} />
+          <Route path="tenants" element={<Tenants />} />
           <Route path="roles" element={<Roles />} />
           <Route path="menus" element={<Menus />} />
           <Route path="settings" element={<Settings />} />

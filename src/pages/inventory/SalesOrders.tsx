@@ -300,11 +300,18 @@ export function SalesOrders() {
   };
 
   const handleAdd = async () => {
+    let orderNo: string;
+    try {
+      orderNo = await nextDocumentNo(docType);
+    } catch (error) {
+      message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
+      return;
+    }
     setEditingOrder(null);
     setSelectedOrder(null);
     setIsDisabled(false);
     form.setFieldsValue({
-      order_no: await nextDocumentNo(docType),
+      order_no: orderNo,
       order_date: dayjs(new Date()),
       customer_id: undefined,
       delivery_date: "",
@@ -790,7 +797,7 @@ export function SalesOrders() {
           </Space>
         }
         width={'70%'}
-        height={680}
+        height={'80%'}
       />
 
       <SimpleModal

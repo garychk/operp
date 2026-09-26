@@ -276,11 +276,18 @@ export function Vouchers() {
   };
 
   const handleAdd = async () => {
+    let voucherNo: string;
+    try {
+      voucherNo = await nextDocumentNo('voucher');
+    } catch (error) {
+      message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
+      return;
+    }
     setEditingVoucher(null);
     setSelectedVoucher(null);
     setDetails([]);
     form.setFieldsValue({
-      voucher_no: await nextDocumentNo('voucher'),
+      voucher_no: voucherNo,
       voucher_date: dayjs(new Date()),
       type: 'general',
       total_amount: 0,
@@ -598,7 +605,7 @@ export function Vouchers() {
             <Button type="primary" onClick={() => form.submit()}>{t('common.save')}</Button>
           </Space>
         }
-        height={680}
+        height={'80%'}
       />
 
       <SupaModal

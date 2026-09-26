@@ -331,13 +331,20 @@ export function PurchaseReceipts() {
   };
 
   const handleAdd = async () => {
+    let receiptNo: string;
+    try {
+      receiptNo = await nextDocumentNo('purchase_receipt');
+    } catch (error) {
+      message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
+      return;
+    }
     setEditingReceipt(null);
     setSelectedReceipt(null);
     setSelectedOrderId(null);
     setPurchaseOrderDetails([]);
     setDetails([]);
     form.setFieldsValue({
-      receipt_no: await nextDocumentNo('purchase_receipt'),
+      receipt_no: receiptNo,
       receipt_date: dayjs(new Date()),
       order_id: undefined,
       supplier_id: undefined,

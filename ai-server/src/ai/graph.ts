@@ -10,6 +10,7 @@ import { responseComposerNode } from "./nodes/responseComposer.js";
 const State = Annotation.Root({
   sessionId: Annotation<string>,
   userId: Annotation<number | undefined>,
+  tenantId: Annotation<number | undefined>,
   text: Annotation<string>,
   skill: Annotation<AiGraphState["skill"]>,
   provider: Annotation<AiGraphState["provider"]>,
@@ -61,6 +62,7 @@ const compiled = graph.compile();
 const buildState = (input: AiChatRequest): AiGraphState => ({
   sessionId: input.session_id,
   userId: input.user_id,
+  tenantId: input.tenant_id,
   text: input.text,
   skill: input.skill ?? "auto",
   provider: input.provider,

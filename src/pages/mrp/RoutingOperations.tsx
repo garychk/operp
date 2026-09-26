@@ -713,7 +713,7 @@ export function RoutingOperations() {
             </Button>
           </Space>
         }
-        height={680}
+        height={'80%'}
       />
 
       <SimpleModal

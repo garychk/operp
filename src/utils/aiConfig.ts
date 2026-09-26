@@ -93,12 +93,14 @@ export function normalizeAISettings(value: unknown): AISettingsConfig {
   };
 }
 
+// 读覆盖视图而不是 sys_config 原表：同一 category_code 可能同时存在
+// 平台基线行（tenant_id IS NULL）和本租户的私有行，直接查原表会拿到 2 行，
+// .maybeSingle() 会报 PGRST116。视图保证私有行覆盖基线行，永远单行。
 export async function fetchAISettings() {
   const { data, error } = await supabase
-    .from('sys_config')
+    .from('vw_sys_config_effective')
     .select('config_json')
     .eq('category_code', 'ai')
-    .eq('is_deleted', 'n')
     .maybeSingle();
 
   if (error) {
@@ -109,20 +111,16 @@ export async function fetchAISettings() {
 }
 
 export async function saveAISettings(config: AISettingsConfig) {
-  const { error } = await supabase
-    .from('sys_config')
-    .upsert(
-      {
-        category_code: 'ai',
-        category_name: 'AI设置',
-        description: 'AI 助手、大模型列表和生成参数。密钥建议放在服务端环境变量。',
-        config_json: config,
-        status: '1',
-        sort_order: 5,
-        is_deleted: 'n',
-      },
-      { onConflict: 'category_code' },
-    );
+  // 走 RPC 而不是 upsert：有私有行则更新，没有则基于基线行创建一条本租户的副本。
+  // 直接 upsert 行不通 —— 唯一键已改成分租户的部分索引，onConflict 命中不了。
+  const { error } = await supabase.rpc('save_tenant_config', {
+    p_category_code: 'ai',
+    p_config_json: config,
+    p_category_name: 'AI设置',
+    p_description: 'AI 助手、大模型列表和生成参数。密钥建议放在服务端环境变量。',
+    p_sort_order: 5,
+    p_status: '1',
+  });
 
   if (error) {
     throw error;

@@ -50,6 +50,8 @@ import type {
   ErpProductionReceiptsS539Dcf81BRow,
   SysFormsRow,
   SysConfigRow,
+  SysInventoryTransactionTypesRow,
+  SysDocumentTransactionTypesRow,
 } from '../types/database';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -181,5 +183,7 @@ export type Tables = {
   erp_production_receipts_s_539dcf81_b: { Row: ErpProductionReceiptsS539Dcf81BRow };
   sys_forms: { Row: SysFormsRow };
   sys_config: { Row: SysConfigRow };
+  sys_inventory_transaction_types: { Row: SysInventoryTransactionTypesRow };
+  sys_document_transaction_types: { Row: SysDocumentTransactionTypesRow };
 };
 
