@@ -1089,6 +1089,7 @@ const zhCN = {
     "knowledgeBase.reindexHint": "保存或导入文档后，请运行重新索引生成分片和向量。",
     "knowledgeBase.reindexDone": "索引完成，共 {{total}} 条，成功 {{success}} 条，失败 {{failed}} 条",
     "knowledgeBase.reindexRequestFailed": "索引请求失败：{{status}}",
+    "knowledgeBase.reindexNoTenant": "当前账号未分配租户，无法确定要索引哪些文档，请联系管理员。",
     "knowledgeBase.newDoc": "新建文档",
     "knowledgeBase.drawerEditTitle": "编辑知识库文档",
     "knowledgeBase.drawerCreateTitle": "新建知识库文档",

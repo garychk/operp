@@ -1089,6 +1089,7 @@ const enUS = {
     "knowledgeBase.reindexHint": "After saving or importing documents, run reindex to generate chunks and vectors.",
     "knowledgeBase.reindexDone": "Reindexing completed: {{total}} total, {{success}} succeeded, {{failed}} failed",
     "knowledgeBase.reindexRequestFailed": "Index request failed: {{status}}",
+    "knowledgeBase.reindexNoTenant": "Your account is not assigned to a tenant, so there is no document set to index. Please contact an administrator.",
     "knowledgeBase.newDoc": "New Document",
     "knowledgeBase.drawerEditTitle": "Edit Knowledge Base Document",
     "knowledgeBase.drawerCreateTitle": "New Knowledge Base Document",

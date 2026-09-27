@@ -3,7 +3,7 @@ import { z } from "zod";
 import { supabase } from "../config/supabase.js";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
 import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
-import { TenantScopeError } from "../config/tenantContext.js";
+import { TenantScopeError, resolveTenantContext } from "../config/tenantContext.js";
 
 export const aiRouter = Router();
 
@@ -50,6 +50,7 @@ const aiSettingsSchema = z.object({
 const reindexSchema = z.object({
   doc_id: z.number().int().optional(),
   tenant_id: z.number().int().optional(),
+  user_id: z.number().int().optional(),
 });
 
 async function resolveProviderConfig(
@@ -201,7 +202,18 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
   }
 
   try {
-    const tenantId = parsed.data.tenant_id ?? null;
+    // service_role 绕过 RLS，租户必须显式传入或从 user_id 解析。
+    // 两者都没有时不报错（保持 fail-closed），但会只扫 tenant_id IS NULL 的平台基线行，
+    // 表现为 total=0 的静默空跑——打日志，免得下次又查半天。
+    let tenantId = parsed.data.tenant_id ?? null;
+    if (tenantId === null && parsed.data.user_id !== undefined) {
+      tenantId = (await resolveTenantContext(parsed.data.user_id)).tenantId;
+    }
+    if (tenantId === null) {
+      console.warn(
+        "[ai-server] /knowledge/reindex 缺少租户上下文（既无 tenant_id 也无 user_id），只会索引平台基线文档",
+      );
+    }
     const resolvedProvider = await resolveProviderConfig({ id: "ollama" }, tenantId).catch(
       async () => {
         const { data, error } = await supabase.rpc("get_tenant_config", {
@@ -230,6 +242,10 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
     );
     res.json({ ok: true, ...result });
   } catch (error) {
+    if (error instanceof TenantScopeError) {
+      res.status(403).json({ ok: false, error: errorToMessage(error) });
+      return;
+    }
     res.status(500).json({
       ok: false,
       error: errorToMessage(error),
