@@ -116,6 +116,11 @@ export function Tenants() {
 
   const columns: ColumnsType<Tenant> = [
     {
+      title: t('common.id'),
+      dataIndex: 'id',
+      width: 80,
+    },
+    {
       title: t('tenants.code'),
       dataIndex: 'code',
       width: 160,
