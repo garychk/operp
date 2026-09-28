@@ -102,42 +102,42 @@
 
 ## 部署后必须配置
 
-1. 创建 Supabase Auth 登录账号。
+1. 登录账号（已自动创建，仅需改密码）。
 
    前端登录使用 Supabase Auth，不直接使用 `sys_users.password_hash`。
 
-   建议在 Supabase Authentication 中创建管理员账号，例如：
+   `deploy_01`（新部署）与 `deploy_54`（幂等补齐，可对已有环境单独执行）会自动完成：
 
-   - Email: `admin@erp.com`
-   - Password: 按实施现场要求设置
+   - 创建 GoTrue 账号（`auth.users` + `auth.identities` 成对插入）：
+     - Email: `admin@operp.com`
+     - Password: `admin123`（**上线后请尽快修改**）
+   - 回填 `sys_users.auth_id`，完成业务档案与登录账号的绑定。
 
-2. 绑定 Auth 用户与 `sys_users`。
-
-   程序登录时会尝试按邮箱自动绑定 `sys_users.auth_id`。也可以手工绑定：
+   修改初始密码（或用 Supabase Authentication 控制台操作）：
 
    ```sql
-   update public.sys_users
-   set auth_id = '<auth.users.id>'
-   where email = 'admin@erp.com';
+   update auth.users
+   set encrypted_password = extensions.crypt('<新密码>', extensions.gen_salt('bf', 10))
+   where email = 'admin@operp.com';
    ```
 
-3. 确认管理员用户已绑定超级管理员角色。
+2. 确认管理员用户已绑定超级管理员角色。
 
    ```sql
    select u.id, u.username, u.email, r.role_code, r.role_name
    from public.sys_users u
    join public.sys_user_roles ur on ur.user_id = u.id
    join public.sys_roles r on r.id = ur.role_id
-   where u.email = 'admin@erp.com';
+   where u.email = 'admin@operp.com';
    ```
 
    结果中应包含 `super_admin`。
 
-4. 补齐业务菜单。
+3. 补齐业务菜单。
 
    初始脚本只写入系统管理菜单。财务、进销存、MRP 菜单需要在“菜单管理”中维护，或由实施数据脚本补充。
 
-5. 给普通角色授权。
+4. 给普通角色授权。
 
    在系统中进入：
 

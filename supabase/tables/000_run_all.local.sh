@@ -94,6 +94,7 @@ ORDER=(
   deploy_51_erp_unique_key_tenant.sql
   deploy_52_platform_metadata_materialize.sql
   deploy_53_fix_sys_config_super_admin.sql
+  deploy_54_auth_seed_users.sql
 )
 
 # ---------------------------------------------------------------- 文件自检
