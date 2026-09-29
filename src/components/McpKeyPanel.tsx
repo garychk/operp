@@ -230,7 +230,7 @@ export function McpKeyPanel() {
     {
       title: t("mcpKeys.colStatus"),
       key: "status",
-      width: 100,
+      width: 80,
       render: (_, row) => {
         const { text, color } = statusOf(row);
         return <Tag color={color}>{text}</Tag>;
@@ -239,14 +239,14 @@ export function McpKeyPanel() {
     {
       title: t("mcpKeys.colLastUsed"),
       dataIndex: "last_used_at",
-      width: 180,
+      width: 160,
       render: (value: string | null) =>
         value ? formatTime(value) : <Text type="secondary">{t("mcpKeys.neverUsed")}</Text>,
     },
     {
       title: t("mcpKeys.colCreatedAt"),
       dataIndex: "created_at",
-      width: 180,
+      width: 160,
       render: (value: string | null) => formatTime(value),
     },
     {
@@ -266,9 +266,7 @@ export function McpKeyPanel() {
             cancelText={t("mcpKeys.cancel")}
             onConfirm={() => handleRevoke(row)}
           >
-            <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              {t("mcpKeys.revoke")}
-            </Button>
+            <Button type="link" danger size="small" icon={<DeleteOutlined />}></Button>
           </Popconfirm>
         );
       },
