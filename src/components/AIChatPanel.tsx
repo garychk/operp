@@ -854,6 +854,26 @@ export function AIChatPanel({
     }
 
     const sessionId = readSessionId();
+
+    // 面板初始化时不再加载历史。只有在真正要发消息、且本地还没有激活会话时，
+    // 才按 localStorage 里的 id 尝试恢复既有会话（避免重复插入），恢复到就顺带把
+    // 该会话的历史消息拉回来，保证上下文连续。
+    try {
+      const sessions = await fetchChatSessions(user?.profile.id ?? null);
+      setSessionsLoaded(true);
+      setConversationItems((prev) =>
+        prev.length ? prev : sessions.map(mapSessionToListItem),
+      );
+      const matched = sessions.find((session) => session.id === sessionId);
+      if (matched) {
+        setActiveConversationId(matched.id);
+        await loadConversationMessages(matched.id);
+        return matched.id;
+      }
+    } catch (error) {
+      console.error("恢复 AI 会话失败", error);
+    }
+
     const session = await createChatSession({
       id: sessionId,
       user_id: user?.profile.id ?? null,
@@ -867,32 +887,22 @@ export function AIChatPanel({
   };
 
   useEffect(() => {
-    if (!active || sessionsLoaded) {
+    if (!active) {
+      return;
+    }
+    window.setTimeout(scrollMessagesToBottom, 0);
+  }, [messages, active]);
+
+  // 会话列表懒加载：只在用户第一次打开「历史」抽屉时拉取，面板初始化不发请求。
+  useEffect(() => {
+    if (!active || !historyOpen || sessionsLoaded) {
       return;
     }
 
     const loadSessions = async () => {
       try {
         const sessions = await fetchChatSessions(user?.profile.id ?? null);
-        const localSessionId = readSessionId();
-        const items = sessions.map(mapSessionToListItem);
-        setConversationItems(items);
-
-        let activeId = sessions.find((session) => session.id === localSessionId)?.id || sessions[0]?.id || "";
-
-        if (!activeId) {
-          const created = await createChatSession({
-            id: localSessionId,
-            user_id: user?.profile.id ?? null,
-            title: t("aiChat.newConversation"),
-          });
-          activeId = created.id;
-          setConversationItems([mapSessionToListItem(created)]);
-        }
-
-        syncSessionId(activeId);
-        setActiveConversationId(activeId);
-        await loadConversationMessages(activeId);
+        setConversationItems(sessions.map(mapSessionToListItem));
       } catch (error) {
         console.error("加载 AI 对话历史失败", error);
         message.error(t("aiChat.msg.loadHistoryFailed"));
@@ -902,14 +912,7 @@ export function AIChatPanel({
     };
 
     void loadSessions();
-  }, [active, sessionsLoaded, user?.profile.id]);
-
-  useEffect(() => {
-    if (!active) {
-      return;
-    }
-    window.setTimeout(scrollMessagesToBottom, 0);
-  }, [messages, active]);
+  }, [active, historyOpen, sessionsLoaded, user?.profile.id]);
 
   const updateProvider = (id: string, patch: Partial<AIProviderConfig>) => {
     setAISettings((prev) => ({
@@ -1456,7 +1459,7 @@ export function AIChatPanel({
                 ))}
               </div>
             ) : (
-              <Flex vertical gap={18}>
+              <Flex vertical gap={18} className="ai-chat-welcome">
                 <Welcome
                   icon={<img src={chatIcon} alt="Chat Icon" />}
                   variant="borderless"

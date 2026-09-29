@@ -139,7 +139,8 @@ const normalizeEntityFields = (
   return normalized;
 };
 
-const hasColumn = (entity: EntityDef, name: string) => entity.columns.some((column) => column.name === name);
+export const hasColumn = (entity: EntityDef, name: string) =>
+  entity.columns.some((column) => column.name === name);
 
 /**
  * 该表是否需要租户过滤。
@@ -156,7 +157,7 @@ const hasColumn = (entity: EntityDef, name: string) => entity.columns.some((colu
  */
 const TENANT_SCOPED_SYSTEM_TABLES = new Set(["sys_baq_queries", "sys_ai_chat_memory"]);
 
-const isTenantScopedTable = (tableName: string) =>
+export const isTenantScopedTable = (tableName: string) =>
   tableName.startsWith("erp_") || TENANT_SCOPED_SYSTEM_TABLES.has(tableName);
 
 /**

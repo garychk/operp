@@ -14,6 +14,9 @@ interface ChatMessage {
 const toResponseUrl = (baseUrl: string) =>
   baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/$/, "")}/chat/completions`;
 
+const toChatUrl = (endpoint: string, apiType?: LlmProviderConfig["apiType"]) =>
+  apiType === "ollama" ? endpoint : toResponseUrl(endpoint);
+
 export async function callChatModel(
   messages: ChatMessage[],
   provider?: LlmProviderConfig,
@@ -30,7 +33,9 @@ export async function callChatModel(
     throw new Error("No model endpoint configured");
   }
 
-  const response = await fetch(endpoint, {
+  // proxy（OpenAI 兼容）类型允许只填根地址（如 https://api.deepseek.com），
+  // 自动补全为 <base>/chat/completions；ollama 的 /api/chat 地址原样使用。
+  const response = await fetch(toChatUrl(endpoint, provider?.apiType), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

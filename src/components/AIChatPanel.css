@@ -158,6 +158,53 @@
   padding-right: 4px;
 }
 
+/* 欢迎页（Welcome + 快捷提问）：内容超出可视高度时允许整体滚动，避免被裁切 */
+.ai-chat-welcome {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 滚动条悬停才显示：默认透明，鼠标移入容器时才显形 */
+.ai-chat-message-list,
+.ai-chat-welcome,
+.ai-chat-session-list,
+.ai-chat-history {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.ai-chat-message-list:hover,
+.ai-chat-welcome:hover,
+.ai-chat-session-list:hover,
+.ai-chat-history:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+}
+
+.ai-chat-message-list::-webkit-scrollbar,
+.ai-chat-welcome::-webkit-scrollbar,
+.ai-chat-session-list::-webkit-scrollbar,
+.ai-chat-history::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ai-chat-message-list::-webkit-scrollbar-thumb,
+.ai-chat-welcome::-webkit-scrollbar-thumb,
+.ai-chat-session-list::-webkit-scrollbar-thumb,
+.ai-chat-history::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.ai-chat-message-list:hover::-webkit-scrollbar-thumb,
+.ai-chat-welcome:hover::-webkit-scrollbar-thumb,
+.ai-chat-session-list:hover::-webkit-scrollbar-thumb,
+.ai-chat-history:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.25);
+}
+
 .ai-chat-message-row {
   display: flex;
 }

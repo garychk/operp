@@ -1,8 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { supabase } from "../config/supabase.js";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
 import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
+import {
+  resolveEmbeddingProviderConfig,
+  resolveProviderConfig,
+} from "../services/aiProvider.js";
 import { TenantScopeError, resolveTenantContext } from "../config/tenantContext.js";
 
 export const aiRouter = Router();
@@ -28,63 +31,11 @@ const chatSchema = z.object({
     .optional(),
 });
 
-const providerSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().optional(),
-  endpoint: z.string().optional(),
-  model: z.string().optional(),
-  apiType: z.enum(["proxy", "ollama"]).optional(),
-  apiKey: z.string().optional(),
-  temperature: z.number().optional(),
-});
-
-const aiSettingsSchema = z.object({
-  enabled: z.boolean().optional(),
-  providers: z.array(providerSchema).default([]),
-  activeProviderId: z.string().optional(),
-  temperature: z.number().optional(),
-  redactSensitiveData: z.boolean().optional(),
-  maxContextMessages: z.number().optional(),
-});
-
 const reindexSchema = z.object({
   doc_id: z.number().int().optional(),
   tenant_id: z.number().int().optional(),
   user_id: z.number().int().optional(),
 });
-
-async function resolveProviderConfig(
-  provider?: { id?: string; name?: string },
-  tenantId?: number | null,
-) {
-  // sys_config 里同一 category_code 可能同时有平台基线行和租户私有行，
-  // 直接查表会拿到多行。RPC 内部「私有优先、回退基线」并接受显式 tenant_id。
-  const { data, error } = await supabase.rpc("get_tenant_config", {
-    p_category_code: "ai",
-    p_tenant_id: tenantId ?? null,
-  });
-
-  if (error) throw error;
-
-  const settings = aiSettingsSchema.parse(data || {});
-  const matched = settings.providers.find((item) => {
-    if (!provider?.id) return false;
-    if (item.id === provider.id) return true;
-    if (provider.name && item.name === provider.name) return true;
-    return false;
-  });
-
-  if (!matched) {
-    throw new Error(`未找到对应的 AI provider：${provider?.id || provider?.name || "unknown"}`);
-  }
-
-  // console.log("[ai-server] resolved provider:", {
-  //   requestProvider: provider,
-  //   matchedProvider: matched,
-  // });
-
-  return matched;
-}
 
 const wantsStream = (req: { body?: { stream?: unknown }; headers: Record<string, unknown> }) => {
   const accept = String(req.headers.accept || "");
@@ -214,26 +165,12 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
         "[ai-server] /knowledge/reindex 缺少租户上下文（既无 tenant_id 也无 user_id），只会索引平台基线文档",
       );
     }
-    const resolvedProvider = await resolveProviderConfig({ id: "ollama" }, tenantId).catch(
-      async () => {
-        const { data, error } = await supabase.rpc("get_tenant_config", {
-          p_category_code: "ai",
-          p_tenant_id: tenantId,
-        });
-        if (error) throw error;
-        const settings = aiSettingsSchema.parse(data || {});
-        const candidates = settings.providers.filter(
-          (item) =>
-            item.apiType === "ollama" ||
-            /embed/i.test(String(item.model || "")) ||
-            /embeddings/i.test(String(item.endpoint || "")),
-        );
-        if (!candidates.length) {
-          throw new Error("未找到可用于知识库向量化的 embedding provider");
-        }
-        return candidates[0];
-      },
-    );
+    // 优先用 id=ollama 的 provider；没有则按 embedding 特征自动挑。
+    // 规则收在 services/aiProvider.ts，与 MCP 链路共用同一份。
+    const resolvedProvider = await resolveEmbeddingProviderConfig(
+      { id: "ollama" },
+      tenantId,
+    ).catch(() => resolveEmbeddingProviderConfig(undefined, tenantId));
 
     const result = await reindexKnowledgeDocuments(
       resolvedProvider,
