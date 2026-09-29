@@ -50,6 +50,7 @@ import type {
   ErpProductionReceiptsS539Dcf81BRow,
   SysFormsRow,
   SysConfigRow,
+  SysMcpApiKeysRow,
   SysInventoryTransactionTypesRow,
   SysDocumentTransactionTypesRow,
 } from '../types/database';
@@ -183,6 +184,7 @@ export type Tables = {
   erp_production_receipts_s_539dcf81_b: { Row: ErpProductionReceiptsS539Dcf81BRow };
   sys_forms: { Row: SysFormsRow };
   sys_config: { Row: SysConfigRow };
+  sys_mcp_api_keys: { Row: SysMcpApiKeysRow };
   sys_inventory_transaction_types: { Row: SysInventoryTransactionTypesRow };
   sys_document_transaction_types: { Row: SysDocumentTransactionTypesRow };
 };

@@ -43,6 +43,7 @@ import {
   SwapOutlined,
   SunFilled,
   MoonOutlined,
+  ApiOutlined,
   BgColorsOutlined,
   CheckOutlined,
   InfoCircleFilled,
@@ -60,6 +61,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { MenuPermissionGuard } from "./ProtectedRoute";
 import { AIChatDrawer } from "./AIChatDrawer";
+import { McpGuideDrawer } from "./McpGuideDrawer";
 import { NotificationBell } from "./NotificationBell";
 import heroLogo from "../assets/opelix.svg";
 import defaultAvatar from "../assets/avatar.png";
@@ -637,6 +639,7 @@ export function ProLayout() {
     return Number.isNaN(radius) ? 6 : radius;
   });
   const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [databaseMenus, setDatabaseMenus] = useState<MenuRoute[]>([]);
 
@@ -1017,6 +1020,13 @@ export function ProLayout() {
                   className={`ai-chat-action${aiChatOpen ? " ai-chat-action-active" : ""}`}
                   onClick={() => setAiChatOpen(true)}
                 />,
+                <ApiOutlined
+                  key="mcp-guide"
+                  className={`ai-chat-action${mcpGuideOpen ? " ai-chat-action-active" : ""}`}
+                  title={t("mcpGuide.entry")}
+                  aria-label={t("mcpGuide.entry")}
+                  onClick={() => setMcpGuideOpen(true)}
+                />,
                 <Dropdown
                   key="theme-color"
                   trigger={["click"]}
@@ -1216,6 +1226,7 @@ export function ProLayout() {
           </ProCard>
         </PageContainer>
         <AIChatDrawer open={aiChatOpen} onClose={() => setAiChatOpen(false)} />
+        <McpGuideDrawer open={mcpGuideOpen} onClose={() => setMcpGuideOpen(false)} />
         <Modal
           open={isInfoModalOpen}
           title={t("layout.aboutTitle")}

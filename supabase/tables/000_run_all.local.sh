@@ -95,6 +95,7 @@ ORDER=(
   deploy_52_platform_metadata_materialize.sql
   deploy_53_fix_sys_config_super_admin.sql
   deploy_54_auth_seed_users.sql
+  deploy_55_mcp_api_keys.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

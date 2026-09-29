@@ -1008,6 +1008,36 @@ export interface SysFormsRow {
 export type SysFormsInsert = Omit<SysFormsRow, 'id' | 'corp_id' | 'emp_id' | 'created_at'>;
 export type SysFormsUpdate = Partial<SysFormsInsert>;
 
+/**
+ * MCP 服务 API Key（deploy_55_mcp_api_keys.sql）。
+ *
+ * 明文永不入库，这里能拿到的只有 key_prefix（展示用）与 key_hash（不可逆摘要）。
+ * user_id / tenant_id 由数据库的 DEFAULT current_sys_user_id() / current_tenant_id()
+ * 自动填充，前端不要也**不应该**显式传 —— 传了也会被 RLS 的 WITH CHECK 拦住。
+ */
+export interface SysMcpApiKeysRow {
+  id: number;
+  user_id: number;
+  tenant_id: number | null;
+  name: string;
+  key_prefix: string;
+  key_hash: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string | null;
+  is_deleted: string | null;
+}
+/** 前端只会 insert 这三项 + 可选过期时间，其余交给数据库默认值 */
+export interface SysMcpApiKeysInsert {
+  name?: string;
+  key_prefix: string;
+  key_hash: string;
+  expires_at?: string | null;
+}
+/** 列级授权只放开了这三列，多传会被数据库拒绝 */
+export type SysMcpApiKeysUpdate = Partial<Pick<SysMcpApiKeysRow, 'name' | 'revoked_at' | 'is_deleted'>>;
+
 export interface ErpUomGroupsS539Dcf81BRow {
   id: number;
   corp_id: string | null;
