@@ -89,7 +89,7 @@ body {
    历史常量 90vh 保持不动，避免改变既有页面观感；--page-viewport-h 供需要锚定视口高度的
    局部样式复用（见 AIChatPanel.css 的 .ai-chat-page）。 */
 :root {
-  --page-viewport-h: 90vh;
+  --page-viewport-h: 82vh;
 }
 
 .page-viewport {
