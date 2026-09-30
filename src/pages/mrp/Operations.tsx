@@ -247,7 +247,7 @@ export function Operations() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredOperations}

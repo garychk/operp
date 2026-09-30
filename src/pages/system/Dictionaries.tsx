@@ -197,7 +197,6 @@ export function Dictionaries() {
       }}
     >
       <Card
-        className='mainContent'
         title={t('dictionaries.dictTypeTitle')}
         extra={
           <Button

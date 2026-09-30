@@ -409,7 +409,7 @@ export function QualityInspections() {
     },
   ];
   return (
-    <Card className='mainContent' variant="borderless" size="small">
+    <Card variant="borderless" size="small">
       <Row gutter={12} style={{ marginBottom: 16 }}>
         <Col span={8}>
           <Card size="small">

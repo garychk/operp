@@ -152,7 +152,7 @@ export function AccountingPeriods() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns as any}
         dataSource={filteredRows}

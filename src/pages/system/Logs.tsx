@@ -273,7 +273,7 @@ export function Logs() {
 
   return (
     <>
-      <Card className='mainContent' variant="borderless" title={t('logs.title')} extra={
+      <Card variant="borderless" title={t('logs.title')} extra={
         <Space size="middle">
           {selectedRowKeys.length > 0 && (
             <Popconfirm

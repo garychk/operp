@@ -258,7 +258,7 @@ export function WorkCenters() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredWorkCenters}

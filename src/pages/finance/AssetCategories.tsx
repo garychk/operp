@@ -185,7 +185,7 @@ export function AssetCategories() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredCategories}

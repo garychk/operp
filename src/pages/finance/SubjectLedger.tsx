@@ -117,7 +117,7 @@ export function SubjectLedger() {
   const activeSubject = subjectId ? subjectMap.get(subjectId) : null;
 
   return (
-    <Card className="mainContent" size='small' variant='borderless'>
+    <Card size='small' variant='borderless'>
       <Tabs
         tabPlacement='start'
         defaultActiveKey="balance"

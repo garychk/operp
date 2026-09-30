@@ -516,7 +516,7 @@ export function MaterialIssues() {
   );
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredIssues}

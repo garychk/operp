@@ -586,7 +586,6 @@ export function DocumentTypeBuilder() {
 
   return (
     <Card
-      className="mainContent"
       variant="borderless"
       title="DocType Builder"
       extra={

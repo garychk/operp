@@ -8,7 +8,6 @@ import { AIChatPanel } from '../components/AIChatPanel';
 export function Dashboard() {
   return (
     <Card
-      className="mainContent"
       variant="borderless"
     >
     <div className="ai-chat-page">

@@ -206,7 +206,7 @@ export function MrpPlans() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredPlans}

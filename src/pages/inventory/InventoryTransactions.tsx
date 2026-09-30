@@ -221,7 +221,6 @@ export function InventoryTransactions() {
 
   return (
     <Card
-      className="mainContent"
       variant="borderless"
       title={t("inventoryTransactions.title")}
       extra={

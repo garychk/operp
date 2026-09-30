@@ -489,7 +489,7 @@ export function Vouchers() {
   }), { debit: 0, credit: 0 });
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredVouchers}

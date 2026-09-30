@@ -539,7 +539,6 @@ export function Workbench() {
 
   return (
     <Card
-      className="workbench-page"
       variant="borderless"
       title={t('workbench.title')}
       extra={

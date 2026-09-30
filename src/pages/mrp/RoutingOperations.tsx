@@ -517,7 +517,7 @@ export function RoutingOperations() {
   );
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredRoutings}

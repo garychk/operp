@@ -206,7 +206,7 @@ export function BaqDesigner() {
     }
   };
   return (
-    <div className='mainContent'>
+    <div>
       <Card
         variant="borderless"
         title={

@@ -366,7 +366,7 @@ export function Warehouses() {
   };
 
   return (
-    <div className="mainContent">
+    <div>
       <Card bordered={false} title={t('inventory.warehouseTitle')} style={{ marginBottom: 16 }}>
         <SuperTable
           columns={warehouseColumns}

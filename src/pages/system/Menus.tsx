@@ -363,7 +363,7 @@ export function Menus() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('menus.title')} extra={<Space><Button onClick={handleImportStaticMenus}>{t('menus.importStaticMenus')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('menus.addMenu')}</Button></Space>}>
+    <Card variant="borderless" title={t('menus.title')} extra={<Space><Button onClick={handleImportStaticMenus}>{t('menus.importStaticMenus')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('menus.addMenu')}</Button></Space>}>
       <Table
         columns={columns}
         dataSource={menuTree}

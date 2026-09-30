@@ -744,7 +744,7 @@ export function SalesDeliveries() {
   }), { amount: 0 });
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredDeliveries}

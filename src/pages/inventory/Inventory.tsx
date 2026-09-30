@@ -196,7 +196,7 @@ export function Inventory() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('stockInventory.title')} extra={<Button icon={<ReloadOutlined />} onClick={fetchInventory}>{t('common.refresh')}</Button>}>
+    <Card variant="borderless" title={t('stockInventory.title')} extra={<Button icon={<ReloadOutlined />} onClick={fetchInventory}>{t('common.refresh')}</Button>}>
       
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={8}>

@@ -262,7 +262,7 @@ export function FixedAssets() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredAssets}

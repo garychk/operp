@@ -177,7 +177,7 @@ export function AccountSubjects() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredSubjects}

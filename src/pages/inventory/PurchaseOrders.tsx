@@ -640,7 +640,7 @@ export function PurchaseOrders() {
   );
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredOrders}

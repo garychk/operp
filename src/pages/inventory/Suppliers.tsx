@@ -193,7 +193,7 @@ export function Suppliers() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredSuppliers}

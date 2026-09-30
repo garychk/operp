@@ -419,7 +419,6 @@ export function Settings() {
   return (
     <ConfigProvider variant="underlined">
     <Card
-      className='mainContent'
       variant="borderless"
       title={t('settings.title')}
       extra={

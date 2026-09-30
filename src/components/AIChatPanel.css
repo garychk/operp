@@ -2,15 +2,20 @@
   padding: 0;
 }
 
-/* 整页形态（Dashboard）：外层 Card 铺满 .mainContent 的 90vh */
+/* 注意：这条是全站生效的（antd 的 .ant-card-body 是全局类），本意只服务首页整页对话
+   的外层 Card，但页面的留白一直依赖它，所以 padding 部分保持不动。
+   height/overflow 对"定高卡片"会裁掉内容，页面根卡片现在只吃 min-height（见 index.css
+   的 .page-viewport），因此这里对页面不再有裁切效果。 */
 .ant-card-body {
   height: 100%;
   padding: 0;
   overflow: hidden;
 }
 
+/* 整页形态（Dashboard）：高度直接锚定内容视口，不再依赖祖辈卡片有确定高度——
+   页面根元素现在由布局给 min-height，百分比高度会失锚，聊天区会塌成 0。 */
 .ai-chat-page {
-  height: 80%;
+  height: calc(var(--page-viewport-h, 90vh) * 0.8 - 40px);
   width: 50%;
   margin: 20px auto;
 }

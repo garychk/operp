@@ -262,7 +262,7 @@ export function Payables() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredPayables}

@@ -64,7 +64,7 @@ export function GeneralLedgerBalance() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns as any}
         dataSource={rows}

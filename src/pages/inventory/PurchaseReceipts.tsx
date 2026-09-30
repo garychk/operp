@@ -669,7 +669,7 @@ export function PurchaseReceipts() {
   }), { amount: 0 });
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredReceipts}

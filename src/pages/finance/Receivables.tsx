@@ -258,7 +258,7 @@ export function Receivables() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredReceivables}

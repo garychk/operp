@@ -183,7 +183,6 @@ export function Tenants() {
     <Card
       title={t('tenants.title')}
       variant='borderless'
-      className="mainContent"
       extra={
         <Button
           type="primary"

@@ -84,11 +84,33 @@ body {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-.mainContent{
+/* 内容视口：页面高度与滚动统一由布局负责（ProLayout 里 <Outlet /> 外层的 .page-viewport），
+   页面组件自己不再需要任何类名——只管把内容排好即可。
+   历史常量 90vh 保持不动，避免改变既有页面观感；--page-viewport-h 供需要锚定视口高度的
+   局部样式复用（见 AIChatPanel.css 的 .ai-chat-page）。 */
+:root {
+  --page-viewport-h: 90vh;
+}
+
+.page-viewport {
+  height: var(--page-viewport-h);
+  /* 纵向可滚动：内容比一屏长时能滚，而不是被裁掉；
+     横向仍按历史行为隐藏溢出，避免全站冒出横向滚动条。 */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 页面根元素至少铺满视口，短页面不会出现"卡片只到一半"；
+   内容更高时自然撑开，由 .page-viewport 滚动。 */
+.page-viewport > * {
+  min-height: 100%;
+}
+
+/* 页面根卡片与内容区贴合、不留圆角（原 .mainContent 的视觉效果，现由布局统一负责） */
+.page-viewport > .ant-card,
+.page-viewport > .ant-pro-card {
   border-radius: 0;
-  height: 90vh;
-  margin-top: 0px;
-  overflow: hidden;
+  margin-top: 0;
 }
 
 /* 登录页流动背景——三个大面积色斑缓慢漂移，形成极光流动感 */
@@ -208,14 +230,6 @@ body {
   .login-bg__sheen {
     animation: none;
   }
-}
-
-/* 个人工作台：沿用 .mainContent 的高度占位，但内容比一屏长，改成容器内滚动 */
-.workbench-page {
-  border-radius: 0;
-  height: 90vh;
-  margin-top: 0;
-  overflow-y: auto;
 }
 
 /* 个人工作台欢迎条：静态复刻登录页背景（同一套渐变 + 三个色斑，但不带动画） */

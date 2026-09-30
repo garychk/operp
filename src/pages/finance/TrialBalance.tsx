@@ -66,7 +66,7 @@ export function TrialBalance() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns as any}
         dataSource={rows}

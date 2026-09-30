@@ -314,7 +314,7 @@ export function Products() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredProducts}
