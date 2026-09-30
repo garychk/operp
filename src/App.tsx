@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { ProLayout } from './components/ProLayout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { Workbench } from './pages/Workbench';
 import { AccountSubjects } from './pages/finance/AccountSubjects';
 import { Vouchers } from './pages/finance/Vouchers';
 import { GeneralLedgerBalance } from './pages/finance/GeneralLedgerBalance';
@@ -87,6 +88,9 @@ function AppContent() {
         }
       >
         <Route index element={<Dashboard />} />
+
+        {/* 个人工作台：不挂在业务菜单下，任何登录用户都可访问（见 MenuPermissionGuard） */}
+        <Route path="workbench" element={<Workbench />} />
         
         <Route path="finance">
           <Route index element={<Navigate to="subjects" replace />} />

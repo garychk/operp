@@ -51,7 +51,8 @@ const severityColorMap: Record<string, string> = {
   critical: "red",
 };
 
-function typeLabelKey(type: string): string {
+// 通知类型 → 文案键。个人工作台（Workbench）复用同一映射，改这里即可同时生效
+export function notificationTypeLabelKey(type: string): string {
   const map: Record<string, string> = {
     approval_pending: "notification.type.approvalPending",
     approval_result: "notification.type.approvalResult",
@@ -252,7 +253,7 @@ export function NotificationBell() {
                         color={severityColorMap[row.severity] ?? "default"}
                         style={{ marginLeft: 8 }}
                       >
-                        {t(typeLabelKey(row.notification_type))}
+                        {t(notificationTypeLabelKey(row.notification_type))}
                       </Tag>
                     </span>
                   }

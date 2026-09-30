@@ -209,3 +209,65 @@ body {
     animation: none;
   }
 }
+
+/* 个人工作台：沿用 .mainContent 的高度占位，但内容比一屏长，改成容器内滚动 */
+.workbench-page {
+  border-radius: 0;
+  height: 90vh;
+  margin-top: 0;
+  overflow-y: auto;
+}
+
+/* 个人工作台欢迎条：静态复刻登录页背景（同一套渐变 + 三个色斑，但不带动画） */
+.workbench-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 35%, #eef2ff 100%);
+}
+
+.workbench-hero__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.workbench-hero__blob--sky {
+  top: -140px;
+  left: -40px;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle at 50% 50%, #7dd3fc 0%, rgba(125, 211, 252, 0) 70%);
+}
+
+.workbench-hero__blob--violet {
+  top: -150px;
+  right: -30px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle at 50% 50%, #c4b5fd 0%, rgba(196, 181, 253, 0) 70%);
+}
+
+.workbench-hero__blob--mint {
+  bottom: -180px;
+  left: 30%;
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle at 50% 50%, #a7f3d0 0%, rgba(167, 243, 208, 0) 70%);
+}
+
+/* 色斑是装饰层，内容必须盖在它上面 */
+.workbench-hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+/* 深色模式下换成同结构的暗色极光：浅底配 antd 的浅色文字会读不清 */
+html[data-erp-dark='true'] .workbench-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 35%, #1e1b4b 100%);
+}
+
+html[data-erp-dark='true'] .workbench-hero__blob {
+  opacity: 0.3;
+}

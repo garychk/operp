@@ -57,6 +57,7 @@ import {
   LineChartOutlined,
   BarChartOutlined,
   TableOutlined,
+  IdcardOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { MenuPermissionGuard } from "./ProtectedRoute";
@@ -455,6 +456,7 @@ export const menuData: MenuRoute[] = [
 
 const pathToNameMap: Record<string, string> = {
   "/": "首页",
+  "/workbench": "个人工作台",
   "/finance/subjects": "会计科目",
   "/finance/vouchers": "凭证管理",
   "/finance/gl-balance": "总账余额",
@@ -504,6 +506,7 @@ const pathToNameMap: Record<string, string> = {
 
 const pathToTranslationKey: Record<string, string> = {
   "/": "menu.home",
+  "/workbench": "workbench.title",
   "/finance": "menu.finance",
   "/finance/subjects": "menu.subjects",
   "/finance/vouchers": "menu.vouchers",
@@ -671,6 +674,9 @@ export function ProLayout() {
   }, []);
   useEffect(() => {
     localStorage.setItem("erp-dark-mode", JSON.stringify(dark));
+    // 深浅模式目前只存在于 antd token 里，纯 CSS（如个人工作台的欢迎条）没法跟着切换。
+    // 这里同步一个 DOM 标记，供 index.css 里需要跟随主题的样式使用。
+    document.documentElement.setAttribute("data-erp-dark", dark ? "true" : "false");
   }, [dark]);
 
   useEffect(() => {
@@ -736,6 +742,12 @@ export function ProLayout() {
   }, [user, localizedMenuData]);
   const handleLogout = async () => {
     await logout();
+  };
+
+  // 个人工作台走站内导航：由 Tabs 的 addTab 逻辑在顶部标签栏里新开一个页签
+  // （'/workbench' 已登记在 pathToNameMap / pathToTranslationKey 中，因此能拿到标题并出现在标签栏）。
+  const openWorkbench = () => {
+    navigate("/workbench");
   };
 
   const addTab = useCallback(
@@ -952,6 +964,13 @@ export function ProLayout() {
               <Dropdown
                 menu={{
                   items: [
+                    {
+                      key: "workbench",
+                      icon: <IdcardOutlined />,
+                      label: t("workbench.title"),
+                      onClick: openWorkbench,
+                    },
+                    { type: "divider" },
                     {
                       key: "logout",
                       icon: <LogoutOutlined />,
