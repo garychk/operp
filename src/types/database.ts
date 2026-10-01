@@ -392,6 +392,10 @@ export interface ErpMaterialIssuesS539Dcf81BRow {
   total_amount: number | null;
   remark: string | null;
   status: string | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
 }
 export type ErpMaterialIssuesS539Dcf81BInsert = Omit<ErpMaterialIssuesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMaterialIssuesS539Dcf81BUpdate = Partial<ErpMaterialIssuesS539Dcf81BInsert>;
@@ -563,6 +567,10 @@ export interface ErpProductionReceiptsS539Dcf81BRow {
   quality_status: string | null;
   remark: string | null;
   status: string | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
 }
 export type ErpProductionReceiptsS539Dcf81BInsert = Omit<ErpProductionReceiptsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpProductionReceiptsS539Dcf81BUpdate = Partial<ErpProductionReceiptsS539Dcf81BInsert>;

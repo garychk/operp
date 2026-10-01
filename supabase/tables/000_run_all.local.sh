@@ -96,6 +96,7 @@ ORDER=(
   deploy_53_fix_sys_config_super_admin.sql
   deploy_54_auth_seed_users.sql
   deploy_55_mcp_api_keys.sql
+  deploy_56_production_posting.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

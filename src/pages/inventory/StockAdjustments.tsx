@@ -76,7 +76,7 @@ export function StockAdjustments() {
     Modal.confirm({
       title: t('stockAdjustments.approveAndPost'),
       content: t('stockAdjustments.postConfirmContentMany', { count: targets.length }),
-      okText: t('stockAdjustments.continue'),
+      okText: t('common.continue'),
       cancelText: t('common.cancel'),
       onOk: async () => {
         setPosting(true);
