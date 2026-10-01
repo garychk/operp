@@ -26,7 +26,7 @@ interface Menu {
 
 const iconOptions = [
   'DashboardOutlined', 'BookOutlined', 'ShoppingOutlined', 'ShoppingCartOutlined', 'ToolOutlined',
-  'TeamOutlined', 'ShopOutlined', 'InboxOutlined', 'AppstoreOutlined',
+  'TeamOutlined', 'ShopOutlined', 'InboxOutlined', 'ImportOutlined', 'AppstoreOutlined',
   'SettingOutlined', 'BuildOutlined', 'BranchesOutlined', 'ProfileOutlined', 'CalendarOutlined',
   'ContainerOutlined', 'FileTextOutlined', 'MenuOutlined', 'SafetyOutlined',
   'TruckOutlined', 'RiseOutlined', 'FallOutlined', 'TableOutlined', 'UnorderedListOutlined',

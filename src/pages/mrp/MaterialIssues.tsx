@@ -38,6 +38,7 @@ type MaterialIssueDetail = Tables["erp_material_issue_details_s_539dcf81_b"]["Ro
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductionOrder = Tables["erp_production_orders_s_539dcf81_b"]["Row"];
 type Warehouse = Tables["erp_warehouses_s_539dcf81_b"]["Row"];
+type Bin = Tables["erp_bins_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 const materialIssueTable = "erp_material_issues_s_539dcf81_b";
@@ -68,6 +69,7 @@ export function MaterialIssues() {
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [bins, setBins] = useState<Bin[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -82,12 +84,16 @@ export function MaterialIssues() {
   const [posting, setPosting] = useState(false);
   const [reversing, setReversing] = useState(false);
   const [pulling, setPulling] = useState(false);
+  // 明细的库位下拉要按「本单的领料仓库」过滤，所以把表头仓库提成受控值；
+  // 直接读 selectedIssue.warehouse_id 会在「改了仓库还没重载」时拿到旧值。
+  const [headerWarehouseId, setHeaderWarehouseId] = useState<number | undefined>();
 
   useEffect(() => {
     fetchIssues();
     fetchProducts();
     fetchOrders();
     fetchWarehouses();
+    fetchBins();
   }, []);
 
   const fetchIssues = async () => {
@@ -148,6 +154,19 @@ export function MaterialIssues() {
     }
   };
 
+  const fetchBins = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("erp_bins_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n");
+      if (error) throw error;
+      setBins(data || []);
+    } catch (error) {
+      console.error("Error fetching bins:", error);
+    }
+  };
+
   const fetchDetails = async (issueId: number) => {
     try {
       const { data, error } = await supabase
@@ -195,6 +214,7 @@ export function MaterialIssues() {
       setIsModalOpen(false);
       form.resetFields();
       setEditingIssue(null);
+      setHeaderWarehouseId(undefined);
       fetchIssues();
     } catch (error) {
       console.error("Error saving material issue:", error);
@@ -274,6 +294,7 @@ export function MaterialIssues() {
     }
     setEditingIssue(record);
     setSelectedIssue(record);
+    setHeaderWarehouseId(record.warehouse_id ?? undefined);
     form.setFieldsValue({
       ...record,
       issue_date: dayjs(record.issue_date),
@@ -454,6 +475,7 @@ export function MaterialIssues() {
     setEditingIssue(null);
     setSelectedIssue(null);
     setDetails([]);
+    setHeaderWarehouseId(undefined);
     form.setFieldsValue({
       issue_no: issueNo,
       issue_date: dayjs(new Date()),
@@ -512,6 +534,7 @@ export function MaterialIssues() {
             .single();
           if (header) {
             setSelectedIssue(header);
+            setHeaderWarehouseId(header.warehouse_id ?? undefined);
             form.setFieldsValue({
               production_order_id: header.production_order_id,
               warehouse_id: header.warehouse_id,
@@ -547,6 +570,7 @@ export function MaterialIssues() {
       unit_cost: 0,
       amount: 0,
       batch_no: "",
+      location_id: undefined,
       remark: "",
     });
     setIsDetailModalOpen(true);
@@ -603,6 +627,18 @@ export function MaterialIssues() {
     const warehouse = warehouses.find((w) => w.id === warehouseId);
     return warehouse?.name || "-";
   };
+
+  const getBinLabel = (binId: number | null) => {
+    if (!binId) return "-";
+    const bin = bins.find((b) => b.id === binId);
+    return bin ? `${bin.code} - ${bin.name}` : "-";
+  };
+
+  // 明细的库位下拉只列「本单领料仓库」下的货位。
+  // 过账时会用 erp_bins.warehouse_id 校验，这里先过滤掉必然失败的选项。
+  const detailBinOptions = bins.filter(
+    (b) => headerWarehouseId != null && b.warehouse_id === headerWarehouseId,
+  );
 
   const filteredIssues = issues.filter(
     (i) =>
@@ -731,6 +767,17 @@ export function MaterialIssues() {
       dataIndex: "batch_no",
       key: "batch_no",
       render: (text: string) => text || "-",
+    },
+    {
+      title: t("mrp.materialIssues.location"),
+      dataIndex: "location_id",
+      key: "location_id",
+      render: (binId: number | null) =>
+        binId ? (
+          getBinLabel(binId)
+        ) : (
+          <Tag color="orange">{t("mrp.materialIssues.locationUnset")}</Tag>
+        ),
     },
     {
       title: t("mrp.materialIssues.source"),
@@ -887,6 +934,7 @@ export function MaterialIssues() {
                     placeholder={t("mrp.materialIssues.warehousePrompt")}
                     showSearch
                     optionFilterProp="children"
+                    onChange={(value: number) => setHeaderWarehouseId(value)}
                   >
                     {warehouses.map((w) => (
                       <Option key={w.id} value={w.id}>
@@ -952,7 +1000,7 @@ export function MaterialIssues() {
                 <Table.Summary.Cell index={1} colSpan={2} align="right">
                   <strong>{formatMoney(detailTotal)}</strong>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={2} colSpan={3} />
+                <Table.Summary.Cell index={2} colSpan={4} />
               </Table.Summary.Row>
             )}
           />
@@ -965,7 +1013,7 @@ export function MaterialIssues() {
             </Button>
           </Space>
         }
-        width={"60%"}
+        width={"80%"}
         height={"80%"}
       />
 
@@ -1043,6 +1091,29 @@ export function MaterialIssues() {
           </Row>
           <Form.Item label={t("mrp.materialIssues.batchNo")} name="batch_no">
             <Input placeholder={t("mrp.materialIssues.batchNoPrompt")} />
+          </Form.Item>
+          <Form.Item
+            label={t("mrp.materialIssues.location")}
+            name="location_id"
+            extra={
+              headerWarehouseId == null
+                ? t("mrp.materialIssues.locationNeedWarehouse")
+                : t("mrp.materialIssues.locationHint")
+            }
+          >
+            <Select
+              allowClear
+              placeholder={t("mrp.materialIssues.locationPrompt")}
+              disabled={headerWarehouseId == null}
+              showSearch
+              optionFilterProp="children"
+            >
+              {detailBinOptions.map((b) => (
+                <Option key={b.id} value={b.id}>
+                  {b.code} - {b.name}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
           <Form.Item label={t("mrp.materialIssues.remark")} name="remark">
             <Input.TextArea rows={2} placeholder={t("mrp.materialIssues.remarkPrompt")} />

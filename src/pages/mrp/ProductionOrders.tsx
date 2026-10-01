@@ -67,6 +67,7 @@ const GENERATE_ISSUE_RPC = "generate_material_issue_from_order";
 
 // 已完成的订单不允许再展开/领料；与 explore RPC 的守卫保持一致
 const CLOSED_STATUSES = ["completed", "closed", "cancelled"];
+const DOC_TYPE = "production_order";
 
 export function ProductionOrders() {
   const { t } = useTranslation();
@@ -537,7 +538,7 @@ export function ProductionOrders() {
   const handleAdd = async () => {
     let orderNo: string;
     try {
-      orderNo = await nextDocumentNo("production_order");
+      orderNo = await nextDocumentNo(DOC_TYPE);
     } catch (error) {
       message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
       return;
@@ -692,7 +693,7 @@ export function ProductionOrders() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        storageKey="production-orders"
+        storageKey={DOC_TYPE}
         headerTitle={t('mrp.productionOrders.title')}
         rowSelection={{
           selectedRowKeys,
@@ -939,8 +940,9 @@ export function ProductionOrders() {
             </Button>
           </Space>
         }
-        width={'60%'}
+        width={'80%'}
         height={'80%'}
+        workflowDocumentType={DOC_TYPE}
       />
     </div>
   );

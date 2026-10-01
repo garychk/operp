@@ -375,6 +375,7 @@ export interface ErpMaterialIssueDetailsS539Dcf81BRow {
   batch_no: string | null;
   remark: string | null;
   order_detail_id: number | null;  // FK -> erp_production_order_details_s_539dcf81_b.id（deploy_57）
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（deploy_58，过账时决定扣哪个库位的库存）
 }
 export type ErpMaterialIssueDetailsS539Dcf81BInsert = Omit<ErpMaterialIssueDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMaterialIssueDetailsS539Dcf81BUpdate = Partial<ErpMaterialIssueDetailsS539Dcf81BInsert>;
@@ -569,6 +570,7 @@ export interface ErpProductionReceiptsS539Dcf81BRow {
   quality_status: string | null;
   remark: string | null;
   status: string | null;
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（deploy_58，完工入库的收货库位）
   posting_idempotency_key: string | null;
   reversal_idempotency_key: string | null;
   posted_at: string | null;
