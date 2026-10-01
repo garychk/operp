@@ -97,6 +97,7 @@ ORDER=(
   deploy_54_auth_seed_users.sql
   deploy_55_mcp_api_keys.sql
   deploy_56_production_posting.sql
+  deploy_57_bom_explosion_kit_check.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

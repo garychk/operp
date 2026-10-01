@@ -22,6 +22,7 @@ import {
   EditOutlined,
   ThunderboltOutlined,
   UndoOutlined,
+  ImportOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
@@ -49,6 +50,8 @@ const DOCUMENT_TYPE = "material_issue";
 // RPC 允许过账的来源状态；cancelled 与 posted 不在其中
 const POSTABLE_STATUSES = ["draft", "approved", "issued"];
 const POSTED_STATUS = "posted";
+// 与 deploy_57 对应：把生产订单未领的物料需求带进当前领料单
+const PULL_ORDER_LINES_RPC = "pull_order_lines_into_issue";
 
 const isPosted = (record: { status: string | null }) =>
   record.status === POSTED_STATUS;
@@ -78,6 +81,7 @@ export function MaterialIssues() {
   const [detailForm] = Form.useForm();
   const [posting, setPosting] = useState(false);
   const [reversing, setReversing] = useState(false);
+  const [pulling, setPulling] = useState(false);
 
   useEffect(() => {
     fetchIssues();
@@ -462,6 +466,68 @@ export function MaterialIssues() {
     setIsModalOpen(true);
   };
 
+  // 把生产订单里还没领的物料需求带进当前领料单。
+  // 带出的行写入 order_detail_id，流转台账据此回写订单的已领数量 —— 所以手工
+  // 录入的行只要带了来源行，账也是准的。
+  const handlePullFromOrder = () => {
+    if (!selectedIssue) {
+      message.warning(t("mrp.materialIssues.saveHeaderFirst"));
+      return;
+    }
+    if (isPosted(selectedIssue)) {
+      message.warning(t("mrp.materialIssues.postedLocked"));
+      return;
+    }
+    const orderId = form.getFieldValue("production_order_id");
+    if (!orderId) {
+      message.warning(t("mrp.materialIssues.pullNoOrder"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.materialIssues.pullFromOrder"),
+      content: t("mrp.materialIssues.pullConfirm"),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setPulling(true);
+        try {
+          const { data, error } = await supabase.rpc(PULL_ORDER_LINES_RPC, {
+            p_issue_id: selectedIssue.id,
+            p_order_id: Number(orderId),
+          });
+          if (error) throw error;
+          const result = data as { inserted_lines?: number };
+          message.success(
+            t("mrp.materialIssues.pullSuccess", {
+              count: result?.inserted_lines ?? 0,
+            }),
+          );
+          await fetchDetails(selectedIssue.id);
+          await fetchIssues();
+          // 主表金额与来源订单由 RPC 落库，回读一次把表单同步过来
+          const { data: header } = await supabase
+            .from(materialIssueTable)
+            .select("*")
+            .eq("id", selectedIssue.id)
+            .single();
+          if (header) {
+            setSelectedIssue(header);
+            form.setFieldsValue({
+              production_order_id: header.production_order_id,
+              warehouse_id: header.warehouse_id,
+              total_amount: header.total_amount,
+            });
+          }
+        } catch (error: any) {
+          console.error("Error pulling production order lines:", error);
+          message.error(error?.message || t("mrp.materialIssues.pullFailed"));
+        } finally {
+          setPulling(false);
+        }
+      },
+    });
+  };
+
   const handleAddDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
@@ -667,6 +733,18 @@ export function MaterialIssues() {
       render: (text: string) => text || "-",
     },
     {
+      title: t("mrp.materialIssues.source"),
+      dataIndex: "order_detail_id",
+      key: "order_detail_id",
+      width: 110,
+      render: (orderDetailId: number | null) =>
+        orderDetailId ? (
+          <Tag color="blue">{t("mrp.materialIssues.sourceOrder")}</Tag>
+        ) : (
+          <Tag>{t("mrp.materialIssues.sourceManual")}</Tag>
+        ),
+    },
+    {
       title: t("mrp.materialIssues.remark"),
       dataIndex: "remark",
       key: "remark",
@@ -838,15 +916,27 @@ export function MaterialIssues() {
           </Form>
         }
         detailExtra={
-          <Button
-            type="link"
-            size="small"
-            disabled={!!selectedIssue && isPosted(selectedIssue)}
-            onClick={handleAddDetail}
-            icon={<PlusOutlined />}
-          >
-            {t("mrp.materialIssues.addDetail")}
-          </Button>
+          <Space size={4}>
+            <Button
+              type="link"
+              size="small"
+              loading={pulling}
+              disabled={!!selectedIssue && isPosted(selectedIssue)}
+              onClick={handlePullFromOrder}
+              icon={<ImportOutlined />}
+            >
+              {t("mrp.materialIssues.pullFromOrder")}
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              disabled={!!selectedIssue && isPosted(selectedIssue)}
+              onClick={handleAddDetail}
+              icon={<PlusOutlined />}
+            >
+              {t("mrp.materialIssues.addDetail")}
+            </Button>
+          </Space>
         }
         tableEle={
           <Table
@@ -862,7 +952,7 @@ export function MaterialIssues() {
                 <Table.Summary.Cell index={1} colSpan={2} align="right">
                   <strong>{formatMoney(detailTotal)}</strong>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={2} colSpan={2} />
+                <Table.Summary.Cell index={2} colSpan={3} />
               </Table.Summary.Row>
             )}
           />

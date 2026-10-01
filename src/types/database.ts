@@ -374,6 +374,7 @@ export interface ErpMaterialIssueDetailsS539Dcf81BRow {
   amount: number | null;
   batch_no: string | null;
   remark: string | null;
+  order_detail_id: number | null;  // FK -> erp_production_order_details_s_539dcf81_b.id（deploy_57）
 }
 export type ErpMaterialIssueDetailsS539Dcf81BInsert = Omit<ErpMaterialIssueDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMaterialIssueDetailsS539Dcf81BUpdate = Partial<ErpMaterialIssueDetailsS539Dcf81BInsert>;
@@ -544,6 +545,7 @@ export interface ErpProductionOrdersS539Dcf81BRow {
   priority: number | null;
   remark: string | null;
   status: string | null;
+  warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id（领料仓库，deploy_57）
 }
 export type ErpProductionOrdersS539Dcf81BInsert = Omit<ErpProductionOrdersS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpProductionOrdersS539Dcf81BUpdate = Partial<ErpProductionOrdersS539Dcf81BInsert>;
