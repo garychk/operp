@@ -101,6 +101,8 @@ ORDER=(
   deploy_58_production_receipt_and_locations.sql
   deploy_59_production_receipt_menu.sql
   deploy_60_mrp_planning_parameters.sql
+  deploy_61_planned_conversion_and_cost.sql
+  deploy_62_production_report_and_cost_menu.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

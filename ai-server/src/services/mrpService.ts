@@ -187,7 +187,9 @@ export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promi
     list.push({
       materialId: num(d.material_id),
       quantity: num(d.quantity),
-      lossRate: num(d.loss_rate) / 100, // 库里存的是百分数（loss_rate=5 表示 5%）
+      // ⚠️ 库里存的是「小数」不是百分数（与前端 BomEditableTreeGraph 的 InputNumber max=1
+      //    与显示 ×100、deploy_57 BOM 展开的 (1 + loss_rate) 一致）。曾误写成 /100，会让损耗率失效。
+      lossRate: num(d.loss_rate),
     });
     linesByBom.set(bomId, list);
   }
@@ -419,12 +421,16 @@ export async function persistResult(
   planId: number,
   result: MrpEngineResult,
 ): Promise<void> {
-  // 先清旧结果（重跑场景），再整批写入
+  // 先清旧结果（重跑场景），再整批写入。
+  // ⚠️ 只清「未转单」的行：已转单的行是既成事实（下游单据已经存在），删掉会丢失转单追踪，
+  //    下次转单就会对同一需求重复下单。转单后的供给会作为在途被引擎重新算进 supply，
+  //    所以保留它们不会造成重复计需求。
   const del = await supabase
     .from(T.requirements)
     .delete()
     .eq("tenant_id", tenantId)
-    .eq("plan_id", planId);
+    .eq("plan_id", planId)
+    .is("converted_document_id", null);
   if (del.error) throw del.error;
 
   const payload = result.rows.map((row) => ({

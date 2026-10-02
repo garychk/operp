@@ -441,6 +441,12 @@ export interface ErpMrpRequirementsS539Dcf81BRow {
   order_release_date: string | null;
   source_type: string | null;
   source_id: number | null;
+  // 转单追踪（deploy_61）：转成了哪张下游单据
+  converted_document_type: string | null;  // 'purchase_order' | 'production_order'
+  converted_document_id: number | null;
+  converted_document_no: string | null;
+  converted_at: string | null;
+  converted_by_user_id: number | null;
 }
 export type ErpMrpRequirementsS539Dcf81BInsert = Omit<ErpMrpRequirementsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMrpRequirementsS539Dcf81BUpdate = Partial<ErpMrpRequirementsS539Dcf81BInsert>;

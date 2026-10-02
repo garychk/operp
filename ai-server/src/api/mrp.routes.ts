@@ -6,6 +6,8 @@
  *   绝不信任请求方自称的角色。
  * - 允许角色：super_admin / tenant_admin / mrp_manager（白名单写在 MRP_RUN_ROLES）。
  * - 租户互斥：同一租户同一时刻只允许一个 running 计划（mrpService.tryAcquirePlan）。
+ *
+ * 阶段 4 追加两个写端点：/convert（计划转单）、/cost-rollup（成本卷算）+ /cost（只读查询）。
  */
 import { Router } from "express";
 import { z } from "zod";
@@ -13,10 +15,18 @@ import { supabase } from "../config/supabase.js";
 import { resolveTenantContext, TenantScopeError } from "../config/tenantContext.js";
 import { generateMrpReport } from "../services/mrpAdvisor.js";
 import { runMrpForPlan, saveAnalysisReport } from "../services/mrpService.js";
+import {
+  buildConversionPreview,
+  convertPlanToDocuments,
+  type ConversionFilter,
+} from "../services/mrpConvertService.js";
+import { loadCostRows, rollupProductionCost } from "../services/costRollupService.js";
 
 export const mrpRouter = Router();
 
 const MRP_RUN_ROLES = new Set(["super_admin", "tenant_admin", "mrp_manager"]);
+/** 成本卷算同样限制在计划角色内（成本表对 mrp_manager 只授了只读，写入由 service_role 完成） */
+const COST_ROLLUP_ROLES = MRP_RUN_ROLES;
 
 const runSchema = z.object({
   user_id: z.coerce.number().int().positive(),
@@ -24,8 +34,21 @@ const runSchema = z.object({
   plan_id: z.coerce.number().int().positive(),
 });
 
+const convertSchema = runSchema.extend({
+  mode: z.enum(["preview", "apply"]).default("preview"),
+  filter: z.enum(["all", "purchased", "manufactured"]).default("all"),
+});
+
+const costSchema = z.object({
+  user_id: z.coerce.number().int().positive(),
+  tenant_id: z.coerce.number().int().positive().optional(),
+  year: z.coerce.number().int().min(1900).max(2999),
+  month: z.coerce.number().int().min(1).max(12),
+  dry_run: z.coerce.boolean().optional().default(false),
+});
+
 /** 服务端核实用户是否持有允许运行 MRP 的角色（不信任请求体的任何自称） */
-async function userHasMrpRole(userId: number): Promise<boolean> {
+async function userHasRole(userId: number, allowed: Set<string>): Promise<boolean> {
   const { data, error } = await supabase
     .from("sys_user_roles")
     .select("sys_roles!inner(role_code)")
@@ -38,9 +61,12 @@ async function userHasMrpRole(userId: number): Promise<boolean> {
 
   return (data || []).some((row: unknown) => {
     const roleCode = (row as { sys_roles?: { role_code?: string } } | null)?.sys_roles?.role_code;
-    return roleCode ? MRP_RUN_ROLES.has(roleCode) : false;
+    return roleCode ? allowed.has(roleCode) : false;
   });
 }
+
+/** 409：状态冲突（并发/重复运行/未完成运算就想转单） */
+const isConflict = (message: string) => /不允许运算|正在进行|尚未完成运算/.test(message);
 
 mrpRouter.post("/run", async (req, res) => {
   const parsed = runSchema.safeParse(req.body);
@@ -56,7 +82,7 @@ mrpRouter.post("/run", async (req, res) => {
     const context = await resolveTenantContext(user_id, tenant_id);
 
     // 2. 角色核实（与租户解析分离：有租户不代表能跑 MRP）
-    const allowed = await userHasMrpRole(user_id);
+    const allowed = await userHasRole(user_id, MRP_RUN_ROLES);
     if (!allowed) {
       res.status(403).json({
         ok: false,
@@ -90,12 +116,151 @@ mrpRouter.post("/run", async (req, res) => {
     }
     const message = err instanceof Error ? err.message : String(err);
     // 计划状态不允许（并发/重复运行）属于请求冲突，不是服务端故障
-    if (/不允许运算|正在进行/.test(message)) {
+    if (isConflict(message)) {
       res.status(409).json({ ok: false, error: message });
       return;
     }
     console.error("[ai-server] MRP run failed:", err);
     res.status(500).json({ ok: false, error: message });
+  }
+});
+
+/**
+ * 计划转单：把 MRP 计划订单落成采购订单草稿 / 生产订单。
+ * mode=preview 只回候选清单（不写任何单据），mode=apply 才真正建单。
+ */
+mrpRouter.post("/convert", async (req, res) => {
+  const parsed = convertSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: "Invalid request", issues: parsed.error.issues });
+    return;
+  }
+
+  try {
+    const { user_id, tenant_id, plan_id, mode, filter } = parsed.data;
+    const context = await resolveTenantContext(user_id, tenant_id);
+
+    const allowed = await userHasRole(user_id, MRP_RUN_ROLES);
+    if (!allowed) {
+      res.status(403).json({
+        ok: false,
+        error: "当前用户没有执行计划转单的角色（需要 super_admin / tenant_admin / mrp_manager）。",
+      });
+      return;
+    }
+
+    if (mode === "preview") {
+      const preview = await buildConversionPreview(
+        context.tenantId,
+        plan_id,
+        filter as ConversionFilter,
+      );
+      res.json({
+        ok: true,
+        mode: "preview",
+        plan_id: preview.plan.id,
+        plan_no: preview.plan.plan_no,
+        summary: preview.summary,
+        candidates: preview.candidates,
+        skipped: preview.skipped,
+      });
+      return;
+    }
+
+    const outcome = await convertPlanToDocuments(
+      context.tenantId,
+      plan_id,
+      user_id,
+      filter as ConversionFilter,
+    );
+    res.json({
+      ok: true,
+      mode: "apply",
+      plan_id: outcome.plan.id,
+      plan_no: outcome.plan.plan_no,
+      created: outcome.created,
+      failed: outcome.failed,
+      notified: outcome.notified,
+      items: outcome.items,
+      skipped: outcome.skipped,
+    });
+  } catch (err) {
+    if (err instanceof TenantScopeError) {
+      res.status(403).json({ ok: false, error: err.message });
+      return;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    if (isConflict(message)) {
+      res.status(409).json({ ok: false, error: message });
+      return;
+    }
+    console.error("[ai-server] MRP convert failed:", err);
+    res.status(500).json({ ok: false, error: message });
+  }
+});
+
+/** 成本卷算：dry_run=true 只算不写 */
+mrpRouter.post("/cost-rollup", async (req, res) => {
+  const parsed = costSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ ok: false, error: "Invalid request", issues: parsed.error.issues });
+    return;
+  }
+
+  try {
+    const { user_id, tenant_id, year, month, dry_run } = parsed.data;
+    const context = await resolveTenantContext(user_id, tenant_id);
+
+    const allowed = await userHasRole(user_id, COST_ROLLUP_ROLES);
+    if (!allowed) {
+      res.status(403).json({
+        ok: false,
+        error: "当前用户没有执行成本卷算的角色（需要 super_admin / tenant_admin / mrp_manager）。",
+      });
+      return;
+    }
+
+    const outcome = await rollupProductionCost(context.tenantId, year, month, { dryRun: dry_run });
+    res.json({ ok: true, ...outcome });
+  } catch (err) {
+    if (err instanceof TenantScopeError) {
+      res.status(403).json({ ok: false, error: err.message });
+      return;
+    }
+    console.error("[ai-server] cost rollup failed:", err);
+    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+/** 读取已保存的成本行（成本页列表，只读） */
+mrpRouter.get("/cost", async (req, res) => {
+  const userId = Number(req.query.user_id);
+  const tenantId = req.query.tenant_id === undefined ? undefined : Number(req.query.tenant_id);
+  const year = Number(req.query.year);
+  const month = Number(req.query.month);
+
+  if (
+    !Number.isInteger(userId) ||
+    userId <= 0 ||
+    !Number.isInteger(year) ||
+    !Number.isInteger(month) ||
+    month < 1 ||
+    month > 12
+  ) {
+    res.status(400).json({ ok: false, error: "Invalid request" });
+    return;
+  }
+
+  try {
+    const context = await resolveTenantContext(userId, tenantId);
+    const { periodId, rows } = await loadCostRows(context.tenantId, year, month);
+    res.json({ ok: true, year, month, period_id: periodId, rows });
+  } catch (err) {
+    if (err instanceof TenantScopeError) {
+      res.status(403).json({ ok: false, error: err.message });
+      return;
+    }
+    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
   }
 });
 

@@ -279,7 +279,7 @@ BEGIN
 
   INSERT INTO public.erp_production_order_details_s_539dcf81_b (
     corp_id, emp_id, is_deleted, order_id, line_no, material_id,
-    planned_quantity, issued_quantity, unit, warehouse_id, remark
+    planned_quantity, issued_quantity, unit, warehouse_id, remark, tenant_id
   )
   SELECT
     v_order.corp_id,
@@ -297,7 +297,10 @@ BEGIN
     0,
     COALESCE(d.unit, p.unit),
     v_order.warehouse_id,
-    format('BOM %s v%s 行 %s', v_bom.bom_no, v_bom.version, d.line_no)
+    format('BOM %s v%s 行 %s', v_bom.bom_no, v_bom.version, d.line_no),
+    -- ⚠️ 必须显式带 tenant_id：该列默认值是 current_tenant_id()，依赖 JWT 上下文，
+    --    由 service_role（ai-server 转单）调用时会取到 NULL 而整批失败。
+    v_order.tenant_id
   FROM public.erp_bom_details_s_539dcf81_b d
   LEFT JOIN public.erp_products_s_539dcf81_b p ON p.id = d.material_id
   WHERE d.bom_id = v_bom_id

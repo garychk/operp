@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker, Alert } from 'antd';
-import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, FileTextOutlined } from '@ant-design/icons';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker, Alert, Table } from 'antd';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, FileTextOutlined, SwapOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import type { Tables } from '../../utils/supabase';
@@ -10,6 +10,7 @@ import { SuperTable } from '../../components/SuperTable';
 import dayjs from 'dayjs';
 import SimpleModal from '../../components/SimpleModal';
 import { useAuth } from '../../contexts/AuthContext';
+import { resolveMrpApiBaseUrl } from '../../utils/aiServer';
 
 type MrpPlan = Tables['erp_mrp_plans_s_539dcf81_b']['Row'];
 
@@ -17,20 +18,49 @@ const { Option } = Select;
 const { TextArea } = Input;
 const mrpPlanTable = 'erp_mrp_plans_s_539dcf81_b';
 
-/**
- * MRP 运算走 ai-server（service_role + 应用层租户过滤，RLS 对它无效）。
- * VITE_AI_SERVER_URL 约定与 AIChatPanel 一致（…/api/ai 结尾），这里换算出 /api/mrp 基址。
- */
-const resolveMrpBaseUrl = () => {
-  const explicitUrl = import.meta.env.VITE_AI_SERVER_URL;
-  if (explicitUrl) {
-    return explicitUrl.replace(/\/$/, '').replace(/\/api\/ai$/, '') + '/api/mrp';
-  }
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:3001/api/mrp';
-  }
-  return '/api/mrp';
-};
+/** 转单去向量：采购件 → 采购订单草稿，制造件 → 生产订单 */
+type ConversionTarget = 'purchase_order' | 'production_order';
+
+interface ConversionCandidate {
+  requirementId: number;
+  productId: number;
+  productCode: string;
+  productName: string;
+  quantity: number;
+  requirementDate: string;
+  orderDate: string;
+  target: ConversionTarget;
+  bomId: number | null;
+  unitPrice: number;
+  warnings: string[];
+}
+
+interface ConversionItemResult {
+  requirementId: number;
+  productCode: string;
+  productName: string;
+  target: ConversionTarget;
+  quantity: number;
+  ok: boolean;
+  documentNo?: string;
+  error?: string;
+  warnings: string[];
+}
+
+interface ConversionPreviewState {
+  planId: number;
+  planNo: string;
+  candidates: ConversionCandidate[];
+  skipped: { productCode: string; reason: string; quantity: number }[];
+  totalPurchaseAmount: number;
+}
+
+interface ConversionResultState {
+  planNo: string;
+  created: number;
+  failed: number;
+  items: ConversionItemResult[];
+}
 
 interface MrpRunResponse {
   ok: boolean;
@@ -42,7 +72,7 @@ interface MrpRunResponse {
 }
 
 export function MrpPlans() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const [plans, setPlans] = useState<MrpPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +87,10 @@ export function MrpPlans() {
     generatedBy: 'llm' | 'fallback';
     llmError: string | null;
   } | null>(null);
+  const [convertPreview, setConvertPreview] = useState<ConversionPreviewState | null>(null);
+  const [convertResult, setConvertResult] = useState<ConversionResultState | null>(null);
+  const [previewingPlanId, setPreviewingPlanId] = useState<number | null>(null);
+  const [converting, setConverting] = useState(false);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -130,7 +164,7 @@ export function MrpPlans() {
       onOk: async () => {
         setRunningPlanId(record.id);
         try {
-          const response = await fetch(`${resolveMrpBaseUrl()}/run`, {
+          const response = await fetch(`${resolveMrpApiBaseUrl()}/run`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -173,7 +207,7 @@ export function MrpPlans() {
         tenant_id: String(user.tenantId),
       });
       const response = await fetch(
-        `${resolveMrpBaseUrl()}/report/${record.id}?${params.toString()}`,
+        `${resolveMrpApiBaseUrl()}/report/${record.id}?${params.toString()}`,
       );
       const data = (await response.json()) as { ok: boolean; error?: string; report?: string };
       if (!response.ok || !data.ok) {
@@ -192,8 +226,106 @@ export function MrpPlans() {
     }
   };
 
-  const handleAdd = async () => {
-    let planNo: string;
+  // 计划转单：先预览（不写任何单据），确认后再真正建单。
+  // 服务端保证：只对 planned_order_receipt > 0 且尚未转单的行建单，重复触发不会重复下单。
+  const handlePreviewConvert = async (record: MrpPlan) => {
+    if (!user?.profile.id || !user?.tenantId) {
+      message.error(t('auth.noTenantAssigned'));
+      return;
+    }
+    try {
+      setPreviewingPlanId(record.id);
+      const response = await fetch(`${resolveMrpApiBaseUrl()}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.profile.id,
+          tenant_id: user.tenantId,
+          plan_id: record.id,
+          mode: 'preview',
+          filter: 'all',
+        }),
+      });
+      const data = (await response.json()) as {
+        ok: boolean;
+        error?: string;
+        plan_no?: string;
+        summary?: { total: number; purchaseOrders: number; productionOrders: number };
+        candidates?: ConversionCandidate[];
+        skipped?: { productCode: string; reason: string; quantity: number }[];
+      };
+      if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+      const candidates = data.candidates || [];
+      if (candidates.length === 0) {
+        message.info(t('mrp.plans.convertEmpty'));
+        return;
+      }
+      setConvertPreview({
+        planId: record.id,
+        planNo: data.plan_no || record.plan_no,
+        candidates,
+        skipped: data.skipped || [],
+        totalPurchaseAmount: candidates
+          .filter((c) => c.target === 'purchase_order')
+          .reduce((sum, c) => sum + c.quantity * c.unitPrice, 0),
+      });
+    } catch (error) {
+      console.error('Error previewing MRP conversion:', error);
+      message.error(`${t('mrp.plans.convertPreviewFailed')}：${(error as Error).message}`);
+    } finally {
+      setPreviewingPlanId(null);
+    }
+  };
+
+  const handleApplyConvert = async () => {
+    if (!convertPreview || !user?.profile.id || !user?.tenantId) return;
+    try {
+      setConverting(true);
+      const response = await fetch(`${resolveMrpApiBaseUrl()}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.profile.id,
+          tenant_id: user.tenantId,
+          plan_id: convertPreview.planId,
+          mode: 'apply',
+          filter: 'all',
+        }),
+      });
+      const data = (await response.json()) as {
+        ok: boolean;
+        error?: string;
+        plan_no?: string;
+        created?: number;
+        failed?: number;
+        items?: ConversionItemResult[];
+      };
+      if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+
+      setConvertPreview(null);
+      setConvertResult({
+        planNo: data.plan_no || convertPreview.planNo,
+        created: data.created ?? 0,
+        failed: data.failed ?? 0,
+        items: data.items || [],
+      });
+      if ((data.failed ?? 0) > 0) {
+        message.warning(
+          t('mrp.plans.convertPartial', { created: data.created ?? 0, failed: data.failed ?? 0 }),
+        );
+      } else {
+        message.success(t('mrp.plans.convertSuccess', { count: data.created ?? 0 }));
+      }
+    } catch (error) {
+      console.error('Error converting MRP plan:', error);
+      message.error(`${t('mrp.plans.convertFailed')}：${(error as Error).message}`);
+    } finally {
+      setConverting(false);
+    }
+  };
+
+  const handleAdd = async () => {    let planNo: string;
     try {
       planNo = await nextDocumentNo('mrp_plan');
     } catch (error) {
@@ -210,6 +342,12 @@ export function MrpPlans() {
       status: 'draft',
     });
     setIsModalOpen(true);
+  };
+
+  // 服务端返回的是机器码（结构性事实），只把已知码翻成文案，未知码原样显示便于排查
+  const labelFrom = (prefix: string, code: string) => {
+    const key = `${prefix}.${code.split(":")[0]}`;
+    return i18n.exists(key) ? t(key) : code;
   };
 
   const filteredPlans = plans.filter(
@@ -296,6 +434,16 @@ export function MrpPlans() {
               onClick={() => handleViewReport(record)}
             >
               {t('mrp.plans.reportButton')}
+            </Button>
+          )}
+          {record.status === 'completed' && (
+            <Button
+              type="text"
+              icon={<SwapOutlined />}
+              loading={previewingPlanId === record.id}
+              onClick={() => handlePreviewConvert(record)}
+            >
+              {t('mrp.plans.convert')}
             </Button>
           )}
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
@@ -410,6 +558,160 @@ export function MrpPlans() {
         <div style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>
           {reportView?.report || t('mrp.plans.reportEmpty')}
         </div>
+      </Modal>
+
+      {/* 转单预览：只列候选，不写任何单据 */}
+      <Modal
+        title={`${t('mrp.plans.convertTitle')} - ${convertPreview?.planNo ?? ''}`}
+        open={!!convertPreview}
+        onCancel={() => setConvertPreview(null)}
+        width={880}
+        footer={[
+          <Button key="cancel" onClick={() => setConvertPreview(null)}>
+            {t('common.cancel')}
+          </Button>,
+          <Button key="ok" type="primary" loading={converting} onClick={handleApplyConvert}>
+            {t('mrp.plans.convertConfirm', { count: convertPreview?.candidates.length ?? 0 })}
+          </Button>,
+        ]}
+      >
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t('mrp.plans.convertPreviewHint')}
+          description={
+            <span>
+              {t('mrp.plans.convertPreviewSummary', {
+                purchase: convertPreview?.candidates.filter((c) => c.target === 'purchase_order').length ?? 0,
+                production: convertPreview?.candidates.filter((c) => c.target === 'production_order').length ?? 0,
+                amount: `¥${(convertPreview?.totalPurchaseAmount ?? 0).toFixed(2)}`,
+              })}
+            </span>
+          }
+        />
+        <Table
+          size="small"
+          rowKey="requirementId"
+          pagination={false}
+          scroll={{ y: 320 }}
+          dataSource={convertPreview?.candidates ?? []}
+          columns={[
+            {
+              title: t('mrp.plans.convertProduct'),
+              dataIndex: 'productCode',
+              render: (_: unknown, row: ConversionCandidate) =>
+                row.productName ? `${row.productCode} - ${row.productName}` : row.productCode,
+            },
+            {
+              title: t('mrp.plans.convertTarget'),
+              dataIndex: 'target',
+              width: 130,
+              render: (target: ConversionTarget) => (
+                <Tag color={target === 'purchase_order' ? 'blue' : 'purple'}>
+                  {t(`mrp.plans.convertTarget.${target}`)}
+                </Tag>
+              ),
+            },
+            {
+              title: t('mrp.plans.convertQuantity'),
+              dataIndex: 'quantity',
+              align: 'right' as const,
+              render: (qty: number) => Number(qty).toLocaleString(),
+            },
+            {
+              title: t('mrp.plans.convertRequirementDate'),
+              dataIndex: 'requirementDate',
+            },
+            {
+              title: t('mrp.plans.convertUnitPrice'),
+              dataIndex: 'unitPrice',
+              align: 'right' as const,
+              render: (price: number) => `¥${Number(price).toFixed(2)}`,
+            },
+            {
+              title: t('mrp.plans.convertWarnings'),
+              dataIndex: 'warnings',
+              render: (warnings: string[]) =>
+                warnings.length === 0 ? (
+                  '-'
+                ) : (
+                  <Space wrap size={4}>
+                    {warnings.map((code) => (
+                      <Tag key={code} color="orange">
+                        {labelFrom('mrp.plans.convertWarning', code)}
+                      </Tag>
+                    ))}
+                  </Space>
+                ),
+            },
+          ]}
+        />
+        {(convertPreview?.skipped.length ?? 0) > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginTop: 12 }}
+            message={t('mrp.plans.convertSkipped', { count: convertPreview?.skipped.length ?? 0 })}
+            description={
+              <Space wrap size={4}>
+                {convertPreview?.skipped.map((s, idx) => (
+                  <Tag key={`${s.productCode}-${idx}`}>
+                    {s.productCode || '-'}：{labelFrom('mrp.plans.convertReason', s.reason)}
+                  </Tag>
+                ))}
+              </Space>
+            }
+          />
+        )}
+      </Modal>
+
+      {/* 转单结果：逐条给出生成的单据号或失败原因 */}
+      <Modal
+        title={`${t('mrp.plans.convertResultTitle')} - ${convertResult?.planNo ?? ''}`}
+        open={!!convertResult}
+        onCancel={() => setConvertResult(null)}
+        width={760}
+        footer={[
+          <Button key="close" type="primary" onClick={() => setConvertResult(null)}>
+            {t('common.close')}
+          </Button>,
+        ]}
+      >
+        <Alert
+          type={(convertResult?.failed ?? 0) > 0 ? 'warning' : 'success'}
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t('mrp.plans.convertResultSummary', {
+            created: convertResult?.created ?? 0,
+            failed: convertResult?.failed ?? 0,
+          })}
+        />
+        <Table
+          size="small"
+          rowKey="requirementId"
+          pagination={false}
+          scroll={{ y: 320 }}
+          dataSource={convertResult?.items ?? []}
+          columns={[
+            {
+              title: t('mrp.plans.convertProduct'),
+              dataIndex: 'productCode',
+            },
+            {
+              title: t('mrp.plans.convertTarget'),
+              dataIndex: 'target',
+              width: 120,
+              render: (target: ConversionTarget) => t(`mrp.plans.convertTarget.${target}`),
+            },
+            {
+              title: t('mrp.plans.convertDocumentNo'),
+              dataIndex: 'documentNo',
+              render: (no: string | undefined, row: ConversionItemResult) =>
+                row.ok ? no || '-' : <span style={{ color: '#cf1322' }}>{row.error || '-'}</span>,
+            },
+          ]}
+        />
       </Modal>
     </div>
   );

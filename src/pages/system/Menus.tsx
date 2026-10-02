@@ -31,6 +31,7 @@ const iconOptions = [
   'ContainerOutlined', 'FileTextOutlined', 'MenuOutlined', 'SafetyOutlined',
   'TruckOutlined', 'RiseOutlined', 'FallOutlined', 'TableOutlined', 'UnorderedListOutlined',
   'SwapOutlined', 'ExperimentOutlined', 'LineChartOutlined', 'BarChartOutlined',
+  'CheckCircleOutlined', 'CalculatorOutlined',
 ];
 
 const excludedStaticMenuPaths = new Set(['/']);
