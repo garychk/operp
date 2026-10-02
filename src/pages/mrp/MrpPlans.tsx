@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker } from 'antd';
-import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker, Alert } from 'antd';
+import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, FileTextOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import dayjs from 'dayjs';
 import SimpleModal from '../../components/SimpleModal';
+import { useAuth } from '../../contexts/AuthContext';
 
 type MrpPlan = Tables['erp_mrp_plans_s_539dcf81_b']['Row'];
 
@@ -16,13 +17,46 @@ const { Option } = Select;
 const { TextArea } = Input;
 const mrpPlanTable = 'erp_mrp_plans_s_539dcf81_b';
 
+/**
+ * MRP 运算走 ai-server（service_role + 应用层租户过滤，RLS 对它无效）。
+ * VITE_AI_SERVER_URL 约定与 AIChatPanel 一致（…/api/ai 结尾），这里换算出 /api/mrp 基址。
+ */
+const resolveMrpBaseUrl = () => {
+  const explicitUrl = import.meta.env.VITE_AI_SERVER_URL;
+  if (explicitUrl) {
+    return explicitUrl.replace(/\/$/, '').replace(/\/api\/ai$/, '') + '/api/mrp';
+  }
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:3001/api/mrp';
+  }
+  return '/api/mrp';
+};
+
+interface MrpRunResponse {
+  ok: boolean;
+  error?: string;
+  plan_no?: string;
+  report?: string;
+  report_generated_by?: 'llm' | 'fallback';
+  report_error?: string | null;
+}
+
 export function MrpPlans() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [plans, setPlans] = useState<MrpPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [runningPlanId, setRunningPlanId] = useState<number | null>(null);
+  const [reportView, setReportView] = useState<{
+    open: boolean;
+    planNo: string;
+    report: string;
+    generatedBy: 'llm' | 'fallback';
+    llmError: string | null;
+  } | null>(null);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -85,25 +119,77 @@ export function MrpPlans() {
     });
   };
 
-  const handleRunMrp = async (id: number) => {
+  const handleRunMrp = async (record: MrpPlan) => {
+    if (!user?.profile.id || !user?.tenantId) {
+      message.error(t('auth.noTenantAssigned'));
+      return;
+    }
     Modal.confirm({
       title: t('mrp.plans.confirmRun'),
       content: t('mrp.plans.confirmRunContent'),
       onOk: async () => {
+        setRunningPlanId(record.id);
         try {
-          const { error } = await supabase
-            .from(mrpPlanTable)
-            .update({ status: 'running' })
-            .eq('id', id);
-          if (error) throw error;
-          message.success(t('mrp.plans.runStarted'));
+          const response = await fetch(`${resolveMrpBaseUrl()}/run`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: user.profile.id,
+              tenant_id: user.tenantId,
+              plan_id: record.id,
+            }),
+          });
+          const data = (await response.json()) as MrpRunResponse;
+          if (!response.ok || !data.ok) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+          }
+          message.success(t('mrp.plans.runSuccess'));
+          setReportView({
+            open: true,
+            planNo: data.plan_no || record.plan_no,
+            report: data.report || '',
+            generatedBy: data.report_generated_by === 'llm' ? 'llm' : 'fallback',
+            llmError: data.report_error ?? null,
+          });
           fetchPlans();
         } catch (error) {
           console.error('Error running MRP:', error);
-          message.error(t('mrp.plans.runFailed'));
+          message.error(`${t('mrp.plans.runFailed')}：${(error as Error).message}`);
+        } finally {
+          setRunningPlanId(null);
         }
       },
     });
+  };
+
+  const handleViewReport = async (record: MrpPlan) => {
+    if (!user?.profile.id || !user?.tenantId) {
+      message.error(t('auth.noTenantAssigned'));
+      return;
+    }
+    try {
+      const params = new URLSearchParams({
+        user_id: String(user.profile.id),
+        tenant_id: String(user.tenantId),
+      });
+      const response = await fetch(
+        `${resolveMrpBaseUrl()}/report/${record.id}?${params.toString()}`,
+      );
+      const data = (await response.json()) as { ok: boolean; error?: string; report?: string };
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+      setReportView({
+        open: true,
+        planNo: record.plan_no,
+        report: data.report || '',
+        generatedBy: 'llm',
+        llmError: null,
+      });
+    } catch (error) {
+      console.error('Error fetching MRP report:', error);
+      message.error(`${t('mrp.plans.reportFetchFailed')}：${(error as Error).message}`);
+    }
   };
 
   const handleAdd = async () => {
@@ -143,6 +229,7 @@ export function MrpPlans() {
     draft: { text: t('mrp.plans.statusDraft'), color: 'default' },
     running: { text: t('mrp.plans.statusRunning'), color: 'processing' },
     completed: { text: t('mrp.plans.statusCompleted'), color: 'success' },
+    failed: { text: t('mrp.plans.statusFailed'), color: 'error' },
     cancelled: { text: t('mrp.plans.statusCancelled'), color: 'error' },
   };
 
@@ -192,9 +279,23 @@ export function MrpPlans() {
           <Button type="text" icon={<EyeOutlined />}>
             {t('mrp.plans.view')}
           </Button>
-          {record.status === 'draft' && (
-            <Button type="text" icon={<PlayCircleOutlined />} onClick={() => handleRunMrp(record.id)}>
+          {(record.status === 'draft' || record.status === 'failed') && (
+            <Button
+              type="text"
+              icon={<PlayCircleOutlined />}
+              loading={runningPlanId === record.id}
+              onClick={() => handleRunMrp(record)}
+            >
               {t('mrp.plans.run')}
+            </Button>
+          )}
+          {record.analysis_report && (
+            <Button
+              type="text"
+              icon={<FileTextOutlined />}
+              onClick={() => handleViewReport(record)}
+            >
+              {t('mrp.plans.reportButton')}
             </Button>
           )}
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)}>
@@ -285,6 +386,31 @@ export function MrpPlans() {
           </Form.Item>
         </Form>
       </SimpleModal>
+
+      <Modal
+        title={`${t('mrp.plans.reportTitle')} - ${reportView?.planNo ?? ''}`}
+        open={reportView?.open ?? false}
+        onCancel={() => setReportView(null)}
+        footer={[
+          <Button key="close" onClick={() => setReportView(null)}>
+            {t('common.close')}
+          </Button>,
+        ]}
+        width={720}
+      >
+        {reportView?.generatedBy === 'fallback' && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t('mrp.plans.reportFromFallback')}
+            description={reportView.llmError || undefined}
+          />
+        )}
+        <div style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>
+          {reportView?.report || t('mrp.plans.reportEmpty')}
+        </div>
+      </Modal>
     </div>
   );
 }

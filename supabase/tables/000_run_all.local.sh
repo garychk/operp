@@ -100,6 +100,7 @@ ORDER=(
   deploy_57_bom_explosion_kit_check.sql
   deploy_58_production_receipt_and_locations.sql
   deploy_59_production_receipt_menu.sql
+  deploy_60_mrp_planning_parameters.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

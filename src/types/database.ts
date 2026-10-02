@@ -416,6 +416,8 @@ export interface ErpMrpPlansS539Dcf81BRow {
   plan_type: string | null;
   status: string | null;
   remark: string | null;
+  /** deploy_60：运算完成后由 ai-server 写入的分析报告（LLM 生成或确定性摘要） */
+  analysis_report: string | null;
 }
 export type ErpMrpPlansS539Dcf81BInsert = Omit<ErpMrpPlansS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMrpPlansS539Dcf81BUpdate = Partial<ErpMrpPlansS539Dcf81BInsert>;

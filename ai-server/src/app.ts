@@ -3,6 +3,7 @@ import cors from "cors";
 import { env } from "./config/env.js";
 import { healthRouter } from "./api/health.routes.js";
 import { aiRouter } from "./api/ai.routes.js";
+import { mrpRouter } from "./api/mrp.routes.js";
 
 export function createApp() {
   const app = express();
@@ -18,6 +19,7 @@ export function createApp() {
 
   app.use("/api/health", healthRouter);
   app.use("/api/ai", aiRouter);
+  app.use("/api/mrp", mrpRouter);
 
   return app;
 }
