@@ -28,7 +28,7 @@ import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
-import { SuperTable } from "../../components/SuperTable";
+import { SuperTable, SuperTableColumn } from "../../components/SuperTable";
 import { formatMoney, useCurrencyRegistry, currencyLabel, fetchExchangeRate } from "../../utils/money";
 import { ProductUnit } from "../../components/ProductUnit";
 import SimpleModal from "../../components/SimpleModal";
@@ -491,7 +491,7 @@ export function SalesOrders() {
     cancelled: { text: t("salesOrders.statusCancelled"), color: "error" },
   };
 
-  const columns = [
+  const columns: SuperTableColumn<SalesOrder>[] = [
     {
       title: t("salesOrders.orderNo"),
       dataIndex: "order_no",
@@ -562,6 +562,7 @@ export function SalesOrders() {
       title: t("common.actions"),
       key: "action",
       width: 120,
+      fixed: "right",
       render: (_: any, record: SalesOrder) => (
         <Space>
           <Button

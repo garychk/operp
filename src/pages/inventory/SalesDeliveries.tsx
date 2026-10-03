@@ -11,7 +11,7 @@ import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
-import { SuperTable } from '../../components/SuperTable';
+import { SuperTable, SuperTableColumn } from '../../components/SuperTable';
 import { formatMoney, useCurrencyRegistry, currencyLabel } from '../../utils/money';
 import { ProductUnit } from '../../components/ProductUnit';
 import { InventoryInfo, invalidateInventoryCache } from '../../components/InventoryInfo';
@@ -582,7 +582,7 @@ export function SalesDeliveries() {
     cancelled: { text: t('salesDeliveries.statusCancelled'), color: 'error' },
   };
 
-  const columns = [
+  const columns: SuperTableColumn<SalesDelivery>[] = [
     {
       title: t('salesDeliveries.deliveryNo'),
       dataIndex: 'delivery_no',
@@ -643,11 +643,10 @@ export function SalesDeliveries() {
     {
       title: t('common.actions'),
       key: 'action',
+      width: 120,
+      fixed: "right",
       render: (_: any, record: SalesDelivery) => (
-        <Space size="middle">
-          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetails(record)}>
-            {t('salesDeliveries.details')}
-          </Button>
+        <Space>
           {record.status === 'draft' && (
             <Button type="text" onClick={() => runDeliveryAction('submit', record)} disabled={record.status !== 'draft'}>{t('salesDeliveries.submit')}</Button>
           )}
@@ -939,7 +938,7 @@ export function SalesDeliveries() {
             </Button>
           </Space>
         }
-        width={'70%'}
+        width={'80%'}
         height={'80%'}
       />
 
