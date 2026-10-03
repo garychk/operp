@@ -9,6 +9,7 @@ import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
+import { formatMoney } from '../../utils/money';
 import { useTranslation } from 'react-i18next';
 
 type Receivable = Tables['erp_receivables_s_539dcf81_b']['Row'];
@@ -224,13 +225,13 @@ export function Receivables() {
       title: t('receivables.amount'),
       dataIndex: 'amount',
       key: 'amount',
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number, record: Receivable) => formatMoney(amount, record.currency),
     },
     {
       title: t('receivables.balance'),
       dataIndex: 'balance',
       key: 'balance',
-      render: (balance: number) => `¥${(balance ?? 0).toLocaleString()}`,
+      render: (balance: number, record: Receivable) => formatMoney(balance, record.currency),
     },
     {
       title: t('common.status'),

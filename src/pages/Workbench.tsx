@@ -42,6 +42,7 @@ import { supabase } from '../utils/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { formatShanghaiDateTime } from '../utils/datetime';
 import { notificationTypeLabelKey, type NotificationRow } from '../components/NotificationBell';
+import { useCurrencyRegistry } from '../utils/money';
 import defaultAvatar from '../assets/avatar.png';
 
 /**
@@ -329,6 +330,9 @@ export function Workbench() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  // 工作台统计卡片里的金额一律本位币，符号跟随币别主数据
+  const { getMeta } = useCurrencyRegistry();
+  const baseCurrencySymbol = getMeta().symbol;
 
   const language = i18n.resolvedLanguage === 'en-US' ? 'en-US' : 'zh-CN';
   const [stats, setStats] = useState<WorkbenchStats>(EMPTY_STATS);
@@ -733,7 +737,7 @@ export function Workbench() {
                       </span>
                     }
                     value={stats[card.key]}
-                    prefix={card.currency ? '¥' : undefined}
+                    prefix={card.currency ? baseCurrencySymbol : undefined}
                     formatter={(value) => formatNumber(Number(value), card.precision ?? 0)}
                     valueStyle={{ fontSize: 20 }}
                   />

@@ -12,6 +12,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney } from '../../utils/money';
+import { MoneyInput } from '../../components/MoneyInput';
 
 type Voucher = Tables['erp_vouchers_s_539dcf81_b']['Row'];
 type VoucherDetail = Tables['erp_voucher_details_s_539dcf81_b']['Row'];
@@ -388,7 +390,7 @@ export function Vouchers() {
       title: t('vouchers.amount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number) => formatMoney(amount),
     },
     {
       title: t('vouchers.remark'),
@@ -453,13 +455,13 @@ export function Vouchers() {
       title: t('vouchers.debitAmount'),
       dataIndex: 'debit_amount',
       key: 'debit_amount',
-      render: (amount: number) => amount > 0 ? `¥${amount.toFixed(2)}` : '-',
+      render: (amount: number) => amount > 0 ? formatMoney(amount) : '-',
     },
     {
       title: t('vouchers.creditAmount'),
       dataIndex: 'credit_amount',
       key: 'credit_amount',
-      render: (amount: number) => amount > 0 ? `¥${amount.toFixed(2)}` : '-',
+      render: (amount: number) => amount > 0 ? formatMoney(amount) : '-',
     },
     {
       title: t('vouchers.auxiliaryType'),
@@ -592,8 +594,8 @@ export function Vouchers() {
             summary={() => (
               <Table.Summary.Row>
                 <Table.Summary.Cell index={0} colSpan={3} align="right"><strong>{t('vouchers.total')}</strong></Table.Summary.Cell>
-                <Table.Summary.Cell index={1} align="left"><strong>¥{detailTotal.debit.toFixed(2)}</strong></Table.Summary.Cell>
-                <Table.Summary.Cell index={2} align="left"><strong>¥{detailTotal.credit.toFixed(2)}</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={1} align="left"><strong>{formatMoney(detailTotal.debit)}</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={2} align="left"><strong>{formatMoney(detailTotal.credit)}</strong></Table.Summary.Cell>
                 <Table.Summary.Cell index={3} colSpan={2}></Table.Summary.Cell>
               </Table.Summary.Row>
             )}
@@ -648,11 +650,11 @@ export function Vouchers() {
             <Col span={12}>
               {isDebit ? (
                 <Form.Item label={t('vouchers.debitAmount')} name="debit_amount" initialValue={0}>
-                <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.debitAmountPlaceholder')} />
+                <MoneyInput min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.debitAmountPlaceholder')} />
               </Form.Item>
               ) : (
                 <Form.Item label={t('vouchers.creditAmount')} name="credit_amount" initialValue={0}>
-                  <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.creditAmountPlaceholder')} />
+                  <MoneyInput min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.creditAmountPlaceholder')} />
                 </Form.Item>
               )}
             </Col>

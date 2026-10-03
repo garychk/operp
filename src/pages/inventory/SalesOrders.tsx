@@ -29,6 +29,7 @@ import { nextDocumentNo } from "../../utils/documentNaming";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
+import { formatMoney } from "../../utils/money";
 import { ProductUnit } from "../../components/ProductUnit";
 import SimpleModal from "../../components/SimpleModal";
 
@@ -62,6 +63,9 @@ export function SalesOrders() {
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
   const [isDisabled, setIsDisabled] = useState(false);
+
+  // 明细行金额跟随表头币种（新单据取表单当前值，编辑时取单据值），保证与表头一致
+  const detailCurrency = Form.useWatch("currency", form) ?? editingOrder?.currency ?? undefined;
 
   useEffect(() => {
     fetchOrders();
@@ -437,14 +441,14 @@ export function SalesOrders() {
       dataIndex: "total_amount",
       key: "total_amount",
       width: 120,
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number, record: SalesOrder) => formatMoney(amount, record.currency),
     },
     {
       title: t("salesOrders.receivableAmount"),
       dataIndex: "receivable_amount",
       key: "receivable_amount",
       width: 120,
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number, record: SalesOrder) => formatMoney(amount, record.currency),
     },
     {
       title: t("common.status"),
@@ -514,13 +518,13 @@ export function SalesOrders() {
       title: t("salesOrders.unitPrice"),
       dataIndex: "unit_price",
       key: "unit_price",
-      render: (price: number) => `¥${(price ?? 0).toFixed(2)}`,
+      render: (price: number) => formatMoney(price, detailCurrency),
     },
     {
       title: t("salesOrders.amount"),
       dataIndex: "amount",
       key: "amount",
-      render: (amount: number) => `¥${(amount ?? 0).toFixed(2)}`,
+      render: (amount: number) => formatMoney(amount, detailCurrency),
     },
     {
       title: t("salesOrders.taxRate"),
@@ -532,7 +536,7 @@ export function SalesOrders() {
       title: t("salesOrders.taxAmount"),
       dataIndex: "tax_amount",
       key: "tax_amount",
-      render: (amount: number) => `¥${(amount ?? 0).toFixed(2)}`,
+      render: (amount: number) => formatMoney(amount, detailCurrency),
     },
     {
       title: t("salesOrders.deliveredQuantity"),
@@ -777,11 +781,11 @@ export function SalesOrders() {
                   <strong>{t("salesOrders.totalText")}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={1} align="left">
-                  <strong>¥{detailTotal.amount.toFixed(2)}</strong>
+                  <strong>{formatMoney(detailTotal.amount, detailCurrency)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={2}></Table.Summary.Cell>
                 <Table.Summary.Cell index={3} align="left">
-                  <strong>¥{detailTotal.taxAmount.toFixed(2)}</strong>
+                  <strong>{formatMoney(detailTotal.taxAmount, detailCurrency)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={4} colSpan={3}></Table.Summary.Cell>
               </Table.Summary.Row>

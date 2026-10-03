@@ -27,6 +27,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
+import { formatMoney } from "../../utils/money";
 import SimpleModal from "../../components/SimpleModal";
 import dayjs from "dayjs";
 
@@ -54,9 +55,6 @@ const QUALITY_STATUSES = ["qualified", "unqualified", "pending"] as const;
 
 const isPosted = (record: { status: string | null }) =>
   record.status === POSTED_STATUS;
-
-const formatMoney = (value: number | null | undefined) =>
-  `¥${(value ?? 0).toFixed(2)}`;
 
 const formatQuantity = (value: number | null | undefined) =>
   Number(value ?? 0).toLocaleString();

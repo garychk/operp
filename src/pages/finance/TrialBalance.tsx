@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney } from '../../utils/money';
 
 
 type Period = Tables['erp_accounting_periods_s_539dcf81_b']['Row'];
@@ -60,9 +61,9 @@ export function TrialBalance() {
 
   const columns = [
     { title: t('trialBalance.period'), dataIndex: 'period_id', key: 'period_id', render: (value: number) => periodMap.get(value)?.year && periodMap.get(value)?.month ? `${periodMap.get(value)?.year}-${String(periodMap.get(value)?.month).padStart(2, '0')}` : value || '-' },
-    { title: t('trialBalance.totalDebit'), dataIndex: 'total_debit', key: 'total_debit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: t('trialBalance.totalCredit'), dataIndex: 'total_credit', key: 'total_credit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: t('trialBalance.difference'), dataIndex: 'balance_diff', key: 'balance_diff', render: (value: number) => <Tag color={Math.abs(value ?? 0) < 0.005 ? 'success' : 'error'}>{`¥${(value ?? 0).toFixed(2)}`}</Tag> },
+    { title: t('trialBalance.totalDebit'), dataIndex: 'total_debit', key: 'total_debit', render: (value: number) => formatMoney(value) },
+    { title: t('trialBalance.totalCredit'), dataIndex: 'total_credit', key: 'total_credit', render: (value: number) => formatMoney(value) },
+    { title: t('trialBalance.difference'), dataIndex: 'balance_diff', key: 'balance_diff', render: (value: number) => <Tag color={Math.abs(value ?? 0) < 0.005 ? 'success' : 'error'}>{formatMoney(value)}</Tag> },
   ];
 
   return (

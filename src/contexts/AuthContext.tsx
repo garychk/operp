@@ -5,6 +5,7 @@ import { message } from 'antd';
 import { supabase } from '../utils/supabase';
 import i18n from '../i18n';
 import { logOperation } from '../utils/logger';
+import { setCurrencyTenantScope } from '../utils/money';
 import type { SysRolesRow, SysUsersRow } from '../types/database';
 
 interface AuthContextType {
@@ -193,6 +194,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     const tenantId = resolveTenantId(profile, authUser);
 
+    // 把权威租户注入币别注册表（money.ts），让金额格式化与币别查询都收敛到本租户。
+    // 这一层是纵深防御：真正的隔离由 deploy_67 的 RESTRICTIVE 租户策略保证。
+    setCurrencyTenantScope(tenantId);
+
     // 未分配租户是 fail-closed 状态：RLS 会挡掉全部 erp 数据、AI 也会被拒。
     // 用户看到的只是一堆空页面，不提示的话根本不知道发生了什么。
     if (tenantId === null && !tenantWarnedRef.current) {
@@ -228,6 +233,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session?.user) {
         setUser(null);
+        setCurrencyTenantScope(null);
         setLoading(false);
         return;
       }
@@ -289,6 +295,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const logout = async () => {
     tenantWarnedRef.current = false;
     await supabase.auth.signOut();
+    setCurrencyTenantScope(null);
     setUser(null);
   };
 

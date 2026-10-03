@@ -7,6 +7,7 @@ import { supabase } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney } from '../../utils/money';
 import dayjs from 'dayjs';
 import SimpleModal from '../../components/SimpleModal';
 import { useAuth } from '../../contexts/AuthContext';
@@ -585,7 +586,7 @@ export function MrpPlans() {
               {t('mrp.plans.convertPreviewSummary', {
                 purchase: convertPreview?.candidates.filter((c) => c.target === 'purchase_order').length ?? 0,
                 production: convertPreview?.candidates.filter((c) => c.target === 'production_order').length ?? 0,
-                amount: `¥${(convertPreview?.totalPurchaseAmount ?? 0).toFixed(2)}`,
+                amount: formatMoney(convertPreview?.totalPurchaseAmount),
               })}
             </span>
           }
@@ -627,7 +628,7 @@ export function MrpPlans() {
               title: t('mrp.plans.convertUnitPrice'),
               dataIndex: 'unitPrice',
               align: 'right' as const,
-              render: (price: number) => `¥${Number(price).toFixed(2)}`,
+              render: (price: number) => formatMoney(price),
             },
             {
               title: t('mrp.plans.convertWarnings'),

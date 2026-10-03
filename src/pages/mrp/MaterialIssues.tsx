@@ -29,6 +29,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
+import { formatMoney } from "../../utils/money";
 import { SupaModal } from "../../components/SupaModal";
 import SimpleModal from "../../components/SimpleModal";
 import dayjs from "dayjs";
@@ -56,9 +57,6 @@ const PULL_ORDER_LINES_RPC = "pull_order_lines_into_issue";
 
 const isPosted = (record: { status: string | null }) =>
   record.status === POSTED_STATUS;
-
-const formatMoney = (value: number | null | undefined) =>
-  `¥${(value ?? 0).toFixed(2)}`;
 
 const formatDateTime = (value: string | null | undefined) =>
   value ? dayjs(value).format("YYYY-MM-DD HH:mm") : "-";

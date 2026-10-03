@@ -17,6 +17,7 @@ import dayjs, { type Dayjs } from "dayjs";
 import { SuperTable } from "../../components/SuperTable";
 import { useAuth } from "../../contexts/AuthContext";
 import { resolveMrpApiBaseUrl } from "../../utils/aiServer";
+import { formatMoney, useCurrencyRegistry } from "../../utils/money";
 
 interface CostRow {
   productId: number;
@@ -55,6 +56,11 @@ interface RollupResponse {
 export function CostCalculations() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  // 成本卷算一律以本位币计价，符号与小数位跟随本位币设置
+  const { getMeta } = useCurrencyRegistry();
+  const baseMeta = getMeta();
+  const baseCurrencySymbol = baseMeta.symbol;
+  const baseDecimalPlaces = baseMeta.decimalPlaces;
   const [monthValue, setMonthValue] = useState<Dayjs>(dayjs());
   const [rows, setRows] = useState<CostRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -149,7 +155,6 @@ export function CostCalculations() {
     );
   };
 
-  const formatMoney = (value: number | null | undefined) => `¥${(value ?? 0).toFixed(2)}`;
   const formatQuantity = (value: number | null | undefined) =>
     Number(value ?? 0).toLocaleString();
 
@@ -244,40 +249,40 @@ export function CostCalculations() {
             <Statistic
               title={t("mrp.costCalculations.material")}
               value={totals.material}
-              precision={2}
-              prefix="¥"
+              precision={baseDecimalPlaces}
+              prefix={baseCurrencySymbol}
             />
           </Col>
           <Col span={4}>
             <Statistic
               title={t("mrp.costCalculations.labor")}
               value={totals.labor}
-              precision={2}
-              prefix="¥"
+              precision={baseDecimalPlaces}
+              prefix={baseCurrencySymbol}
             />
           </Col>
           <Col span={4}>
             <Statistic
               title={t("mrp.costCalculations.overhead")}
               value={totals.overhead}
-              precision={2}
-              prefix="¥"
+              precision={baseDecimalPlaces}
+              prefix={baseCurrencySymbol}
             />
           </Col>
           <Col span={4}>
             <Statistic
               title={t("mrp.costCalculations.totalCost")}
               value={totals.total}
-              precision={2}
-              prefix="¥"
+              precision={baseDecimalPlaces}
+              prefix={baseCurrencySymbol}
             />
           </Col>
           <Col span={4}>
             <Statistic
               title={t("mrp.costCalculations.endingWip")}
               value={totals.endingWip}
-              precision={2}
-              prefix="¥"
+              precision={baseDecimalPlaces}
+              prefix={baseCurrencySymbol}
             />
           </Col>
           <Col span={4}>

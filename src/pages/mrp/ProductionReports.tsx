@@ -28,6 +28,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
+import { formatMoney } from "../../utils/money";
 import type { SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import dayjs from "dayjs";
@@ -62,9 +63,6 @@ const formatQuantity = (value: number | null | undefined) =>
 
 const formatHours = (value: number | null | undefined) =>
   Number(value ?? 0).toFixed(2);
-
-const formatMoney = (value: number | null | undefined) =>
-  `¥${(value ?? 0).toFixed(2)}`;
 
 export function ProductionReports() {
   const { t } = useTranslation();

@@ -57,6 +57,7 @@ import {
   ExperimentOutlined,
   TranslationOutlined,
   UnorderedListOutlined,
+  DollarOutlined,
   LineChartOutlined,
   BarChartOutlined,
   TableOutlined,
@@ -70,6 +71,7 @@ import { NotificationBell } from "./NotificationBell";
 import heroLogo from "../assets/opelix.svg";
 import defaultAvatar from "../assets/avatar.png";
 import { supabase } from "../utils/supabase";
+import { loadCurrencyRegistry } from "../utils/money";
 import { useTranslation } from "react-i18next";
 import type { SupportedLanguage } from "../i18n";
 
@@ -124,6 +126,7 @@ const menuIconMap: Record<string, ReactNode> = {
   FallOutlined: <FallOutlined />,
   TableOutlined: <TableOutlined />,
   UnorderedListOutlined: <UnorderedListOutlined />,
+  DollarOutlined: <DollarOutlined />,
   SwapOutlined: <SwapOutlined />,
   ExperimentOutlined: <ExperimentOutlined />,
   LineChartOutlined: <LineChartOutlined />,
@@ -452,6 +455,11 @@ export const menuData: MenuRoute[] = [
         name: "计量单位",
         icon: <UnorderedListOutlined />,
       },
+      {
+        path: "/system/currencies",
+        name: "币别管理",
+        icon: <DollarOutlined />,
+      },
       { path: "/system/logs", name: "系统日志", icon: <FileTextOutlined /> },
       {
         path: "/system/page-designer",
@@ -481,6 +489,7 @@ const pathToNameMap: Record<string, string> = {
   "/inventory/products": "物料管理",
   "/inventory/warehouses": "仓库管理",
   "/system/uoms": "计量单位",
+  "/system/currencies": "币别管理",
   "/inventory/stock": "库存查询",
   "/inventory/transactions": "库存流水",
   "/inventory/purchase": "采购订单",
@@ -534,6 +543,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/inventory/products": "menu.products",
   "/inventory/warehouses": "menu.warehouses",
   "/system/uoms": "menu.uoms",
+  "/system/currencies": "menu.currencies",
   "/inventory/stock": "menu.stock",
   "/inventory/transactions": "menu.transactions",
   "/inventory/purchase": "menu.purchase",
@@ -617,6 +627,7 @@ export const staticComponentByPath: Record<string, string> = {
   "/system/document-types": "./pages/system/DocumentTypeBuilder",
   "/system/dictionaries": "./pages/system/Dictionaries",
   "/system/uoms": "./pages/system/Uoms",
+  "/system/currencies": "./pages/system/Currencies",
   "/system/logs": "./pages/system/Logs",
   "/system/page-designer": "./features/page-builder/PageDesigner",
   "/system/baq": "./features/baq/BaqDesigner",
@@ -685,6 +696,11 @@ export function ProLayout() {
       window.removeEventListener("custom-pages-changed", refreshDatabaseMenus);
       window.removeEventListener("menus-changed", refreshDatabaseMenus);
     };
+  }, []);
+  // 币别元数据（本位币 / 符号 / 金额小数位）加载一次，供全站 formatMoney、MoneyInput 使用。
+  // 加载完成后 useCurrencyRegistry 会自动触发订阅重渲染，无需在此管理状态。
+  useEffect(() => {
+    void loadCurrencyRegistry();
   }, []);
   useEffect(() => {
     localStorage.setItem("erp-dark-mode", JSON.stringify(dark));

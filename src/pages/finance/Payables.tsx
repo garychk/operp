@@ -9,6 +9,7 @@ import { generateIdempotencyKey } from '../../utils/uuid';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import { SupaModal } from '../../components/SupaModal';
+import { formatMoney } from '../../utils/money';
 import { useTranslation } from 'react-i18next';
 
 type Payable = Tables['erp_payables_s_539dcf81_b']['Row'];
@@ -228,13 +229,13 @@ export function Payables() {
       title: t('payables.amount'),
       dataIndex: 'amount',
       key: 'amount',
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number, record: Payable) => formatMoney(amount, record.currency),
     },
     {
       title: t('payables.balance'),
       dataIndex: 'balance',
       key: 'balance',
-      render: (balance: number) => `¥${(balance ?? 0).toLocaleString()}`,
+      render: (balance: number, record: Payable) => formatMoney(balance, record.currency),
     },
     {
       title: t('common.status'),

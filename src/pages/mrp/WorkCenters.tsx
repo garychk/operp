@@ -19,6 +19,7 @@ import {
   EditOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
+import { useCurrencyRegistry } from "../../utils/money";
 import { SuperTable } from "../../components/SuperTable";
 import type { SuperTableColumn } from "../../components/SuperTable";
 import { logWithTiming } from "../../utils/logger";
@@ -34,6 +35,9 @@ const workCenterTable = "erp_work_centers_s_539dcf81_b";
 
 export function WorkCenters() {
   const { t } = useTranslation();
+  // 工时/制费费率为本位币单价，符号跟随币别主数据
+  const { getMeta } = useCurrencyRegistry();
+  const baseCurrencySymbol = getMeta().symbol;
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,7 +218,10 @@ export function WorkCenters() {
       width: 120,
       align: "center",
       render: (rate: number) =>
-        t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
+        t("mrp.ratePerHour", {
+          symbol: baseCurrencySymbol,
+          rate: (rate ?? 0).toLocaleString(),
+        }),
     },
     {
       title: t("mrp.workCenters.overheadRate"),
@@ -223,7 +230,10 @@ export function WorkCenters() {
       width: 120,
       align: "center",
       render: (rate: number) =>
-        t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
+        t("mrp.ratePerHour", {
+          symbol: baseCurrencySymbol,
+          rate: (rate ?? 0).toLocaleString(),
+        }),
     },
     {
       title: t("common.status"),

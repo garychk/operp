@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney } from '../../utils/money';
 
 type Period = Tables['erp_accounting_periods_s_539dcf81_b']['Row'];
 type Subject = Tables['erp_account_subjects_s_539dcf81_b']['Row'];
@@ -100,17 +101,17 @@ export function SubjectLedger() {
   const balanceColumns = [
     { title: t('subjectLedger.period'), dataIndex: 'period_id', key: 'period_id', render: (value: number) => periodMap.get(value)?.year && periodMap.get(value)?.month ? `${periodMap.get(value)?.year}-${String(periodMap.get(value)?.month).padStart(2, '0')}` : value || '-' },
     { title: t('subjectLedger.subject'), dataIndex: 'subject_id', key: 'subject_id', render: (value: number) => subjectMap.get(value) ? `${subjectMap.get(value)?.code} - ${subjectMap.get(value)?.name}` : value || '-' },
-    { title: t('subjectLedger.totalDebit'), dataIndex: 'debit_total', key: 'debit_total', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: t('subjectLedger.totalCredit'), dataIndex: 'credit_total', key: 'credit_total', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: t('subjectLedger.netAmount'), dataIndex: 'net_amount', key: 'net_amount', render: (value: number) => <Tag color={(value ?? 0) >= 0 ? 'success' : 'error'}>{`¥${(value ?? 0).toFixed(2)}`}</Tag> },
+    { title: t('subjectLedger.totalDebit'), dataIndex: 'debit_total', key: 'debit_total', render: (value: number) => formatMoney(value) },
+    { title: t('subjectLedger.totalCredit'), dataIndex: 'credit_total', key: 'credit_total', render: (value: number) => formatMoney(value) },
+    { title: t('subjectLedger.netAmount'), dataIndex: 'net_amount', key: 'net_amount', render: (value: number) => <Tag color={(value ?? 0) >= 0 ? 'success' : 'error'}>{formatMoney(value)}</Tag> },
   ];
 
   const detailColumns = [
     { title: t('subjectLedger.date'), dataIndex: 'voucher_date', key: 'voucher_date' },
     { title: t('subjectLedger.voucherNo'), dataIndex: 'voucher_no', key: 'voucher_no' },
     { title: t('subjectLedger.summary'), dataIndex: 'summary', key: 'summary', ellipsis: true },
-    { title: t('subjectLedger.debit'), dataIndex: 'debit_amount', key: 'debit_amount', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: t('subjectLedger.credit'), dataIndex: 'credit_amount', key: 'credit_amount', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
+    { title: t('subjectLedger.debit'), dataIndex: 'debit_amount', key: 'debit_amount', render: (value: number) => formatMoney(value) },
+    { title: t('subjectLedger.credit'), dataIndex: 'credit_amount', key: 'credit_amount', render: (value: number) => formatMoney(value) },
     { title: t('subjectLedger.source'), dataIndex: 'source_type', key: 'source_type', render: (value: string) => value || '-' },
   ];
 

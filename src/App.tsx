@@ -20,6 +20,7 @@ import { Suppliers } from './pages/inventory/Suppliers';
 import { Products } from './pages/inventory/Products';
 import { Warehouses } from './pages/inventory/Warehouses';
 import { Uoms } from './pages/system/Uoms';
+import { Currencies } from './pages/system/Currencies';
 import { Inventory } from './pages/inventory/Inventory';
 import { PurchaseOrders } from './pages/inventory/PurchaseOrders';
 import { SalesOrders } from './pages/inventory/SalesOrders';
@@ -153,6 +154,7 @@ function AppContent() {
           <Route path="settings" element={<Settings />} />
           <Route path="dictionaries" element={<Dictionaries />} />
           <Route path="uoms" element={<Uoms />} />
+          <Route path="currencies" element={<Currencies />} />
           <Route path="workflow" element={<WorkflowConfig />} />
           <Route path="doc-flow" element={<DocFlowConfig />} />
           <Route path="document-types" element={<DocumentTypeBuilder />} />

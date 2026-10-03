@@ -27,6 +27,7 @@ import { Categories } from "./Categories";
 import { ProductUoms } from "./ProductUoms";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
+import { formatMoney } from "../../utils/money";
 import type { SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import { useTranslation } from "react-i18next";
@@ -268,14 +269,14 @@ export function Products() {
       dataIndex: "purchase_price",
       key: "purchase_price",
       width: 120,
-      render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
+      render: (price: number) => formatMoney(price),
     },
     {
       title: t("products.salePrice"),
       dataIndex: "sale_price",
       key: "sale_price",
       width: 120,
-      render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
+      render: (price: number) => formatMoney(price),
     },
     {
       title: t("common.status"),

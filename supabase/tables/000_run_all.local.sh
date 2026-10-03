@@ -105,6 +105,9 @@ ORDER=(
   deploy_62_production_report_and_cost_menu.sql
   deploy_63_mps_master_schedule.sql
   deploy_64_mps_menu.sql
+  deploy_65_currency_master.sql
+  deploy_66_currency_menu.sql
+  deploy_67_currency_tenant_scope.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

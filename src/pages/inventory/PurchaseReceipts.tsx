@@ -12,6 +12,7 @@ import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney } from '../../utils/money';
 import { ProductUnit } from '../../components/ProductUnit';
 import SimpleModal from '../../components/SimpleModal';
 import { WarehouseBinSelect } from '../../components/WarehouseBinSelect';
@@ -538,7 +539,7 @@ export function PurchaseReceipts() {
       dataIndex: 'total_amount',
       key: 'total_amount',
       width: 100,
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number) => formatMoney(amount),
     },
     {
       title: t('common.status'),
@@ -622,13 +623,13 @@ export function PurchaseReceipts() {
       title: t('purchaseReceipts.unitPrice'),
       dataIndex: 'unit_price',
       key: 'unit_price',
-      render: (price: number) => `¥${(price ?? 0).toFixed(2)}`,
+      render: (price: number) => formatMoney(price),
     },
     {
       title: t('purchaseReceipts.amount'),
       dataIndex: 'amount',
       key: 'amount',
-      render: (amount: number) => `¥${(amount ?? 0).toFixed(2)}`,
+      render: (amount: number) => formatMoney(amount),
     },
     {
       title: t('purchaseReceipts.batchNo'),
@@ -816,7 +817,7 @@ export function PurchaseReceipts() {
           summary={() => (
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>{t('purchaseReceipts.totalText')}</strong></Table.Summary.Cell>
-              <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right"><strong>{formatMoney(detailTotal.amount)}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={2} colSpan={4}></Table.Summary.Cell>
             </Table.Summary.Row>
           )}

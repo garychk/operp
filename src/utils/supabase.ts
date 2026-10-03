@@ -43,6 +43,8 @@ import type {
   ErpMrpPlansS539Dcf81BRow,
   ErpMpsPlansS539Dcf81BRow,
   ErpMpsPlanDetailsS539Dcf81BRow,
+  ErpCurrenciesS539Dcf81BRow,
+  ErpExchangeRatesS539Dcf81BRow,
   ErpMrpRequirementsS539Dcf81BRow,
   ErpProductionOrdersS539Dcf81BRow,
   ErpProductionOrderDetailsS539Dcf81BRow,
@@ -186,6 +188,8 @@ export type Tables = {
   erp_production_receipts_s_539dcf81_b: { Row: ErpProductionReceiptsS539Dcf81BRow };
   erp_mps_plans_s_539dcf81_b: { Row: ErpMpsPlansS539Dcf81BRow };
   erp_mps_plan_details_s_539dcf81_b: { Row: ErpMpsPlanDetailsS539Dcf81BRow };
+  erp_currencies_s_539dcf81_b: { Row: ErpCurrenciesS539Dcf81BRow };
+  erp_exchange_rates_s_539dcf81_b: { Row: ErpExchangeRatesS539Dcf81BRow };
   sys_forms: { Row: SysFormsRow };
   sys_config: { Row: SysConfigRow };
   sys_mcp_api_keys: { Row: SysMcpApiKeysRow };

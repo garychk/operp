@@ -463,6 +463,53 @@ export interface ErpMpsPlanDetailsS539Dcf81BRow {
 export type ErpMpsPlanDetailsS539Dcf81BInsert = Omit<ErpMpsPlanDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMpsPlanDetailsS539Dcf81BUpdate = Partial<ErpMpsPlanDetailsS539Dcf81BInsert>;
 
+/** 币别主数据（deploy_65）：每租户一份，is_base 唯一决定本位币 */
+export interface ErpCurrenciesS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  /** ISO 4217 大写代码（CNY / USD / EUR ...），单据上的 currency 列软引用此列 */
+  code: string;
+  name: string;
+  symbol: string | null;
+  /** 该币别金额的小数位（JPY = 0），供 formatMoney 使用 */
+  decimal_places: number | null;
+  /** 本位币标记；切换走 RPC set_base_currency() */
+  is_base: boolean | null;
+  status: string | null;
+  sort_order: number | null;
+  remark: string | null;
+  tenant_id: number | null;
+}
+export type ErpCurrenciesS539Dcf81BInsert = Omit<ErpCurrenciesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpCurrenciesS539Dcf81BUpdate = Partial<ErpCurrenciesS539Dcf81BInsert>;
+
+/** 汇率（deploy_65）：1 单位 currency_code = rate 单位本位币 */
+export interface ErpExchangeRatesS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  /** 外币代码（本位币本身不设汇率） */
+  currency_code: string;
+  /** spot = 即期 / monthly = 月初 / custom = 自定义 */
+  rate_type: string | null;
+  effective_date: string;
+  /** 1 单位外币 = rate 单位本位币，方向写死不可反用 */
+  rate: number;
+  source: string | null;
+  remark: string | null;
+  tenant_id: number | null;
+}
+export type ErpExchangeRatesS539Dcf81BInsert = Omit<ErpExchangeRatesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpExchangeRatesS539Dcf81BUpdate = Partial<ErpExchangeRatesS539Dcf81BInsert>;
+
+
 export interface ErpMrpRequirementsS539Dcf81BRow {
   id: number;
   corp_id: string | null;

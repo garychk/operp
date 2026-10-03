@@ -3,6 +3,7 @@ import { Button, Form, Select, Space, message } from 'antd';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney } from '../../utils/money';
 import { useTranslation } from 'react-i18next';
 
 type Period = Tables['erp_accounting_periods_s_539dcf81_b']['Row'];
@@ -59,8 +60,8 @@ export function GeneralLedgerBalance() {
   const columns = [
     { title: t('glBalance.accountingPeriod'), dataIndex: 'period_id', key: 'period_id', render: (value: number) => periodMap.get(value)?.year && periodMap.get(value)?.month ? `${periodMap.get(value)?.year}-${String(periodMap.get(value)?.month).padStart(2, '0')}` : value || '-' },
     { title: t('glBalance.accountSubject'), dataIndex: 'subject_id', key: 'subject_id', render: (value: number) => subjectMap.get(value) ? `${subjectMap.get(value)?.code} - ${subjectMap.get(value)?.name}` : value || '-' },
-    { title: t('glBalance.periodDebit'), dataIndex: 'period_debit', key: 'period_debit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
-    { title: t('glBalance.periodCredit'), dataIndex: 'period_credit', key: 'period_credit', render: (value: number) => `¥${(value ?? 0).toFixed(2)}` },
+    { title: t('glBalance.periodDebit'), dataIndex: 'period_debit', key: 'period_debit', render: (value: number) => formatMoney(value) },
+    { title: t('glBalance.periodCredit'), dataIndex: 'period_credit', key: 'period_credit', render: (value: number) => formatMoney(value) },
   ];
 
   return (

@@ -20,6 +20,7 @@ import {
   EditOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
+import { useCurrencyRegistry } from "../../utils/money";
 import { SuperTable } from "../../components/SuperTable";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
@@ -35,6 +36,9 @@ const operationTable = 'erp_operations_s_539dcf81_b';
 
 export function Operations() {
   const { t } = useTranslation();
+  // 工序费率为本位币单价，符号跟随币别主数据
+  const { getMeta } = useCurrencyRegistry();
+  const baseCurrencySymbol = getMeta().symbol;
   const [operations, setOperations] = useState<Operation[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -202,14 +206,21 @@ export function Operations() {
       title: t("mrp.operations.laborRate"),
       dataIndex: "labor_rate",
       key: "labor_rate",
-      render: (rate: number) => t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
+      render: (rate: number) =>
+        t("mrp.ratePerHour", {
+          symbol: baseCurrencySymbol,
+          rate: (rate ?? 0).toLocaleString(),
+        }),
     },
     {
       title: t("mrp.operations.overheadRate"),
       dataIndex: "overhead_rate",
       key: "overhead_rate",
       render: (rate: number) =>
-        t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
+        t("mrp.ratePerHour", {
+          symbol: baseCurrencySymbol,
+          rate: (rate ?? 0).toLocaleString(),
+        }),
     },
     {
       title: t("common.status"),

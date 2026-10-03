@@ -85,3 +85,7 @@
 \i supabase/tables/deploy_62_production_report_and_cost_menu.sql
 \i supabase/tables/deploy_63_mps_master_schedule.sql
 \i supabase/tables/deploy_64_mps_menu.sql
+
+\i supabase/tables/deploy_65_currency_master.sql
+\i supabase/tables/deploy_66_currency_menu.sql
+\i supabase/tables/deploy_67_currency_tenant_scope.sql
