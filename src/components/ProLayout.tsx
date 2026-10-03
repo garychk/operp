@@ -68,6 +68,7 @@ import { MenuPermissionGuard } from "./ProtectedRoute";
 import { AIChatDrawer } from "./AIChatDrawer";
 import { McpGuideDrawer } from "./McpGuideDrawer";
 import { NotificationBell } from "./NotificationBell";
+import { MenuSearch } from "./MenuSearch";
 import heroLogo from "../assets/opelix.svg";
 import defaultAvatar from "../assets/avatar.png";
 import { supabase } from "../utils/supabase";
@@ -798,6 +799,15 @@ export function ProLayout() {
     [localizedMenuData, t],
   );
 
+  // 顶部菜单搜索：选中后按标签栏的老规矩新开一个页签（已有则激活），再跳转过去。
+  const openMenuInNewTab = useCallback(
+    (path: string) => {
+      addTab(path);
+      navigate(path);
+    },
+    [addTab, navigate],
+  );
+
   useEffect(() => {
     setTabs((currentTabs) =>
       currentTabs.map((tab) => ({
@@ -1030,6 +1040,11 @@ export function ProLayout() {
           },
         }}
         actionsRender={() => [
+          <MenuSearch
+            key="menu-search"
+            menus={visibleMenuData}
+            onSelect={openMenuInNewTab}
+          />,
           <NotificationBell key="notifications" />,
           dark ? (
             <MoonOutlined key="theme" onClick={() => setDark(false)} />
