@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
-import { Button, Input, Tag, Modal, Form, Select, Space, message, InputNumber, DatePicker, Row, Col } from 'antd';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, InputNumber, DatePicker, Row, Col, Alert } from 'antd';
 import dayjs from 'dayjs';
 import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
@@ -9,7 +9,8 @@ import { generateIdempotencyKey } from '../../utils/uuid';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import { SupaModal } from '../../components/SupaModal';
-import { formatMoney } from '../../utils/money';
+import { useCurrencyRegistry, fetchExchangeRate } from '../../utils/money';
+import { MoneyInput } from '../../components/MoneyInput';
 import { useTranslation } from 'react-i18next';
 
 type Payable = Tables['erp_payables_s_539dcf81_b']['Row'];
@@ -18,6 +19,18 @@ type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
 const { Option } = Select;
 
 const payableTable = 'erp_payables_s_539dcf81_b';
+
+/** 币种代码规范化：空 / 本位币统一收敛成 null */
+function normalizeCcy(value?: string | null): string | null {
+  const text = String(value ?? '').trim().toUpperCase();
+  return text || null;
+}
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+const todayText = () => new Date().toISOString().slice(0, 10);
 
 export function Payables() {
   const { t } = useTranslation();
@@ -30,6 +43,32 @@ export function Payables() {
   const [editingPayable, setEditingPayable] = useState<Payable | null>(null);
   const [form] = Form.useForm();
   const [openPeriodId, setOpenPeriodId] = useState<number>();
+  const [settleForm] = Form.useForm();
+  const [settleTarget, setSettleTarget] = useState<Payable | null>(null);
+  const { formatMoney, baseCurrency, currencies, currencyLabel } = useCurrencyRegistry();
+
+  const baseCcy = normalizeCcy(baseCurrency) ?? 'CNY';
+  const currencyOptions = currencies.map((c) => ({
+    value: c.code,
+    label: `${c.code} · ${currencyLabel(c.code, c.name)}`,
+  }));
+  const formCurrency = Form.useWatch('currency', form);
+  const formRate = Form.useWatch('exchange_rate', form);
+  const isFormForeign = !!normalizeCcy(formCurrency) && normalizeCcy(formCurrency) !== baseCcy;
+
+  const settleCcy = normalizeCcy(settleTarget?.currency);
+  const settleIsForeign = !!settleCcy && settleCcy !== baseCcy;
+  const settleRate = Form.useWatch('settlement_rate', settleForm);
+  const settleAmount = Form.useWatch('amount', settleForm);
+
+  /** 与 deploy_73 的 settle_ar_ap 同一套算法，所见即所得 */
+  const settleBaseAmount = round2(Number(settleAmount || 0) * (settleIsForeign ? Number(settleRate || 0) : 1));
+  const settleBalance = Number(settleTarget?.balance || 0);
+  const settleBookAmount = settleBalance > 0.005
+    ? round2(Number(settleTarget?.base_balance || 0) * Number(settleAmount || 0) / settleBalance)
+    : settleBaseAmount;
+  // 应付：实付 > 账面 = 多付了 = 损失（正）；符号约定与 6603 的净借方一致
+  const settleFx = round2(settleBaseAmount - settleBookAmount);
 
   const fetchOpenPeriod = async () => {
     const { data } = await supabase.from('erp_accounting_periods_s_539dcf81_b').select('id').eq('is_deleted', 'n').eq('is_enabled', true).eq('is_closed', false).eq('is_locked', false).order('year', { ascending: false }).order('month', { ascending: false }).limit(1).maybeSingle();
@@ -75,13 +114,43 @@ export function Payables() {
     }
   };
 
+  const handleFormCurrencyChange = async (code?: string) => {
+    const next = normalizeCcy(code);
+    if (!next || next === baseCcy) {
+      form.setFieldValue('exchange_rate', 1);
+      return;
+    }
+    const rate = await fetchExchangeRate(next, todayText());
+    if (rate === null) {
+      message.warning(t('currency.rateMissing', { code: next, date: todayText() }));
+      return;
+    }
+    form.setFieldValue('exchange_rate', rate);
+    message.success(t('currency.rateAutoFilled', { date: todayText() }));
+  };
+
   const handleSubmit = async (values: any) => {
     try {
+      const ccy = normalizeCcy(values.currency);
+      const foreign = !!ccy && ccy !== baseCcy;
+      const rate = foreign ? Number(values.exchange_rate || 0) : 1;
+      if (foreign && !(rate > 0)) {
+        message.error(t('currency.form.ratePositive'));
+        return;
+      }
+      // base_amount / base_balance / base_paid_amount 由 deploy_78 的
+      // trg_sync_ar_ap_base_amount 触发器统一落库，不在前端重复实现
+      const payload = {
+        ...values,
+        currency: foreign ? ccy : null,
+        exchange_rate: rate,
+      };
+
       if (editingPayable) {
         await logWithTiming(t('payables.log.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
             .from(payableTable)
-            .update(values)
+            .update(payload)
             .eq('id', editingPayable.id);
           if (error) throw error;
         });
@@ -91,7 +160,7 @@ export function Payables() {
           const { error } = await supabase
             .from(payableTable)
             .insert([{
-              ...values,
+              ...payload,
               balance: values.amount,
             }]);
           if (error) throw error;
@@ -110,37 +179,72 @@ export function Payables() {
 
   const handleEdit = (record: Payable) => {
     setEditingPayable(record);
-    const formValues = { ...record };
+    const formValues: any = { ...record };
     if (formValues.doc_date) {
       formValues.doc_date = dayjs(formValues.doc_date);
     }
     if (formValues.due_date) {
       formValues.due_date = dayjs(formValues.due_date);
     }
+    // 留空 = 本位币；'null' 收敛成 undefined，否则 Select 会显示成已选项
+    formValues.currency = normalizeCcy(record.currency) ?? undefined;
+    formValues.exchange_rate = record.exchange_rate ?? 1;
     form.setFieldsValue(formValues);
     setIsModalOpen(true);
   };
 
-  const handleSettle = (record: Payable) => {
-    let amount = Number(record.balance || 0);
-    Modal.confirm({
-      title: '应付核销',
-      content: <InputNumber min={0.01} max={Number(record.balance || 0)} defaultValue={amount} onChange={(value) => { amount = Number(value || 0); }} style={{ width: '100%' }} />,
-      okButtonProps: { disabled: !openPeriodId },
-      onOk: async () => {
-        if (!openPeriodId || amount <= 0) throw new Error('没有可用期间或核销金额无效');
-        const { error } = await supabase.rpc('settle_ar_ap', { p_settlement_type: 'payable', p_source_id: record.id, p_period_id: openPeriodId, p_amount: amount, p_settlement_date: new Date().toISOString().slice(0, 10), p_remark: null, p_idempotency_key: generateIdempotencyKey() });
-        if (error) throw error;
-        message.success('应付核销成功');
-        fetchPayables();
-      },
+  const handleSettle = async (record: Payable) => {
+    if (!openPeriodId) {
+      message.warning(t('settlement.noPeriod'));
+      return;
+    }
+    const ccy = normalizeCcy(record.currency);
+    const foreign = !!ccy && ccy !== baseCcy;
+    let rate: number | null = 1;
+    if (foreign) {
+      rate = await fetchExchangeRate(ccy as string, todayText());
+      if (rate === null) {
+        message.warning(t('currency.rateMissing', { code: ccy, date: todayText() }));
+      }
+    }
+    setSettleTarget(record);
+    settleForm.setFieldsValue({
+      amount: Number(record.balance || 0),
+      settlement_rate: rate ?? undefined,
     });
+  };
+
+  const confirmSettle = async () => {
+    if (!settleTarget) return;
+    const values = await settleForm.validateFields();
+    const amount = Number(values.amount || 0);
+    if (!openPeriodId || !(amount > 0)) throw new Error(t('settlement.invalid'));
+
+    const rateValue = settleIsForeign ? Number(values.settlement_rate || 0) : null;
+    if (settleIsForeign && !(rateValue && rateValue > 0)) throw new Error(t('currency.form.ratePositive'));
+
+    const { error } = await supabase.rpc('settle_ar_ap', {
+      p_settlement_type: 'payable',
+      p_source_id: settleTarget.id,
+      p_period_id: openPeriodId,
+      p_amount: amount,
+      p_settlement_date: todayText(),
+      p_remark: null,
+      p_idempotency_key: generateIdempotencyKey(),
+      // deploy_73 新增第 8 参数（核销汇率），本位币单据传 null
+      p_settlement_rate: rateValue,
+    });
+    if (error) throw error;
+    message.success(t('settlement.successPayable'));
+    setSettleTarget(null);
+    settleForm.resetFields();
+    fetchPayables();
   };
 
 
   const handleSelectedSettle = () => {
     if (selectedRowKeys.length !== 1) {
-      message.warning('请先选择一条应付账款进行核销');
+      message.warning(t('settlement.selectOnePayable'));
       return;
     }
     const record = payables.find((item) => item.id === Number(selectedRowKeys[0]));
@@ -179,6 +283,8 @@ export function Payables() {
       doc_date: dayjs(),
       due_date: '',
       amount: 0,
+      currency: undefined,
+      exchange_rate: 1,
       remark: '',
     });
     setIsModalOpen(true);
@@ -215,6 +321,17 @@ export function Payables() {
       render: (supplierId: number) => getSupplierName(supplierId),
     },
     {
+      title: t('currency.field.currency'),
+      dataIndex: 'currency',
+      key: 'currency',
+      width: 100,
+      render: (code: string | null) => {
+        const ccy = normalizeCcy(code);
+        if (!ccy) return <Tag>{t('currency.baseTag')}</Tag>;
+        return <Tag color="blue">{ccy}</Tag>;
+      },
+    },
+    {
       title: t('payables.docDate'),
       dataIndex: 'doc_date',
       key: 'doc_date',
@@ -226,16 +343,38 @@ export function Payables() {
       render: (text: string) => text || '-',
     },
     {
-      title: t('payables.amount'),
+      title: t('currency.field.foreignAmount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number, record: Payable) => formatMoney(amount, record.currency),
     },
     {
-      title: t('payables.balance'),
+      title: t('currency.field.fcBalance'),
       dataIndex: 'balance',
       key: 'balance',
       render: (balance: number, record: Payable) => formatMoney(balance, record.currency),
+    },
+    {
+      // 账面本位币余额：被期末调汇改写后与「原币余额 × 单据汇率」不再相等，
+      // 差额就是已累计确认的调汇额（与 vw_erp_ar_ap_open.revalued_fx 同口径）
+      title: t('currency.bookBaseBalance'),
+      dataIndex: 'base_balance',
+      key: 'base_balance',
+      render: (value: number, record: Payable) => {
+        const book = value === null || value === undefined ? null : Number(value);
+        const atDocRate = round2(Number(record.balance || 0) * Number(record.exchange_rate || 1));
+        const revalued = book === null ? 0 : round2(book - atDocRate);
+        return (
+          <Space size={4}>
+            <span>{formatMoney(book, baseCurrency)}</span>
+            {Math.abs(revalued) >= 0.005 && (
+              <Tag color="orange" title={t('currency.revaluedHint')}>
+                {t('currency.revaluedTag', { amount: formatMoney(revalued, baseCurrency) })}
+              </Tag>
+            )}
+          </Space>
+        );
+      },
     },
     {
       title: t('common.status'),
@@ -279,7 +418,7 @@ export function Payables() {
         queryBar={
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('payables.addPayable')}</Button>
-            <Button onClick={handleSelectedSettle} disabled={!openPeriodId || selectedRowKeys.length !== 1}>核销</Button>
+            <Button onClick={handleSelectedSettle} disabled={!openPeriodId || selectedRowKeys.length !== 1}>{t('settlement.button')}</Button>
             <Input.Search
               allowClear
               placeholder={t('payables.searchPlaceholder')}
@@ -295,7 +434,7 @@ export function Payables() {
         title={editingPayable ? t('payables.editPayable') : t('payables.addPayable')}
         open={isModalOpen}
         width={800}
-        height={440}
+        height={560}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
@@ -355,7 +494,39 @@ export function Payables() {
                 rules={[{ required: true, message: t('payables.amountRequired') }]}
                 initialValue={0}
               >
-                <InputNumber style={{ width: '100%' }} placeholder={t('payables.amountPlaceholder')} />
+                <MoneyInput
+                  currency={isFormForeign ? formCurrency : baseCurrency}
+                  min={0}
+                  step={0.01}
+                  style={{ width: '100%' }}
+                  placeholder={t('payables.amountPlaceholder')}
+                />
+              </Form.Item>
+              <Form.Item
+                label={t('currency.field.currency')}
+                name="currency"
+                extra={t('currency.baseHint')}
+              >
+                <Select
+                  allowClear
+                  placeholder={t('currency.baseOption', { code: baseCurrency })}
+                  options={currencyOptions}
+                  onChange={handleFormCurrencyChange}
+                />
+              </Form.Item>
+              <Form.Item
+                label={t('currency.field.exchangeRate')}
+                name="exchange_rate"
+                initialValue={1}
+                extra={isFormForeign ? t('currency.rateHint', { foreign: normalizeCcy(formCurrency), rate: formRate, base: baseCurrency }) : undefined}
+              >
+                <InputNumber
+                  min={0}
+                  step={0.000001}
+                  precision={8}
+                  style={{ width: '100%' }}
+                  disabled={!isFormForeign}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -364,6 +535,70 @@ export function Payables() {
           </Form.Item>
         </Form>
       </SupaModal>
+
+      {/* 核销弹窗：外币单据多一个「核销汇率」，差额即汇兑损益（进 6603） */}
+      <Modal
+        title={t('settlement.titlePayable')}
+        open={!!settleTarget}
+        width={520}
+        okButtonProps={{ disabled: !openPeriodId }}
+        onCancel={() => {
+          setSettleTarget(null);
+          settleForm.resetFields();
+        }}
+        onOk={() => confirmSettle().catch((error: any) => {
+          message.error(error?.message || t('settlement.failedPayable'));
+        })}
+      >
+        <Form form={settleForm} layout="vertical">
+          <Form.Item label={t('settlement.source')}>
+            <Input readOnly value={settleTarget ? `${settleTarget.doc_no} · ${getSupplierName(settleTarget.supplier_id)}` : ''} />
+          </Form.Item>
+          <Form.Item label={t('settlement.openOriginal')}>
+            <Input readOnly value={formatMoney(settleTarget?.balance, settleTarget?.currency)} />
+          </Form.Item>
+          <Form.Item
+            label={t('settlement.amount')}
+            name="amount"
+            rules={[{ required: true, message: t('settlement.amountRequired') }]}
+          >
+            <MoneyInput
+              currency={settleIsForeign ? settleCcy : baseCurrency}
+              min={0.01}
+              max={Number(settleTarget?.balance || 0)}
+              step={0.01}
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+          {settleIsForeign && (
+            <>
+              <Form.Item
+                label={t('settlement.rate')}
+                name="settlement_rate"
+                extra={t('settlement.rateHint')}
+                rules={[{ required: true, message: t('currency.form.rateRequired') }]}
+              >
+                <InputNumber min={0} step={0.000001} precision={8} style={{ width: '100%' }} />
+              </Form.Item>
+              <Alert
+                type={Math.abs(settleFx) < 0.005 ? 'success' : settleFx > 0 ? 'warning' : 'info'}
+                showIcon
+                message={t('settlement.previewMessage', {
+                  base: formatMoney(settleBaseAmount, baseCurrency),
+                })}
+                description={
+                  Math.abs(settleFx) < 0.005
+                    ? t('settlement.noFx')
+                    : t('settlement.fxPreview', {
+                        amount: formatMoney(Math.abs(settleFx), baseCurrency),
+                        type: settleFx > 0 ? t('currency.fxLoss') : t('currency.fxGain'),
+                      })
+                }
+              />
+            </>
+          )}
+        </Form>
+      </Modal>
     </div>
   );
 }

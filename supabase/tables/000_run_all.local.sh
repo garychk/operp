@@ -110,6 +110,14 @@ ORDER=(
   deploy_67_currency_tenant_scope.sql
   deploy_68_document_currency_columns.sql
   deploy_69_post_stock_base_currency.sql
+  deploy_71_finance_fx_subject.sql
+  deploy_72_finance_double_amount_columns.sql
+  deploy_73_finance_fx_settlement.sql
+  deploy_74_finance_fx_revaluation.sql
+  deploy_75_finance_report_currency_views.sql
+  deploy_76_service_role_finance_entry.sql
+  deploy_77_finance_report_currency_dimension.sql
+  deploy_78_ar_ap_base_balance_guard.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

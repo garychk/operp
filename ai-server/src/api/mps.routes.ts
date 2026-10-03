@@ -22,7 +22,7 @@ import {
   pushPlanToProductionOrders,
   setPlanConfirmed,
 } from "../services/mpsService.js";
-import { supabase } from "../config/supabase.js";
+import { userHasRole } from "../services/roleGuard.js";
 
 export const mpsRouter = Router();
 
@@ -41,21 +41,6 @@ const confirmSchema = planSchema.extend({
 const pushSchema = planSchema.extend({
   line_ids: z.array(z.coerce.number().int().positive()).optional(),
 });
-
-/** 服务端核实角色（不信任请求体的任何自称）—— 与 mrp.routes.userHasRole 同构 */
-async function userHasRole(userId: number, allowed: Set<string>): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("sys_user_roles")
-    .select("sys_roles!inner(role_code)")
-    .eq("user_id", userId)
-    .eq("is_deleted", "n")
-    .eq("sys_roles.is_deleted", "n");
-  if (error) return false;
-  return (data || []).some((row: unknown) => {
-    const roleCode = (row as { sys_roles?: { role_code?: string } } | null)?.sys_roles?.role_code;
-    return roleCode ? allowed.has(roleCode) : false;
-  });
-}
 
 /** 409：状态冲突（重复确认 / 已下推还想取消确认 / 未确认就想下推） */
 const isConflict = (message: string) =>

@@ -91,3 +91,12 @@
 \i supabase/tables/deploy_67_currency_tenant_scope.sql
 \i supabase/tables/deploy_68_document_currency_columns.sql
 \i supabase/tables/deploy_69_post_stock_base_currency.sql
+
+\i supabase/tables/deploy_71_finance_fx_subject.sql
+\i supabase/tables/deploy_72_finance_double_amount_columns.sql
+\i supabase/tables/deploy_73_finance_fx_settlement.sql
+\i supabase/tables/deploy_74_finance_fx_revaluation.sql
+\i supabase/tables/deploy_75_finance_report_currency_views.sql
+\i supabase/tables/deploy_76_service_role_finance_entry.sql
+\i supabase/tables/deploy_77_finance_report_currency_dimension.sql
+\i supabase/tables/deploy_78_ar_ap_base_balance_guard.sql

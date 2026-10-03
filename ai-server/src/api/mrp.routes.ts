@@ -21,6 +21,8 @@ import {
   type ConversionFilter,
 } from "../services/mrpConvertService.js";
 import { loadCostRows, rollupProductionCost } from "../services/costRollupService.js";
+import { userHasRole } from "../services/roleGuard.js";
+import { extractErrorMessage } from "../services/errors.js";
 
 export const mrpRouter = Router();
 
@@ -46,24 +48,6 @@ const costSchema = z.object({
   month: z.coerce.number().int().min(1).max(12),
   dry_run: z.coerce.boolean().optional().default(false),
 });
-
-/** 服务端核实用户是否持有允许运行 MRP 的角色（不信任请求体的任何自称） */
-async function userHasRole(userId: number, allowed: Set<string>): Promise<boolean> {
-  const { data, error } = await supabase
-    .from("sys_user_roles")
-    .select("sys_roles!inner(role_code)")
-    .eq("user_id", userId)
-    .eq("is_deleted", "n")
-    .eq("sys_roles.is_deleted", "n");
-
-  // 查询出错按无权限处理：宁可拒绝，不可放行
-  if (error) return false;
-
-  return (data || []).some((row: unknown) => {
-    const roleCode = (row as { sys_roles?: { role_code?: string } } | null)?.sys_roles?.role_code;
-    return roleCode ? allowed.has(roleCode) : false;
-  });
-}
 
 /** 409：状态冲突（并发/重复运行/未完成运算就想转单） */
 const isConflict = (message: string) => /不允许运算|正在进行|尚未完成运算/.test(message);
@@ -114,7 +98,7 @@ mrpRouter.post("/run", async (req, res) => {
       res.status(403).json({ ok: false, error: err.message });
       return;
     }
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractErrorMessage(err);
     // 计划状态不允许（并发/重复运行）属于请求冲突，不是服务端故障
     if (isConflict(message)) {
       res.status(409).json({ ok: false, error: message });
@@ -189,7 +173,7 @@ mrpRouter.post("/convert", async (req, res) => {
       res.status(403).json({ ok: false, error: err.message });
       return;
     }
-    const message = err instanceof Error ? err.message : String(err);
+    const message = extractErrorMessage(err);
     if (isConflict(message)) {
       res.status(409).json({ ok: false, error: message });
       return;
@@ -228,7 +212,7 @@ mrpRouter.post("/cost-rollup", async (req, res) => {
       return;
     }
     console.error("[ai-server] cost rollup failed:", err);
-    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ ok: false, error: extractErrorMessage(err) });
   }
 });
 
@@ -260,7 +244,7 @@ mrpRouter.get("/cost", async (req, res) => {
       res.status(403).json({ ok: false, error: err.message });
       return;
     }
-    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ ok: false, error: extractErrorMessage(err) });
   }
 });
 
@@ -296,6 +280,6 @@ mrpRouter.get("/report/:planId", async (req, res) => {
       res.status(403).json({ ok: false, error: err.message });
       return;
     }
-    res.status(500).json({ ok: false, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ ok: false, error: extractErrorMessage(err) });
   }
 });
