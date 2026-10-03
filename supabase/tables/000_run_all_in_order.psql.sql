@@ -89,3 +89,5 @@
 \i supabase/tables/deploy_65_currency_master.sql
 \i supabase/tables/deploy_66_currency_menu.sql
 \i supabase/tables/deploy_67_currency_tenant_scope.sql
+\i supabase/tables/deploy_68_document_currency_columns.sql
+\i supabase/tables/deploy_69_post_stock_base_currency.sql

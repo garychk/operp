@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -28,7 +28,12 @@ import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
-import { formatMoney } from "../../utils/money";
+import {
+  formatMoney,
+  useCurrencyRegistry,
+  currencyLabel,
+  fetchExchangeRate,
+} from "../../utils/money";
 import { ProductUnit } from "../../components/ProductUnit";
 import dayjs from "dayjs";
 import SimpleModal from "../../components/SimpleModal";
@@ -44,6 +49,10 @@ const { TextArea } = Input;
 const purchaseOrderTable = "erp_purchase_orders_s_539dcf81_b";
 const purchaseOrderDetailTable = "erp_purchase_order_details_s_539dcf81_b";
 const docType = "purchase_order";
+
+/** 金额/单价四舍五入到本位币精度（与后端 NUMERIC(18,2) / (18,4) 对齐） */
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+const round4 = (n: number) => Math.round((Number(n) || 0) * 10000) / 10000;
 
 export function PurchaseOrders() {
   const { t } = useTranslation();
@@ -67,7 +76,53 @@ export function PurchaseOrders() {
   const [form] = Form.useForm();
 
   // 明细行金额跟随表头币种（新单据取表单当前值，编辑时取单据值）
-  const detailCurrency = Form.useWatch("currency", form) ?? editingOrder?.currency ?? undefined;
+  // 币别元数据与当前租户本位币（来自 erp_currencies / current_base_currency()）
+  const { baseCurrency, currencies } = useCurrencyRegistry();
+
+  const watchedCurrency = Form.useWatch("currency", form);
+  const watchedRate = Form.useWatch("exchange_rate", form);
+  const detailCurrency = watchedCurrency ?? editingOrder?.currency ?? undefined;
+  const baseCurrencyCode = (baseCurrency || "CNY").toUpperCase();
+  const isForeignCurrency =
+    !!detailCurrency && detailCurrency.toUpperCase() !== baseCurrencyCode;
+
+  // 冻结汇率：外币取表单值，本位币恒为 1
+  const activeRate = isForeignCurrency
+    ? Number(watchedRate ?? editingOrder?.exchange_rate ?? 0) || 0
+    : 1;
+
+  // 币种选项：只列启用中的币别；当前单据已选的币别即使已停用也要保留，
+  // 否则编辑历史单据时下拉会显示空白（值在、选项没了）。
+  const currencyOptions = useMemo(() => {
+    const selected = (detailCurrency || "").toUpperCase();
+    return currencies
+      .filter((c) => c.status === "active" || c.code.toUpperCase() === selected)
+      .map((c) => ({
+        value: c.code,
+        label: `${c.code} · ${currencyLabel(c.code, c.name)}`,
+      }));
+  }, [currencies, detailCurrency]);
+
+  /**
+   * 切换币种时预填汇率：取该币种在单据日期上的即期汇率。
+   * 拿不到就清空并提示 —— 不隐式按 1 处理（外币金额当人民币入账是静默错误）。
+   */
+  const handleCurrencyChange = async (code: string) => {
+    if (!code || code.toUpperCase() === baseCurrencyCode) {
+      form.setFieldValue("exchange_rate", 1);
+      return;
+    }
+    const orderDate = form.getFieldValue("order_date");
+    const dateText = orderDate ? dayjs(orderDate).format("YYYY-MM-DD") : undefined;
+    const rate = await fetchExchangeRate(code, dateText);
+    if (rate !== null) {
+      form.setFieldValue("exchange_rate", rate);
+      message.info(t("currency.rateAutoFilled", { date: dateText ?? "-" }));
+    } else {
+      form.setFieldValue("exchange_rate", undefined);
+      message.warning(t("currency.rateMissing", { code, date: dateText ?? "-" }));
+    }
+  };
   const [isDisabled, setIsDisabled] = useState(false);
 
   useEffect(() => {
@@ -139,24 +194,42 @@ export function PurchaseOrders() {
     }
   };
 
-  const calculateOrderTotals = (detailRows: PurchaseOrderDetail[]) => {
+  const calculateOrderTotals = (
+    detailRows: PurchaseOrderDetail[],
+    exchangeRate = 1,
+  ) => {
     const totalAmount = detailRows.reduce((sum, d) => sum + (d.amount || 0), 0);
     const taxAmount = detailRows.reduce(
       (sum, d) => sum + (d.tax_amount || 0),
       0,
     );
+    const rate = exchangeRate > 0 ? exchangeRate : 1;
     return {
       total_amount: totalAmount,
       tax_amount: taxAmount,
       payable_amount: totalAmount + taxAmount,
+      // 双金额：本位币金额按单据上冻结的汇率折算
+      base_total_amount: round2(totalAmount * rate),
+      base_tax_amount: round2(taxAmount * rate),
     };
   };
 
   const handleSubmit = async (values: any) => {
     try {
-      const orderTotals = calculateOrderTotals(details);
+      // 币种与汇率落定：本位币强制汇率 = 1；外币必须带正汇率（表单已校验，这里兜底）
+      const currencyCode = (values.currency || baseCurrencyCode).toUpperCase();
+      const formRate =
+        currencyCode === baseCurrencyCode ? 1 : Number(values.exchange_rate) || 0;
+      if (currencyCode !== baseCurrencyCode && formRate <= 0) {
+        message.error(t("currency.form.rateRequired"));
+        return;
+      }
+
+      const orderTotals = calculateOrderTotals(details, formRate);
       const payload = {
         ...values,
+        currency: currencyCode,
+        exchange_rate: formRate,
         ...orderTotals,
       };
 
@@ -215,6 +288,9 @@ export function PurchaseOrders() {
 
       values.amount = (values.quantity || 0) * (values.unit_price || 0);
       values.tax_amount = values.amount * ((values.tax_rate || 0) / 100);
+      // 明细行双金额：逐行按冻结汇率折本位币（行级四舍五入，差额由表头吸收）
+      values.base_unit_price = round4((values.unit_price || 0) * activeRate);
+      values.base_amount = round2(values.amount * activeRate);
 
       if (editingDetail) {
         await supabase
@@ -263,12 +339,22 @@ export function PurchaseOrders() {
       const taxAmount =
         data?.reduce((sum, d) => sum + (d.tax_amount || 0), 0) || 0;
 
+      // 用**单据自己冻结的汇率**折算，而不是表单当前的 activeRate ——
+      // 本函数在明细弹窗关闭后调用，此时表单可能已被重置。
+      const order = orders.find((o) => o.id === orderId);
+      const orderCurrency = (order?.currency || baseCurrencyCode).toUpperCase();
+      const orderRate =
+        orderCurrency === baseCurrencyCode ? 1 : Number(order?.exchange_rate) || 1;
+
       await supabase
         .from("erp_purchase_orders_s_539dcf81_b")
         .update({
           total_amount: totalAmount,
           tax_amount: taxAmount,
           payable_amount: totalAmount + taxAmount,
+          base_total_amount: round2(totalAmount * orderRate),
+          base_tax_amount: round2(taxAmount * orderRate),
+          base_discount_amount: round2((order?.discount_amount || 0) * orderRate),
         })
         .eq("id", orderId);
 
@@ -350,7 +436,11 @@ export function PurchaseOrders() {
       total_amount: 0,
       tax_amount: 0,
       payable_amount: 0,
-      currency: "CNY",
+      base_total_amount: 0,
+      base_tax_amount: 0,
+      base_discount_amount: 0,
+      currency: baseCurrencyCode,
+      exchange_rate: 1,
       delivery_address: "",
       contact_person: "",
       contact_phone: "",
@@ -486,11 +576,25 @@ export function PurchaseOrders() {
       render: (text: string) => text || "-",
     },
     {
+      title: t('purchaseOrders.currency'),
+      dataIndex: "currency",
+      key: "currency",
+      width: 110,
+      render: (code: string) => (code ? `${code} · ${currencyLabel(code)}` : "-"),
+    },
+    {
       title: t('purchaseOrders.amount'),
       dataIndex: "total_amount",
       key: "total_amount",
       width: 130,
       render: (amount: number, record: PurchaseOrder) => formatMoney(amount, record.currency),
+    },
+    {
+      title: t('currency.field.baseAmount'),
+      dataIndex: "base_total_amount",
+      key: "base_total_amount",
+      width: 130,
+      render: (amount: number) => formatMoney(amount, baseCurrencyCode),
     },
     {
       title: t('purchaseOrders.payableAmount'),
@@ -813,20 +917,36 @@ export function PurchaseOrders() {
                 <Form.Item
                   label={t('purchaseOrders.currency')}
                   name="currency"
-                  initialValue="CNY"
+                  rules={[{ required: true, message: t("currency.form.currencyRequired") }]}
                 >
-                  <Select>
-                    <Option value="CNY">
-                      {t('purchaseOrders.currencyCny')}
-                    </Option>
-                    <Option value="USD">
-                      {t('purchaseOrders.currencyUsd')}
-                    </Option>
-                    <Option value="EUR">
-                      {t('purchaseOrders.currencyEur')}
-                    </Option>
-                  </Select>
+                  <Select
+                    options={currencyOptions}
+                    onChange={(code: string) => void handleCurrencyChange(code)}
+                  />
                 </Form.Item>
+                {isForeignCurrency && (
+                  <Form.Item
+                    label={t('currency.field.exchangeRate')}
+                    name="exchange_rate"
+                    tooltip={t('currency.rateTooltip')}
+                    rules={[
+                      { required: true, message: t('currency.form.rateRequired') },
+                      {
+                        type: "number",
+                        min: 0.00000001,
+                        message: t('currency.form.ratePositive'),
+                      },
+                    ]}
+                    extra={t('currency.frozenHint')}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      precision={8}
+                      min={0}
+                      addonAfter={baseCurrencyCode}
+                    />
+                  </Form.Item>
+                )}
                 <Form.Item
                   label={t('purchaseOrders.deliveryAddress')}
                   name="delivery_address"

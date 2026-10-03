@@ -108,6 +108,8 @@ ORDER=(
   deploy_65_currency_master.sql
   deploy_66_currency_menu.sql
   deploy_67_currency_tenant_scope.sql
+  deploy_68_document_currency_columns.sql
+  deploy_69_post_stock_base_currency.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

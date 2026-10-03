@@ -214,6 +214,57 @@ export function getCurrencyOptions(): CurrencyMeta[] {
   return state.currencies;
 }
 
+/**
+ * 币种显示名。
+ *
+ * 约定（结构性事实留代码、说明文字才进 i18n）：
+ *   · 已知币种走 i18n 键 `currency.name.<CODE>` —— 这样英文界面不会露出
+ *     数据库里的中文名（「人民币」）。
+ *   · 用户自建的新币种没有对应键 → 回退数据库里的 name，再兜底显示代码。
+ * 键是动态拼的，所以这里用 i18n.exists 判断而不是 t(key, defaultValue)。
+ */
+export function currencyLabel(
+  code?: string | null,
+  fallbackName?: string | null
+): string {
+  const normalized = normalizeCode(code);
+  if (!normalized) return '';
+  const key = `currency.name.${normalized}`;
+  if (i18n.exists(key)) return i18n.t(key);
+  return fallbackName?.trim() || normalized;
+}
+
+/**
+ * 取某币种在指定日期对本位币的汇率（口径：1 外币 = rate 本位币）。
+ *
+ * 本位币恒为 1。**无有效汇率返回 null** —— 与后端 get_exchange_rate 的
+ * fail-loud 语义一致，绝不隐式按 1 处理：把外币金额当人民币入账是静默错误，
+ * 比拿不到汇率严重得多。
+ */
+export async function fetchExchangeRate(
+  currency: string,
+  date?: string,
+  rateType = 'spot'
+): Promise<number | null> {
+  const code = normalizeCode(currency);
+  if (!code) return null;
+  if (code === normalizeCode(state.baseCurrency) || resolveCurrencyMeta(code).isBase) {
+    return 1;
+  }
+
+  const { data, error } = await supabase.rpc('get_exchange_rate', {
+    p_currency: code,
+    p_date: date ?? new Date().toISOString().slice(0, 10),
+    p_rate_type: rateType,
+  });
+  if (error) {
+    console.error('Error fetching exchange rate:', error);
+    return null;
+  }
+  const rate = data === null || data === undefined ? null : Number(data);
+  return rate !== null && Number.isFinite(rate) && rate > 0 ? rate : null;
+}
+
 function currentLocale(): string {
   return i18n.resolvedLanguage || i18n.language || 'zh-CN';
 }
@@ -286,6 +337,8 @@ export interface CurrencyRegistryHook {
   formatRate: (value: number | string | null | undefined, maxDigits?: number) => string;
   formatQuantity: (value: number | string | null | undefined, digits?: number) => string;
   getMeta: (code?: string | null) => CurrencyMeta;
+  /** 币种显示名（已知币种走 i18n，未知回退数据库名 / 代码） */
+  currencyLabel: (code?: string | null, fallbackName?: string | null) => string;
 }
 
 /**
@@ -304,6 +357,12 @@ export function useCurrencyRegistry(): CurrencyRegistryHook {
 
   const getMeta = useCallback((code?: string | null) => resolveCurrencyMeta(code), [snapshot]);
 
+  const hookCurrencyLabel = useCallback(
+    (code?: string | null, fallbackName?: string | null) => currencyLabel(code, fallbackName),
+    // snapshot 参与依赖：语言切换 / 币别元数据变化时让标签同步更新
+    [snapshot]
+  );
+
   return useMemo(
     () => ({
       loaded: snapshot.loaded,
@@ -313,7 +372,8 @@ export function useCurrencyRegistry(): CurrencyRegistryHook {
       formatRate,
       formatQuantity,
       getMeta,
+      currencyLabel: hookCurrencyLabel,
     }),
-    [snapshot, hookFormatMoney, getMeta]
+    [snapshot, hookFormatMoney, getMeta, hookCurrencyLabel]
   );
 }

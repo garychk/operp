@@ -579,6 +579,7 @@ export interface ErpPayablesS539Dcf81BRow {
   balance: number | null;
   currency: string | null;
   exchange_rate: number | null;
+  base_amount: number | null;  // 本位币金额 = amount x exchange_rate（第 2 期新增）
   status: string | null;
   remark: string | null;
 }
@@ -740,6 +741,8 @@ export interface ErpPurchaseOrderDetailsS539Dcf81BRow {
   quantity: number | null;
   unit_price: number | null;
   amount: number | null;
+  base_unit_price: number | null;  // 原币单价折本位币（第 2 期新增）
+  base_amount: number | null;      // 本位币行金额（第 2 期新增）
   tax_rate: number | null;
   tax_amount: number | null;
   received_quantity: number | null;
@@ -763,6 +766,9 @@ export interface ErpPurchaseOrdersS539Dcf81BRow {
   tax_amount: number | null;
   discount_amount: number | null;
   payable_amount: number | null;
+  base_total_amount: number | null;    // 本位币金额（第 2 期新增）
+  base_tax_amount: number | null;      // 本位币税额（第 2 期新增）
+  base_discount_amount: number | null; // 本位币折扣（第 2 期新增）
   currency: string | null;
   exchange_rate: number | null;
   delivery_address: string | null;
@@ -790,6 +796,8 @@ export interface ErpPurchaseReceiptDetailsS539Dcf81BRow {
   quantity: number | null;
   unit_price: number | null;
   amount: number | null;
+  base_unit_price: number | null;  // 原币单价折本位币（第 2 期新增）
+  base_amount: number | null;      // 本位币行金额（第 2 期新增）
   batch_no: string | null;
   expiry_date: string | null;
   location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
@@ -812,6 +820,9 @@ export interface ErpPurchaseReceiptsS539Dcf81BRow {
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
   location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（默认库位）
   total_amount: number | null;
+  currency: string | null;       // 原币币种，从来源采购订单继承（第 2 期新增）
+  exchange_rate: number | null;  // 冻结汇率（第 2 期新增）
+  base_total_amount: number | null;  // 本位币金额（第 2 期新增）
   remark: string | null;
   status: string | null;
   posting_idempotency_key: string | null;
@@ -832,6 +843,9 @@ export interface ErpReceivablesS539Dcf81BRow {
   customer_id: number | null;  // FK -> erp_customers_s_539dcf81_b.id
   doc_type: string | null;
   doc_no: string;
+  source_type: string | null;
+  source_id: number | null;
+  source_no: string | null;
   doc_date: string;
   due_date: string | null;
   amount: number | null;
@@ -839,6 +853,7 @@ export interface ErpReceivablesS539Dcf81BRow {
   balance: number | null;
   currency: string | null;
   exchange_rate: number | null;
+  base_amount: number | null;  // 本位币金额 = amount x exchange_rate（第 2 期新增）
   status: string | null;
   remark: string | null;
 }
@@ -899,6 +914,9 @@ export interface ErpSalesDeliveriesS539Dcf81BRow {
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
   location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（默认库位）
   total_amount: number | null;
+  currency: string | null;       // 原币币种，从来源销售订单继承（第 2 期新增）
+  exchange_rate: number | null;  // 冻结汇率（第 2 期新增）
+  base_total_amount: number | null;  // 本位币金额（第 2 期新增）
   remark: string | null;
   status: string | null;
   posting_idempotency_key: string | null;
@@ -923,6 +941,8 @@ export interface ErpSalesDeliveryDetailsS539Dcf81BRow {
   quantity: number | null;
   unit_price: number | null;
   amount: number | null;
+  base_unit_price: number | null;  // 原币单价折本位币（第 2 期新增）
+  base_amount: number | null;      // 本位币行金额（第 2 期新增）
   batch_no: string | null;
   location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
   remark: string | null;
@@ -943,6 +963,8 @@ export interface ErpSalesOrderDetailsS539Dcf81BRow {
   quantity: number | null;
   unit_price: number | null;
   amount: number | null;
+  base_unit_price: number | null;  // 原币单价折本位币（第 2 期新增）
+  base_amount: number | null;      // 本位币行金额（第 2 期新增）
   tax_rate: number | null;
   tax_amount: number | null;
   delivered_quantity: number | null;
@@ -966,6 +988,9 @@ export interface ErpSalesOrdersS539Dcf81BRow {
   tax_amount: number | null;
   discount_amount: number | null;
   receivable_amount: number | null;
+  base_total_amount: number | null;    // 本位币金额（第 2 期新增）
+  base_tax_amount: number | null;      // 本位币税额（第 2 期新增）
+  base_discount_amount: number | null; // 本位币折扣（第 2 期新增）
   currency: string | null;
   exchange_rate: number | null;
   delivery_address: string | null;
