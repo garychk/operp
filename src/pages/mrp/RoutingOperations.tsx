@@ -32,6 +32,7 @@ import type { Tables } from "../../utils/supabase";
 import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
+import { BizAttachments } from "../../components/BizAttachments";
 import { RoutingMap } from "../../components/RoutingMap";
 import SimpleModal from "../../components/SimpleModal";
 
@@ -599,6 +600,19 @@ export function RoutingOperations() {
         detailPanelTitle={t('mrp.routingOperations.detailPanelTitle')}
         historyTable={routingTable}
         historyRecordId={editingRouting?.id || selectedRouting?.id}
+        detailItems={[
+          {
+            key: "attachments",
+            label: t("attachments.title"),
+            disabled: !(editingRouting?.id || selectedRouting?.id),
+            children: (
+              <BizAttachments
+                bizType="routing_operation"
+                bizId={editingRouting?.id || selectedRouting?.id}
+              />
+            ),
+          },
+        ]}
         detailExtra={
           <Button
             type="link"

@@ -772,6 +772,30 @@ export interface ErpProductImagesS539Dcf81BRow {
 export type ErpProductImagesS539Dcf81BInsert = Omit<ErpProductImagesS539Dcf81BRow, 'id' | 'tenant_id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpProductImagesS539Dcf81BUpdate = Partial<ErpProductImagesS539Dcf81BInsert>;
 
+/** 业务附件（deploy_80）：通用 (biz_type, biz_id) 引用所属单据/档案，文件存 uploadfiles 桶 */
+export interface ErpAttachmentsS539Dcf81BRow {
+  id: number;
+  tenant_id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  /** 所属业务类型，如 sales_order / purchase_order / supplier / bom ... */
+  biz_type: string;
+  /** 所属业务记录 id（跨表引用，故无外键） */
+  biz_id: number;
+  bucket: string;
+  /** 对象在桶内的路径，下载 URL 由 getPublicUrl(storage_path) 派生 */
+  storage_path: string;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  remark: string | null;
+}
+export type ErpAttachmentsS539Dcf81BInsert = Omit<ErpAttachmentsS539Dcf81BRow, 'id' | 'tenant_id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpAttachmentsS539Dcf81BUpdate = Partial<ErpAttachmentsS539Dcf81BInsert>;
+
 export interface ErpProductionReportsS539Dcf81BRow {
   id: number;
   corp_id: string | null;

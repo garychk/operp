@@ -11,6 +11,7 @@ import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
+import { BizAttachments } from '../../components/BizAttachments';
 import { SuperTable, SuperTableColumn } from '../../components/SuperTable';
 import { formatMoney, useCurrencyRegistry, currencyLabel } from '../../utils/money';
 import { ProductUnit } from '../../components/ProductUnit';
@@ -818,6 +819,19 @@ export function SalesDeliveries() {
         detailPanelTitle={t('salesDeliveries.detailPanelTitle')}
         historyTable={salesDeliveryTable}
         historyRecordId={editingDelivery?.id || selectedDelivery?.id}
+        detailItems={[
+          {
+            key: "attachments",
+            label: t('attachments.title'),
+            disabled: !(editingDelivery?.id || selectedDelivery?.id),
+            children: (
+              <BizAttachments
+                bizType="sales_delivery"
+                bizId={editingDelivery?.id || selectedDelivery?.id}
+              />
+            ),
+          },
+        ]}
         workflowDocumentType="sales_delivery"
         onDataChanged={fetchDeliveries}
         form={form}

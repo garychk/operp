@@ -119,6 +119,7 @@ ORDER=(
   deploy_77_finance_report_currency_dimension.sql
   deploy_78_ar_ap_base_balance_guard.sql
   deploy_79_product_images.sql
+  deploy_80_attachments.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

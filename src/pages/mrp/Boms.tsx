@@ -29,6 +29,7 @@ import type { Tables } from "../../utils/supabase";
 import { SuperTable } from "../../components/SuperTable";
 import dayjs from 'dayjs';
 import { SupaModal } from "../../components/SupaModal";
+import { BizAttachments } from "../../components/BizAttachments";
 import DictSelect from "../../components/DictSelect";
 import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
 import SimpleModal from "../../components/SimpleModal";
@@ -553,6 +554,19 @@ export function Boms() {
         detailPanelTitle={t("mrp.boms.detailPanelTitle")}
         historyTable={bomTable}
         historyRecordId={editingBom?.id || selectedBom?.id}
+        detailItems={[
+          {
+            key: "attachments",
+            label: t("attachments.title"),
+            disabled: !(editingBom?.id || selectedBom?.id),
+            children: (
+              <BizAttachments
+                bizType="bom"
+                bizId={editingBom?.id || selectedBom?.id}
+              />
+            ),
+          },
+        ]}
         form={form}
         formEle={
           <Form

@@ -101,3 +101,4 @@
 \i supabase/tables/deploy_77_finance_report_currency_dimension.sql
 \i supabase/tables/deploy_78_ar_ap_base_balance_guard.sql
 \i supabase/tables/deploy_79_product_images.sql
+\i supabase/tables/deploy_80_attachments.sql

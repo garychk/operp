@@ -27,6 +27,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SupaModal } from "../../components/SupaModal";
+import { BizAttachments } from "../../components/BizAttachments";
 import { SuperTable } from "../../components/SuperTable";
 import {
   formatMoney,
@@ -817,6 +818,19 @@ export function PurchaseOrders() {
         detailPanelTitle={t('purchaseOrders.detailPanelTitle')}
         historyTable={purchaseOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
+        detailItems={[
+          {
+            key: "attachments",
+            label: t("attachments.title"),
+            disabled: !(editingOrder?.id || selectedOrder?.id),
+            children: (
+              <BizAttachments
+                bizType="purchase_order"
+                bizId={editingOrder?.id || selectedOrder?.id}
+              />
+            ),
+          },
+        ]}
         onDataChanged={() => {
           fetchOrders();
           if (selectedOrder) fetchDetails(selectedOrder.id);
