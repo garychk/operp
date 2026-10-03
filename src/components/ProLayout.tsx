@@ -994,11 +994,14 @@ export function ProLayout() {
         avatarProps={{
           src: user?.profile.avatar_url || defaultAvatar,
           size: "small",
-          title:
-            user?.profile.real_name ||
-            user?.profile.username ||
-            user?.auth.email ||
-            "",
+          // 侧边布局（非 mix）下右上角只留头像：title 就是 ProLayout 渲染在头像右侧的用户名，
+          // 传 undefined 即不渲染那个 span（它不会被透传给 Avatar，所以不会丢失任何东西）。
+          title: ismix
+            ? user?.profile.real_name ||
+              user?.profile.username ||
+              user?.auth.email ||
+              ""
+            : undefined,
           render: (_props, dom) => {
             return user ? (
               <Dropdown

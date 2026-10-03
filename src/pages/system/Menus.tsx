@@ -374,7 +374,7 @@ export function Menus() {
           expandedRowKeys,
           onExpandedRowsChange: keys => setExpandedRowKeys([...keys]),
         }}
-        scroll={{ x: 1200, y: 600 }}
+        scroll={{ x: 1200, y: 'calc(100vh - 300px)' }}
         pagination={false}
       />
       <SimpleModal
