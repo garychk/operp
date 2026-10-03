@@ -100,3 +100,4 @@
 \i supabase/tables/deploy_76_service_role_finance_entry.sql
 \i supabase/tables/deploy_77_finance_report_currency_dimension.sql
 \i supabase/tables/deploy_78_ar_ap_base_balance_guard.sql
+\i supabase/tables/deploy_79_product_images.sql

@@ -118,6 +118,7 @@ ORDER=(
   deploy_76_service_role_finance_entry.sql
   deploy_77_finance_report_currency_dimension.sql
   deploy_78_ar_ap_base_balance_guard.sql
+  deploy_79_product_images.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

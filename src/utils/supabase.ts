@@ -54,6 +54,7 @@ import type {
   ErpMaterialIssueDetailsS539Dcf81BRow,
   ErpProductionReportsS539Dcf81BRow,
   ErpProductionReceiptsS539Dcf81BRow,
+  ErpProductImagesS539Dcf81BRow,
   SysFormsRow,
   SysConfigRow,
   SysMcpApiKeysRow,
@@ -190,6 +191,7 @@ export type Tables = {
   erp_material_issue_details_s_539dcf81_b: { Row: ErpMaterialIssueDetailsS539Dcf81BRow };
   erp_production_reports_s_539dcf81_b: { Row: ErpProductionReportsS539Dcf81BRow };
   erp_production_receipts_s_539dcf81_b: { Row: ErpProductionReceiptsS539Dcf81BRow };
+  erp_product_images_s_539dcf81_b: { Row: ErpProductImagesS539Dcf81BRow };
   erp_mps_plans_s_539dcf81_b: { Row: ErpMpsPlansS539Dcf81BRow };
   erp_mps_plan_details_s_539dcf81_b: { Row: ErpMpsPlanDetailsS539Dcf81BRow };
   erp_currencies_s_539dcf81_b: { Row: ErpCurrenciesS539Dcf81BRow };

@@ -750,6 +750,28 @@ export interface ErpProductionReceiptsS539Dcf81BRow {
 export type ErpProductionReceiptsS539Dcf81BInsert = Omit<ErpProductionReceiptsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpProductionReceiptsS539Dcf81BUpdate = Partial<ErpProductionReceiptsS539Dcf81BInsert>;
 
+/** 物料图片（deploy_79）：每行对应 uploadfiles 桶里的一张图，首图 = sort_order 最小 */
+export interface ErpProductImagesS539Dcf81BRow {
+  id: number;
+  tenant_id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  product_id: number;
+  bucket: string;
+  /** 对象在桶内的路径，展示 URL 由 getPublicUrl(storage_path) 派生 */
+  storage_path: string;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  sort_order: number;
+  remark: string | null;
+}
+export type ErpProductImagesS539Dcf81BInsert = Omit<ErpProductImagesS539Dcf81BRow, 'id' | 'tenant_id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpProductImagesS539Dcf81BUpdate = Partial<ErpProductImagesS539Dcf81BInsert>;
+
 export interface ErpProductionReportsS539Dcf81BRow {
   id: number;
   corp_id: string | null;
