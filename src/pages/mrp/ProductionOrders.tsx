@@ -691,6 +691,7 @@ export function ProductionOrders() {
         columns={columns}
         dataSource={filteredOrders}
         rowKey="id"
+        toolbarActions={["delete" , "export"]}
         loading={loading}
         pagination={{ pageSize: 10 }}
         storageKey={DOC_TYPE}
@@ -735,7 +736,7 @@ export function ProductionOrders() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchOrders}
-              style={{ width: 240 }}
+              style={{ width: 160 }}
             />
           </Space>
         }

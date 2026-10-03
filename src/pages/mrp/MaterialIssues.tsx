@@ -831,6 +831,7 @@ export function MaterialIssues() {
         pagination={{ pageSize: 10 }}
         storageKey="material-issues"
         headerTitle={t("mrp.materialIssues.title")}
+        toolbarActions={["delete" , "export"]}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,

@@ -208,7 +208,7 @@ export function SubjectLedger() {
   return (
     <Card size='small' variant='borderless'>
       <Tabs
-        tabPlacement='start'
+        tabPlacement='top'
         defaultActiveKey="balance"
         items={[
           {

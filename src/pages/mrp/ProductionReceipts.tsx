@@ -26,7 +26,7 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
-import { SuperTable } from "../../components/SuperTable";
+import { SuperTable, SuperTableColumn } from "../../components/SuperTable";
 import { formatMoney } from "../../utils/money";
 import SimpleModal from "../../components/SimpleModal";
 import dayjs from "dayjs";
@@ -505,7 +505,8 @@ export function ProductionReceipts() {
     },
   };
 
-  const columns = [
+
+  const columns: SuperTableColumn<ProductionReceipt>[] = [
     {
       title: t("mrp.productionReceipts.receiptNo"),
       dataIndex: "receipt_no",
@@ -597,8 +598,9 @@ export function ProductionReceipts() {
     {
       title: t("common.actions"),
       key: "action",
+      fixed: "right",
       render: (_: any, record: ProductionReceipt) => (
-        <Space size="middle">
+        <Space>
           <Button
             type="text"
             icon={<EditOutlined />}
