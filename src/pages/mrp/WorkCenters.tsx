@@ -20,6 +20,7 @@ import {
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { SuperTable } from "../../components/SuperTable";
+import type { SuperTableColumn } from "../../components/SuperTable";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import SimpleModal from "../../components/SimpleModal";
@@ -173,7 +174,7 @@ export function WorkCenters() {
     other: t("mrp.workCenters.typeOther"),
   };
 
-  const columns = [
+  const columns: SuperTableColumn<WorkCenter>[] = [
     {
       title: t("common.code"),
       dataIndex: "code",
@@ -189,7 +190,8 @@ export function WorkCenters() {
       title: t("common.type"),
       dataIndex: "type",
       key: "type",
-      width: 200,
+      width: 100,
+      align: "center",
       render: (type: string) => typeLabels[type] || type,
     },
     {
@@ -202,13 +204,15 @@ export function WorkCenters() {
       title: t("mrp.workCenters.capacity"),
       dataIndex: "capacity_per_day",
       key: "capacity_per_day",
-      width: 200,
+      width: 120,
+      align: "center",
     },
     {
       title: t("mrp.workCenters.laborRate"),
       dataIndex: "labor_rate",
       key: "labor_rate",
-      width: 200,
+      width: 120,
+      align: "center",
       render: (rate: number) =>
         t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
     },
@@ -216,7 +220,8 @@ export function WorkCenters() {
       title: t("mrp.workCenters.overheadRate"),
       dataIndex: "overhead_rate",
       key: "overhead_rate",
-      width: 200,
+      width: 120,
+      align: "center",
       render: (rate: number) =>
         t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
     },
@@ -224,7 +229,8 @@ export function WorkCenters() {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 200,
+      width: 100,
+      align: "center",
       render: (status: string) => (
         <Tag color={status === "active" ? "success" : "default"}>
           {status === "active" ? t("common.enabled") : t("mrp.inactive")}
@@ -236,7 +242,7 @@ export function WorkCenters() {
       key: "action",
       width: 200,
       render: (_: any, record: WorkCenter) => (
-        <Space size="middle">
+        <Space size="small">
           <Button
             type="text"
             icon={<EditOutlined />}

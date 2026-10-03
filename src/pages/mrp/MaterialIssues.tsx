@@ -737,6 +737,7 @@ export function MaterialIssues() {
       title: t("mrp.materialIssues.lineNo"),
       dataIndex: "line_no",
       key: "line_no",
+      width: 80,
     },
     {
       title: t("mrp.materialIssues.material"),
@@ -766,6 +767,8 @@ export function MaterialIssues() {
       title: t("mrp.materialIssues.batchNo"),
       dataIndex: "batch_no",
       key: "batch_no",
+      width: 120,
+      ellipsis: true,
       render: (text: string) => text || "-",
     },
     {
@@ -795,19 +798,21 @@ export function MaterialIssues() {
       title: t("mrp.materialIssues.remark"),
       dataIndex: "remark",
       key: "remark",
+      width: 100,
+      ellipsis: true,
       render: (text: string) => text || "-",
     },
     {
       title: t("common.actions"),
       key: "action",
+      width: 160,
       render: (_: any, record: MaterialIssueDetail) => (
-        <Space size="middle">
+        <Space size="small">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
             {t("common.edit")}
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)}>
-            {t("common.delete")}
-          </Button>
+          <Button type="text" danger icon={<DeleteOutlined />} 
+          onClick={() => handleDeleteDetail(record.id)} />
         </Space>
       ),
     },
