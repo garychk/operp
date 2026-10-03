@@ -20,3 +20,6 @@ export const resolveAiServerBaseUrl = (): string => {
 
 /** MRP 相关端点基址（运算 / 转单 / 成本卷算都在 /api/mrp 下） */
 export const resolveMrpApiBaseUrl = (): string => `${resolveAiServerBaseUrl()}/api/mrp`;
+
+/** MPS 相关端点基址（汇总 / RCCP / 确认 / 下推都在 /api/mps 下） */
+export const resolveMpsApiBaseUrl = (): string => `${resolveAiServerBaseUrl()}/api/mps`;

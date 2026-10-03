@@ -4,6 +4,7 @@ import { env } from "./config/env.js";
 import { healthRouter } from "./api/health.routes.js";
 import { aiRouter } from "./api/ai.routes.js";
 import { mrpRouter } from "./api/mrp.routes.js";
+import { mpsRouter } from "./api/mps.routes.js";
 
 export function createApp() {
   const app = express();
@@ -20,6 +21,7 @@ export function createApp() {
   app.use("/api/health", healthRouter);
   app.use("/api/ai", aiRouter);
   app.use("/api/mrp", mrpRouter);
+  app.use("/api/mps", mpsRouter);
 
   return app;
 }

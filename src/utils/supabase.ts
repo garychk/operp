@@ -41,6 +41,8 @@ import type {
   ErpRoutingOperationsS539Dcf81BRow,
   ErpRoutingOperationDetailsS539Dcf81BRow,
   ErpMrpPlansS539Dcf81BRow,
+  ErpMpsPlansS539Dcf81BRow,
+  ErpMpsPlanDetailsS539Dcf81BRow,
   ErpMrpRequirementsS539Dcf81BRow,
   ErpProductionOrdersS539Dcf81BRow,
   ErpProductionOrderDetailsS539Dcf81BRow,
@@ -182,6 +184,8 @@ export type Tables = {
   erp_material_issue_details_s_539dcf81_b: { Row: ErpMaterialIssueDetailsS539Dcf81BRow };
   erp_production_reports_s_539dcf81_b: { Row: ErpProductionReportsS539Dcf81BRow };
   erp_production_receipts_s_539dcf81_b: { Row: ErpProductionReceiptsS539Dcf81BRow };
+  erp_mps_plans_s_539dcf81_b: { Row: ErpMpsPlansS539Dcf81BRow };
+  erp_mps_plan_details_s_539dcf81_b: { Row: ErpMpsPlanDetailsS539Dcf81BRow };
   sys_forms: { Row: SysFormsRow };
   sys_config: { Row: SysConfigRow };
   sys_mcp_api_keys: { Row: SysMcpApiKeysRow };

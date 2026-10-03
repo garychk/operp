@@ -103,6 +103,8 @@ ORDER=(
   deploy_60_mrp_planning_parameters.sql
   deploy_61_planned_conversion_and_cost.sql
   deploy_62_production_report_and_cost_menu.sql
+  deploy_63_mps_master_schedule.sql
+  deploy_64_mps_menu.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

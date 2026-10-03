@@ -68,7 +68,9 @@ export interface MrpDemandInput {
 export type MrpSupplySourceType =
   | "inventory"
   | "purchase_order"
-  | "production_order";
+  | "production_order"
+  /** 主生产计划：已确认但未下推的 mps_qty（下推后即成为 production_order 供给，两者不会重复计） */
+  | "mps";
 
 export interface MrpSupplyInput {
   productId: number;

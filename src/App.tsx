@@ -40,6 +40,7 @@ import { ProductionReceipts } from './pages/mrp/ProductionReceipts';
 import { ProductionReports } from './pages/mrp/ProductionReports';
 import { CostCalculations } from './pages/mrp/CostCalculations';
 import { MrpPlans } from './pages/mrp/MrpPlans';
+import { MpsPlans } from './pages/mrp/MpsPlans';
 import { QualityInspections } from './pages/mrp/QualityInspections';
 import { Users } from './pages/system/Users';
 import { Tenants } from './pages/system/Tenants';
@@ -139,6 +140,7 @@ function AppContent() {
           <Route path="production-reports" element={<ProductionReports />} />
           <Route path="cost-calculations" element={<CostCalculations />} />
           <Route path="plans" element={<MrpPlans />} />
+          <Route path="mps" element={<MpsPlans />} />
           <Route path="quality" element={<QualityInspections />} />
         </Route>
         

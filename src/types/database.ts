@@ -422,6 +422,47 @@ export interface ErpMrpPlansS539Dcf81BRow {
 export type ErpMrpPlansS539Dcf81BInsert = Omit<ErpMrpPlansS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMrpPlansS539Dcf81BUpdate = Partial<ErpMrpPlansS539Dcf81BInsert>;
 
+/** 主生产计划头（deploy_63）：draft | confirmed */
+export interface ErpMpsPlansS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  plan_no: string;
+  plan_date: string;
+  start_date: string;
+  end_date: string;
+  frozen_days: number | null;
+  status: string | null;
+  remark: string | null;
+  tenant_id: number | null;
+}
+export type ErpMpsPlansS539Dcf81BInsert = Omit<ErpMpsPlansS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpMpsPlansS539Dcf81BUpdate = Partial<ErpMpsPlansS539Dcf81BInsert>;
+
+/** 主生产计划行（deploy_63）：产品 × 日期，forecast 仅展示，mps_qty 为计划产出 */
+export interface ErpMpsPlanDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  plan_id: number;  // FK -> erp_mps_plans_s_539dcf81_b.id
+  product_id: number;  // FK -> erp_products_s_539dcf81_b.id
+  requirement_date: string;
+  forecast_qty: number | null;
+  mps_qty: number | null;
+  /** 已下推生产订单数量（doc_flow 台账回写） */
+  pushed_quantity: number | null;
+  remark: string | null;
+  tenant_id: number | null;
+}
+export type ErpMpsPlanDetailsS539Dcf81BInsert = Omit<ErpMpsPlanDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpMpsPlanDetailsS539Dcf81BUpdate = Partial<ErpMpsPlanDetailsS539Dcf81BInsert>;
+
 export interface ErpMrpRequirementsS539Dcf81BRow {
   id: number;
   corp_id: string | null;

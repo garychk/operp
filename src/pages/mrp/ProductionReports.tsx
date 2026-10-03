@@ -28,6 +28,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
+import type { SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import dayjs from "dayjs";
 
@@ -522,7 +523,7 @@ export function ProductionReports() {
     Number(formMachineHours || 0),
   );
 
-  const columns = [
+  const columns: SuperTableColumn<ProductionReport>[] = [
     {
       title: t("mrp.productionReports.reportNo"),
       dataIndex: "report_no",
@@ -601,6 +602,8 @@ export function ProductionReports() {
     {
       title: t("common.actions"),
       key: "action",
+      width: 200,
+      fixed: "right",
       render: (_: any, record: ProductionReport) => (
         <Space size="middle">
           <Button

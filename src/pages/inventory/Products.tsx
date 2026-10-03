@@ -26,7 +26,7 @@ import { logWithTiming } from "../../utils/logger";
 import { Categories } from "./Categories";
 import { ProductUoms } from "./ProductUoms";
 import { SupaModal } from "../../components/SupaModal";
-import { SuperTable } from "../../components/SuperTable";
+import { SuperTable, SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import { useTranslation } from "react-i18next";
 
@@ -230,7 +230,7 @@ export function Products() {
       p.code.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const columns = [
+  const columns: SuperTableColumn<Product>[] = [
     {
       title: t("products.code"),
       dataIndex: "code",
@@ -291,6 +291,7 @@ export function Products() {
       title: t("common.actions"),
       key: "action",
       width: 120,
+      fixed: "right",
       render: (_: any, record: Product) => (
         <Space>
           <Button

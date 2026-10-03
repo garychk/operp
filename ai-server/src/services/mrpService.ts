@@ -30,6 +30,8 @@ const T = {
   purchaseOrderDetails: "erp_purchase_order_details_s_539dcf81_b",
   productionOrders: "erp_production_orders_s_539dcf81_b",
   productionOrderDetails: "erp_production_order_details_s_539dcf81_b",
+  mpsPlans: "erp_mps_plans_s_539dcf81_b",
+  mpsDetails: "erp_mps_plan_details_s_539dcf81_b",
 } as const;
 
 /** 终态单据不参与供需（覆盖当前已知的状态词表，遇到新值宁可多算也不漏算） */
@@ -395,6 +397,42 @@ export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promi
           quantity: (remaining * line.quantity * (1 + line.lossRate)) / bom.quantity,
           sourceType: "production_order",
           sourceId: num(o.id),
+        });
+      }
+    }
+  }
+
+  // ---- 主生产计划 MPS：已确认但未下推的 mps_qty = 计划供给 ----
+  // 已下推的部分会成为真实生产订单（上面 production_order 块已计为供给），
+  // 这里只补「确认了但还没下推」的差额，避免 MRP 把计划员已锁定的产量再算一遍。
+  // forecast_qty 刻意不接入需求源（见 mpsService 头部注释）。
+  {
+    const { data: mpsPlans, error } = await supabase
+      .from(T.mpsPlans)
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n")
+      .eq("status", "confirmed");
+    if (error) throw error;
+    const planIds = asRows(mpsPlans).map((p) => num(p.id));
+    if (planIds.length > 0) {
+      const { data: mpsLines, error: lErr } = await supabase
+        .from(T.mpsDetails)
+        .select("id, product_id, requirement_date, mps_qty, pushed_quantity")
+        .eq("tenant_id", tenantId)
+        .eq("is_deleted", "n")
+        .in("plan_id", planIds);
+      if (lErr) throw lErr;
+      for (const d of asRows(mpsLines)) {
+        const remaining = num(d.mps_qty) - num(d.pushed_quantity);
+        if (remaining <= 0) continue;
+        supplies.push({
+          productId: num(d.product_id),
+          date:
+            String(d.requirement_date as string) || plan.start_date,
+          quantity: remaining,
+          sourceType: "mps",
+          sourceId: num(d.id),
         });
       }
     }
