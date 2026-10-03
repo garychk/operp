@@ -796,7 +796,7 @@ export function SalesOrders() {
             </Button>
           </Space>
         }
-        width={'70%'}
+        width={'80%'}
         height={'80%'}
       />
 

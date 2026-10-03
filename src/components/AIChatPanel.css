@@ -32,10 +32,53 @@
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  /* 对话历史浮层以此为定位容器，只在面板内部滑动，不再另开一层全局 Drawer */
+  position: relative;
 }
 
-.ai-chat-history-drawer .ant-drawer-body {
-  padding: 12px;
+/* 面板内部的「历史」浮层：从左侧滑入，盖住面板内容（含底部输入区），
+   视觉上等同于「抽屉里再开一层抽屉」，但不会遮住整页。 */
+.ai-chat-history-pane {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.08);
+  transform: translateX(-100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.24s ease, visibility 0.24s ease;
+  will-change: transform;
+}
+
+.ai-chat-history-pane-open {
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.ai-chat-history-pane-head {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-chat-history-pane-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
+}
+
+/* 浮层里让会话列表自己吃掉剩余高度并滚动，别再依赖 100% 高度传递 */
+.ai-chat-history-pane-body > .ai-chat-history {
+  flex: 1;
+  height: auto;
+  min-height: 0;
 }
 
 .ai-chat-history {

@@ -14,32 +14,41 @@
  * 布局：页面高度由布局统一负责，这里不定高（.page-viewport 约定）。
  */
 import { useEffect, useMemo, useState } from "react";
-import type { Key } from "react";
+import type { Key, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Alert,
   Button,
+  Card,
+  Col,
   DatePicker,
+  Empty,
   Form,
   Input,
   InputNumber,
   Modal,
+  Row,
   Select,
   Space,
-  Statistic,
   Table,
   Tag,
   Tooltip,
   message,
 } from "antd";
 import {
+  BarChartOutlined,
   CheckCircleOutlined,
   CalendarOutlined,
+  ClockCircleOutlined,
+  LineChartOutlined,
   PlusOutlined,
   PushpinOutlined,
   ReconciliationOutlined,
   StopOutlined,
+  UnorderedListOutlined,
+  WarningOutlined,
 } from "@ant-design/icons";
+import { Column, Line, Pie } from "@ant-design/charts";
 import dayjs, { Dayjs } from "dayjs";
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
@@ -128,6 +137,64 @@ const statusLabelKey = (status: string | null): string => {
 const statusColor = (status: string | null): string =>
   status === "confirmed" ? "success" : "default";
 
+/** 数字归一：库里的 numeric 与 ai-server 聚合值都可能回传字符串 */
+const num = (v: unknown): number => {
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+
+/** 图表配色：浅色走清爽冷色系；深色模式整体提亮，保证在暗底上可读 */
+const CHART_COLORS = {
+  order: "#38bdf8",
+  mps: "#818cf8",
+  pushed: "#34d399",
+  date: "#60a5fa",
+  load: "#f59e0b",
+  capacity: "#94a3b8",
+};
+
+/** 指标卡配色（图标底色 / 数字色） */
+const STAT_TONES = [
+  { bg: "rgba(56,189,248,.16)", color: "#0284c7" },
+  { bg: "rgba(129,140,248,.16)", color: "#4f46e5" },
+  { bg: "rgba(52,211,153,.16)", color: "#059669" },
+  { bg: "rgba(251,191,36,.18)", color: "#b45309" },
+  { bg: "rgba(244,114,182,.16)", color: "#be185d" },
+  { bg: "rgba(148,163,184,.2)", color: "#475569" },
+];
+
+/** 暗色开关：ProLayout 把开关写到 html[data-erp-dark]，图表主题要跟着切 */
+const useIsDark = (): boolean => {
+  const read = () =>
+    document.documentElement.getAttribute("data-erp-dark") === "true";
+  const [dark, setDark] = useState(read);
+  useEffect(() => {
+    const observer = new MutationObserver(() => setDark(read()));
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-erp-dark"],
+    });
+    return () => observer.disconnect();
+  }, []);
+  return dark;
+};
+
+/** 分组柱状图的行：一个业务点 × 一个系列 */
+interface SeriesDatum {
+  label: string;
+  series: string;
+  value: number;
+}
+
+/** 指标卡的数据形状 */
+interface StatItem {
+  key: string;
+  label: string;
+  value: number;
+  icon: ReactNode;
+  suffix?: string;
+}
+
 export function MpsPlans() {
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -163,6 +230,114 @@ export function MpsPlans() {
     [plans, selectedPlanKeys],
   );
   const isConfirmed = selectedPlan?.status === "confirmed";
+  const isDark = useIsDark();
+
+  // ------------------------------------------------------------------
+  // 可视化派生数据（全部由 overview / rccp 本地聚合，不额外打接口）
+  // ------------------------------------------------------------------
+  /** 供需对比：订单需求 / MPS 计划 / 已下推 三系列分组柱 */
+  const supplyDemandData = useMemo<SeriesDatum[]>(() => {
+    const rows: SeriesDatum[] = [];
+    for (const l of overview?.lines ?? []) {
+      const label = `${l.product_code || l.product_id} · ${String(l.requirement_date).slice(5)}`;
+      if (num(l.order_qty) > 0) {
+        rows.push({ label, series: t("mrp.mps.seriesOrderQty"), value: num(l.order_qty) });
+      }
+      if (num(l.mps_qty) > 0) {
+        rows.push({ label, series: t("mrp.mps.seriesMpsQty"), value: num(l.mps_qty) });
+      }
+      if (num(l.pushed_quantity) > 0) {
+        rows.push({ label, series: t("mrp.mps.seriesPushedQty"), value: num(l.pushed_quantity) });
+      }
+    }
+    return rows;
+  }, [overview, t]);
+
+  /** 下推进度：已下推 vs 待下推（环形图） */
+  const pushProgressData = useMemo<SeriesDatum[]>(() => {
+    const pushed = num(overview?.summary.totalPushed);
+    const remaining = num(overview?.summary.totalRemaining);
+    const rows: SeriesDatum[] = [];
+    if (pushed > 0) {
+      rows.push({ label: t("mrp.mps.seriesPushedQty"), series: t("mrp.mps.seriesPushedQty"), value: pushed });
+    }
+    if (remaining > 0) {
+      rows.push({
+        label: t("mrp.mps.seriesRemainingQty"),
+        series: t("mrp.mps.seriesRemainingQty"),
+        value: remaining,
+      });
+    }
+    return rows;
+  }, [overview, t]);
+
+  /** 需求日期分布：按需求日汇总 MPS 数量，看交付节奏是否集中 */
+  const requirementTrend = useMemo(() => {
+    const byDate = new Map<string, number>();
+    for (const l of overview?.lines ?? []) {
+      const date = String(l.requirement_date);
+      byDate.set(date, (byDate.get(date) ?? 0) + num(l.mps_qty));
+    }
+    return [...byDate.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, qty]) => ({ date, qty }));
+  }, [overview]);
+
+  /** RCCP：工作中心 × 月 的负荷 vs 产能 */
+  const rccpChartData = useMemo<SeriesDatum[]>(() => {
+    const rows: SeriesDatum[] = [];
+    for (const r of rccp?.rows ?? []) {
+      const label = `${r.work_center_name || r.work_center_code} · ${r.month.slice(2)}`;
+      rows.push({ label, series: t("mrp.mps.seriesLoad"), value: num(r.load_hours) });
+      rows.push({ label, series: t("mrp.mps.seriesCapacity"), value: num(r.capacity_hours) });
+    }
+    return rows;
+  }, [rccp, t]);
+
+  /** 指标卡：5 个汇总 + 缺口行数 */
+  const statItems = useMemo<StatItem[]>(
+    () => [
+      {
+        key: "lines",
+        label: t("mrp.mps.summaryLines"),
+        value: num(overview?.summary.totalLines),
+        icon: <UnorderedListOutlined />,
+      },
+      {
+        key: "forecast",
+        label: t("mrp.mps.summaryForecast"),
+        value: num(overview?.summary.totalForecast),
+        icon: <LineChartOutlined />,
+      },
+      {
+        key: "mps",
+        label: t("mrp.mps.summaryMps"),
+        value: num(overview?.summary.totalMps),
+        icon: <BarChartOutlined />,
+      },
+      {
+        key: "pushed",
+        label: t("mrp.mps.summaryPushed"),
+        value: num(overview?.summary.totalPushed),
+        icon: <PushpinOutlined />,
+      },
+      {
+        key: "remaining",
+        label: t("mrp.mps.summaryRemaining"),
+        value: num(overview?.summary.totalRemaining),
+        icon: <ClockCircleOutlined />,
+      },
+      {
+        key: "gap",
+        label: t("mrp.mps.summaryGapLines"),
+        value: num(overview?.summary.linesWithOrderGap),
+        icon: <WarningOutlined />,
+      },
+    ],
+    [overview, t],
+  );
+
+  const chartTheme = isDark ? "classicDark" : "classic";
 
   useEffect(() => {
     fetchPlans();
@@ -644,29 +819,159 @@ export function MpsPlans() {
       />
 
       {selectedPlan && (
-        <div style={{ marginTop: 16 }}>
-          <Alert
-            style={{ marginBottom: 12 }}
-            type={isConfirmed ? "success" : "info"}
-            showIcon
-            icon={isConfirmed ? <CheckCircleOutlined /> : <CalendarOutlined />}
-            message={
-              isConfirmed
-                ? t("mrp.mps.lockedBanner", { no: selectedPlan.plan_no })
-                : t("mrp.mps.draftBanner", { no: selectedPlan.plan_no })
-            }
-            description={
-              overview && (
-                <Space size="large" wrap>
-                  <Statistic title={t("mrp.mps.summaryLines")} value={overview.summary.totalLines} />
-                  <Statistic title={t("mrp.mps.summaryForecast")} value={overview.summary.totalForecast} />
-                  <Statistic title={t("mrp.mps.summaryMps")} value={overview.summary.totalMps} />
-                  <Statistic title={t("mrp.mps.summaryPushed")} value={overview.summary.totalPushed} />
-                  <Statistic title={t("mrp.mps.summaryRemaining")} value={overview.summary.totalRemaining} />
-                </Space>
-              )
-            }
-          />
+        <Space direction="vertical" size={16} style={{ display: "flex", marginTop: 16 }}>
+          {/* 计划概览：极光卡片 + 玻璃指标卡 */}
+          <div className="mps-hero">
+            <div className="mps-hero__blob mps-hero__blob--sky" />
+            <div className="mps-hero__blob mps-hero__blob--violet" />
+            <div className="mps-hero__blob mps-hero__blob--mint" />
+            <div className="mps-hero__content">
+              <Row justify="space-between" align="middle" gutter={[12, 12]}>
+                <Col flex="auto">
+                  <div className="mps-hero__title">{selectedPlan.plan_no}</div>
+                  <div className="mps-hero__meta">
+                    {t("mrp.mps.planWindow")}：{selectedPlan.start_date} ~ {selectedPlan.end_date}
+                    {" · "}
+                    {t("mrp.mps.planDate")}：{selectedPlan.plan_date}
+                    {selectedPlan.remark ? ` · ${selectedPlan.remark}` : ""}
+                  </div>
+                </Col>
+                <Col>
+                  <Tag
+                    color={statusColor(selectedPlan.status)}
+                    icon={isConfirmed ? <CheckCircleOutlined /> : <CalendarOutlined />}
+                    style={{ marginInlineEnd: 0, padding: "4px 12px", fontSize: 13 }}
+                  >
+                    {isConfirmed
+                      ? t("mrp.mps.lockedBanner", { no: selectedPlan.plan_no })
+                      : t("mrp.mps.draftBanner", { no: selectedPlan.plan_no })}
+                  </Tag>
+                </Col>
+              </Row>
+
+              <Row gutter={[12, 12]} style={{ marginTop: 16 }}>
+                {statItems.map((item, index) => {
+                  const tone = STAT_TONES[index % STAT_TONES.length];
+                  return (
+                    <Col key={item.key} xs={12} sm={8} lg={4}>
+                      <Card className="mps-stat" styles={{ body: { padding: 14 } }}>
+                        <span
+                          className="mps-stat__icon"
+                          style={{ background: tone.bg, color: tone.color }}
+                        >
+                          {item.icon}
+                        </span>
+                        <div className="mps-stat__label">{item.label}</div>
+                        <div
+                          className={
+                            item.value === 0
+                              ? "mps-stat__value mps-stat__value--muted"
+                              : "mps-stat__value"
+                          }
+                        >
+                          {item.value.toLocaleString()}
+                        </div>
+                      </Card>
+                    </Col>
+                  );
+                })}
+              </Row>
+            </div>
+          </div>
+
+          {/* 图表区：供需对比 + 下推进度 */}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} xl={16}>
+              <Card
+                title={t("mrp.mps.chartSupplyDemand")}
+                styles={{ body: { padding: "8px 8px 0" } }}
+              >
+                {supplyDemandData.length > 0 ? (
+                  <Column
+                    data={supplyDemandData}
+                    xField="label"
+                    yField="value"
+                    colorField="series"
+                    group
+                    height={260}
+                    theme={chartTheme}
+                    scale={{
+                      color: {
+                        range: [CHART_COLORS.order, CHART_COLORS.mps, CHART_COLORS.pushed],
+                      },
+                    }}
+                    axis={{
+                      x: { title: false, labelAutoRotate: true, labelAutoHide: true },
+                      y: { title: false },
+                    }}
+                    legend={{ color: { position: "top" } }}
+                  />
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t("mrp.mps.noChartData")}
+                    style={{ padding: "48px 0" }}
+                  />
+                )}
+              </Card>
+            </Col>
+            <Col xs={24} xl={8}>
+              <Card
+                title={t("mrp.mps.chartPushProgress")}
+                styles={{ body: { padding: "8px 8px 0" } }}
+              >
+                {pushProgressData.length > 0 ? (
+                  <Pie
+                    data={pushProgressData}
+                    angleField="value"
+                    colorField="series"
+                    innerRadius={0.66}
+                    radius={0.92}
+                    height={260}
+                    theme={chartTheme}
+                    scale={{
+                      color: {
+                        range: [CHART_COLORS.pushed, isDark ? "#475569" : "#cbd5e1"],
+                      },
+                    }}
+                    label={{ text: "value", style: { fontSize: 12 } }}
+                    legend={{ color: { position: "bottom" } }}
+                  />
+                ) : (
+                  <Empty
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    description={t("mrp.mps.noChartData")}
+                    style={{ padding: "48px 0" }}
+                  />
+                )}
+              </Card>
+            </Col>
+          </Row>
+
+          {/* 需求日期分布 */}
+          <Card
+            title={t("mrp.mps.chartRequirementTrend")}
+            styles={{ body: { padding: "8px 8px 0" } }}
+          >
+            {requirementTrend.length > 0 ? (
+              <Line
+                data={requirementTrend}
+                xField="date"
+                yField="qty"
+                height={220}
+                theme={chartTheme}
+                style={{ stroke: CHART_COLORS.date, lineWidth: 2, shape: "smooth" }}
+                point={{ style: { fill: CHART_COLORS.date, r: 3 } }}
+                axis={{ x: { title: false }, y: { title: false } }}
+              />
+            ) : (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={t("mrp.mps.noChartData")}
+                style={{ padding: "40px 0" }}
+              />
+            )}
+          </Card>
 
           <SuperTable<MpsOverviewLine>
             columns={lineColumns}
@@ -733,7 +1038,7 @@ export function MpsPlans() {
               </Space>
             }
           />
-        </div>
+        </Space>
       )}
 
       <SimpleModal
@@ -867,7 +1172,7 @@ export function MpsPlans() {
         footer={
           <Button onClick={() => setRccpOpen(false)}>{t("common.close")}</Button>
         }
-        width={760}
+        width={880}
       >
         {rccp && (
           <>
@@ -890,6 +1195,32 @@ export function MpsPlans() {
                 style={{ marginBottom: 12 }}
                 message={t("mrp.mps.rccpNoRoutingHint")}
               />
+            )}
+            {rccpChartData.length > 0 && (
+              <Card
+                className="mps-rccp-chart"
+                title={t("mrp.mps.chartRccpLoad")}
+                style={{ marginBottom: 12 }}
+                styles={{ body: { padding: "8px 8px 0" } }}
+              >
+                <Column
+                  data={rccpChartData}
+                  xField="label"
+                  yField="value"
+                  colorField="series"
+                  group
+                  height={240}
+                  theme={chartTheme}
+                  scale={{
+                    color: { range: [CHART_COLORS.load, CHART_COLORS.capacity] },
+                  }}
+                  axis={{
+                    x: { title: false, labelAutoRotate: true, labelAutoHide: true },
+                    y: { title: false },
+                  }}
+                  legend={{ color: { position: "top" } }}
+                />
+              </Card>
             )}
             <Table<RccpRow>
               rowKey={(r) => `${r.work_center_id ?? 0}-${r.month}`}

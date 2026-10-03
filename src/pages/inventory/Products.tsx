@@ -26,7 +26,8 @@ import { logWithTiming } from "../../utils/logger";
 import { Categories } from "./Categories";
 import { ProductUoms } from "./ProductUoms";
 import { SupaModal } from "../../components/SupaModal";
-import { SuperTable, SuperTableColumn } from "../../components/SuperTable";
+import { SuperTable } from "../../components/SuperTable";
+import type { SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import { useTranslation } from "react-i18next";
 

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from 'react-i18next';
 import type { CSSProperties, ReactNode } from "react";
 import {
+  ArrowLeftOutlined,
   BulbOutlined,
   ClockCircleOutlined,
   DatabaseOutlined,
@@ -25,7 +26,6 @@ import {
 import {
   Button,
   Card,
-  Drawer,
   Dropdown,
   Flex,
   Input,
@@ -1543,83 +1543,101 @@ export function AIChatPanel({
               })}
             />
           </div>
+
+          {/* 对话历史不再单独开一层 Drawer（会盖住整页、还和所在抽屉互相叠），
+              改成在面板内部从左滑入的浮层，视觉上就是「抽屉里再开一层」。 */}
+          <div
+            className={`ai-chat-history-pane${
+              historyOpen ? " ai-chat-history-pane-open" : ""
+            }`}
+            aria-hidden={!historyOpen}
+          >
+            <Flex
+              align="center"
+              justify="space-between"
+              gap={8}
+              className="ai-chat-history-pane-head"
+            >
+              <Space size={4} align="center">
+                <Button
+                  type="text"
+                  size="small"
+                  aria-label={t("common.back")}
+                  icon={<ArrowLeftOutlined />}
+                  onClick={() => setHistoryOpen(false)}
+                />
+                <Typography.Text strong>{t("aiChat.history")}</Typography.Text>
+              </Space>
+              <Button
+                type="text"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={handleCreateConversation}
+              >
+                {t("aiChat.createConversation")}
+              </Button>
+            </Flex>
+            <div className="ai-chat-history-pane-body">
+              <Flex vertical gap={12} className="ai-chat-history">
+                {conversationItems.length ? (
+                  <Conversations
+                    className="ai-chat-session-list"
+                    activeKey={activeConversationId}
+                    onActiveChange={(value) =>
+                      void handleSelectConversation(String(value))
+                    }
+                    items={conversationItems.map((item) => ({
+                      key: item.id,
+                      label: (
+                        <Flex vertical className="ai-chat-session-label">
+                          <Typography.Text className="ai-chat-session-title">
+                            {item.title}
+                          </Typography.Text>
+                          <Typography.Text
+                            type="secondary"
+                            className="ai-chat-session-time"
+                          >
+                            {item.updatedAt}
+                          </Typography.Text>
+                        </Flex>
+                      ),
+                    }))}
+                    menu={(conversation) => ({
+                      items: [
+                        {
+                          key: "delete",
+                          label: t("common.delete"),
+                          danger: true,
+                          icon: <DeleteOutlined />,
+                        },
+                      ],
+                      onClick: ({ key, domEvent }) => {
+                        domEvent.stopPropagation();
+                        if (key === "delete") {
+                          void handleDeleteConversation(String(conversation.key));
+                        }
+                      },
+                      trigger: (
+                        <Button
+                          type="text"
+                          size="small"
+                          className="ai-chat-session-more"
+                          icon={<MoreOutlined />}
+                          onClick={(event) => event.stopPropagation()}
+                        />
+                      ),
+                    })}
+                  />
+                ) : (
+                  <Typography.Text type="secondary">
+                    {t("aiChat.historyEmpty")}
+                  </Typography.Text>
+                )}
+              </Flex>
+            </div>
+          </div>
         </Flex>
       </XProvider>
-
-      <Drawer
-        title={t("aiChat.history")}
-        placement="left"
-        width={variant === "page" ? 360 : 320}
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        className="ai-chat-history-drawer"
-        destroyOnHidden={false}
-      >
-        <Flex vertical gap={12} className="ai-chat-history">
-          <Button
-            type="primary"
-            block
-            icon={<PlusOutlined />}
-            onClick={handleCreateConversation}
-          >
-            {t("aiChat.createConversation")}
-          </Button>
-          {conversationItems.length ? (
-            <Conversations
-              className="ai-chat-session-list"
-              activeKey={activeConversationId}
-              onActiveChange={(value) =>
-                void handleSelectConversation(String(value))
-              }
-              items={conversationItems.map((item) => ({
-                key: item.id,
-                label: (
-                  <Flex vertical className="ai-chat-session-label">
-                    <Typography.Text className="ai-chat-session-title">
-                      {item.title}
-                    </Typography.Text>
-                    <Typography.Text
-                      type="secondary"
-                      className="ai-chat-session-time"
-                    >
-                      {item.updatedAt}
-                    </Typography.Text>
-                  </Flex>
-                ),
-              }))}
-              menu={(conversation) => ({
-                items: [
-                  {
-                    key: "delete",
-                    label: t("common.delete"),
-                    danger: true,
-                    icon: <DeleteOutlined />,
-                  },
-                ],
-                onClick: ({ key, domEvent }) => {
-                  domEvent.stopPropagation();
-                  if (key === "delete") {
-                    void handleDeleteConversation(String(conversation.key));
-                  }
-                },
-                trigger: (
-                  <Button
-                    type="text"
-                    size="small"
-                    className="ai-chat-session-more"
-                    icon={<MoreOutlined />}
-                    onClick={(event) => event.stopPropagation()}
-                  />
-                ),
-              })}
-            />
-          ) : (
-            <Typography.Text type="secondary">
-              {t("aiChat.historyEmpty")}
-            </Typography.Text>
-          )}
-        </Flex>
-      </Drawer>
 
       <Modal
         title={t("aiChat.config.title")}
