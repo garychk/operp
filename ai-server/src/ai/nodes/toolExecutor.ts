@@ -1,5 +1,5 @@
 import type { AiGraphState } from "../state.js";
-import { callChatModel } from "../../config/llm.js";
+import { callChatModelStream } from "../../config/llm.js";
 import { businessAnalysisTool, countMasterDataTool, createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
 import { searchKnowledgeRag } from "../../services/knowledgeBase.js";
 import {
@@ -8,6 +8,7 @@ import {
   PendingActionError,
 } from "../../services/pendingActions.js";
 import { TenantScopeError } from "../../config/tenantContext.js";
+import { emitDelta } from "../streamContext.js";
 
 const requireConfirmIdentity = (state: AiGraphState) => {
   if (typeof state.userId !== "number" || typeof state.tenantId !== "number") {
@@ -177,9 +178,11 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
       "请输出适合用户阅读的简洁答案，必要时给出条目式总结。",
     ].join("\n");
 
-    const { content } = await callChatModel(
+    // 真流式：知识库答案边生成边下发（emitDelta 在非流式请求下是 no-op）
+    const content = await callChatModelStream(
       [{ role: "system", content: knowledgePrompt }],
       state.provider,
+      emitDelta,
     );
     return {
       ...state,
@@ -226,7 +229,8 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
     "如果当前只是普通咨询，直接回答用户问题；不要编造工具执行结果。",
   ].join("\n");
 
-  const { content, raw } = await callChatModel(
+  // 真流式：兜底闲聊 / 咨询回复边生成边下发
+  const content = await callChatModelStream(
     [
       { role: "system", content: systemPrompt },
       ...state.recentMessages.map((item) => {
@@ -239,11 +243,12 @@ export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphStat
       { role: "user", content: state.text },
     ],
     state.provider,
+    emitDelta,
   );
 
   return {
     ...state,
-    toolResults: [{ step: "draft_reply", ok: true, output: (raw as Record<string, unknown>).choices ? "model_response" : "raw_response" }],
+    toolResults: [{ step: "draft_reply", ok: true, output: content ? "model_response" : "empty_response" }],
     reply: content || "模型未返回内容。",
   };
 }

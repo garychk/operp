@@ -10,8 +10,11 @@ import type { AiGraphState } from "../ai/state.js";
  * 列元数据来自 public.ai_entity_catalog()（deploy_39）；
  * 该 RPC 不存在时回退到 execute_ai_analysis() 读取 information_schema。
  *
- * 写保护策略集中在 evaluateWritePolicy()：AI 只能写入 erp_* 业务表，
- * 过账 / 核算 / MRP 生成的表与系统表一律只读，任何表都不提供删除能力。
+ * 写保护策略集中在 evaluateWritePolicy()（2026-10-04 放宽口径）：
+ *   默认全部表可写；只读白名单收窄为——
+ *   sys_users / sys_tenants / sys_roles / sys_user_roles / sys_logs / sys_mcp_api_keys
+ *   以及 sys_ai_* 前缀（AI 平台自身的会话 / 知识库数据）。
+ *   任何表仍不提供删除能力（evaluateDeletePolicy）。
  */
 
 export interface EntityColumn {
@@ -79,52 +82,6 @@ const serial = (prefix: string) => `${prefix}${Date.now().toString().slice(-8)}`
 
 /** 由系统自动维护、不允许 AI 直接写入的列 */
 const NON_INSERTABLE_COLUMNS = new Set(["id", "created_at", "updated_at"]);
-
-/** 只允许写 erp 模块的表 */
-const WRITABLE_MODULE = "erp";
-
-/** 由过账 / 核算 / MRP 运算生成的表：AI 只读 */
-const READ_ONLY_TABLES = new Set([
-  "erp_gl_entries",
-  "erp_voucher_details",
-  "erp_inventory",
-  "erp_inventory_transactions",
-  "erp_general_ledger_balances",
-  "erp_ar_ap_settlements",
-  "erp_cost_calculations",
-  "erp_depreciation_records",
-  "erp_receivables",
-  "erp_payables",
-  "erp_mrp_plans",
-  "erp_mrp_requirements",
-]);
-
-/** 系统 / 流程 / 日志表：AI 只读，绝不允许写入或删除 */
-const PROTECTED_PREFIXES = ["sys_", "wf_", "doc_flow_"];
-const PROTECTED_TABLES = new Set([
-  "sys_users",
-  "sys_roles",
-  "sys_user_roles",
-  "sys_role_menus",
-  "sys_menus",
-  "sys_logs",
-  "sys_config",
-  "sys_dict_types",
-  "sys_forms",
-  "sys_baq_queries",
-]);
-
-/**
- * 系统表里唯一允许 AI 写入的例外：数据字典项 sys_dict_items。
- *
- * 背景：系统里存在两套同名概念，例如「计量单位」既有系统字典
- * （sys_dict_types.code='uom' 下的 sys_dict_items），也有物料级业务表 erp_uoms。
- * 用户说「在字典里加一个 X」时要写字典项，说「加一个计量单位」时写 erp_uoms。
- *
- * 字典项属于业务枚举值维护，与 sys_users / sys_roles 等权限表性质不同，故放开写。
- * 但 sys_dict_types（字典类型）仍然只读——新增字典类型属于结构性变更，需人工确认。
- */
-const WRITABLE_SYS_EXCEPTIONS = new Set(["sys_dict_items"]);
 
 /** 去掉租户后缀：erp_uoms_s_539dcf81_b -> erp_uoms */
 const baseTableName = (table: string) => table.replace(/_s_[0-9a-f]{6,}_[a-z]$/i, "");
@@ -433,18 +390,34 @@ export interface WritePolicy {
   reason?: string;
 }
 
-export function evaluateWritePolicy(table: string, module?: string): WritePolicy {
+/**
+ * 权限 / 身份 / 审计类系统表：AI 只读。
+ *
+ * 这些表决定「谁能做什么」与「做过什么」，被篡改等于绕过整个权限体系：
+ *   sys_users / sys_user_roles / sys_roles —— 账号、角色、授权关系；
+ *   sys_tenants —— 租户本身；
+ *   sys_mcp_api_keys —— MCP 凭据；
+ *   sys_logs —— 审计日志（改日志 = 销毁痕迹）。
+ */
+const PROTECTED_TABLES = new Set([
+  "sys_users",
+  "sys_tenants",
+  "sys_logs",
+  "sys_roles",
+  "sys_user_roles",
+  "sys_mcp_api_keys",
+]);
+
+/** AI 平台自身的数据表（会话 / 记忆 / 知识库 / 待确认动作 / 审计）：只读 */
+const PROTECTED_PREFIXES = ["sys_ai_"];
+
+export function evaluateWritePolicy(table: string, _module?: string): WritePolicy {
   const base = baseTableName(table);
-  // 白名单例外优先：数据字典项允许写入（但仍禁止删除，见 evaluateDeletePolicy）
-  if (WRITABLE_SYS_EXCEPTIONS.has(base)) return { writable: true };
-  if (PROTECTED_TABLES.has(base) || PROTECTED_PREFIXES.some((prefix) => base.startsWith(prefix))) {
-    return { writable: false, reason: "系统 / 流程配置表，AI 禁止写入和删除，只能查询" };
+  if (PROTECTED_TABLES.has(base)) {
+    return { writable: false, reason: "系统权限 / 身份 / 审计表，AI 禁止写入，只能查询" };
   }
-  if (module && module !== WRITABLE_MODULE) {
-    return { writable: false, reason: "非 ERP 业务表，AI 只能查询" };
-  }
-  if (READ_ONLY_TABLES.has(base)) {
-    return { writable: false, reason: "该表由过账 / 核算逻辑自动生成，AI 只能查询，请通过对应单据操作" };
+  if (PROTECTED_PREFIXES.some((prefix) => base.startsWith(prefix))) {
+    return { writable: false, reason: "AI 平台自身数据表，AI 禁止写入，只能查询" };
   }
   return { writable: true };
 }
@@ -731,7 +704,7 @@ const DICT_TYPE_REQUEST = /(字典类型|字典分类|新增.{0,4}(字典)?类�
 
 const matchDictRequest = (tables: EntityTable[], text: string): EntityTable | null => {
   if (!DICT_REQUEST.test(text)) return null;
-  // 「字典类型」指 sys_dict_types（只读）；新增字典类型属于结构变更，不开放写入
+  // 「字典类型」指 sys_dict_types（结构性配置，现按用户口径放开写入，走确认回路）
   if (DICT_TYPE_REQUEST.test(text)) return findTableByBase(tables, "sys_dict_types");
   return findTableByBase(tables, "sys_dict_items");
 };

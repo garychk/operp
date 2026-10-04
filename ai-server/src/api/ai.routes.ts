@@ -9,6 +9,7 @@ import {
 } from "../services/aiProvider.js";
 import { TenantScopeError } from "../config/tenantContext.js";
 import { getIdentity, requireAuth } from "../services/authGuard.js";
+import { chatRateLimit, reindexRateLimit, heavyActionRateLimit } from "../services/rateLimit.js";
 
 export const aiRouter = Router();
 
@@ -17,10 +18,15 @@ export const aiRouter = Router();
  * 此前 chat 完全不验 JWT、身份取自请求体 user_id，等于对内网裸奔；
  * 现在身份链路 = Supabase JWT → sys_users.auth_id → resolveTenantContext，
  * 请求体里的 user_id/tenant_id 只做一致性/越权校验，不再作为身份来源。
+ *
+ * ⚠️ 限流（#8）：chat 是 LLM 成本入口，reindex 是批量 embedding 入口，
+ * confirm 是写库入口 —— 都按「用户」窗口限流，防止单租户刷爆模型配额。
+ * ⚠️ 顺序：必须先 requireAuth 再限流 —— 限流 key 取 identity.userId，
+ * 反过来的话匿名请求会污染 per-IP 桶，把真实用户一起限死（真实踩过）。
  */
-aiRouter.use("/chat", requireAuth);
-aiRouter.use("/knowledge", requireAuth);
-aiRouter.use("/confirm", requireAuth);
+aiRouter.use("/chat", requireAuth, chatRateLimit);
+aiRouter.use("/knowledge", requireAuth, reindexRateLimit);
+aiRouter.use("/confirm", requireAuth, heavyActionRateLimit);
 
 const chatSchema = z.object({
   session_id: z.string().min(1),
@@ -109,6 +115,10 @@ aiRouter.post("/chat", async (req, res) => {
       await runChatGraphStream(requestBody, async (event) => {
         if (event.type === "step") {
           send("step", event);
+          return;
+        }
+        if (event.type === "delta") {
+          send("delta", event);
           return;
         }
         send("final", event.result);

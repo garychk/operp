@@ -103,6 +103,7 @@ interface ConversationListItem {
 type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
 type AiChatStreamEvent =
   | { type: "step"; step: string; message: string; data?: unknown }
+  | { type: "delta"; text: string }
   | {
       type: "final";
       status?: "success" | "error" | "need_confirmation" | "needs_more";
@@ -1068,6 +1069,7 @@ export function AIChatPanel({
     window.setTimeout(scrollMessagesToBottom, 0);
 
     let traceItems: ThoughtChainItemType[] = [];
+    let streamedText = "";
     try {
       await saveChatMessage({
         id: userMessage.id,
@@ -1155,6 +1157,14 @@ export function AIChatPanel({
             content: "",
             status: "loading",
           });
+          window.setTimeout(scrollMessagesToBottom, 0);
+          return;
+        }
+
+        // 真流式：LLM 增量文本边收边渲染；final 事件会用完整 reply 覆盖校准
+        if (event.type === "delta") {
+          streamedText += event.text || "";
+          updateAssistant({ content: streamedText, status: "loading" });
           window.setTimeout(scrollMessagesToBottom, 0);
           return;
         }

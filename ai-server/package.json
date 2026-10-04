@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "mcp": "tsx src/mcp/server.ts",
-    "mcp:start": "node dist/mcp/server.js"
+    "mcp:start": "node dist/mcp/server.js",
+    "eval": "tsx eval/run_eval.ts"
   },
   "dependencies": {
     "@langchain/core": "^0.3.72",

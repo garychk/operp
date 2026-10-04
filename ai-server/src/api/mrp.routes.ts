@@ -24,11 +24,17 @@ import { loadCostRows, rollupProductionCost } from "../services/costRollupServic
 import { userHasRole } from "../services/roleGuard.js";
 import { extractErrorMessage } from "../services/errors.js";
 import { getIdentity, requireAuth } from "../services/authGuard.js";
+import { heavyActionRateLimit } from "../services/rateLimit.js";
 
 export const mrpRouter = Router();
 
 // 所有端点（含只读 /cost、/report）都要登录：租户上下文由中间件统一解析
 mrpRouter.use(requireAuth);
+
+// MRP 运算 / 转单 / 成本卷算是重操作（含 LLM 报告生成 / 批量建单），按用户限流
+mrpRouter.use("/run", heavyActionRateLimit);
+mrpRouter.use("/convert", heavyActionRateLimit);
+mrpRouter.use("/cost-rollup", heavyActionRateLimit);
 
 const MRP_RUN_ROLES = new Set(["super_admin", "tenant_admin", "mrp_manager"]);
 /** 成本卷算同样限制在计划角色内（成本表对 mrp_manager 只授了只读，写入由 service_role 完成） */

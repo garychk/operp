@@ -25,11 +25,16 @@ import {
 } from "../services/mpsService.js";
 import { userHasRole } from "../services/roleGuard.js";
 import { getIdentity, requireAuth } from "../services/authGuard.js";
+import { heavyActionRateLimit } from "../services/rateLimit.js";
 
 export const mpsRouter = Router();
 
 // 所有端点（含只读 overview / rccp）都要登录：租户上下文由中间件统一解析
 mpsRouter.use(requireAuth);
+
+// 确认 / 下推是重操作（批量建 MO），按用户限流
+mpsRouter.use("/confirm", heavyActionRateLimit);
+mpsRouter.use("/push", heavyActionRateLimit);
 
 const MPS_ROLES = new Set(["super_admin", "tenant_admin", "mrp_manager"]);
 

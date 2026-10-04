@@ -8,7 +8,9 @@ import type {
 import { callChatModel } from "../../config/llm.js";
 import { describeWritableObjects } from "../../tools/entityRegistry.js";
 
-const CREATE_WORDS = /(创建|新建|新增|生成|录入|保存|写入|建立)/i;
+// eval 教训：口语里「加一个 / 加个 / 建一张 / 添加」都是明确的创建意图，
+// 不加进去 ruleFallback 会把它们误判成 chat（真实 eval 失败用例，勿删）
+const CREATE_WORDS = /(创建|新建|新增|生成|录入|保存|写入|建立|建一张|建一张|建个|建一|添加|增加|加一个|加个)/i;
 const UPDATE_WORDS = /(修改|更新|编辑|调整|补充|修订|改一下|改成|变更|替换|优化)/i;
 const COUNT_WORDS = /(多少|几个|总数|数量|有几|有多少|一共|总共有|总计|合计)/i;
 const LIST_WORDS = /(哪些|列表|清单|明细|列出|展示|给我看)/i;
@@ -21,8 +23,18 @@ const ANALYSIS_WORDS = /(分析|统计|汇总|报表|经营|财务|采购|销售
 const MRP_WORDS = /(mrp|物料需求计划|产能|净需求)/i;
 
 const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }> = [
+  // 排序原则：越具体的单据 / 强信号越靠前，属性词（客户是xx、给供应商xx）在后。
+  // eval 教训：「建一张采购订单给供应商上海钢铁」若 customer/supplier 在前，
+  // 会被属性词抢走 target —— 单据词必须先判（真实 eval 失败用例，勿调回）。
   // 系统字典优先：与业务表（如 erp_uoms）同名概念共存，必须优先区分
   { target: "dictItem", pattern: /(数据字典|字典项|字典值|字典数据|字典)/i, domain: "system" },
+  { target: "salesOrder", pattern: /(销售订单|销售单)/i, domain: "sales" },
+  { target: "purchaseOrder", pattern: /(采购订单|采购单)/i, domain: "procurement" },
+  { target: "salesDelivery", pattern: /(销售出货|出货单)/i, domain: "sales" },
+  { target: "purchaseReceipt", pattern: /(采购入库|入库单)/i, domain: "procurement" },
+  { target: "productionOrder", pattern: /(生产订单|生产单|工单)/i, domain: "production" },
+  // mrp 强信号（缺料 / 净需求）优先于泛化的「物料」，否则「物料缺料预警」会命中 product
+  { target: "mrp", pattern: /(mrp|物料需求计划|净需求|缺料)/i, domain: "production" },
   { target: "customer", pattern: /(客户|客商)/i, domain: "master_data" },
   { target: "supplier", pattern: /(供应商)/i, domain: "master_data" },
   { target: "product", pattern: /(物料|产品|商品)/i, domain: "master_data" },
@@ -32,11 +44,6 @@ const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }
   { target: "operation", pattern: /(工序)/i, domain: "master_data" },
   { target: "bom", pattern: /(bom|物料清单)/i, domain: "engineering" },
   { target: "routing", pattern: /(工艺路线|路线)/i, domain: "engineering" },
-  { target: "purchaseOrder", pattern: /(采购订单|采购单)/i, domain: "procurement" },
-  { target: "purchaseReceipt", pattern: /(采购入库|入库单)/i, domain: "procurement" },
-  { target: "salesOrder", pattern: /(销售订单|销售单)/i, domain: "sales" },
-  { target: "salesDelivery", pattern: /(销售出货|出货单)/i, domain: "sales" },
-  { target: "productionOrder", pattern: /(生产订单|生产单|工单)/i, domain: "production" },
   { target: "uom", pattern: /(计量单位|单位|uom)/i, domain: "master_data" },
   { target: "bin", pattern: /(库位|货位)/i, domain: "inventory" },
   { target: "company", pattern: /(公司|组织)/i, domain: "master_data" },
@@ -51,7 +58,6 @@ const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }
   { target: "qualityInspection", pattern: /(质检|质量检验|检验单)/i, domain: "production" },
   { target: "finance", pattern: /(财务|应收|应付|凭证|利润|现金流|费用)/i, domain: "finance" },
   { target: "inventory", pattern: /(库存|存货|现存量)/i, domain: "inventory" },
-  { target: "mrp", pattern: /(mrp|物料需求计划|净需求|缺料)/i, domain: "production" },
   { target: "baq", pattern: /(baq|报表查询|查询设计)/i, domain: "baq" },
 ];
 
@@ -122,7 +128,8 @@ const detectResponseMode = (
   return "text";
 };
 
-const ruleFallback = (state: AiGraphState): RoutedIntent => {
+/** 规则兜底路由（确定性、不调 LLM）——eval 集也用它做回归测试 */
+export const ruleFallback = (state: AiGraphState): RoutedIntent => {
   const text = state.text.toLowerCase();
   const action = detectAction(text);
   const targetInfo = detectTarget(text, state.currentFocus);
