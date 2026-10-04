@@ -3,10 +3,13 @@ import type { AiChatRequest, AiChatResult, AiGraphState } from "./state.js";
 import { intentRouterNode } from "./nodes/intentRouter.js";
 import { contextLoaderNode } from "./nodes/contextLoader.js";
 import { plannerNode } from "./nodes/planner.js";
-import { toolExecutorNode } from "./nodes/toolExecutor.js";
+import { shouldContinuePlan, toolExecutorNode } from "./nodes/toolExecutor.js";
 import { memoryWriterNode } from "./nodes/memoryWriter.js";
 import { responseComposerNode } from "./nodes/responseComposer.js";
 import { streamContext } from "./streamContext.js";
+
+/** 多步计划的硬上限（防计划自激 / 死循环） */
+const MAX_PLAN_STEPS = 5;
 
 const State = Annotation.Root({
   sessionId: Annotation<string>,
@@ -30,8 +33,12 @@ const State = Annotation.Root({
   intent: Annotation<string | undefined>,
   domain: Annotation<string | undefined>,
   plan: Annotation<unknown | undefined>,
+  stepInput: Annotation<Record<string, unknown> | undefined>,
+  planCursor: Annotation<number | undefined>,
+  planOutputs: Annotation<Array<Record<string, unknown>> | undefined>,
   toolResults: Annotation<unknown[]>({
-    reducer: (_prev, next) => next ?? [],
+    // 多步计划：各步结果累积（responseComposer 取最后一条作为主回复）
+    reducer: (prev, next) => [...((prev as unknown[]) || []), ...((next as unknown[]) || [])],
     default: () => [],
   }),
   reply: Annotation<string | undefined>,
@@ -54,7 +61,12 @@ const graph = new StateGraph(State)
   .addEdge("contextLoader", "intentRouter")
   .addEdge("intentRouter", "planner")
   .addEdge("planner", "toolExecutor")
-  .addEdge("toolExecutor", "memoryWriter")
+  // 多步计划循环：还有下一步就回到 toolExecutor，否则进入收尾
+  .addConditionalEdges(
+    "toolExecutor",
+    (state) => (shouldContinuePlan(state as AiGraphState) ? "toolExecutor" : "memoryWriter"),
+    { toolExecutor: "toolExecutor", memoryWriter: "memoryWriter" },
+  )
   .addEdge("memoryWriter", "responseComposer")
   .addEdge("responseComposer", END);
 
@@ -75,6 +87,8 @@ const buildState = (input: AiChatRequest): AiGraphState => ({
   confidence: undefined,
   memory: undefined,
   recentMessages: input.context?.recent_messages ?? [],
+  planCursor: 0,
+  planOutputs: [],
 });
 
 export type StreamEvent =
@@ -154,20 +168,34 @@ export async function runChatGraphStream(
       },
     });
 
-    await onEvent({ type: "step", step: "toolExecutor", message: "正在执行工具..." });
-    state = await toolExecutorNode(state);
-    await onEvent({
-      type: "step",
-      step: "toolExecutor",
-      message: "工具执行完成",
-      data: {
-        toolResults: state.toolResults,
-        reply: state.reply,
-        sources: state.sources,
-        needConfirmation: state.needConfirmation,
-        nextQuestions: state.nextQuestions,
-      },
-    });
+    // 多步计划：逐步执行（写操作产出待确认草稿 / 某步失败 / 计划跑完即停）
+    let guard = 0;
+    while (guard < MAX_PLAN_STEPS) {
+      guard += 1;
+      const plan = Array.isArray(state.plan) ? state.plan : [];
+      const cursor = typeof state.planCursor === "number" ? state.planCursor : 0;
+      const current = plan[cursor] as { step?: string; tool?: string } | undefined;
+      await onEvent({
+        type: "step",
+        step: "toolExecutor",
+        message: current?.step ? `正在执行：${current.step}（${guard}）` : "正在执行工具...",
+        data: { step: current?.step, tool: current?.tool, index: cursor },
+      });
+      state = await toolExecutorNode(state);
+      await onEvent({
+        type: "step",
+        step: "toolExecutor",
+        message: "工具执行完成",
+        data: {
+          toolResults: state.toolResults,
+          reply: state.reply,
+          sources: state.sources,
+          needConfirmation: state.needConfirmation,
+          nextQuestions: state.nextQuestions,
+        },
+      });
+      if (!shouldContinuePlan(state)) break;
+    }
 
     await onEvent({ type: "step", step: "memoryWriter", message: "正在写入会话记忆..." });
     state = await memoryWriterNode(state);

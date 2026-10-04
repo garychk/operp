@@ -7,6 +7,11 @@ import type {
 } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
 import { describeWritableObjects } from "../../tools/entityRegistry.js";
+import { detectDocumentAction, detectDocumentType } from "../../services/documentService.js";
+
+/** 单据动作 / 单号的强信号（命中即按「单据操作」意图处理） */
+const DOC_ACTION_WORDS = /(过账|记账|入账|反过账|冲销|红冲|撤回审批|提交审批|送审|审批通过|审核通过|驳回|转单|下推|流转|转成)/i;
+const DOC_NO_PATTERN = /[A-Za-z]{2,4}\d{5,}/;
 
 // eval 教训：口语里「加一个 / 加个 / 建一张 / 添加」都是明确的创建意图，
 // 不加进去 ruleFallback 会把它们误判成 chat（真实 eval 失败用例，勿删）
@@ -120,12 +125,28 @@ const detectResponseMode = (
   queryMode: AiQueryMode,
 ): AiResponseMode => {
   if (intent === "create" || intent === "update") return "card";
+  if (intent === "document") return "card";
   if (intent === "baq") return "card";
   if (queryMode === "count") return "text";
   if (queryMode === "list" || queryMode === "compare") return "table";
   if (queryMode === "trend" || queryMode === "summary" || queryMode === "exception") return "card";
   if (target !== "general" && intent === "knowledge") return "table";
   return "text";
+};
+
+/** 单据意图判定：单据类型 + 动作/创建/查询信号，或单号 + 动作 */
+const detectDocumentIntent = (rawText: string, lowerText: string): boolean => {
+  const docType = detectDocumentType(rawText);
+  const docAction = detectDocumentAction(rawText);
+  const hasDocNo = DOC_NO_PATTERN.test(rawText);
+
+  // 有单号 + 动作词 → 单据操作（如「把 SO20260005 过账」）
+  if (docAction && (hasDocNo || DOC_ACTION_WORDS.test(rawText) && docType)) return true;
+  // 单据类型 + 创建/过账/审批/转单 → 单据
+  if (docType && (CREATE_WORDS.test(lowerText) || docAction)) return true;
+  // 单据类型 + 列表/明细查询 → 单据查询
+  if (docType && (LIST_WORDS.test(lowerText) || hasDocNo)) return true;
+  return false;
 };
 
 /** 规则兜底路由（确定性、不调 LLM）——eval 集也用它做回归测试 */
@@ -152,6 +173,10 @@ export const ruleFallback = (state: AiGraphState): RoutedIntent => {
   } else if (KNOWLEDGE_WORDS.test(text)) {
     intent = "knowledge";
     domain = targetInfo.domain === "general" ? "knowledge" : targetInfo.domain;
+  } else if (detectDocumentIntent(state.text, text)) {
+    // 单据优先于主数据：ERP 里「销售订单/采购订单/领料单」是单据，不是可直写的主数据
+    intent = "document";
+    domain = "document";
   } else if (action === "create") {
     intent = "create";
     domain = targetInfo.domain === "general" ? "master_data" : targetInfo.domain;
@@ -197,7 +222,8 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
   const prompt = [
     "你是 ERP 智能路由器，只能输出 JSON。",
     "你要判断：intent、target、queryMode、responseMode、action、domain、confidence。",
-    "intent 只能是：chat, knowledge, create, update, baq, analysis。",
+    "intent 只能是：chat, knowledge, create, update, baq, analysis, document。",
+    "document 指单据类操作：建单据（销售订单/采购订单/入库单/出货单/领料单/生产订单）、对单据过账/反过账/审批/转单，或查询某张单据的明细与状态。",
     "target 优先从下面的业务对象清单中选择，也可以用历史值：dictItem, customer, supplier, product, warehouse, department, workCenter, operation, bom, routing, purchaseOrder, purchaseReceipt, salesOrder, salesDelivery, productionOrder, uom, bin, company, employee, finance, inventory, mrp, baq, general。",
     "重要：dictItem 指系统字典项（sys_dict_items，挂在 sys_dict_types 类型下的枚举值）。用户说“在字典 XX 里加 / 加个字典项 / 字典值”时用 dictItem；说“加个计量单位、加个客户”这种业务数据时用对应业务 target。两者是不同的数据，不要混淆。",
     "queryMode 只能是：count, list, summary, detail, trend, compare, exception, definition, answer。",

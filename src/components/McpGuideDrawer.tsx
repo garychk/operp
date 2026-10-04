@@ -13,7 +13,8 @@ interface McpGuideDrawerProps {
 const { Title, Paragraph, Text, Link } = Typography;
 
 /**
- * 工具清单与后端 src/mcp/tools.ts 的注册项一一对应。
+ * 工具清单与后端 src/mcp/tools.ts（只读）+ src/mcp/documentTools.ts（单据写入）
+ * 两处注册项一一对应。
  *
  * 这里只保留「结构性事实」——工具名、参数名、类型、是否必填。
  * 说明性文字全部走 i18n，键为 mcpGuide.tool.<name>.title / .desc / .param.<paramName>。
@@ -22,16 +23,32 @@ const { Title, Paragraph, Text, Link } = Typography;
  * 把它们放进翻译文件等于给「前后端不一致」开了口子；而说明文字本来就该随语言变。
  * 后端增删工具后，同步本数组 + 两个语言文件里的对应键。
  */
+/**
+ * kind 决定右侧标签：
+ *   query  —— 纯查询，不改动任何数据
+ *   model  —— 依赖大模型（成本更高，可能受模型配置影响）
+ *   write  —— 只产草稿（落 sys_ai_pending_actions），业务表不动
+ *   commit —— 真正写业务库，必须用草稿编号二次提交
+ */
+type ToolKind = "query" | "model" | "write" | "commit";
+
 type ToolShape = {
   name: string;
-  needsModel: boolean;
+  kind: ToolKind;
   params: { name: string; type: string; required: boolean }[];
+};
+
+const TOOL_KIND_TAG: Record<ToolKind, { color: string; labelKey: string }> = {
+  query: { color: "green", labelKey: "mcpGuide.tools.queryTag" },
+  model: { color: "orange", labelKey: "mcpGuide.tools.modelTag" },
+  write: { color: "blue", labelKey: "mcpGuide.tools.writeTag" },
+  commit: { color: "red", labelKey: "mcpGuide.tools.commitTag" },
 };
 
 const MCP_TOOLS: ToolShape[] = [
   {
     name: "erp_list_entities",
-    needsModel: false,
+    kind: "query",
     params: [
       { name: "keyword", type: "string", required: false },
       { name: "module", type: "string", required: false },
@@ -41,22 +58,22 @@ const MCP_TOOLS: ToolShape[] = [
   },
   {
     name: "erp_describe_entity",
-    needsModel: false,
+    kind: "query",
     params: [{ name: "entity", type: "string", required: true }],
   },
   {
     name: "erp_count_records",
-    needsModel: false,
+    kind: "query",
     params: [{ name: "entity", type: "string", required: true }],
   },
   {
     name: "erp_finance_summary",
-    needsModel: false,
+    kind: "query",
     params: [],
   },
   {
     name: "erp_business_analysis",
-    needsModel: true,
+    kind: "model",
     params: [
       { name: "question", type: "string", required: true },
       { name: "target", type: "string", required: false },
@@ -65,11 +82,48 @@ const MCP_TOOLS: ToolShape[] = [
   },
   {
     name: "erp_search_knowledge",
-    needsModel: true,
+    kind: "model",
     params: [
       { name: "query", type: "string", required: true },
       { name: "limit", type: "number", required: false },
     ],
+  },
+  {
+    name: "erp_query_documents",
+    kind: "query",
+    params: [
+      { name: "document_no", type: "string", required: false },
+      { name: "document_type", type: "string", required: false },
+    ],
+  },
+  {
+    name: "erp_create_document",
+    kind: "write",
+    params: [
+      { name: "document_type", type: "string", required: true },
+      { name: "party_name", type: "string", required: false },
+      { name: "date", type: "string", required: false },
+      { name: "warehouse_name", type: "string", required: false },
+      { name: "remark", type: "string", required: false },
+      { name: "lines", type: "array", required: true },
+    ],
+  },
+  {
+    name: "erp_document_action",
+    kind: "write",
+    params: [
+      { name: "action", type: "enum", required: true },
+      { name: "document_no", type: "string", required: false },
+      { name: "document_id", type: "number", required: false },
+      { name: "document_type", type: "string", required: false },
+      { name: "comment", type: "string", required: false },
+      { name: "rule_code", type: "string", required: false },
+    ],
+  },
+  {
+    name: "erp_commit_document",
+    kind: "commit",
+    params: [{ name: "action_id", type: "number", required: true }],
   },
 ];
 
@@ -222,6 +276,8 @@ export function McpGuideDrawer({ open, onClose }: McpGuideDrawerProps) {
           <li>{t("mcpGuide.overview.can2")}</li>
           <li>{t("mcpGuide.overview.can3")}</li>
           <li>{t("mcpGuide.overview.can4")}</li>
+          <li>{t("mcpGuide.overview.can5")}</li>
+          <li>{t("mcpGuide.overview.can6")}</li>
         </ul>
       </div>
 
@@ -231,8 +287,16 @@ export function McpGuideDrawer({ open, onClose }: McpGuideDrawerProps) {
           <li>{t("mcpGuide.overview.cant1")}</li>
           <li>{t("mcpGuide.overview.cant2")}</li>
           <li>{t("mcpGuide.overview.cant3")}</li>
+          <li>{t("mcpGuide.overview.cant4")}</li>
         </ul>
       </div>
+
+      <Alert
+        type="warning"
+        showIcon
+        message={t("mcpGuide.overview.writeTitle")}
+        description={t("mcpGuide.overview.writeDesc")}
+      />
 
       <Alert
         type="info"
@@ -261,11 +325,9 @@ export function McpGuideDrawer({ open, onClose }: McpGuideDrawerProps) {
               <Text code copyable={{ text: tool.name }}>
                 {tool.name}
               </Text>
-              {tool.needsModel ? (
-                <Tag color="orange">{t("mcpGuide.tools.modelTag")}</Tag>
-              ) : (
-                <Tag color="green">{t("mcpGuide.tools.queryTag")}</Tag>
-              )}
+              <Tag color={TOOL_KIND_TAG[tool.kind].color}>
+                {t(TOOL_KIND_TAG[tool.kind].labelKey)}
+              </Tag>
             </Space>
             <Paragraph type="secondary" style={{ margin: "8px 0 12px" }}>
               {t(`mcpGuide.tool.${tool.name}.desc`)}

@@ -1,12 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { supabase } from "../config/supabase.js";
-import { TenantScopeError, type TenantContext } from "../config/tenantContext.js";
+import type { TenantContext } from "../config/tenantContext.js";
 import { searchKnowledgeRag } from "../services/knowledgeBase.js";
 import { businessAnalysisTool, financeSummaryTool, hasColumn, isTenantScopedTable } from "../tools/erpTools.js";
 import { buildEntityDef, evaluateWritePolicy, loadEntityCatalog } from "../tools/entityRegistry.js";
-import { McpAuthError } from "./auth.js";
 import { buildState, renderToolResult, resolveEntityByRef, resolveToolProvider } from "./adapters.js";
+import {
+  READ_ONLY_ANNOTATIONS,
+  runTool as runMcpTool,
+} from "./toolContract.js";
 
 /**
  * MCP 只读工具集。
@@ -16,25 +19,11 @@ import { buildState, renderToolResult, resolveEntityByRef, resolveToolProvider }
  *  - 不提供任何删除能力（沿用 evaluateDeletePolicy 的结论：AI 侧一律不给删除）。
  *  - 每个工具都标 readOnlyHint，让客户端可以做二次确认提示。
  *
+ * 写入能力不在这里 —— 单据的建单 / 过账等放在 documentTools.ts，
+ * 且一律走「草稿 → 提交」两段式，不提供一次调用直接落库的入口。
+ *
  * 业务实现全部复用 erpTools / entityRegistry，这里只负责把入参和结果在两种形状间转换。
  */
-
-const formatError = (error: unknown) => {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-};
-
-const ok = (text: string) => ({ content: [{ type: "text" as const, text }] });
-
-const fail = (text: string) => ({
-  content: [{ type: "text" as const, text }],
-  isError: true,
-});
 
 /**
  * 大模型相关的报错，光把原始信息抛回去基本没法排查。
@@ -68,25 +57,9 @@ const explainModelError = (message: string): string => {
   return matched ? matched.render(message) : `工具执行失败：${message}`;
 };
 
-/** 统一兜底：把异常转成 isError 结果，避免抛出去把 stdio 连接打挂。 */
-async function runTool(label: string, fn: () => Promise<string>) {
-  try {
-    return ok(await fn());
-  } catch (error) {
-    if (error instanceof TenantScopeError || error instanceof McpAuthError) {
-      return fail(`拒绝访问：${error.message}`);
-    }
-    console.error(`[mcp] 工具 ${label} 执行失败：`, error);
-    return fail(explainModelError(formatError(error)));
-  }
-}
-
-const READ_ONLY_ANNOTATIONS = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
+/** 只读工具的兜底：额外把「大模型/向量模型配置」类报错渲染成可执行的排查路径 */
+const runTool = (label: string, fn: () => Promise<string>) =>
+  runMcpTool(label, fn, explainModelError);
 
 export function registerReadOnlyTools(server: McpServer, identity: TenantContext): void {
   /* ---------------------------------------------------------------- *

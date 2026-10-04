@@ -6,6 +6,8 @@ export type AiIntent =
   | "update"
   | "baq"
   | "analysis"
+  /** 单据类操作：建单 / 过账 / 审批 / 转单 / 查询（第三批） */
+  | "document"
   /** 会话里有待确认草稿且用户回复了「确认」 */
   | "confirm_execute"
   /** 会话里有待确认草稿且用户回复了「取消」 */
@@ -88,7 +90,7 @@ export interface AiGraphState {
   recentMessages: unknown[];
   memory?: AiSessionMemory | null;
   /** 会话里最新一条待确认草稿（contextLoader 预取，「确认/取消」短路命中用） */
-  pendingAction?: { id: number; actionType: string; entityKey: string } | null;
+  pendingAction?: { id: number; actionType: string; entityKey: string; remainingPlan?: unknown[] } | null;
   intent?: AiIntent;
   action?: AiAction;
   domain?: string;
@@ -97,6 +99,14 @@ export interface AiGraphState {
   responseMode?: AiResponseMode;
   confidence?: number;
   plan?: unknown;
+  /** 当前步骤的输入（planner 产出，占位符已替换） */
+  stepInput?: Record<string, unknown>;
+  /** 多步计划执行游标：下一个要执行的步骤下标 */
+  planCursor?: number;
+  /** 当前步骤之后剩余的计划（写操作产草稿时冻结进 pending context，确认后续跑） */
+  planRemaining?: unknown[];
+  /** 各步骤产出（多步计划里后续步骤可用 $prev.xxx 引用上一步产出） */
+  planOutputs?: Array<Record<string, unknown>>;
   toolResults?: unknown[];
   sources?: unknown[];
   reply?: string;

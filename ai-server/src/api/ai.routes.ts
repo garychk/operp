@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { z } from "zod";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
+import { nextPendingActionId, runRemainingPlan } from "../ai/planRunner.js";
+import type { AiGraphState } from "../ai/state.js";
 import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
 import { executePendingAction, PendingActionError } from "../services/pendingActions.js";
 import {
@@ -218,6 +220,37 @@ aiRouter.post("/confirm", async (req, res) => {
   try {
     const identity = getIdentity(req);
     const result = await executePendingAction(parsed.data.pending_action_id, identity);
+
+    // 多步计划（第三批）：草稿上挂着剩余步骤时，在同一请求里继续跑。
+    // 续跑遇到下一个写操作会再产一份草稿 → 返回 need_confirmation + 新的 pending id。
+    if (Array.isArray(result.remainingPlan) && result.remainingPlan.length) {
+      const baseState: AiGraphState = {
+        sessionId: String(req.body?.session_id || "confirm"),
+        userId: identity.userId,
+        tenantId: identity.tenantId,
+        text: String(req.body?.text || ""),
+        skill: "auto",
+        provider: req.body?.provider as AiGraphState["provider"],
+        recentMessages: [],
+        toolResults: [],
+        planOutputs: [result.output || {}],
+      };
+      const continued = await runRemainingPlan(result.remainingPlan, baseState);
+      const nextId = nextPendingActionId(continued);
+      res.json({
+        ok: true,
+        status: "success",
+        reply: [result.reply, continued.reply].filter(Boolean).join("\n\n"),
+        focus: continued.focus || result.focus,
+        route: continued.route || result.route,
+        routeLabel: continued.routeLabel || result.routeLabel,
+        need_confirmation: Boolean(continued.needConfirmation),
+        next_pending_action_id: nextId ?? null,
+        tool_results: continued.toolResults,
+      });
+      return;
+    }
+
     res.json({ ok: true, status: "success", ...result });
   } catch (error) {
     if (error instanceof PendingActionError) {

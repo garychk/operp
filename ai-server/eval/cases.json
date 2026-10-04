@@ -1,48 +1,374 @@
 {
-  "description": "AI 链路简单 eval 集（#10）：ruleFallback 意图路由（确定性规则，不调 LLM、不连库）+ evaluateWritePolicy 写保护策略。新增能力时在这里补用例，npm run eval 回归。",
+  "description": "AI 链路简单 eval 集（#10）：ruleFallback 意图路由 + 单据解析（类型/动作）+ 多步计划 + evaluateWritePolicy 写保护策略。均为确定性逻辑，不调 LLM、不连库。新增能力时在这里补用例，npm run eval 回归。",
   "intent_cases": [
-    { "text": "新增一个客户，名称叫无锡宏征", "expect": { "intent": "create", "target": "customer" } },
-    { "text": "帮我新建供应商 华宏机械", "expect": { "intent": "create", "target": "supplier" } },
-    { "text": "修改客户 无锡宏征 的信用额度", "expect": { "intent": "update", "target": "customer" } },
-    { "text": "在字典里加一个字典项", "expect": { "intent": "create", "target": "dictItem" } },
-    { "text": "加个计量单位 平方米", "expect": { "intent": "create", "target": "uom" } },
-    { "text": "有多少个客户？", "expect": { "intent": "analysis", "target": "customer", "queryMode": "count" } },
-    { "text": "现在库存里有多少物料", "expect": { "intent": "analysis", "target": "product", "queryMode": "count" } },
-    { "text": "列出所有仓库", "expect": { "intent": "analysis", "target": "warehouse", "queryMode": "list" } },
-    { "text": "这个月销售额和上个月对比怎么样", "expect": { "intent": "analysis", "target": "general", "queryMode": "compare" } },
-    { "text": "最近的采购趋势如何", "expect": { "intent": "analysis", "queryMode": "trend" } },
-    { "text": "有哪些物料缺料预警", "expect": { "intent": "analysis", "target": "mrp", "queryMode": "exception" } },
-    { "text": "公司的报销制度是什么", "expect": { "intent": "knowledge" } },
-    { "text": "领料的流程怎么处理", "expect": { "intent": "knowledge", "target": "materialIssue" } },
-    { "text": "帮我设计一个 baq 报表查询", "expect": { "intent": "baq" } },
-    { "text": "建一张采购订单给供应商上海钢铁", "expect": { "intent": "create", "target": "purchaseOrder" } },
-    { "text": "新建销售订单 客户是宏征", "expect": { "intent": "create", "target": "salesOrder" } },
-    { "text": "建一张 BOM", "expect": { "intent": "create", "target": "bom" } },
-    { "text": "新增一个仓库 在无锡", "expect": { "intent": "create", "target": "warehouse" } },
-    { "text": "新增一个盘点单", "expect": { "intent": "create", "target": "stockCount" } },
-    { "text": "创建生产订单 MO", "expect": { "intent": "create", "target": "productionOrder" } },
-    { "text": "今天天气怎么样", "expect": { "intent": "chat" } },
-    { "text": "你好", "expect": { "intent": "chat" } },
-    { "text": "explain quantum computing", "expect": { "intent": "chat" } }
+    {
+      "text": "新增一个客户，名称叫无锡宏征",
+      "expect": {
+        "intent": "create",
+        "target": "customer"
+      }
+    },
+    {
+      "text": "帮我新建供应商 华宏机械",
+      "expect": {
+        "intent": "create",
+        "target": "supplier"
+      }
+    },
+    {
+      "text": "修改客户 无锡宏征 的信用额度",
+      "expect": {
+        "intent": "update",
+        "target": "customer"
+      }
+    },
+    {
+      "text": "在字典里加一个字典项",
+      "expect": {
+        "intent": "create",
+        "target": "dictItem"
+      }
+    },
+    {
+      "text": "加个计量单位 平方米",
+      "expect": {
+        "intent": "create",
+        "target": "uom"
+      }
+    },
+    {
+      "text": "有多少个客户？",
+      "expect": {
+        "intent": "analysis",
+        "target": "customer",
+        "queryMode": "count"
+      }
+    },
+    {
+      "text": "现在库存里有多少物料",
+      "expect": {
+        "intent": "analysis",
+        "target": "product",
+        "queryMode": "count"
+      }
+    },
+    {
+      "text": "列出所有仓库",
+      "expect": {
+        "intent": "analysis",
+        "target": "warehouse",
+        "queryMode": "list"
+      }
+    },
+    {
+      "text": "这个月销售额和上个月对比怎么样",
+      "expect": {
+        "intent": "analysis",
+        "target": "general",
+        "queryMode": "compare"
+      }
+    },
+    {
+      "text": "最近的采购趋势如何",
+      "expect": {
+        "intent": "analysis",
+        "queryMode": "trend"
+      }
+    },
+    {
+      "text": "有哪些物料缺料预警",
+      "expect": {
+        "intent": "analysis",
+        "target": "mrp",
+        "queryMode": "exception"
+      }
+    },
+    {
+      "text": "公司的报销制度是什么",
+      "expect": {
+        "intent": "knowledge"
+      }
+    },
+    {
+      "text": "领料的流程怎么处理",
+      "expect": {
+        "intent": "knowledge",
+        "target": "materialIssue"
+      }
+    },
+    {
+      "text": "帮我设计一个 baq 报表查询",
+      "expect": {
+        "intent": "baq"
+      }
+    },
+    {
+      "text": "建一张采购订单给供应商上海钢铁",
+      "expect": {
+        "intent": "document"
+      }
+    },
+    {
+      "text": "新建销售订单 客户是宏征",
+      "expect": {
+        "intent": "document"
+      }
+    },
+    {
+      "text": "建一张 BOM",
+      "expect": {
+        "intent": "create",
+        "target": "bom"
+      }
+    },
+    {
+      "text": "新增一个仓库 在无锡",
+      "expect": {
+        "intent": "create",
+        "target": "warehouse"
+      }
+    },
+    {
+      "text": "新增一个盘点单",
+      "expect": {
+        "intent": "create",
+        "target": "stockCount"
+      }
+    },
+    {
+      "text": "创建生产订单 MO",
+      "expect": {
+        "intent": "document"
+      }
+    },
+    {
+      "text": "今天天气怎么样",
+      "expect": {
+        "intent": "chat"
+      }
+    },
+    {
+      "text": "你好",
+      "expect": {
+        "intent": "chat"
+      }
+    },
+    {
+      "text": "explain quantum computing",
+      "expect": {
+        "intent": "chat"
+      }
+    },
+    {
+      "text": "新建一张销售订单给亚马逊公司",
+      "expect": {
+        "intent": "document"
+      }
+    },
+    {
+      "text": "把采购入库单 PR20260004 过账",
+      "expect": {
+        "intent": "document"
+      }
+    },
+    {
+      "text": "销售订单 SO20260005 提交审批",
+      "expect": {
+        "intent": "document"
+      }
+    },
+    {
+      "text": "看一下销售订单 SO20260005 的明细",
+      "expect": {
+        "intent": "document"
+      }
+    },
+    {
+      "text": "把销售订单 SO20260005 转成出货单然后过账",
+      "expect": {
+        "intent": "document"
+      }
+    }
   ],
   "policy_cases": [
-    { "table": "sys_users", "writable": false },
-    { "table": "sys_tenants", "writable": false },
-    { "table": "sys_logs", "writable": false },
-    { "table": "sys_roles", "writable": false },
-    { "table": "sys_user_roles", "writable": false },
-    { "table": "sys_mcp_api_keys", "writable": false },
-    { "table": "sys_ai_chat_memory", "writable": false },
-    { "table": "sys_ai_operation_logs", "writable": false },
-    { "table": "sys_ai_pending_actions", "writable": false },
-    { "table": "erp_customers", "writable": true },
-    { "table": "erp_customers_s_539dcf81_b", "writable": true },
-    { "table": "erp_gl_entries", "writable": true },
-    { "table": "erp_inventory", "writable": true },
-    { "table": "sys_dict_items", "writable": true },
-    { "table": "sys_menus", "writable": true },
-    { "table": "wf_process_definitions", "writable": true },
-    { "table": "doc_flow_rules", "writable": true }
+    {
+      "table": "sys_users",
+      "writable": false
+    },
+    {
+      "table": "sys_tenants",
+      "writable": false
+    },
+    {
+      "table": "sys_logs",
+      "writable": false
+    },
+    {
+      "table": "sys_roles",
+      "writable": false
+    },
+    {
+      "table": "sys_user_roles",
+      "writable": false
+    },
+    {
+      "table": "sys_mcp_api_keys",
+      "writable": false
+    },
+    {
+      "table": "sys_ai_chat_memory",
+      "writable": false
+    },
+    {
+      "table": "sys_ai_operation_logs",
+      "writable": false
+    },
+    {
+      "table": "sys_ai_pending_actions",
+      "writable": false
+    },
+    {
+      "table": "erp_customers",
+      "writable": true
+    },
+    {
+      "table": "erp_customers_s_539dcf81_b",
+      "writable": true
+    },
+    {
+      "table": "erp_gl_entries",
+      "writable": true
+    },
+    {
+      "table": "erp_inventory",
+      "writable": true
+    },
+    {
+      "table": "sys_dict_items",
+      "writable": true
+    },
+    {
+      "table": "sys_menus",
+      "writable": true
+    },
+    {
+      "table": "wf_process_definitions",
+      "writable": true
+    },
+    {
+      "table": "doc_flow_rules",
+      "writable": true
+    }
   ],
-  "delete_cases": [{ "any": true, "writable": false }]
+  "delete_cases": [
+    {
+      "any": true,
+      "writable": false
+    }
+  ],
+  "document_cases": [
+    {
+      "text": "新建一张销售订单给亚马逊公司",
+      "type": "sales_order",
+      "action": null
+    },
+    {
+      "text": "建一张采购订单给供应商 Intel",
+      "type": "purchase_order",
+      "action": null
+    },
+    {
+      "text": "做一个采购入库单",
+      "type": "purchase_receipt",
+      "action": null
+    },
+    {
+      "text": "生产入库单怎么过账",
+      "type": "production_receipt",
+      "action": "post"
+    },
+    {
+      "text": "把 PR20260004 过账",
+      "type": null,
+      "action": "post"
+    },
+    {
+      "text": "把 SO20260005 反过账",
+      "type": null,
+      "action": "reverse"
+    },
+    {
+      "text": "把采购订单 PO20260001 转成入库单",
+      "type": "purchase_order",
+      "action": "convert"
+    },
+    {
+      "text": "提交审批一下",
+      "type": null,
+      "action": "submit"
+    },
+    {
+      "text": "这张单子审批通过",
+      "type": null,
+      "action": "approve"
+    },
+    {
+      "text": "帮我驳回这张单",
+      "type": null,
+      "action": "reject"
+    },
+    {
+      "text": "库存调拨单过账",
+      "type": "inventory_transfer",
+      "action": "post"
+    },
+    {
+      "text": "领料单过账",
+      "type": "material_issue",
+      "action": "post"
+    }
+  ],
+  "plan_cases": [
+    {
+      "text": "新建一张销售订单给亚马逊公司，然后过账",
+      "tools": [
+        "document.create",
+        "document.action"
+      ],
+      "actions": [
+        "create",
+        "convert"
+      ]
+    },
+    {
+      "text": "建一张采购入库单，然后过账",
+      "tools": [
+        "document.create",
+        "document.action"
+      ],
+      "actions": [
+        "create",
+        "post"
+      ]
+    },
+    {
+      "text": "把采购订单 PO20260001 转成入库单然后过账",
+      "tools": [
+        "document.action",
+        "document.action"
+      ],
+      "actions": [
+        "convert",
+        "post"
+      ]
+    },
+    {
+      "text": "新建一张销售订单给亚马逊公司",
+      "tools": null
+    },
+    {
+      "text": "把销售订单 SO20260005 过账",
+      "tools": null
+    }
+  ]
 }

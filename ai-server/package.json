@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "mcp": "tsx src/mcp/server.ts",
     "mcp:start": "node dist/mcp/server.js",
-    "eval": "tsx eval/run_eval.ts"
+    "eval": "tsx eval/run_eval.ts",
+    "mcp:smoke": "tsx src/scripts/mcpSmoke.ts"
   },
   "dependencies": {
     "@langchain/core": "^0.3.72",

@@ -17,6 +17,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { ruleFallback } from "../src/ai/nodes/intentRouter.js";
+import { buildMultiStepPlan } from "../src/ai/nodes/planner.js";
+import { detectDocumentAction, detectDocumentType } from "../src/services/documentService.js";
 import { evaluateWritePolicy, evaluateDeletePolicy } from "../src/tools/entityRegistry.js";
 
 interface IntentCase {
@@ -27,11 +29,24 @@ interface PolicyCase {
   table: string;
   writable: boolean;
 }
+interface DocumentCase {
+  text: string;
+  type: string | null;
+  action: string | null;
+}
+interface PlanCase {
+  text: string;
+  tools: string[] | null;
+  /** 可选：断言每一步的 input.action（多步计划里第二步的动作语义） */
+  actions?: string[] | null;
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cases = JSON.parse(readFileSync(join(here, "cases.json"), "utf-8")) as {
   intent_cases: IntentCase[];
   policy_cases: PolicyCase[];
+  document_cases: DocumentCase[];
+  plan_cases: PlanCase[];
 };
 
 let pass = 0;
@@ -63,6 +78,55 @@ for (const item of cases.intent_cases) {
     fail += 1;
     const detail = bad.map(([name, got, want]) => `${name}: got=${got} want=${want}`).join("; ");
     failures.push(`[intent] "${item.text}" → ${detail}`);
+    console.log(`  FAIL  ${item.text} → ${detail}`);
+  }
+}
+
+console.log("\n== 单据解析（类型 / 动作）==");
+
+for (const item of cases.document_cases ?? []) {
+  const gotType = detectDocumentType(item.text);
+  const gotAction = detectDocumentAction(item.text);
+  const bad: string[] = [];
+  if (gotType !== item.type) bad.push(`type: got=${gotType} want=${item.type}`);
+  if (gotAction !== item.action) bad.push(`action: got=${gotAction} want=${item.action}`);
+  if (!bad.length) {
+    pass += 1;
+    console.log(`  PASS  ${item.text}`);
+  } else {
+    fail += 1;
+    failures.push(`[document] "${item.text}" → ${bad.join("; ")}`);
+    console.log(`  FAIL  ${item.text} → ${bad.join("; ")}`);
+  }
+}
+
+console.log("\n== 多步计划 buildMultiStepPlan ==");
+
+for (const item of cases.plan_cases ?? []) {
+  const plan = buildMultiStepPlan({
+    sessionId: "eval",
+    text: item.text,
+    skill: "auto",
+    recentMessages: [],
+  } as Parameters<typeof buildMultiStepPlan>[0]);
+  const gotTools = plan ? plan.map((step) => step.tool) : null;
+  const gotActions = plan
+    ? plan.map((step) => String((step.input as Record<string, unknown> | undefined)?.action ?? ""))
+    : null;
+  const same =
+    (gotTools === null && item.tools === null) ||
+    (Array.isArray(gotTools) && Array.isArray(item.tools) && gotTools.join(",") === item.tools.join(","));
+  const actionsSame =
+    item.actions === undefined ||
+    item.actions === null ||
+    (gotActions !== null && gotActions.join(",") === item.actions.join(","));
+  if (same && actionsSame) {
+    pass += 1;
+    console.log(`  PASS  ${item.text} → ${gotTools ? gotTools.join(" → ") : "单步"}${gotActions ? ` [${gotActions.map((a) => a || "-").join(", ")}]` : ""}`);
+  } else {
+    fail += 1;
+    const detail = `got=${gotTools ? gotTools.join(",") : "single"}${actionsSame ? "" : ` actions=${gotActions ? gotActions.join(",") : "n/a"} want=${item.actions?.join(",")}`}`;
+    failures.push(`[plan] "${item.text}" → ${detail}`);
     console.log(`  FAIL  ${item.text} → ${detail}`);
   }
 }
