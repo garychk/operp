@@ -440,11 +440,6 @@ export function SalesDeliveries() {
     setIsModalOpen(true);
   };
 
-  const handleViewDetails = (record: SalesDelivery) => {
-    setSelectedDelivery(record);
-    fetchDetails(record.id);
-  };
-
   const handleAddDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingDetail(null);
