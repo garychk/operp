@@ -12,17 +12,25 @@
  * 所以：**传 p_tenant_id 时必须传 resolveTenantContext 校验过的那个值**，
  * 不要直接透传请求体里的 tenant_id。
  *
+ * ⚠️ 鉴权（同 MRP/MPS 口径）：全部端点过 requireAuth —— 身份链路 Supabase JWT →
+ * sys_users.auth_id → 租户解析，body/query 明文 user_id 只做一致性校验（不符 403）。
+ * service_* RPC 的 p_user_id 一律传 JWT 解析出的 identity.userId。
+ *
  * ⚠️ 角色：财务动作只允许 super_admin / tenant_admin / finance_manager。
  */
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { supabase } from "../config/supabase.js";
-import { resolveTenantContext, TenantScopeError } from "../config/tenantContext.js";
+import { TenantScopeError } from "../config/tenantContext.js";
 import { userHasRole } from "../services/roleGuard.js";
 import { extractErrorMessage } from "../services/errors.js";
+import { getIdentity, requireAuth, type RequestIdentity } from "../services/authGuard.js";
 
 export const financeRouter = Router();
+
+// 所有端点（含只读查询）都要登录：租户上下文由中间件统一解析
+financeRouter.use(requireAuth);
 
 /** 财务动作白名单：与 deploy_71/deploy_74 的表权限基线保持一致 */
 const FINANCE_ROLES = new Set(["super_admin", "tenant_admin", "finance_manager"]);
@@ -30,8 +38,9 @@ const FINANCE_ROLES = new Set(["super_admin", "tenant_admin", "finance_manager"]
 const FX_REVALUATION_TABLE = "erp_fx_revaluation_s_539dcf81_b";
 const FX_OPEN_VIEW = "vw_erp_ar_ap_open";
 
+// user_id/tenant_id 仅为兼容旧客户端保留：requireAuth 已核过一致性，处理逻辑一律用 identity
 const baseQuerySchema = z.object({
-  user_id: z.coerce.number().int().positive(),
+  user_id: z.coerce.number().int().positive().optional(),
   tenant_id: z.coerce.number().int().positive().optional(),
 });
 
@@ -59,23 +68,21 @@ const runSettlementSchema = baseQuerySchema.extend({
   idempotency_key: z.string().uuid().optional(),
 });
 
-/** 解析租户 + 校验财务角色。校验不过时直接写响应并返回 null。 */
+/** 校验财务角色（身份来自 JWT）。校验不过时直接写响应并返回 -1。 */
 async function requireFinanceActor(
   res: import("express").Response,
-  userId: number,
-  tenantId?: number,
-): Promise<{ tenantId: number } | null> {
-  const context = await resolveTenantContext(userId, tenantId);
-  const allowed = await userHasRole(userId, FINANCE_ROLES);
+  identity: RequestIdentity,
+): Promise<number> {
+  const allowed = await userHasRole(identity.userId, FINANCE_ROLES);
   if (!allowed) {
     res.status(403).json({
       ok: false,
       error:
         "当前用户没有执行财务动作的角色（需要 super_admin / tenant_admin / finance_manager）。",
     });
-    return null;
+    return -1;
   }
-  return { tenantId: context.tenantId };
+  return identity.tenantId;
 }
 
 /** 把数据库抛出的错误码映射成合适的 HTTP 状态码 */
@@ -116,18 +123,17 @@ financeRouter.get("/fx-open", async (req, res) => {
     return;
   }
   try {
-    const { user_id, tenant_id } = parsed.data;
-    const actor = await requireFinanceActor(res, user_id, tenant_id);
-    if (!actor) return;
+    const actor = await requireFinanceActor(res, getIdentity(req));
+    if (actor < 0) return;
 
     const { data, error } = await supabase
       .from(FX_OPEN_VIEW)
       .select("*")
-      .eq("tenant_id", actor.tenantId)
+      .eq("tenant_id", actor)
       .order("due_date", { ascending: true });
 
     if (error) throw error;
-    res.json({ ok: true, tenant_id: actor.tenantId, rows: data ?? [] });
+    res.json({ ok: true, tenant_id: actor, rows: data ?? [] });
   } catch (err) {
     handleError(res, "fx open list", err);
   }
@@ -146,21 +152,21 @@ financeRouter.get("/fx-revaluation", async (req, res) => {
     return;
   }
   try {
-    const { user_id, tenant_id, period_id } = parsed.data;
-    const actor = await requireFinanceActor(res, user_id, tenant_id);
-    if (!actor) return;
+    const { period_id } = parsed.data;
+    const actor = await requireFinanceActor(res, getIdentity(req));
+    if (actor < 0) return;
 
     let query = supabase
       .from(FX_REVALUATION_TABLE)
       .select("*")
-      .eq("tenant_id", actor.tenantId)
+      .eq("tenant_id", actor)
       .eq("is_deleted", "n")
       .order("revaluation_date", { ascending: false });
     if (period_id !== undefined) query = query.eq("period_id", period_id);
 
     const { data, error } = await query;
     if (error) throw error;
-    res.json({ ok: true, tenant_id: actor.tenantId, rows: data ?? [] });
+    res.json({ ok: true, tenant_id: actor, rows: data ?? [] });
   } catch (err) {
     handleError(res, "fx revaluation list", err);
   }
@@ -176,15 +182,16 @@ financeRouter.post("/fx-revaluation/run", async (req, res) => {
     return;
   }
   try {
-    const { user_id, tenant_id, period_id, revaluation_date, currency } = parsed.data;
-    const actor = await requireFinanceActor(res, user_id, tenant_id);
-    if (!actor) return;
+    const { period_id, revaluation_date, currency } = parsed.data;
+    const identity = getIdentity(req);
+    const actor = await requireFinanceActor(res, identity);
+    if (actor < 0) return;
 
     const idempotencyKey = parsed.data.idempotency_key ?? randomUUID();
 
     const { data, error } = await supabase.rpc("service_run_fx_revaluation", {
-      p_user_id: user_id,
-      p_tenant_id: actor.tenantId,
+      p_user_id: identity.userId,
+      p_tenant_id: actor,
       p_period_id: period_id,
       p_revaluation_date: revaluation_date,
       p_idempotency_key: idempotencyKey,
@@ -208,15 +215,16 @@ financeRouter.post("/fx-revaluation/reverse", async (req, res) => {
     return;
   }
   try {
-    const { user_id, tenant_id, revaluation_id } = parsed.data;
-    const actor = await requireFinanceActor(res, user_id, tenant_id);
-    if (!actor) return;
+    const { revaluation_id } = parsed.data;
+    const identity = getIdentity(req);
+    const actor = await requireFinanceActor(res, identity);
+    if (actor < 0) return;
 
     const idempotencyKey = parsed.data.idempotency_key ?? randomUUID();
 
     const { data, error } = await supabase.rpc("service_reverse_fx_revaluation", {
-      p_user_id: user_id,
-      p_tenant_id: actor.tenantId,
+      p_user_id: identity.userId,
+      p_tenant_id: actor,
       p_revaluation_id: revaluation_id,
       p_idempotency_key: idempotencyKey,
     });
@@ -238,15 +246,16 @@ financeRouter.post("/settlement/run", async (req, res) => {
     return;
   }
   try {
-    const { user_id, tenant_id, settlement_type, source_id, period_id, amount } = parsed.data;
-    const actor = await requireFinanceActor(res, user_id, tenant_id);
-    if (!actor) return;
+    const { settlement_type, source_id, period_id, amount } = parsed.data;
+    const identity = getIdentity(req);
+    const actor = await requireFinanceActor(res, identity);
+    if (actor < 0) return;
 
     const idempotencyKey = parsed.data.idempotency_key ?? randomUUID();
 
     const { data, error } = await supabase.rpc("service_settle_ar_ap", {
-      p_user_id: user_id,
-      p_tenant_id: actor.tenantId,
+      p_user_id: identity.userId,
+      p_tenant_id: actor,
       p_settlement_type: settlement_type,
       p_source_id: source_id,
       p_period_id: period_id,
@@ -277,14 +286,14 @@ financeRouter.get("/periods", async (req, res) => {
     return;
   }
   try {
-    const { user_id, tenant_id, year } = parsed.data;
-    const actor = await requireFinanceActor(res, user_id, tenant_id);
-    if (!actor) return;
+    const { year } = parsed.data;
+    const actor = await requireFinanceActor(res, getIdentity(req));
+    if (actor < 0) return;
 
     let query = supabase
       .from("erp_accounting_periods_s_539dcf81_b")
       .select("id, year, month, start_date, end_date, is_enabled, is_locked, is_closed")
-      .eq("tenant_id", actor.tenantId)
+      .eq("tenant_id", actor)
       .eq("is_deleted", "n")
       .order("year", { ascending: false })
       .order("month", { ascending: false });
@@ -292,7 +301,7 @@ financeRouter.get("/periods", async (req, res) => {
 
     const { data, error } = await query;
     if (error) throw error;
-    res.json({ ok: true, tenant_id: actor.tenantId, rows: data ?? [] });
+    res.json({ ok: true, tenant_id: actor, rows: data ?? [] });
   } catch (err) {
     handleError(res, "periods list", err);
   }

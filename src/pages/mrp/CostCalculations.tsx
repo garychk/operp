@@ -16,7 +16,7 @@ import { CalculatorOutlined, ExperimentOutlined, ReloadOutlined } from "@ant-des
 import dayjs, { type Dayjs } from "dayjs";
 import { SuperTable } from "../../components/SuperTable";
 import { useAuth } from "../../contexts/AuthContext";
-import { resolveMrpApiBaseUrl } from "../../utils/aiServer";
+import { resolveMrpApiBaseUrl, aiServerAuthHeaders } from "../../utils/aiServer";
 import { formatMoney, useCurrencyRegistry } from "../../utils/money";
 
 interface CostRow {
@@ -82,7 +82,9 @@ export function CostCalculations() {
         year: String(year),
         month: String(month),
       });
-      const response = await fetch(`${resolveMrpApiBaseUrl()}/cost?${params.toString()}`);
+      const response = await fetch(`${resolveMrpApiBaseUrl()}/cost?${params.toString()}`, {
+        headers: await aiServerAuthHeaders(),
+      });
       const data = (await response.json()) as {
         ok: boolean;
         error?: string;
@@ -115,7 +117,10 @@ export function CostCalculations() {
 
       const response = await fetch(`${resolveMrpApiBaseUrl()}/cost-rollup`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(await aiServerAuthHeaders()),
+        },
         body: JSON.stringify({
           user_id: user.profile.id,
           tenant_id: user.tenantId,

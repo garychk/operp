@@ -11,7 +11,7 @@ import { formatMoney } from '../../utils/money';
 import dayjs from 'dayjs';
 import SimpleModal from '../../components/SimpleModal';
 import { useAuth } from '../../contexts/AuthContext';
-import { resolveMrpApiBaseUrl } from '../../utils/aiServer';
+import { resolveMrpApiBaseUrl, aiServerAuthHeaders } from '../../utils/aiServer';
 
 type MrpPlan = Tables['erp_mrp_plans_s_539dcf81_b']['Row'];
 
@@ -167,7 +167,10 @@ export function MrpPlans() {
         try {
           const response = await fetch(`${resolveMrpApiBaseUrl()}/run`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Content-Type': 'application/json',
+              ...(await aiServerAuthHeaders()),
+            },
             body: JSON.stringify({
               user_id: user.profile.id,
               tenant_id: user.tenantId,
@@ -209,6 +212,7 @@ export function MrpPlans() {
       });
       const response = await fetch(
         `${resolveMrpApiBaseUrl()}/report/${record.id}?${params.toString()}`,
+        { headers: await aiServerAuthHeaders() },
       );
       const data = (await response.json()) as { ok: boolean; error?: string; report?: string };
       if (!response.ok || !data.ok) {
@@ -238,7 +242,10 @@ export function MrpPlans() {
       setPreviewingPlanId(record.id);
       const response = await fetch(`${resolveMrpApiBaseUrl()}/convert`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await aiServerAuthHeaders()),
+        },
         body: JSON.stringify({
           user_id: user.profile.id,
           tenant_id: user.tenantId,
@@ -285,7 +292,10 @@ export function MrpPlans() {
       setConverting(true);
       const response = await fetch(`${resolveMrpApiBaseUrl()}/convert`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(await aiServerAuthHeaders()),
+        },
         body: JSON.stringify({
           user_id: user.profile.id,
           tenant_id: user.tenantId,

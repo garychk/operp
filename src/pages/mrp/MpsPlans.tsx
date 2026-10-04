@@ -56,7 +56,7 @@ import { SuperTable } from "../../components/SuperTable";
 import type { SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import { useAuth } from "../../contexts/AuthContext";
-import { resolveMpsApiBaseUrl } from "../../utils/aiServer";
+import { resolveMpsApiBaseUrl, aiServerAuthHeaders } from "../../utils/aiServer";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { logWithTiming } from "../../utils/logger";
 
@@ -389,6 +389,7 @@ export function MpsPlans() {
       });
       const response = await fetch(
         `${resolveMpsApiBaseUrl()}/overview?${params.toString()}`,
+        { headers: await aiServerAuthHeaders() },
       );
       const body = await response.json();
       if (!response.ok || !body.ok) {
@@ -590,7 +591,10 @@ export function MpsPlans() {
     if (!user) throw new Error(t("common.fetchFailed"));
     const response = await fetch(`${resolveMpsApiBaseUrl()}/${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(await aiServerAuthHeaders()),
+      },
       body: JSON.stringify({
         ...body,
         user_id: user.profile.id,
@@ -640,6 +644,7 @@ export function MpsPlans() {
       });
       const response = await fetch(
         `${resolveMpsApiBaseUrl()}/rccp?${params.toString()}`,
+        { headers: await aiServerAuthHeaders() },
       );
       const body = await response.json();
       if (!response.ok || !body.ok) {

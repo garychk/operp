@@ -1,10 +1,11 @@
 /**
  * MRP 运算 HTTP 路由。
  *
- * ⚠️ 这是 ai-server 里第一个「写业务数据」的端点，鉴权比 chat/知识库严格一档：
- * - 请求体明文 user_id/tenant_id 只用来「找到人」，权限必须在服务端查角色表核实，
- *   绝不信任请求方自称的角色。
- * - 允许角色：super_admin / tenant_admin / mrp_manager（白名单写在 MRP_RUN_ROLES）。
+ * ⚠️ 这是 ai-server 里第一个「写业务数据」的端点，鉴权最严格一档：
+ * - 全部端点过 requireAuth：身份链路 Supabase JWT → sys_users.auth_id → 租户解析，
+ *   body/query 明文 user_id 只做一致性校验（不符直接 403），绝不作为身份来源。
+ * - 允许角色：super_admin / tenant_admin / mrp_manager（白名单写在 MRP_RUN_ROLES），
+ *   角色核实一律用 JWT 解析出的 identity.userId 查 sys_user_roles。
  * - 租户互斥：同一租户同一时刻只允许一个 running 计划（mrpService.tryAcquirePlan）。
  *
  * 阶段 4 追加两个写端点：/convert（计划转单）、/cost-rollup（成本卷算）+ /cost（只读查询）。
@@ -12,7 +13,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import { supabase } from "../config/supabase.js";
-import { resolveTenantContext, TenantScopeError } from "../config/tenantContext.js";
 import { generateMrpReport } from "../services/mrpAdvisor.js";
 import { runMrpForPlan, saveAnalysisReport } from "../services/mrpService.js";
 import {
@@ -23,15 +23,20 @@ import {
 import { loadCostRows, rollupProductionCost } from "../services/costRollupService.js";
 import { userHasRole } from "../services/roleGuard.js";
 import { extractErrorMessage } from "../services/errors.js";
+import { getIdentity, requireAuth } from "../services/authGuard.js";
 
 export const mrpRouter = Router();
+
+// 所有端点（含只读 /cost、/report）都要登录：租户上下文由中间件统一解析
+mrpRouter.use(requireAuth);
 
 const MRP_RUN_ROLES = new Set(["super_admin", "tenant_admin", "mrp_manager"]);
 /** 成本卷算同样限制在计划角色内（成本表对 mrp_manager 只授了只读，写入由 service_role 完成） */
 const COST_ROLLUP_ROLES = MRP_RUN_ROLES;
 
+// user_id/tenant_id 仅为兼容旧客户端保留：requireAuth 已核过一致性，处理逻辑一律用 identity
 const runSchema = z.object({
-  user_id: z.coerce.number().int().positive(),
+  user_id: z.coerce.number().int().positive().optional(),
   tenant_id: z.coerce.number().int().positive().optional(),
   plan_id: z.coerce.number().int().positive(),
 });
@@ -42,7 +47,7 @@ const convertSchema = runSchema.extend({
 });
 
 const costSchema = z.object({
-  user_id: z.coerce.number().int().positive(),
+  user_id: z.coerce.number().int().positive().optional(),
   tenant_id: z.coerce.number().int().positive().optional(),
   year: z.coerce.number().int().min(1900).max(2999),
   month: z.coerce.number().int().min(1).max(12),
@@ -60,13 +65,11 @@ mrpRouter.post("/run", async (req, res) => {
   }
 
   try {
-    const { user_id, tenant_id, plan_id } = parsed.data;
+    const { plan_id } = parsed.data;
+    const identity = getIdentity(req);
 
-    // 1. 租户上下文（fail-closed：解析不出就 403）
-    const context = await resolveTenantContext(user_id, tenant_id);
-
-    // 2. 角色核实（与租户解析分离：有租户不代表能跑 MRP）
-    const allowed = await userHasRole(user_id, MRP_RUN_ROLES);
+    // 角色核实（与租户解析分离：有租户不代表能跑 MRP），身份一律用 JWT 解析值
+    const allowed = await userHasRole(identity.userId, MRP_RUN_ROLES);
     if (!allowed) {
       res.status(403).json({
         ok: false,
@@ -75,12 +78,12 @@ mrpRouter.post("/run", async (req, res) => {
       return;
     }
 
-    // 3. 运算（内部含计划状态锁：仅 draft/failed 可跑，running 互斥）
-    const { plan, result } = await runMrpForPlan(context.tenantId, plan_id);
+    // 运算（内部含计划状态锁：仅 draft/failed 可跑，running 互斥）
+    const { plan, result } = await runMrpForPlan(identity.tenantId, plan_id);
 
-    // 4. LLM 报告（generateMrpReport 内部捕获一切异常，失败回退确定性摘要，不影响运算结果）
+    // LLM 报告（generateMrpReport 内部捕获一切异常，失败回退确定性摘要，不影响运算结果）
     const reportOutcome = await generateMrpReport(plan, result);
-    await saveAnalysisReport(context.tenantId, plan_id, reportOutcome.report);
+    await saveAnalysisReport(identity.tenantId, plan_id, reportOutcome.report);
 
     res.json({
       ok: true,
@@ -94,10 +97,6 @@ mrpRouter.post("/run", async (req, res) => {
       report_error: reportOutcome.llmError ?? null,
     });
   } catch (err) {
-    if (err instanceof TenantScopeError) {
-      res.status(403).json({ ok: false, error: err.message });
-      return;
-    }
     const message = extractErrorMessage(err);
     // 计划状态不允许（并发/重复运行）属于请求冲突，不是服务端故障
     if (isConflict(message)) {
@@ -121,10 +120,10 @@ mrpRouter.post("/convert", async (req, res) => {
   }
 
   try {
-    const { user_id, tenant_id, plan_id, mode, filter } = parsed.data;
-    const context = await resolveTenantContext(user_id, tenant_id);
+    const { plan_id, mode, filter } = parsed.data;
+    const identity = getIdentity(req);
 
-    const allowed = await userHasRole(user_id, MRP_RUN_ROLES);
+    const allowed = await userHasRole(identity.userId, MRP_RUN_ROLES);
     if (!allowed) {
       res.status(403).json({
         ok: false,
@@ -135,7 +134,7 @@ mrpRouter.post("/convert", async (req, res) => {
 
     if (mode === "preview") {
       const preview = await buildConversionPreview(
-        context.tenantId,
+        identity.tenantId,
         plan_id,
         filter as ConversionFilter,
       );
@@ -152,9 +151,9 @@ mrpRouter.post("/convert", async (req, res) => {
     }
 
     const outcome = await convertPlanToDocuments(
-      context.tenantId,
+      identity.tenantId,
       plan_id,
-      user_id,
+      identity.userId,
       filter as ConversionFilter,
     );
     res.json({
@@ -169,10 +168,6 @@ mrpRouter.post("/convert", async (req, res) => {
       skipped: outcome.skipped,
     });
   } catch (err) {
-    if (err instanceof TenantScopeError) {
-      res.status(403).json({ ok: false, error: err.message });
-      return;
-    }
     const message = extractErrorMessage(err);
     if (isConflict(message)) {
       res.status(409).json({ ok: false, error: message });
@@ -192,10 +187,10 @@ mrpRouter.post("/cost-rollup", async (req, res) => {
   }
 
   try {
-    const { user_id, tenant_id, year, month, dry_run } = parsed.data;
-    const context = await resolveTenantContext(user_id, tenant_id);
+    const { year, month, dry_run } = parsed.data;
+    const identity = getIdentity(req);
 
-    const allowed = await userHasRole(user_id, COST_ROLLUP_ROLES);
+    const allowed = await userHasRole(identity.userId, COST_ROLLUP_ROLES);
     if (!allowed) {
       res.status(403).json({
         ok: false,
@@ -204,13 +199,9 @@ mrpRouter.post("/cost-rollup", async (req, res) => {
       return;
     }
 
-    const outcome = await rollupProductionCost(context.tenantId, year, month, { dryRun: dry_run });
+    const outcome = await rollupProductionCost(identity.tenantId, year, month, { dryRun: dry_run });
     res.json({ ok: true, ...outcome });
   } catch (err) {
-    if (err instanceof TenantScopeError) {
-      res.status(403).json({ ok: false, error: err.message });
-      return;
-    }
     console.error("[ai-server] cost rollup failed:", err);
     res.status(500).json({ ok: false, error: extractErrorMessage(err) });
   }
@@ -218,54 +209,39 @@ mrpRouter.post("/cost-rollup", async (req, res) => {
 
 /** 读取已保存的成本行（成本页列表，只读） */
 mrpRouter.get("/cost", async (req, res) => {
-  const userId = Number(req.query.user_id);
-  const tenantId = req.query.tenant_id === undefined ? undefined : Number(req.query.tenant_id);
   const year = Number(req.query.year);
   const month = Number(req.query.month);
 
-  if (
-    !Number.isInteger(userId) ||
-    userId <= 0 ||
-    !Number.isInteger(year) ||
-    !Number.isInteger(month) ||
-    month < 1 ||
-    month > 12
-  ) {
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
     res.status(400).json({ ok: false, error: "Invalid request" });
     return;
   }
 
   try {
-    const context = await resolveTenantContext(userId, tenantId);
-    const { periodId, rows } = await loadCostRows(context.tenantId, year, month);
+    const identity = getIdentity(req);
+    const { periodId, rows } = await loadCostRows(identity.tenantId, year, month);
     res.json({ ok: true, year, month, period_id: periodId, rows });
   } catch (err) {
-    if (err instanceof TenantScopeError) {
-      res.status(403).json({ ok: false, error: err.message });
-      return;
-    }
     res.status(500).json({ ok: false, error: extractErrorMessage(err) });
   }
 });
 
 /** 读取已保存的分析报告（计划详情页展示用） */
 mrpRouter.get("/report/:planId", async (req, res) => {
-  const userId = Number(req.query.user_id);
-  const tenantId = req.query.tenant_id === undefined ? undefined : Number(req.query.tenant_id);
   const planId = Number(req.params.planId);
 
-  if (!Number.isInteger(planId) || planId <= 0 || !Number.isInteger(userId)) {
+  if (!Number.isInteger(planId) || planId <= 0) {
     res.status(400).json({ ok: false, error: "Invalid request" });
     return;
   }
 
   try {
-    const context = await resolveTenantContext(userId, tenantId);
+    const identity = getIdentity(req);
     const { data, error } = await supabase
       .from("erp_mrp_plans_s_539dcf81_b")
       .select("analysis_report, plan_no")
       .eq("id", planId)
-      .eq("tenant_id", context.tenantId)
+      .eq("tenant_id", identity.tenantId)
       .eq("is_deleted", "n")
       .maybeSingle();
 
@@ -276,10 +252,6 @@ mrpRouter.get("/report/:planId", async (req, res) => {
     }
     res.json({ ok: true, plan_no: data.plan_no, report: data.analysis_report });
   } catch (err) {
-    if (err instanceof TenantScopeError) {
-      res.status(403).json({ ok: false, error: err.message });
-      return;
-    }
     res.status(500).json({ ok: false, error: extractErrorMessage(err) });
   }
 });

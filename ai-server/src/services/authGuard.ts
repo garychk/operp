@@ -44,6 +44,15 @@ const extractBearerToken = (req: Request): string => {
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 };
 
+/** 宽松数字解析：query 里全是字符串，body 里可能是 number，统一收敛成 number | undefined */
+const parseNumericParam = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) {
+    return Number(value);
+  }
+  return undefined;
+};
+
 /** 完整解析一次请求身份。任何一环失败都抛 AuthError / TenantScopeError。 */
 export async function resolveRequestIdentity(req: Request): Promise<RequestIdentity> {
   const token = extractBearerToken(req);
@@ -66,16 +75,20 @@ export async function resolveRequestIdentity(req: Request): Promise<RequestIdent
     throw new AuthError(403, "登录账号未绑定系统用户（sys_users.auth_id 缺失映射），已拒绝访问。");
   }
 
-  const bodyUserId = typeof req.body?.user_id === "number" ? req.body.user_id : undefined;
-  if (bodyUserId !== undefined && Number(bodyUserId) !== Number(sysUser.id)) {
+  // body 与 query 都要过一致性校验：POST 路由带 body.user_id，
+  // GET 路由（mrp/mps/finance 的只读端点）带 query.user_id，都是明文不可信。
+  const claimedUserId =
+    parseNumericParam(req.body?.user_id) ?? parseNumericParam(req.query?.user_id);
+  if (claimedUserId !== undefined && Number(claimedUserId) !== Number(sysUser.id)) {
     throw new AuthError(
       403,
-      "请求体 user_id 与登录身份不一致，已拒绝本次请求（身份以 JWT 为准）。",
+      "请求里的 user_id 与登录身份不一致，已拒绝本次请求（身份以 JWT 为准）。",
     );
   }
 
-  const bodyTenantId = typeof req.body?.tenant_id === "number" ? req.body.tenant_id : undefined;
-  const context = await resolveTenantContext(Number(sysUser.id), bodyTenantId);
+  const claimedTenantId =
+    parseNumericParam(req.body?.tenant_id) ?? parseNumericParam(req.query?.tenant_id);
+  const context = await resolveTenantContext(Number(sysUser.id), claimedTenantId);
 
   return {
     authId: data.user.id,
