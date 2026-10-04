@@ -408,3 +408,230 @@ html[data-erp-dark='true'] .mps-stat {
 html[data-erp-dark='true'] .mps-stat__value--muted {
   color: rgba(226, 232, 240, 0.38);
 }
+
+/* ---------------- 首页经营驾驶舱（Dashboard） ----------------
+   页面根卡片不自己定高（布局统一给 .page-viewport 撑高、滚动），
+   所以这里只负责「卡片内部的排布与观感」，不涉及任何 viewport 高度。 */
+.cockpit {
+  padding: 2px 2px 2px;
+}
+
+/* 顶部横幅：与登录页/工作台同一套极光语言，静态摆放 */
+.cockpit-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 22px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(135deg, #eef4ff 0%, #f4f0ff 46%, #ecfdf5 100%);
+}
+
+.cockpit-hero__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(58px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.cockpit-hero__blob--sky {
+  top: -140px;
+  left: -30px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle at 50% 50%, #7dd3fc 0%, rgba(125, 211, 252, 0) 70%);
+}
+
+.cockpit-hero__blob--violet {
+  top: -150px;
+  right: 8%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle at 50% 50%, #c4b5fd 0%, rgba(196, 181, 253, 0) 70%);
+}
+
+.cockpit-hero__blob--mint {
+  bottom: -180px;
+  left: 34%;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle at 50% 50%, #a7f3d0 0%, rgba(167, 243, 208, 0) 70%);
+}
+
+.cockpit-hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+.cockpit-hero__title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.cockpit-hero__meta {
+  margin-top: 6px;
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.cockpit-hero__chips {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 指标卡：半透明玻璃，压在极光/底色上不遮内容 */
+.cockpit-kpi {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  padding: 14px 16px 14px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.78);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cockpit-kpi--clickable {
+  cursor: pointer;
+}
+
+.cockpit-kpi--clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.09);
+}
+
+/* 左侧色条：区分指标语义，不用额外的卡片标题 */
+.cockpit-kpi__accent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 12px 0 0 12px;
+}
+
+.cockpit-kpi__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cockpit-kpi__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  font-size: 15px;
+}
+
+.cockpit-kpi__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cockpit-kpi__value {
+  margin-top: 10px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: rgba(15, 23, 42, 0.92);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 窄屏时指标卡只剩半行宽，金额位数多，字号收一档避免被裁 */
+@media (max-width: 1200px) {
+  .cockpit-kpi__value {
+    font-size: 19px;
+  }
+}
+
+.cockpit-kpi__foot {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 图表卡：标题给足呼吸，图表本身自带留白 */
+.cockpit-chart {
+  height: 100%;
+}
+
+/* 全局 .ant-card-body 带 height:100% + overflow:hidden（本意只服务首页整页对话卡），
+   对驾驶舱这种「高度随内容」的卡片只会把图表底部裁掉，这里按类收回成自适应。 */
+.cockpit-hero > .ant-card-body,
+.cockpit-chart > .ant-card-body {
+  height: auto;
+  overflow: visible;
+}
+
+.cockpit-chart__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.cockpit-chart__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.88);
+}
+
+.cockpit-chart__hint {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.4);
+}
+
+.cockpit-chart__body {
+  padding: 4px 8px 12px;
+}
+
+.cockpit-chart__empty {
+  padding: 48px 16px;
+}
+
+html[data-erp-dark='true'] .cockpit-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 46%, #1e1b4b 100%);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+html[data-erp-dark='true'] .cockpit-hero__blob {
+  opacity: 0.28;
+}
+
+html[data-erp-dark='true'] .cockpit-hero__title,
+html[data-erp-dark='true'] .cockpit-kpi__value,
+html[data-erp-dark='true'] .cockpit-chart__title {
+  color: rgba(226, 232, 240, 0.92);
+}
+
+html[data-erp-dark='true'] .cockpit-hero__meta,
+html[data-erp-dark='true'] .cockpit-kpi__label,
+html[data-erp-dark='true'] .cockpit-chart__hint {
+  color: rgba(226, 232, 240, 0.58);
+}
+
+html[data-erp-dark='true'] .cockpit-kpi__foot {
+  color: rgba(226, 232, 240, 0.42);
+}
+
+html[data-erp-dark='true'] .cockpit-kpi {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(148, 163, 184, 0.24);
+}
