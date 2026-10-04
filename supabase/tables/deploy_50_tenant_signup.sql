@@ -55,36 +55,65 @@ END $$;
 
 
 -- ============================================================================
--- 2. 给 tenant_admin 授权菜单
+-- 2. 给 super_admin 补齐全量基线授权，再以它为模板授权 tenant_admin
 --
---    模板取 finance_manager：实测它已覆盖 38 条业务菜单，且 /system/* 下除
---    「/system（父节点）」和「/system/tenants」外全部覆盖，正合需求。
---    补父节点是为了侧边栏能展开「系统管理」分组；排除 /system/tenants 是刻意的 ——
---    租户管理员不该看到租户列表，更不能建租户。
+--    为什么模板是 super_admin 而不是 finance_manager：
+--    早期版本的库经过手工配置，finance_manager 恰好有 38 条菜单 / 89 条表权限，
+--    当时以此为模板。但在全新 reset 的库里，业务菜单与业务表权限「只插了
+--    sys_menus / sys_tables 元数据、从未授权给任何角色」，finance_manager 是
+--    空的 —— 复制出来 tenant_admin 只有 /system 父节点，租户管理员登录后
+--    「系统管理下没有子菜单」，业务表也全部 fail-closed。
+--    所以这里先幂等地把 super_admin 补到全量（超管本就该有全部授权），再复制。
 --
---    用 NOT EXISTS 去重而不是 ON CONFLICT：deploy_48 把部分唯一键改成了部分索引，
---    ON CONFLICT 在多个部分索引上无法推断 arbiter，会直接报错。
+--    授权 tenant_admin 时仍排除 /system/tenants：租户管理员不能看租户列表。
 -- ============================================================================
 
+-- 2.0) super_admin 补齐全部基线菜单授权（幂等）
+INSERT INTO public.sys_role_menus (role_id, menu_id, is_deleted, tenant_id)
+SELECT r.id, m.id, 'n', NULL
+FROM public.sys_roles r
+JOIN public.sys_menus m ON COALESCE(m.is_deleted, 'n') = 'n' AND m.tenant_id IS NULL
+WHERE r.role_code = 'super_admin'
+  AND r.tenant_id IS NULL
+  AND COALESCE(r.is_deleted, 'n') = 'n'
+  AND NOT EXISTS (
+      SELECT 1 FROM public.sys_role_menus dup
+      WHERE dup.role_id = r.id AND dup.menu_id = m.id
+  );
+
+-- 2.0b) super_admin 补齐全部基线表权限（全权限，幂等）
+INSERT INTO public.sys_role_table_permissions
+    (role_id, table_id, can_select, can_insert, can_update, can_delete, is_deleted, tenant_id)
+SELECT r.id, t.id, TRUE, TRUE, TRUE, TRUE, 'n', NULL
+FROM public.sys_roles r
+JOIN public.sys_tables t ON COALESCE(t.is_deleted, 'n') = 'n'
+WHERE r.role_code = 'super_admin'
+  AND r.tenant_id IS NULL
+  AND COALESCE(r.is_deleted, 'n') = 'n'
+  AND NOT EXISTS (
+      SELECT 1 FROM public.sys_role_table_permissions dup
+      WHERE dup.role_id = r.id AND dup.table_id = t.id
+  );
+
+-- 2a) 复制 super_admin 的菜单给 tenant_admin，排除租户管理
 DO $$
 DECLARE
     v_role_id     INTEGER;
     v_src_role_id INTEGER;
     v_count       INTEGER;
 BEGIN
-    SELECT id INTO v_role_id FROM public.sys_roles WHERE role_code = 'tenant_admin' LIMIT 1;
-    SELECT id INTO v_src_role_id FROM public.sys_roles WHERE role_code = 'finance_manager' LIMIT 1;
+    SELECT id INTO v_role_id FROM public.sys_roles WHERE role_code = 'tenant_admin' AND tenant_id IS NULL LIMIT 1;
+    SELECT id INTO v_src_role_id FROM public.sys_roles WHERE role_code = 'super_admin' AND tenant_id IS NULL LIMIT 1;
 
     IF v_role_id IS NULL THEN
         RAISE EXCEPTION 'tenant_admin 角色不存在，无法授权菜单';
     END IF;
 
     IF v_src_role_id IS NULL THEN
-        RAISE WARNING '未找到 finance_manager 角色，跳过菜单授权（tenant_admin 将无任何菜单）';
+        RAISE WARNING '未找到 super_admin 角色，跳过菜单授权（tenant_admin 将无任何菜单）';
         RETURN;
     END IF;
 
-    -- 2a) 复制模板角色的菜单，排除租户管理
     INSERT INTO public.sys_role_menus (role_id, menu_id, is_deleted, tenant_id)
     SELECT v_role_id, src.menu_id, 'n', NULL
     FROM public.sys_role_menus src
@@ -122,12 +151,11 @@ END $$;
 
 
 -- ============================================================================
--- 3. 给 tenant_admin 授权表权限
+-- 3. 给 tenant_admin 授权表权限（模板：super_admin 全量，见步骤 2 的说明）
 --
 --    菜单只决定「看得到入口」，真正能读写要靠 sys_role_table_permissions
 --    （has_table_permission() 会查它）。缺了这块，用户管理页打开就是空白或报错。
---    同样以 finance_manager 的 89 条为底，再把系统管理相关的几张表提到全权限 ——
---    模板里 sys_roles 只有 select、sys_menus 没有 update，管理员改不了角色和菜单。
+--    3b/3c 把系统管理相关的几张表再显式提升到全权限，双保险。
 -- ============================================================================
 
 DO $$
@@ -136,19 +164,19 @@ DECLARE
     v_src_role_id INTEGER;
     v_count       INTEGER;
 BEGIN
-    SELECT id INTO v_role_id FROM public.sys_roles WHERE role_code = 'tenant_admin' LIMIT 1;
-    SELECT id INTO v_src_role_id FROM public.sys_roles WHERE role_code = 'finance_manager' LIMIT 1;
+    SELECT id INTO v_role_id FROM public.sys_roles WHERE role_code = 'tenant_admin' AND tenant_id IS NULL LIMIT 1;
+    SELECT id INTO v_src_role_id FROM public.sys_roles WHERE role_code = 'super_admin' AND tenant_id IS NULL LIMIT 1;
 
     IF v_role_id IS NULL THEN
         RAISE EXCEPTION 'tenant_admin 角色不存在，无法授权表权限';
     END IF;
 
     IF v_src_role_id IS NULL THEN
-        RAISE WARNING '未找到 finance_manager 角色，跳过表权限复制';
+        RAISE WARNING '未找到 super_admin 角色，跳过表权限复制';
         RETURN;
     END IF;
 
-    -- 3a) 复制模板角色的全部表权限
+    -- 3a) 复制 super_admin 的全部表权限（2.0b 已保证其全量）
     INSERT INTO public.sys_role_table_permissions
         (role_id, table_id, can_select, can_insert, can_update, can_delete, is_deleted, tenant_id)
     SELECT v_role_id, src.table_id, src.can_select, src.can_insert,
@@ -276,7 +304,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_sys_users_username_tenant
 --       b) 该 auth_id 若已绑定 sys_users 且 tenant_id 非空 -> 拒绝，一个 auth 账号
 --          只能开一个租户。这是防刷底线：想开第二个租户必须再注册一个 auth 账号
 --          （受 GoTrue 的邮箱唯一性约束），不能靠反复调 RPC 刷库。
---          若已绑定但 tenant_id 为空 -> 放行并改为更新该行（见下方「竞态兜底」）
+--          若已绑定但 tenant_id 为空 -> 放行并改为更新该行（见下方「竞态兜底」）。
+--          若未绑定但 INSERT 时撞 auth_id 唯一键（loadAppUser 恰在检查与插入之间
+--          抢先建档）-> 捕获 unique_violation 后同样收编该行，见 INSERT 的异常分支。
 --       c) 租户编码格式白名单 + 占用检查
 --       d) 管理员邮箱只从 JWT 取，不接受入参 —— 否则可以拿别人的邮箱建管理员
 --
@@ -384,16 +414,48 @@ BEGIN
 
         RAISE NOTICE '复用已存在的空租户档案 sys_users.id=% 收编进新租户 %', v_user_id, v_tenant_id;
     ELSE
-        INSERT INTO public.sys_users
-            (auth_id, tenant_id, username, real_name, email, phone,
-             password_hash, status, is_deleted)
-        VALUES
-            (v_auth_id, v_tenant_id, v_username,
-             NULLIF(btrim(COALESCE(p_admin_real_name, '')), ''),
-             v_email,
-             NULLIF(btrim(COALESCE(p_admin_phone, '')), ''),
-             '$supabase_auth$', '1', 'n')
-        RETURNING id INTO v_user_id;
+        -- TOCTOU 竞态兜底：上方的「是否已绑定」检查与下面的 INSERT 之间存在窗口，
+        -- 注册后 onAuthStateChange 触发的 loadAppUser() 可能恰好在窗口内抢先插入
+        -- 一条 tenant_id 为空的档案（auth_id 相同），INSERT 会撞 sys_users_auth_id_key。
+        -- 撞上时不报错，重新找到那条抢先插入的行，走收编更新。
+        BEGIN
+            INSERT INTO public.sys_users
+                (auth_id, tenant_id, username, real_name, email, phone,
+                 password_hash, status, is_deleted)
+            VALUES
+                (v_auth_id, v_tenant_id, v_username,
+                 NULLIF(btrim(COALESCE(p_admin_real_name, '')), ''),
+                 v_email,
+                 NULLIF(btrim(COALESCE(p_admin_phone, '')), ''),
+                 '$supabase_auth$', '1', 'n')
+            RETURNING id INTO v_user_id;
+        EXCEPTION
+            WHEN unique_violation THEN
+                SELECT id, tenant_id INTO v_bound_id, v_bound_tid
+                FROM public.sys_users
+                WHERE auth_id = v_auth_id
+                LIMIT 1;
+
+                IF v_bound_id IS NULL OR v_bound_tid IS NOT NULL THEN
+                    -- 冲突的不是 loadAppUser 抢先建档，而是别的问题：原样抛出
+                    RAISE;
+                END IF;
+
+                UPDATE public.sys_users
+                SET tenant_id    = v_tenant_id,
+                    username     = v_username,
+                    real_name    = COALESCE(NULLIF(btrim(COALESCE(p_admin_real_name, '')), ''), real_name),
+                    phone        = COALESCE(NULLIF(btrim(COALESCE(p_admin_phone, '')), ''), phone),
+                    email        = v_email,
+                    password_hash = '$supabase_auth$',
+                    status       = '1',
+                    is_deleted   = 'n',
+                    updated_at   = NOW()
+                WHERE id = v_bound_id
+                RETURNING id INTO v_user_id;
+
+                RAISE NOTICE 'INSERT 撞 auth_id 唯一键（loadAppUser 竞态），已收编 sys_users.id=% 进新租户 %', v_user_id, v_tenant_id;
+        END;
     END IF;
 
     -- 赋租户管理员角色（显式 tenant_id：这条是本租户私有数据，不是基线）

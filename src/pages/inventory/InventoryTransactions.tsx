@@ -10,6 +10,7 @@ import {
 } from '../../constants/inventoryTransactionTypes';
 import { useInventoryTransactionTypes } from '../../hooks/useInventoryTransactionTypes';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney } from '../../utils/money';
 
 type InventoryTransaction = Tables['erp_inventory_transactions_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
@@ -199,7 +200,7 @@ export function InventoryTransactions() {
       key: 'unit_cost',
       width: 120,
       align: 'right' as const,
-      render: (value: number | null) => `¥${(Number(value) || 0).toLocaleString()}`,
+      render: (value: number | null) => formatMoney(value),
     },
     {
       title: t('inventoryTransactions.columns.totalCost'),
@@ -207,7 +208,7 @@ export function InventoryTransactions() {
       key: 'total_cost',
       width: 120,
       align: 'right' as const,
-      render: (value: number | null) => `¥${(Number(value) || 0).toLocaleString()}`,
+      render: (value: number | null) => formatMoney(value),
     },
     {
       title: t('inventoryTransactions.columns.remark'),
@@ -221,7 +222,6 @@ export function InventoryTransactions() {
 
   return (
     <Card
-      className="mainContent"
       variant="borderless"
       title={t("inventoryTransactions.title")}
       extra={
@@ -260,7 +260,7 @@ export function InventoryTransactions() {
             {t("inventoryTransactions.stats.totalCost")}
           </Typography.Text>
           <Typography.Title level={4} style={{ margin: "4px 0 0" }}>
-            ¥{totalCost.toLocaleString()}
+            {formatMoney(totalCost)}
           </Typography.Title>
         </Card>
       </div>

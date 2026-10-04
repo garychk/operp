@@ -25,6 +25,7 @@ import {
   ApartmentOutlined,
   ShopOutlined,
   InboxOutlined,
+  ImportOutlined,
   AppstoreOutlined,
   ShoppingCartOutlined,
   RiseOutlined,
@@ -41,8 +42,11 @@ import {
   LogoutOutlined,
   TruckOutlined,
   SwapOutlined,
+  CheckCircleOutlined,
+  CalculatorOutlined,
   SunFilled,
   MoonOutlined,
+  ApiOutlined,
   BgColorsOutlined,
   CheckOutlined,
   InfoCircleFilled,
@@ -53,17 +57,22 @@ import {
   ExperimentOutlined,
   TranslationOutlined,
   UnorderedListOutlined,
+  DollarOutlined,
   LineChartOutlined,
   BarChartOutlined,
   TableOutlined,
+  IdcardOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { MenuPermissionGuard } from "./ProtectedRoute";
 import { AIChatDrawer } from "./AIChatDrawer";
+import { McpGuideDrawer } from "./McpGuideDrawer";
 import { NotificationBell } from "./NotificationBell";
+import { MenuSearch } from "./MenuSearch";
 import heroLogo from "../assets/opelix.svg";
 import defaultAvatar from "../assets/avatar.png";
 import { supabase } from "../utils/supabase";
+import { loadCurrencyRegistry } from "../utils/money";
 import { useTranslation } from "react-i18next";
 import type { SupportedLanguage } from "../i18n";
 
@@ -100,6 +109,9 @@ const menuIconMap: Record<string, ReactNode> = {
   TeamOutlined: <TeamOutlined />,
   ShopOutlined: <ShopOutlined />,
   InboxOutlined: <InboxOutlined />,
+  ImportOutlined: <ImportOutlined />,
+  CheckCircleOutlined: <CheckCircleOutlined />,
+  CalculatorOutlined: <CalculatorOutlined />,
   AppstoreOutlined: <AppstoreOutlined />,
   SettingOutlined: <SettingOutlined />,
   BuildOutlined: <BuildOutlined />,
@@ -115,6 +127,7 @@ const menuIconMap: Record<string, ReactNode> = {
   FallOutlined: <FallOutlined />,
   TableOutlined: <TableOutlined />,
   UnorderedListOutlined: <UnorderedListOutlined />,
+  DollarOutlined: <DollarOutlined />,
   SwapOutlined: <SwapOutlined />,
   ExperimentOutlined: <ExperimentOutlined />,
   LineChartOutlined: <LineChartOutlined />,
@@ -412,7 +425,11 @@ export const menuData: MenuRoute[] = [
       { path: "/mrp/operations", name: "工序管理", icon: <SettingOutlined /> },
       { path: "/mrp/production", name: "生产订单", icon: <ProfileOutlined /> },
       { path: "/mrp/material-issues", name: "领料单", icon: <InboxOutlined /> },
+      { path: "/mrp/production-receipts", name: "完工入库", icon: <ImportOutlined /> },
+      { path: "/mrp/production-reports", name: "生产报工", icon: <CheckCircleOutlined /> },
+      { path: "/mrp/cost-calculations", name: "成本核算", icon: <CalculatorOutlined /> },
       { path: "/mrp/plans", name: "MRP计划", icon: <CalendarOutlined /> },
+      { path: "/mrp/mps", name: "主生产计划", icon: <CalendarOutlined /> },
       { path: "/mrp/quality", name: "检验管理", icon: <ExperimentOutlined /> },
     ],
   },
@@ -439,6 +456,11 @@ export const menuData: MenuRoute[] = [
         name: "计量单位",
         icon: <UnorderedListOutlined />,
       },
+      {
+        path: "/system/currencies",
+        name: "币别管理",
+        icon: <DollarOutlined />,
+      },
       { path: "/system/logs", name: "系统日志", icon: <FileTextOutlined /> },
       {
         path: "/system/page-designer",
@@ -453,6 +475,7 @@ export const menuData: MenuRoute[] = [
 
 const pathToNameMap: Record<string, string> = {
   "/": "首页",
+  "/workbench": "个人工作台",
   "/finance/subjects": "会计科目",
   "/finance/vouchers": "凭证管理",
   "/finance/gl-balance": "总账余额",
@@ -467,6 +490,7 @@ const pathToNameMap: Record<string, string> = {
   "/inventory/products": "物料管理",
   "/inventory/warehouses": "仓库管理",
   "/system/uoms": "计量单位",
+  "/system/currencies": "币别管理",
   "/inventory/stock": "库存查询",
   "/inventory/transactions": "库存流水",
   "/inventory/purchase": "采购订单",
@@ -502,6 +526,7 @@ const pathToNameMap: Record<string, string> = {
 
 const pathToTranslationKey: Record<string, string> = {
   "/": "menu.home",
+  "/workbench": "workbench.title",
   "/finance": "menu.finance",
   "/finance/subjects": "menu.subjects",
   "/finance/vouchers": "menu.vouchers",
@@ -519,6 +544,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/inventory/products": "menu.products",
   "/inventory/warehouses": "menu.warehouses",
   "/system/uoms": "menu.uoms",
+  "/system/currencies": "menu.currencies",
   "/inventory/stock": "menu.stock",
   "/inventory/transactions": "menu.transactions",
   "/inventory/purchase": "menu.purchase",
@@ -533,7 +559,11 @@ const pathToTranslationKey: Record<string, string> = {
   "/mrp/operations": "menu.operations",
   "/mrp/production": "menu.production",
   "/mrp/material-issues": "menu.materialIssues",
+  "/mrp/production-receipts": "menu.productionReceipts",
+  "/mrp/production-reports": "menu.productionReports",
+  "/mrp/cost-calculations": "menu.costCalculations",
   "/mrp/plans": "menu.plans",
+  "/mrp/mps": "menu.mps",
   "/mrp/quality": "menu.quality",
   "/system": "menu.system",
   "/system/users": "menu.users",
@@ -598,6 +628,7 @@ export const staticComponentByPath: Record<string, string> = {
   "/system/document-types": "./pages/system/DocumentTypeBuilder",
   "/system/dictionaries": "./pages/system/Dictionaries",
   "/system/uoms": "./pages/system/Uoms",
+  "/system/currencies": "./pages/system/Currencies",
   "/system/logs": "./pages/system/Logs",
   "/system/page-designer": "./features/page-builder/PageDesigner",
   "/system/baq": "./features/baq/BaqDesigner",
@@ -637,6 +668,7 @@ export function ProLayout() {
     return Number.isNaN(radius) ? 6 : radius;
   });
   const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [databaseMenus, setDatabaseMenus] = useState<MenuRoute[]>([]);
 
@@ -666,8 +698,16 @@ export function ProLayout() {
       window.removeEventListener("menus-changed", refreshDatabaseMenus);
     };
   }, []);
+  // 币别元数据（本位币 / 符号 / 金额小数位）加载一次，供全站 formatMoney、MoneyInput 使用。
+  // 加载完成后 useCurrencyRegistry 会自动触发订阅重渲染，无需在此管理状态。
+  useEffect(() => {
+    void loadCurrencyRegistry();
+  }, []);
   useEffect(() => {
     localStorage.setItem("erp-dark-mode", JSON.stringify(dark));
+    // 深浅模式目前只存在于 antd token 里，纯 CSS（如个人工作台的欢迎条）没法跟着切换。
+    // 这里同步一个 DOM 标记，供 index.css 里需要跟随主题的样式使用。
+    document.documentElement.setAttribute("data-erp-dark", dark ? "true" : "false");
   }, [dark]);
 
   useEffect(() => {
@@ -735,6 +775,12 @@ export function ProLayout() {
     await logout();
   };
 
+  // 个人工作台走站内导航：由 Tabs 的 addTab 逻辑在顶部标签栏里新开一个页签
+  // （'/workbench' 已登记在 pathToNameMap / pathToTranslationKey 中，因此能拿到标题并出现在标签栏）。
+  const openWorkbench = () => {
+    navigate("/workbench");
+  };
+
   const addTab = useCallback(
     (path: string) => {
       const translationKey = pathToTranslationKey[path];
@@ -751,6 +797,15 @@ export function ProLayout() {
       setActiveTabKey(path);
     },
     [localizedMenuData, t],
+  );
+
+  // 顶部菜单搜索：选中后按标签栏的老规矩新开一个页签（已有则激活），再跳转过去。
+  const openMenuInNewTab = useCallback(
+    (path: string) => {
+      addTab(path);
+      navigate(path);
+    },
+    [addTab, navigate],
   );
 
   useEffect(() => {
@@ -939,16 +994,26 @@ export function ProLayout() {
         avatarProps={{
           src: user?.profile.avatar_url || defaultAvatar,
           size: "small",
-          title:
-            user?.profile.real_name ||
-            user?.profile.username ||
-            user?.auth.email ||
-            "",
+          // 侧边布局（非 mix）下右上角只留头像：title 就是 ProLayout 渲染在头像右侧的用户名，
+          // 传 undefined 即不渲染那个 span（它不会被透传给 Avatar，所以不会丢失任何东西）。
+          title: ismix
+            ? user?.profile.real_name ||
+              user?.profile.username ||
+              user?.auth.email ||
+              ""
+            : undefined,
           render: (_props, dom) => {
             return user ? (
               <Dropdown
                 menu={{
                   items: [
+                    {
+                      key: "workbench",
+                      icon: <IdcardOutlined />,
+                      label: t("workbench.title"),
+                      onClick: openWorkbench,
+                    },
+                    { type: "divider" },
                     {
                       key: "logout",
                       icon: <LogoutOutlined />,
@@ -978,6 +1043,11 @@ export function ProLayout() {
           },
         }}
         actionsRender={() => [
+          <MenuSearch
+            key="menu-search"
+            menus={visibleMenuData}
+            onSelect={openMenuInNewTab}
+          />,
           <NotificationBell key="notifications" />,
           dark ? (
             <MoonOutlined key="theme" onClick={() => setDark(false)} />
@@ -1016,6 +1086,13 @@ export function ProLayout() {
                   key="openai"
                   className={`ai-chat-action${aiChatOpen ? " ai-chat-action-active" : ""}`}
                   onClick={() => setAiChatOpen(true)}
+                />,
+                <ApiOutlined
+                  key="mcp-guide"
+                  className={`ai-chat-action${mcpGuideOpen ? " ai-chat-action-active" : ""}`}
+                  title={t("mcpGuide.entry")}
+                  aria-label={t("mcpGuide.entry")}
+                  onClick={() => setMcpGuideOpen(true)}
                 />,
                 <Dropdown
                   key="theme-color"
@@ -1211,11 +1288,16 @@ export function ProLayout() {
               }}
             />
             <MenuPermissionGuard>
-              <Outlet />
+              {/* 页面统一的内容视口：高度与滚动都在这里兜住（见 index.css 的 .page-viewport），
+                  页面组件不必再各自挂 .mainContent，也不会因为忘记挂而被裁掉内容。 */}
+              <div className="page-viewport">
+                <Outlet />
+              </div>
             </MenuPermissionGuard>
           </ProCard>
         </PageContainer>
         <AIChatDrawer open={aiChatOpen} onClose={() => setAiChatOpen(false)} />
+        <McpGuideDrawer open={mcpGuideOpen} onClose={() => setMcpGuideOpen(false)} />
         <Modal
           open={isInfoModalOpen}
           title={t("layout.aboutTitle")}

@@ -5,6 +5,7 @@ import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
 import { useTranslation } from 'react-i18next';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney, useCurrencyRegistry } from '../../utils/money';
 
 type Inventory = Tables['erp_inventory_s_539dcf81_b']['Row'];
 type Product = Tables['erp_products_s_539dcf81_b']['Row'];
@@ -15,6 +16,8 @@ const { Option } = Select;
 
 export function Inventory() {
   const { t } = useTranslation();
+  const { getMeta } = useCurrencyRegistry();
+  const baseCurrencySymbol = getMeta().symbol;
   const [inventory, setInventory] = useState<Inventory[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -173,13 +176,13 @@ export function Inventory() {
       title: t('stockInventory.unitCost'),
       dataIndex: 'unit_cost',
       key: 'unit_cost',
-      render: (cost: number) => `¥${(cost ?? 0).toLocaleString()}`,
+      render: (cost: number) => formatMoney(cost),
     },
     {
       title: t('stockInventory.totalCost'),
       dataIndex: 'total_cost',
       key: 'total_cost',
-      render: (cost: number) => `¥${(cost ?? 0).toLocaleString()}`,
+      render: (cost: number) => formatMoney(cost),
     },
     {
       title: t('common.status'),
@@ -196,7 +199,7 @@ export function Inventory() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('stockInventory.title')} extra={<Button icon={<ReloadOutlined />} onClick={fetchInventory}>{t('common.refresh')}</Button>}>
+    <Card variant="borderless" title={t('stockInventory.title')} extra={<Button icon={<ReloadOutlined />} onClick={fetchInventory}>{t('common.refresh')}</Button>}>
       
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col span={8}>
@@ -212,7 +215,7 @@ export function Inventory() {
             <Statistic
               title={t('stockInventory.totalValue')}
               value={totalValue}
-              prefix="¥"
+              prefix={baseCurrencySymbol}
             />
           </Card>
         </Col>

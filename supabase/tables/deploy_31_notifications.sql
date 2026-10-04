@@ -293,6 +293,19 @@ BEGIN
     );
   END IF;
 
+  -- 运算失败也要让人知道（dedup_key 带时间戳后缀避免 24h 窗口吞掉后续失败）
+  IF TG_OP = 'UPDATE' AND OLD.status IS DISTINCT FROM NEW.status
+     AND NEW.status = 'failed' THEN
+    PERFORM public.notify_push(
+      'task_failed', 'warning',
+      'MRP 运算失败：' || NEW.plan_no,
+      '计划 ' || NEW.plan_no || ' 运算失败，请检查计划参数或供需数据后重跑。',
+      'mrp_plan', NEW.id, NEW.plan_no, '/mrp/plans',
+      'mrp-plan-failed:' || NEW.id,
+      NULL, 'mrp_manager'
+    );
+  END IF;
+
   RETURN NEW;
 END;
 $$;

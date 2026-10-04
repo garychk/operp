@@ -2,33 +2,86 @@
   padding: 0;
 }
 
+/* 注意：这条是全站生效的（antd 的 .ant-card-body 是全局类），本意只服务首页整页对话
+   的外层 Card，但页面的留白一直依赖它，所以 padding 部分保持不动。
+   height/overflow 对"定高卡片"会裁掉内容，页面根卡片现在只吃 min-height（见 index.css
+   的 .page-viewport），因此这里对页面不再有裁切效果。 */
+.ant-card-body {
+  height: 100%;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 整页形态（Dashboard）：高度直接锚定内容视口，不再依赖祖辈卡片有确定高度——
+   页面根元素现在由布局给 min-height，百分比高度会失锚，聊天区会塌成 0。 */
+.ai-chat-page {
+  height: calc(var(--page-viewport-h, 90vh) * 0.8 - 40px);
+  width: 50%;
+  margin: 20px auto;
+}
+
+.ai-chat-panel-page .ai-chat-messages {
+  padding: 24px 28px;
+}
+
+.ai-chat-panel-page .ai-chat-assistant-wrap {
+  max-width: min(100%, 720px);
+}
+
 .ai-chat-panel {
   height: 100%;
   min-height: 0;
   overflow: hidden;
+  /* 对话历史浮层以此为定位容器，只在面板内部滑动，不再另开一层全局 Drawer */
+  position: relative;
 }
 
-.ai-chat-workbench {
+/* 面板内部的「历史」浮层：从左侧滑入，盖住面板内容（含底部输入区），
+   视觉上等同于「抽屉里再开一层抽屉」，但不会遮住整页。 */
+.ai-chat-history-pane {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg);
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.08);
+  transform: translateX(-100%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.24s ease, visibility 0.24s ease;
+  will-change: transform;
+}
+
+.ai-chat-history-pane-open {
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.ai-chat-history-pane-head {
+  flex: 0 0 auto;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.ai-chat-history-pane-body {
   flex: 1;
-  width: 100%;
   min-height: 0;
-  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px;
 }
 
-.ai-chat-workbench .ant-splitter {
-  width: 100%;
-  height: 100%;
-}
-
-.ai-chat-session-panel {
-  height: 100%;
+/* 浮层里让会话列表自己吃掉剩余高度并滚动，别再依赖 100% 高度传递 */
+.ai-chat-history-pane-body > .ai-chat-history {
+  flex: 1;
+  height: auto;
   min-height: 0;
-  overflow: hidden;
-  padding: 12px 8px 12px 12px;
-  border-right: 1px solid var(--border);
 }
 
-.ai-chat-session-inner {
+.ai-chat-history {
   height: 100%;
   min-height: 0;
 }
@@ -127,6 +180,13 @@
   padding: 20px;
 }
 
+.ai-chat-messages > .ant-card-head {
+  flex: 0 0 auto;
+  min-height: auto;
+  padding: 0 0 12px;
+  border-bottom: none;
+}
+
 .ai-chat-messages .ant-card-body {
   flex: 1;
   min-height: 0;
@@ -144,6 +204,53 @@
   height: auto;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+/* 欢迎页（Welcome + 快捷提问）：内容超出可视高度时允许整体滚动，避免被裁切 */
+.ai-chat-welcome {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/* 滚动条悬停才显示：默认透明，鼠标移入容器时才显形 */
+.ai-chat-message-list,
+.ai-chat-welcome,
+.ai-chat-session-list,
+.ai-chat-history {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.ai-chat-message-list:hover,
+.ai-chat-welcome:hover,
+.ai-chat-session-list:hover,
+.ai-chat-history:hover {
+  scrollbar-color: rgba(0, 0, 0, 0.25) transparent;
+}
+
+.ai-chat-message-list::-webkit-scrollbar,
+.ai-chat-welcome::-webkit-scrollbar,
+.ai-chat-session-list::-webkit-scrollbar,
+.ai-chat-history::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.ai-chat-message-list::-webkit-scrollbar-thumb,
+.ai-chat-welcome::-webkit-scrollbar-thumb,
+.ai-chat-session-list::-webkit-scrollbar-thumb,
+.ai-chat-history::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.ai-chat-message-list:hover::-webkit-scrollbar-thumb,
+.ai-chat-welcome:hover::-webkit-scrollbar-thumb,
+.ai-chat-session-list:hover::-webkit-scrollbar-thumb,
+.ai-chat-history:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.25);
 }
 
 .ai-chat-message-row {
@@ -196,35 +303,9 @@
   gap: 12px;
 }
 
-.ai-thought-chain {
-  width: min(100%, 440px);
-  padding: 12px 12px 4px;
-  border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(79, 70, 229, 0.06), rgba(79, 70, 229, 0.02));
-}
-
-.ai-thought-chain .ant-thought-chain-item {
-  border-radius: 12px;
-}
-
-.ai-thought-chain .ant-thought-chain-item + .ant-thought-chain-item {
-  margin-top: 8px;
-}
-
-.ai-thought-chain .ant-thought-chain-item-title {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.ai-thought-chain .ant-thought-chain-item-description {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
 .ai-chat-footer {
   flex: 0 0 auto;
-  border-top: 1px solid var(--border);
+  
   padding: 12px 16px 16px;
 }
 
@@ -291,13 +372,8 @@
 }
 
 @media (max-width: 900px) {
-  .ai-chat-workbench {
-    flex-direction: column;
-  }
-
-  .ai-chat-session-panel {
-    max-height: 240px;
-    border-right: none;
+  .ai-chat-panel-page .ai-chat-messages {
+    padding: 16px;
   }
 }
 

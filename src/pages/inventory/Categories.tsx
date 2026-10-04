@@ -11,6 +11,7 @@ import {
   Popconfirm,
 } from "antd";
 import { PlusOutlined, EditOutlined, DeleteOutlined } from "@ant-design/icons";
+import { useTranslation } from "react-i18next";
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
@@ -27,7 +28,11 @@ interface CategoryFormValues {
   type?: string | null;
 }
 
+/** 类型取值是写库的结构性事实，只有展示文案进 i18n。 */
+const CATEGORY_TYPES = ["product", "material", "service"] as const;
+
 export function Categories() {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -37,6 +42,14 @@ export function Categories() {
   useEffect(() => {
     fetchCategories();
   }, []);
+
+  const categoryTypeOptions = CATEGORY_TYPES.map((type) => ({
+    value: type,
+    label: t(`productCategories.typeOptions.${type}` as "productCategories.typeOptions.product"),
+  }));
+  const categoryTypeMap = new Map<string, string>(
+    categoryTypeOptions.map((option) => [option.value, option.label])
+  );
 
   const fetchCategories = async () => {
     try {
@@ -51,7 +64,7 @@ export function Categories() {
       setCategories(data || []);
     } catch (error) {
       console.error("Error fetching categories:", error);
-      message.error("获取物料类别失败");
+      message.error(t("productCategories.fetchFailed"));
     } finally {
       setLoading(false);
     }
@@ -60,7 +73,7 @@ export function Categories() {
   const handleSubmit = async (values: CategoryFormValues) => {
     try {
       if (editingCategory) {
-        await logWithTiming("更新物料类别", "UPDATE", async () => {
+        await logWithTiming(t("productCategories.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from("erp_product_categories_s_539dcf81_b")
             .update(values)
@@ -70,9 +83,9 @@ export function Categories() {
             throw error;
           }
         });
-        message.success("更新成功");
+        message.success(t("common.updateSuccess"));
       } else {
-        await logWithTiming("新增物料类别", "INSERT", async () => {
+        await logWithTiming(t("productCategories.logCreate"), "INSERT", async () => {
           const { error } = await supabase
             .from("erp_product_categories_s_539dcf81_b")
             .insert([values]);
@@ -81,7 +94,7 @@ export function Categories() {
             throw error;
           }
         });
-        message.success("新增成功");
+        message.success(t("common.createSuccess"));
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -89,7 +102,7 @@ export function Categories() {
       fetchCategories();
     } catch (error) {
       console.error("Error saving category:", error);
-      message.error("保存失败");
+      message.error(t("common.saveFailed"));
     }
   };
 
@@ -100,11 +113,11 @@ export function Categories() {
         .update({ is_deleted: "y" })
         .eq("id", id);
       if (error) throw error;
-      message.success("删除成功");
+      message.success(t("common.deleteSuccess"));
       fetchCategories();
     } catch (error) {
       console.error("Error deleting category:", error);
-      message.error("删除失败");
+      message.error(t("common.deleteFailed"));
     }
   };
 
@@ -129,17 +142,17 @@ export function Categories() {
 
   const columns = [
     {
-      title: "类别编码",
+      title: t("productCategories.code"),
       dataIndex: "code",
       key: "code",
     },
     {
-      title: "类别名称",
+      title: t("productCategories.name"),
       dataIndex: "name",
       key: "name",
     },
     {
-      title: "上级类别",
+      title: t("productCategories.parentCategory"),
       dataIndex: "parent_id",
       key: "parent_id",
       render: (parentId: number | null) => {
@@ -149,13 +162,13 @@ export function Categories() {
       },
     },
     {
-      title: "类型",
+      title: t("productCategories.type"),
       dataIndex: "type",
       key: "type",
-      render: (type: string | null) => type || "-",
+      render: (type: string | null) => (type ? categoryTypeMap.get(type) || type : "-"),
     },
     {
-      title: "操作",
+      title: t("common.actions"),
       key: "action",
       render: (_: any, record: ProductCategory) => (
         <Space size="middle">
@@ -164,17 +177,17 @@ export function Categories() {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t("common.edit")}
           </Button>
           <Popconfirm
-            title="确认删除"
-            description="确定要删除该类别吗？"
+            title={t("common.confirmDelete")}
+            description={t("productCategories.deleteConfirm")}
             onConfirm={() => handleDelete(record.id)}
-            okText="确认"
-            cancelText="取消"
+            okText={t("common.ok")}
+            cancelText={t("common.cancel")}
           >
             <Button type="text" danger icon={<DeleteOutlined />}>
-              删除
+              {t("common.delete")}
             </Button>
           </Popconfirm>
         </Space>
@@ -187,7 +200,7 @@ export function Categories() {
       title={false}
       extra={
         <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
-          新增类别
+          {t("productCategories.addCategory")}
         </Button>
       }
     >
@@ -200,7 +213,7 @@ export function Categories() {
       />
 
       <SimpleModal
-        title={editingCategory ? "编辑类别" : "新增类别"}
+        title={editingCategory ? t("productCategories.editCategory") : t("productCategories.addCategory")}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -216,10 +229,10 @@ export function Categories() {
                 setEditingCategory(null);
               }}
             >
-              取消
+              {t("common.cancel")}
             </Button>
             <Button type="primary" onClick={() => form.submit()}>
-              保存
+              {t("common.save")}
             </Button>
           </Space>
         }
@@ -232,17 +245,21 @@ export function Categories() {
           style={{ marginTop: 16 }}
         >
           <Form.Item
-            label="类别编码"
+            label={t("productCategories.code")}
             name="code"
-            rules={[{ required: true, message: "请输入类别编码" }]}
+            rules={[{ required: true, message: t("productCategories.codeRequired") }]}
           >
-            <Input placeholder="请输入类别编码" disabled={!!editingCategory} />
+            <Input placeholder={t("productCategories.codePlaceholder")} disabled={!!editingCategory} />
           </Form.Item>
-          <Form.Item label="类别名称" name="name" rules={[{ required: true, message: "请输入类别名称" }]}>
-            <Input placeholder="请输入类别名称" />
+          <Form.Item
+            label={t("productCategories.name")}
+            name="name"
+            rules={[{ required: true, message: t("productCategories.nameRequired") }]}
+          >
+            <Input placeholder={t("productCategories.namePlaceholder")} />
           </Form.Item>
-          <Form.Item label="上级类别" name="parent_id">
-            <Select allowClear placeholder="请选择上级类别">
+          <Form.Item label={t("productCategories.parentCategory")} name="parent_id">
+            <Select allowClear placeholder={t("productCategories.parentCategoryPlaceholder")}>
               {categories
                 .filter((c) => c.id !== editingCategory?.id)
                 .map((c) => (
@@ -252,12 +269,8 @@ export function Categories() {
                 ))}
             </Select>
           </Form.Item>
-          <Form.Item label="类型" name="type">
-            <Select allowClear placeholder="请选择类型">
-              <Option value="product">产品</Option>
-              <Option value="material">物料</Option>
-              <Option value="service">服务</Option>
-            </Select>
+          <Form.Item label={t("productCategories.type")} name="type">
+            <Select allowClear placeholder={t("productCategories.typePlaceholder")} options={categoryTypeOptions} />
           </Form.Item>
         </Form>
       </SimpleModal>

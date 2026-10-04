@@ -28,6 +28,8 @@ import type {
   ErpVoucherDetailsS539Dcf81BRow,
   ErpGeneralLedgerBalancesS539Dcf81BRow,
   ErpGlEntriesRow,
+  ErpArApSettlementsRow,
+  ErpFxRevaluationS539Dcf81BRow,
   ErpReceivablesS539Dcf81BRow,
   ErpPayablesS539Dcf81BRow,
   ErpAssetCategoriesS539Dcf81BRow,
@@ -41,6 +43,10 @@ import type {
   ErpRoutingOperationsS539Dcf81BRow,
   ErpRoutingOperationDetailsS539Dcf81BRow,
   ErpMrpPlansS539Dcf81BRow,
+  ErpMpsPlansS539Dcf81BRow,
+  ErpMpsPlanDetailsS539Dcf81BRow,
+  ErpCurrenciesS539Dcf81BRow,
+  ErpExchangeRatesS539Dcf81BRow,
   ErpMrpRequirementsS539Dcf81BRow,
   ErpProductionOrdersS539Dcf81BRow,
   ErpProductionOrderDetailsS539Dcf81BRow,
@@ -48,8 +54,11 @@ import type {
   ErpMaterialIssueDetailsS539Dcf81BRow,
   ErpProductionReportsS539Dcf81BRow,
   ErpProductionReceiptsS539Dcf81BRow,
+  ErpProductImagesS539Dcf81BRow,
+  ErpAttachmentsS539Dcf81BRow,
   SysFormsRow,
   SysConfigRow,
+  SysMcpApiKeysRow,
   SysInventoryTransactionTypesRow,
   SysDocumentTransactionTypesRow,
 } from '../types/database';
@@ -161,6 +170,8 @@ export type Tables = {
   erp_voucher_details_s_539dcf81_b: { Row: ErpVoucherDetailsS539Dcf81BRow };
   erp_general_ledger_balances_s_539dcf81_b: { Row: ErpGeneralLedgerBalancesS539Dcf81BRow };
   erp_gl_entries: { Row: ErpGlEntriesRow };
+  erp_ar_ap_settlements: { Row: ErpArApSettlementsRow };
+  erp_fx_revaluation_s_539dcf81_b: { Row: ErpFxRevaluationS539Dcf81BRow };
   erp_receivables_s_539dcf81_b: { Row: ErpReceivablesS539Dcf81BRow };
   erp_payables_s_539dcf81_b: { Row: ErpPayablesS539Dcf81BRow };
   erp_asset_categories_s_539dcf81_b: { Row: ErpAssetCategoriesS539Dcf81BRow };
@@ -181,8 +192,15 @@ export type Tables = {
   erp_material_issue_details_s_539dcf81_b: { Row: ErpMaterialIssueDetailsS539Dcf81BRow };
   erp_production_reports_s_539dcf81_b: { Row: ErpProductionReportsS539Dcf81BRow };
   erp_production_receipts_s_539dcf81_b: { Row: ErpProductionReceiptsS539Dcf81BRow };
+  erp_product_images_s_539dcf81_b: { Row: ErpProductImagesS539Dcf81BRow };
+  erp_attachments_s_539dcf81_b: { Row: ErpAttachmentsS539Dcf81BRow };
+  erp_mps_plans_s_539dcf81_b: { Row: ErpMpsPlansS539Dcf81BRow };
+  erp_mps_plan_details_s_539dcf81_b: { Row: ErpMpsPlanDetailsS539Dcf81BRow };
+  erp_currencies_s_539dcf81_b: { Row: ErpCurrenciesS539Dcf81BRow };
+  erp_exchange_rates_s_539dcf81_b: { Row: ErpExchangeRatesS539Dcf81BRow };
   sys_forms: { Row: SysFormsRow };
   sys_config: { Row: SysConfigRow };
+  sys_mcp_api_keys: { Row: SysMcpApiKeysRow };
   sys_inventory_transaction_types: { Row: SysInventoryTransactionTypesRow };
   sys_document_transaction_types: { Row: SysDocumentTransactionTypesRow };
 };

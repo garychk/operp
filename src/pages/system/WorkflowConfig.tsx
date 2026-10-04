@@ -353,7 +353,6 @@ export function WorkflowConfig() {
 
   return (
     <Card
-      className="mainContent"
       variant="borderless"
       title={t("workflow.configTitle")}
       extra={

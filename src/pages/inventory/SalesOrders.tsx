@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Key } from "react";
 import {
@@ -28,7 +28,9 @@ import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
-import { SuperTable } from "../../components/SuperTable";
+import { BizAttachments } from "../../components/BizAttachments";
+import { SuperTable, SuperTableColumn } from "../../components/SuperTable";
+import { formatMoney, useCurrencyRegistry, currencyLabel, fetchExchangeRate } from "../../utils/money";
 import { ProductUnit } from "../../components/ProductUnit";
 import SimpleModal from "../../components/SimpleModal";
 
@@ -42,6 +44,10 @@ const { TextArea } = Input;
 const salesOrderTable = "erp_sales_orders_s_539dcf81_b";
 const salesOrderDetailTable = "erp_sales_order_details_s_539dcf81_b";
 const docType = "sales_order";
+
+/** 金额/单价四舍五入到本位币精度（与后端 NUMERIC(18,2) / (18,4) 对齐） */
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+const round4 = (n: number) => Math.round((Number(n) || 0) * 10000) / 10000;
 
 export function SalesOrders() {
   const { t } = useTranslation();
@@ -62,6 +68,57 @@ export function SalesOrders() {
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
   const [isDisabled, setIsDisabled] = useState(false);
+
+  // 币别元数据与当前租户本位币（来自 erp_currencies / current_base_currency()）
+  const { baseCurrency, currencies } = useCurrencyRegistry();
+
+  // 明细行金额跟随表头币种（新单据取表单当前值，编辑时取单据值），保证与表头一致
+  const watchedCurrency = Form.useWatch("currency", form);
+  const watchedRate = Form.useWatch("exchange_rate", form);
+  const detailCurrency = watchedCurrency ?? editingOrder?.currency ?? undefined;
+  const baseCurrencyCode = (baseCurrency || "CNY").toUpperCase();
+  const isForeignCurrency =
+    !!detailCurrency && detailCurrency.toUpperCase() !== baseCurrencyCode;
+
+  // 冻结汇率：外币取表单值，本位币恒为 1
+  const activeRate = isForeignCurrency
+    ? Number(watchedRate ?? editingOrder?.exchange_rate ?? 0) || 0
+    : 1;
+
+  // 币种选项：只列启用中的币别；但当前单据已选的币别即使已停用也要保留，
+  // 否则编辑历史单据时下拉会显示空白（值在、选项没了）。
+  const currencyOptions = useMemo(() => {
+    const selected = (detailCurrency || "").toUpperCase();
+    return currencies
+      .filter((c) => c.status === "active" || c.code.toUpperCase() === selected)
+      .map((c) => ({
+        value: c.code,
+        label: `${c.code} · ${currencyLabel(c.code, c.name)}`,
+      }));
+  }, [currencies, detailCurrency]);
+
+  /**
+   * 切换币种时预填汇率：取该币种在单据日期上的即期汇率。
+   * 拿不到就清空并提示 —— 不隐式按 1 处理（外币金额当人民币入账是静默错误）。
+   */
+  const handleCurrencyChange = async (code: string) => {
+    if (!code || code.toUpperCase() === baseCurrencyCode) {
+      form.setFieldValue("exchange_rate", 1);
+      return;
+    }
+    const orderDate = form.getFieldValue("order_date");
+    const dateText = orderDate ? dayjs(orderDate).format("YYYY-MM-DD") : undefined;
+    const rate = await fetchExchangeRate(code, dateText);
+    if (rate !== null) {
+      form.setFieldValue("exchange_rate", rate);
+      message.info(t("currency.rateAutoFilled", { date: dateText ?? "-" }));
+    } else {
+      form.setFieldValue("exchange_rate", undefined);
+      message.warning(
+        t("currency.rateMissing", { code, date: dateText ?? "-" })
+      );
+    }
+  };
 
   useEffect(() => {
     fetchOrders();
@@ -135,24 +192,41 @@ export function SalesOrders() {
   const calculateOrderTotals = (
     detailRows: { amount: number | null; tax_amount: number | null }[],
     discountAmount = 0,
+    exchangeRate = 1,
   ) => {
     const totalAmount = detailRows.reduce((sum, d) => sum + (d.amount || 0), 0);
     const taxAmount = detailRows.reduce(
       (sum, d) => sum + (d.tax_amount || 0),
       0,
     );
+    const rate = exchangeRate > 0 ? exchangeRate : 1;
     return {
       total_amount: totalAmount,
       tax_amount: taxAmount,
       receivable_amount: totalAmount + taxAmount - discountAmount,
+      // 双金额：本位币金额按单据上冻结的汇率折算
+      base_total_amount: round2(totalAmount * rate),
+      base_tax_amount: round2(taxAmount * rate),
+      base_discount_amount: round2(discountAmount * rate),
     };
   };
 
   const handleSubmit = async (values: any) => {
     try {
+      // 币种与汇率落定：本位币强制汇率 = 1；外币必须带正汇率（已在表单校验）
+      const currencyCode = (values.currency || baseCurrencyCode).toUpperCase();
+      const formRate =
+        currencyCode === baseCurrencyCode ? 1 : Number(values.exchange_rate) || 0;
+      if (currencyCode !== baseCurrencyCode && formRate <= 0) {
+        message.error(t("currency.form.rateRequired"));
+        return;
+      }
+
       const payload = {
         ...values,
-        ...calculateOrderTotals(details, values.discount_amount || 0),
+        currency: currencyCode,
+        exchange_rate: formRate,
+        ...calculateOrderTotals(details, values.discount_amount || 0, formRate),
       };
 
       if (editingOrder) {
@@ -197,6 +271,9 @@ export function SalesOrders() {
 
       values.amount = (values.quantity || 0) * (values.unit_price || 0);
       values.tax_amount = values.amount * ((values.tax_rate || 0) / 100);
+      // 明细行双金额：逐行按冻结汇率折本位币（行级四舍五入，差额由表头吸收）
+      values.base_unit_price = round4((values.unit_price || 0) * activeRate);
+      values.base_amount = round2(values.amount * activeRate);
 
       if (editingDetail) {
         await supabase
@@ -239,10 +316,15 @@ export function SalesOrders() {
 
       const order = orders.find((o) => o.id === orderId);
       const discountAmount = order?.discount_amount || 0;
+      // 用**单据自己冻结的汇率**折算，而不是表单当前的 activeRate ——
+      // 本函数在明细弹窗关闭后调用，此时表单可能已被重置。
+      const orderCurrency = (order?.currency || baseCurrencyCode).toUpperCase();
+      const orderRate =
+        orderCurrency === baseCurrencyCode ? 1 : Number(order?.exchange_rate) || 1;
 
       await supabase
         .from(salesOrderTable)
-        .update(calculateOrderTotals(data || [], discountAmount))
+        .update(calculateOrderTotals(data || [], discountAmount, orderRate))
         .eq("id", orderId);
 
       fetchOrders();
@@ -319,7 +401,11 @@ export function SalesOrders() {
       tax_amount: 0,
       discount_amount: 0,
       receivable_amount: 0,
-      currency: "CNY",
+      base_total_amount: 0,
+      base_tax_amount: 0,
+      base_discount_amount: 0,
+      currency: baseCurrencyCode,
+      exchange_rate: 1,
       delivery_address: "",
       contact_person: "",
       contact_phone: "",
@@ -406,7 +492,7 @@ export function SalesOrders() {
     cancelled: { text: t("salesOrders.statusCancelled"), color: "error" },
   };
 
-  const columns = [
+  const columns: SuperTableColumn<SalesOrder>[] = [
     {
       title: t("salesOrders.orderNo"),
       dataIndex: "order_no",
@@ -433,18 +519,32 @@ export function SalesOrders() {
       render: (text: string) => text || "-",
     },
     {
+      title: t("salesOrders.currency"),
+      dataIndex: "currency",
+      key: "currency",
+      width: 110,
+      render: (code: string) => (code ? `${code} · ${currencyLabel(code)}` : "-"),
+    },
+    {
       title: t("salesOrders.amount"),
       dataIndex: "total_amount",
       key: "total_amount",
       width: 120,
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number, record: SalesOrder) => formatMoney(amount, record.currency),
+    },
+    {
+      title: t("currency.field.baseAmount"),
+      dataIndex: "base_total_amount",
+      key: "base_total_amount",
+      width: 130,
+      render: (amount: number) => formatMoney(amount, baseCurrencyCode),
     },
     {
       title: t("salesOrders.receivableAmount"),
       dataIndex: "receivable_amount",
       key: "receivable_amount",
       width: 120,
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number, record: SalesOrder) => formatMoney(amount, record.currency),
     },
     {
       title: t("common.status"),
@@ -463,6 +563,7 @@ export function SalesOrders() {
       title: t("common.actions"),
       key: "action",
       width: 120,
+      fixed: "right",
       render: (_: any, record: SalesOrder) => (
         <Space>
           <Button
@@ -514,13 +615,13 @@ export function SalesOrders() {
       title: t("salesOrders.unitPrice"),
       dataIndex: "unit_price",
       key: "unit_price",
-      render: (price: number) => `¥${(price ?? 0).toFixed(2)}`,
+      render: (price: number) => formatMoney(price, detailCurrency),
     },
     {
       title: t("salesOrders.amount"),
       dataIndex: "amount",
       key: "amount",
-      render: (amount: number) => `¥${(amount ?? 0).toFixed(2)}`,
+      render: (amount: number) => formatMoney(amount, detailCurrency),
     },
     {
       title: t("salesOrders.taxRate"),
@@ -532,7 +633,7 @@ export function SalesOrders() {
       title: t("salesOrders.taxAmount"),
       dataIndex: "tax_amount",
       key: "tax_amount",
-      render: (amount: number) => `¥${(amount ?? 0).toFixed(2)}`,
+      render: (amount: number) => formatMoney(amount, detailCurrency),
     },
     {
       title: t("salesOrders.deliveredQuantity"),
@@ -585,7 +686,7 @@ export function SalesOrders() {
   );
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredOrders}
@@ -638,6 +739,19 @@ export function SalesOrders() {
         detailPanelTitle={t("salesOrders.detailPanelTitle")}
         historyTable={salesOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
+        detailItems={[
+          {
+            key: "attachments",
+            label: t("attachments.title"),
+            disabled: !(editingOrder?.id || selectedOrder?.id),
+            children: (
+              <BizAttachments
+                bizType="sales_order"
+                bizId={editingOrder?.id || selectedOrder?.id}
+              />
+            ),
+          },
+        ]}
         workflowDocumentType={docType}
         documentNo={editingOrder?.order_no}
         docFlowUsageType="sales"
@@ -731,13 +845,39 @@ export function SalesOrders() {
                     placeholder={t("salesOrders.receivableAmountPlaceholder")}
                   />
                 </Form.Item>
-                <Form.Item label={t("salesOrders.currency")} name="currency" initialValue="CNY">
-                  <Select>
-                    <Option value="CNY">{t("salesOrders.currencyCny")}</Option>
-                    <Option value="USD">{t("salesOrders.currencyUsd")}</Option>
-                    <Option value="EUR">{t("salesOrders.currencyEur")}</Option>
-                  </Select>
+                <Form.Item
+                  label={t("salesOrders.currency")}
+                  name="currency"
+                  rules={[{ required: true, message: t("currency.form.currencyRequired") }]}
+                >
+                  <Select
+                    options={currencyOptions}
+                    onChange={(code: string) => void handleCurrencyChange(code)}
+                  />
                 </Form.Item>
+                {isForeignCurrency && (
+                  <Form.Item
+                    label={t("currency.field.exchangeRate")}
+                    name="exchange_rate"
+                    tooltip={t("currency.rateTooltip")}
+                    rules={[
+                      { required: true, message: t("currency.form.rateRequired") },
+                      {
+                        type: "number",
+                        min: 0.00000001,
+                        message: t("currency.form.ratePositive"),
+                      },
+                    ]}
+                    extra={t("currency.frozenHint")}
+                  >
+                    <InputNumber
+                      style={{ width: "100%" }}
+                      precision={8}
+                      min={0}
+                      addonAfter={baseCurrencyCode}
+                    />
+                  </Form.Item>
+                )}
                 <Form.Item label={t("salesOrders.deliveryAddress")} name="delivery_address">
                   <Input placeholder={t("salesOrders.deliveryAddressPlaceholder")} />
                 </Form.Item>
@@ -777,11 +917,11 @@ export function SalesOrders() {
                   <strong>{t("salesOrders.totalText")}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={1} align="left">
-                  <strong>¥{detailTotal.amount.toFixed(2)}</strong>
+                  <strong>{formatMoney(detailTotal.amount, detailCurrency)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={2}></Table.Summary.Cell>
                 <Table.Summary.Cell index={3} align="left">
-                  <strong>¥{detailTotal.taxAmount.toFixed(2)}</strong>
+                  <strong>{formatMoney(detailTotal.taxAmount, detailCurrency)}</strong>
                 </Table.Summary.Cell>
                 <Table.Summary.Cell index={4} colSpan={3}></Table.Summary.Cell>
               </Table.Summary.Row>
@@ -796,7 +936,7 @@ export function SalesOrders() {
             </Button>
           </Space>
         }
-        width={'70%'}
+        width={'80%'}
         height={'80%'}
       />
 

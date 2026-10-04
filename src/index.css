@@ -84,11 +84,33 @@ body {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-.mainContent{
+/* 内容视口：页面高度与滚动统一由布局负责（ProLayout 里 <Outlet /> 外层的 .page-viewport），
+   页面组件自己不再需要任何类名——只管把内容排好即可。
+   历史常量 90vh 保持不动，避免改变既有页面观感；--page-viewport-h 供需要锚定视口高度的
+   局部样式复用（见 AIChatPanel.css 的 .ai-chat-page）。 */
+:root {
+  --page-viewport-h: 82vh;
+}
+
+.page-viewport {
+  height: var(--page-viewport-h);
+  /* 纵向可滚动：内容比一屏长时能滚，而不是被裁掉；
+     横向仍按历史行为隐藏溢出，避免全站冒出横向滚动条。 */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 页面根元素至少铺满视口，短页面不会出现"卡片只到一半"；
+   内容更高时自然撑开，由 .page-viewport 滚动。 */
+.page-viewport > * {
+  min-height: 100%;
+}
+
+/* 页面根卡片与内容区贴合、不留圆角（原 .mainContent 的视觉效果，现由布局统一负责） */
+.page-viewport > .ant-card,
+.page-viewport > .ant-pro-card {
   border-radius: 0;
-  height: 90vh;
-  margin-top: 0px;
-  overflow: hidden;
+  margin-top: 0;
 }
 
 /* 登录页流动背景——三个大面积色斑缓慢漂移，形成极光流动感 */
@@ -208,4 +230,408 @@ body {
   .login-bg__sheen {
     animation: none;
   }
+}
+
+/* 个人工作台欢迎条：静态复刻登录页背景（同一套渐变 + 三个色斑，但不带动画） */
+.workbench-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 35%, #eef2ff 100%);
+}
+
+.workbench-hero__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.workbench-hero__blob--sky {
+  top: -140px;
+  left: -40px;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle at 50% 50%, #7dd3fc 0%, rgba(125, 211, 252, 0) 70%);
+}
+
+.workbench-hero__blob--violet {
+  top: -150px;
+  right: -30px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle at 50% 50%, #c4b5fd 0%, rgba(196, 181, 253, 0) 70%);
+}
+
+.workbench-hero__blob--mint {
+  bottom: -180px;
+  left: 30%;
+  width: 380px;
+  height: 380px;
+  background: radial-gradient(circle at 50% 50%, #a7f3d0 0%, rgba(167, 243, 208, 0) 70%);
+}
+
+/* 色斑是装饰层，内容必须盖在它上面 */
+.workbench-hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+/* 深色模式下换成同结构的暗色极光：浅底配 antd 的浅色文字会读不清 */
+html[data-erp-dark='true'] .workbench-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 35%, #1e1b4b 100%);
+}
+
+html[data-erp-dark='true'] .workbench-hero__blob {
+  opacity: 0.3;
+}
+
+/* ---------------- MPS 计划工作台（清新极光 + 玻璃指标卡） ---------------- */
+.mps-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 18px 20px 20px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(135deg, #f0f9ff 0%, #eef2ff 45%, #ecfdf5 100%);
+}
+
+.mps-hero__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(58px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.mps-hero__blob--sky {
+  top: -130px;
+  left: -30px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle at 50% 50%, #7dd3fc 0%, rgba(125, 211, 252, 0) 70%);
+}
+
+.mps-hero__blob--violet {
+  top: -140px;
+  right: 6%;
+  width: 280px;
+  height: 280px;
+  background: radial-gradient(circle at 50% 50%, #c4b5fd 0%, rgba(196, 181, 253, 0) 70%);
+}
+
+.mps-hero__blob--mint {
+  bottom: -170px;
+  left: 36%;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle at 50% 50%, #a7f3d0 0%, rgba(167, 243, 208, 0) 70%);
+}
+
+/* 色斑是装饰层，内容必须盖在它上面 */
+.mps-hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+.mps-hero__title {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.mps-hero__meta {
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+/* 指标卡：半透明玻璃，压在极光上不遮色 */
+.mps-stat {
+  height: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(8px);
+}
+
+.mps-stat__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  font-size: 15px;
+}
+
+.mps-stat__label {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mps-stat__value {
+  margin-top: 2px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.mps-stat__value--muted {
+  color: rgba(15, 23, 42, 0.35);
+}
+
+html[data-erp-dark='true'] .mps-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 45%, #1e1b4b 100%);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+html[data-erp-dark='true'] .mps-hero__blob {
+  opacity: 0.28;
+}
+
+html[data-erp-dark='true'] .mps-hero__meta,
+html[data-erp-dark='true'] .mps-stat__label {
+  color: rgba(226, 232, 240, 0.62);
+}
+
+html[data-erp-dark='true'] .mps-stat {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+html[data-erp-dark='true'] .mps-stat__value--muted {
+  color: rgba(226, 232, 240, 0.38);
+}
+
+/* ---------------- 首页经营驾驶舱（Dashboard） ----------------
+   页面根卡片不自己定高（布局统一给 .page-viewport 撑高、滚动），
+   所以这里只负责「卡片内部的排布与观感」，不涉及任何 viewport 高度。 */
+.cockpit {
+  padding: 2px 2px 2px;
+}
+
+/* 顶部横幅：与登录页/工作台同一套极光语言，静态摆放 */
+.cockpit-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 22px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(135deg, #eef4ff 0%, #f4f0ff 46%, #ecfdf5 100%);
+}
+
+.cockpit-hero__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(58px);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.cockpit-hero__blob--sky {
+  top: -140px;
+  left: -30px;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle at 50% 50%, #7dd3fc 0%, rgba(125, 211, 252, 0) 70%);
+}
+
+.cockpit-hero__blob--violet {
+  top: -150px;
+  right: 8%;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle at 50% 50%, #c4b5fd 0%, rgba(196, 181, 253, 0) 70%);
+}
+
+.cockpit-hero__blob--mint {
+  bottom: -180px;
+  left: 34%;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle at 50% 50%, #a7f3d0 0%, rgba(167, 243, 208, 0) 70%);
+}
+
+.cockpit-hero__content {
+  position: relative;
+  z-index: 1;
+}
+
+.cockpit-hero__title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: rgba(15, 23, 42, 0.92);
+}
+
+.cockpit-hero__meta {
+  margin-top: 6px;
+  font-size: 13px;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.cockpit-hero__chips {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* 指标卡：半透明玻璃，压在极光/底色上不遮内容 */
+.cockpit-kpi {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  padding: 14px 16px 14px 18px;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(255, 255, 255, 0.78);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cockpit-kpi--clickable {
+  cursor: pointer;
+}
+
+.cockpit-kpi--clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.09);
+}
+
+/* 左侧色条：区分指标语义，不用额外的卡片标题 */
+.cockpit-kpi__accent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  border-radius: 12px 0 0 12px;
+}
+
+.cockpit-kpi__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cockpit-kpi__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  font-size: 15px;
+}
+
+.cockpit-kpi__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cockpit-kpi__value {
+  margin-top: 10px;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.15;
+  color: rgba(15, 23, 42, 0.92);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 窄屏时指标卡只剩半行宽，金额位数多，字号收一档避免被裁 */
+@media (max-width: 1200px) {
+  .cockpit-kpi__value {
+    font-size: 19px;
+  }
+}
+
+.cockpit-kpi__foot {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 图表卡：标题给足呼吸，图表本身自带留白 */
+.cockpit-chart {
+  height: 100%;
+}
+
+/* 全局 .ant-card-body 带 height:100% + overflow:hidden（本意只服务首页整页对话卡），
+   对驾驶舱这种「高度随内容」的卡片只会把图表底部裁掉，这里按类收回成自适应。 */
+.cockpit-hero > .ant-card-body,
+.cockpit-chart > .ant-card-body {
+  height: auto;
+  overflow: visible;
+}
+
+.cockpit-chart__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 0;
+}
+
+.cockpit-chart__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.88);
+}
+
+.cockpit-chart__hint {
+  font-size: 12px;
+  color: rgba(15, 23, 42, 0.4);
+}
+
+.cockpit-chart__body {
+  padding: 4px 8px 12px;
+}
+
+.cockpit-chart__empty {
+  padding: 48px 16px;
+}
+
+html[data-erp-dark='true'] .cockpit-hero {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 46%, #1e1b4b 100%);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+html[data-erp-dark='true'] .cockpit-hero__blob {
+  opacity: 0.28;
+}
+
+html[data-erp-dark='true'] .cockpit-hero__title,
+html[data-erp-dark='true'] .cockpit-kpi__value,
+html[data-erp-dark='true'] .cockpit-chart__title {
+  color: rgba(226, 232, 240, 0.92);
+}
+
+html[data-erp-dark='true'] .cockpit-hero__meta,
+html[data-erp-dark='true'] .cockpit-kpi__label,
+html[data-erp-dark='true'] .cockpit-chart__hint {
+  color: rgba(226, 232, 240, 0.58);
+}
+
+html[data-erp-dark='true'] .cockpit-kpi__foot {
+  color: rgba(226, 232, 240, 0.42);
+}
+
+html[data-erp-dark='true'] .cockpit-kpi {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(148, 163, 184, 0.24);
 }

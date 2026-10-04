@@ -13,6 +13,7 @@ import {
   Checkbox,
   Row,
   Col,
+  Image,
 } from "antd";
 import {
   PlusOutlined,
@@ -25,8 +26,11 @@ import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import { Categories } from "./Categories";
 import { ProductUoms } from "./ProductUoms";
+import { ProductImages, IMAGE_BUCKET, imagePublicUrl } from "./ProductImages";
 import { SupaModal } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
+import { formatMoney } from "../../utils/money";
+import type { SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import { useTranslation } from "react-i18next";
 
@@ -34,6 +38,8 @@ type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
 type Uom = Tables["erp_uoms_s_539dcf81_b"]["Row"];
 type UomGroup = Tables["erp_uom_groups_s_539dcf81_b"]["Row"];
+
+const productImageTable = "erp_product_images_s_539dcf81_b";
 
 const { Option } = Select;
 const productTable = "erp_products_s_539dcf81_b";
@@ -53,11 +59,14 @@ export function Products() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [, setActiveTab] = useState("basic");
   const [form] = Form.useForm();
+  /** 产品 id -> 首图公开 URL（sort_order 最小者），列表缩略列使用 */
+  const [firstImageUrls, setFirstImageUrls] = useState<Map<number, string>>(new Map());
 
   useEffect(() => {
     fetchProducts();
     fetchCategories();
     fetchUoms();
+    fetchFirstImages();
   }, []);
 
   const fetchUoms = async () => {
@@ -89,6 +98,27 @@ export function Products() {
       message.error(t("common.fetchFailed"));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchFirstImages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from(productImageTable)
+        .select("product_id, bucket, storage_path")
+        .eq("is_deleted", "n")
+        .order("sort_order", { ascending: true })
+        .order("id", { ascending: true });
+      if (error) throw error;
+      const map = new Map<number, string>();
+      for (const row of data || []) {
+        if (!map.has(row.product_id)) {
+          map.set(row.product_id, imagePublicUrl(row.bucket || IMAGE_BUCKET, row.storage_path));
+        }
+      }
+      setFirstImageUrls(map);
+    } catch (error) {
+      console.error("Error fetching product images:", error);
     }
   };
 
@@ -230,7 +260,43 @@ export function Products() {
       p.code.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
-  const columns = [
+  const columns: SuperTableColumn<Product>[] = [
+    {
+      title: t("products.images"),
+      key: "first_image",
+      width: 80,
+      render: (_: any, record: Product) => {
+        const url = firstImageUrls.get(record.id);
+        if (!url) {
+          return (
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 4,
+                background: "#f5f5f5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ccc",
+                fontSize: 12,
+              }}
+            >
+              -
+            </div>
+          );
+        }
+        return (
+          <Image
+            src={url}
+            alt={record.name}
+            width={48}
+            height={48}
+            style={{ objectFit: "cover", borderRadius: 4 }}
+          />
+        );
+      },
+    },
     {
       title: t("products.code"),
       dataIndex: "code",
@@ -267,14 +333,14 @@ export function Products() {
       dataIndex: "purchase_price",
       key: "purchase_price",
       width: 120,
-      render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
+      render: (price: number) => formatMoney(price),
     },
     {
       title: t("products.salePrice"),
       dataIndex: "sale_price",
       key: "sale_price",
       width: 120,
-      render: (price: number) => `¥${(price ?? 0).toLocaleString()}`,
+      render: (price: number) => formatMoney(price),
     },
     {
       title: t("common.status"),
@@ -291,6 +357,7 @@ export function Products() {
       title: t("common.actions"),
       key: "action",
       width: 120,
+      fixed: "right",
       render: (_: any, record: Product) => (
         <Space>
           <Button
@@ -314,7 +381,7 @@ export function Products() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredProducts}
@@ -519,6 +586,17 @@ export function Products() {
               />
             ),
           },
+          {
+            key: "images",
+            label: t("products.images"),
+            disabled: !editingProduct,
+            children: (
+              <ProductImages
+                productId={editingProduct?.id}
+                onChanged={fetchFirstImages}
+              />
+            ),
+          },
         ]}
         footer={
           <Space>
@@ -528,8 +606,8 @@ export function Products() {
             </Button>
           </Space>
         }
-        width={"70%"}
-        height={'80%'}
+        width={"80%"}
+        height={500}
       />
 
       <SimpleModal

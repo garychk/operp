@@ -8,6 +8,7 @@ import {
   Form,
   Select,
   Space,
+  Table,
   message,
   InputNumber,
   DatePicker,
@@ -18,6 +19,9 @@ import {
   PlusOutlined,
   DeleteOutlined,
   EditOutlined,
+  ApartmentOutlined,
+  SafetyCertificateOutlined,
+  ExportOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
@@ -33,9 +37,37 @@ type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 type Routing = Tables["erp_routing_operations_s_539dcf81_b"]["Row"];
+type Warehouse = Tables["erp_warehouses_s_539dcf81_b"]["Row"];
+
+type KitRow = {
+  product_id: number;
+  product_code: string | null;
+  product_name: string | null;
+  unit: string | null;
+  order_detail_ids: number[] | null;
+  required_quantity: number;
+  issued_quantity: number;
+  to_issue_quantity: number;
+  warehouse_id: number | null;
+  warehouse_quantity: number;
+  total_quantity: number;
+  shortage_quantity: number;
+  suggested_warehouse_id: number | null;
+  suggested_warehouse_name: string | null;
+  kit_status: string;
+};
 
 const { Option } = Select;
 const productionOrderTable = "erp_production_orders_s_539dcf81_b";
+
+// 与 deploy_57 的四个 RPC 对应
+const EXPLODE_RPC = "explode_production_order_bom";
+const KIT_CHECK_RPC = "production_kit_check";
+const GENERATE_ISSUE_RPC = "generate_material_issue_from_order";
+
+// 已完成的订单不允许再展开/领料；与 explore RPC 的守卫保持一致
+const CLOSED_STATUSES = ["completed", "closed", "cancelled"];
+const DOC_TYPE = "production_order";
 
 export function ProductionOrders() {
   const { t } = useTranslation();
@@ -44,6 +76,7 @@ export function ProductionOrders() {
   const [boms, setBoms] = useState<Bom[]>([]);
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [routings, setRoutings] = useState<Routing[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -52,6 +85,12 @@ export function ProductionOrders() {
     null,
   );
   const [form] = Form.useForm();
+  const [kitRows, setKitRows] = useState<KitRow[]>([]);
+  const [kitOrderNo, setKitOrderNo] = useState("");
+  const [isKitModalOpen, setIsKitModalOpen] = useState(false);
+  const [kitLoading, setKitLoading] = useState(false);
+  const [exploding, setExploding] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     fetchOrders();
@@ -59,6 +98,7 @@ export function ProductionOrders() {
     fetchBoms();
     fetchWorkCenters();
     fetchRoutings();
+    fetchWarehouses();
   }, []);
 
   const fetchOrders = async () => {
@@ -134,6 +174,293 @@ export function ProductionOrders() {
       console.error("Error fetching routings:", error);
     }
   };
+
+  const fetchWarehouses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("erp_warehouses_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n");
+      if (error) throw error;
+      setWarehouses(data || []);
+    } catch (error) {
+      console.error("Error fetching warehouses:", error);
+    }
+  };
+
+  const getWarehouseName = (warehouseId: number | null) => {
+    const warehouse = warehouses.find((w) => w.id === warehouseId);
+    return warehouse?.name || "-";
+  };
+
+  const selectedOrders = () =>
+    orders.filter((row) => selectedRowKeys.map(Number).includes(row.id));
+
+  // 批量动作逐单执行：一单失败不影响其余单，失败原因逐条汇总
+  const runSequential = async (
+    targets: ProductionOrder[],
+    action: (record: ProductionOrder) => Promise<string | void>,
+    fallbackMessage: string,
+  ) => {
+    let success = 0;
+    const failures: string[] = [];
+    const notes: string[] = [];
+    for (const record of targets) {
+      try {
+        const note = await action(record);
+        success += 1;
+        if (note) notes.push(`${record.order_no}：${note}`);
+      } catch (error: any) {
+        console.error("Error running production order batch action:", error);
+        failures.push(`${record.order_no}：${error?.message || fallbackMessage}`);
+      }
+    }
+    setSelectedRowKeys([]);
+    await fetchOrders();
+    return { success, failures, notes };
+  };
+
+  const handleExplodeBom = () => {
+    const targets = selectedOrders().filter(
+      (row) => !CLOSED_STATUSES.includes((row.status || "").toLowerCase()),
+    );
+    if (targets.length === 0) {
+      message.warning(t("mrp.productionOrders.explodeNoTarget"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.productionOrders.explodeBom"),
+      content: t("mrp.productionOrders.explodeConfirm", { count: targets.length }),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setExploding(true);
+        try {
+          const { success, failures, notes } = await runSequential(
+            targets,
+            async (record) => {
+              const { data, error } = await supabase.rpc(EXPLODE_RPC, {
+                p_order_id: record.id,
+                p_replace: true,
+              });
+              if (error) throw error;
+              const result = data as { bom_no?: string; line_count?: number };
+              return t("mrp.productionOrders.explodeNote", {
+                bom: result?.bom_no ?? "-",
+                count: result?.line_count ?? 0,
+              });
+            },
+            t("mrp.productionOrders.explodeFailed"),
+          );
+          if (failures.length === 0) {
+            message.success(
+              t("mrp.productionOrders.explodeSuccess", { count: success }),
+            );
+            if (notes.length > 0) {
+              Modal.info({
+                title: t("mrp.productionOrders.explodeBom"),
+                content: (
+                  <div>
+                    {notes.map((note) => (
+                      <div key={note}>{note}</div>
+                    ))}
+                  </div>
+                ),
+              });
+            }
+          } else {
+            message.error(
+              t("mrp.productionOrders.explodePartialFailed", {
+                success,
+                failed: failures.length,
+                detail: failures.join("；"),
+              }),
+            );
+          }
+        } finally {
+          setExploding(false);
+        }
+      },
+    });
+  };
+
+  const handleKitCheck = async () => {
+    const targets = selectedOrders();
+    if (targets.length !== 1) {
+      message.warning(t("mrp.productionOrders.kitSingleOnly"));
+      return;
+    }
+    const record = targets[0];
+    setKitLoading(true);
+    setIsKitModalOpen(true);
+    setKitOrderNo(record.order_no);
+    try {
+      const { data, error } = await supabase.rpc(KIT_CHECK_RPC, {
+        p_order_id: record.id,
+      });
+      if (error) throw error;
+      const rows = (data || []) as KitRow[];
+      setKitRows(rows);
+      if (rows.length === 0) {
+        message.warning(t("mrp.productionOrders.kitEmpty"));
+      }
+    } catch (error: any) {
+      console.error("Error running kit check:", error);
+      message.error(error?.message || t("mrp.productionOrders.kitFailed"));
+      setKitRows([]);
+    } finally {
+      setKitLoading(false);
+    }
+  };
+
+  const handleGenerateIssue = () => {
+    const targets = selectedOrders().filter(
+      (row) => !CLOSED_STATUSES.includes((row.status || "").toLowerCase()),
+    );
+    if (targets.length === 0) {
+      message.warning(t("mrp.productionOrders.generateNoTarget"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.productionOrders.generateIssue"),
+      content: t("mrp.productionOrders.generateConfirm", { count: targets.length }),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setGenerating(true);
+        try {
+          const { success, failures, notes } = await runSequential(
+            targets,
+            async (record) => {
+              const { data, error } = await supabase.rpc(GENERATE_ISSUE_RPC, {
+                p_order_id: record.id,
+                p_warehouse_id: record.warehouse_id ?? null,
+              });
+              if (error) throw error;
+              const result = data as { target_document_no?: string };
+              return result?.target_document_no ?? "";
+            },
+            t("mrp.productionOrders.generateFailed"),
+          );
+          if (failures.length === 0) {
+            message.success(
+              t("mrp.productionOrders.generateSuccess", { count: success }),
+            );
+            if (notes.length > 0) {
+              Modal.info({
+                title: t("mrp.productionOrders.generateIssue"),
+                content: (
+                  <div>
+                    {notes.map((note) => (
+                      <div key={note}>{note}</div>
+                    ))}
+                  </div>
+                ),
+              });
+            }
+          } else {
+            message.error(
+              t("mrp.productionOrders.generatePartialFailed", {
+                success,
+                failed: failures.length,
+                detail: failures.join("；"),
+              }),
+            );
+          }
+        } finally {
+          setGenerating(false);
+        }
+      },
+    });
+  };
+
+  const kitStatusLabels: Record<string, { text: string; color: string }> = {
+    done: { text: t("mrp.productionOrders.kitStatusDone"), color: "default" },
+    ready: { text: t("mrp.productionOrders.kitStatusReady"), color: "success" },
+    transfer: { text: t("mrp.productionOrders.kitStatusTransfer"), color: "warning" },
+    short: { text: t("mrp.productionOrders.kitStatusShort"), color: "error" },
+  };
+
+  const formatQty = (value: number | null | undefined) =>
+    Number(value ?? 0).toLocaleString(undefined, { maximumFractionDigits: 4 });
+
+  const kitColumns = [
+    {
+      title: t("mrp.productionOrders.kitMaterial"),
+      dataIndex: "product_code",
+      key: "product_code",
+      render: (code: string, row: KitRow) => (code ? `${code} - ${row.product_name}` : "-"),
+    },
+    {
+      title: t("mrp.productionOrders.kitUnit"),
+      dataIndex: "unit",
+      key: "unit",
+      width: 80,
+      render: (unit: string) => unit || "-",
+    },
+    {
+      title: t("mrp.productionOrders.kitRequired"),
+      dataIndex: "required_quantity",
+      key: "required_quantity",
+      width: 100,
+      render: (qty: number) => formatQty(qty),
+    },
+    {
+      title: t("mrp.productionOrders.kitIssued"),
+      dataIndex: "issued_quantity",
+      key: "issued_quantity",
+      width: 100,
+      render: (qty: number) => formatQty(qty),
+    },
+    {
+      title: t("mrp.productionOrders.kitToIssue"),
+      dataIndex: "to_issue_quantity",
+      key: "to_issue_quantity",
+      width: 100,
+      render: (qty: number) => <strong>{formatQty(qty)}</strong>,
+    },
+    {
+      title: t("mrp.productionOrders.kitWarehouseStock"),
+      dataIndex: "warehouse_quantity",
+      key: "warehouse_quantity",
+      width: 110,
+      render: (qty: number, row: KitRow) => (
+        <span title={getWarehouseName(row.warehouse_id)}>{formatQty(qty)}</span>
+      ),
+    },
+    {
+      title: t("mrp.productionOrders.kitTotalStock"),
+      dataIndex: "total_quantity",
+      key: "total_quantity",
+      width: 100,
+      render: (qty: number) => formatQty(qty),
+    },
+    {
+      title: t("mrp.productionOrders.kitShortage"),
+      dataIndex: "shortage_quantity",
+      key: "shortage_quantity",
+      width: 100,
+      render: (qty: number) =>
+        qty > 0 ? <span style={{ color: "#cf1322" }}>{formatQty(qty)}</span> : "-",
+    },
+    {
+      title: t("mrp.productionOrders.kitSuggestedWarehouse"),
+      dataIndex: "suggested_warehouse_name",
+      key: "suggested_warehouse_name",
+      width: 140,
+      render: (name: string) => name || "-",
+    },
+    {
+      title: t("common.status"),
+      dataIndex: "kit_status",
+      key: "kit_status",
+      width: 100,
+      render: (status: string) => {
+        const config = kitStatusLabels[status] || { text: status, color: "default" };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
+    },
+  ];
 
   const handleSubmit = async (values: any) => {
     try {
@@ -211,7 +538,7 @@ export function ProductionOrders() {
   const handleAdd = async () => {
     let orderNo: string;
     try {
-      orderNo = await nextDocumentNo("production_order");
+      orderNo = await nextDocumentNo(DOC_TYPE);
     } catch (error) {
       message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
       return;
@@ -223,6 +550,7 @@ export function ProductionOrders() {
       product_id: undefined,
       bom_id: undefined,
       routing_id: undefined,
+      warehouse_id: undefined,
       planned_quantity: 1,
       completed_quantity: 0,
       scrapped_quantity: 0,
@@ -358,14 +686,15 @@ export function ProductionOrders() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredOrders}
         rowKey="id"
+        toolbarActions={["delete" , "export"]}
         loading={loading}
         pagination={{ pageSize: 10 }}
-        storageKey="production-orders"
+        storageKey={DOC_TYPE}
         headerTitle={t('mrp.productionOrders.title')}
         rowSelection={{
           selectedRowKeys,
@@ -376,17 +705,65 @@ export function ProductionOrders() {
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
               {t('mrp.productionOrders.add')}
             </Button>
+            <Button
+              icon={<ApartmentOutlined />}
+              loading={exploding}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleExplodeBom}
+            >
+              {t('mrp.productionOrders.explodeBom')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
+            <Button
+              icon={<SafetyCertificateOutlined />}
+              disabled={selectedRowKeys.length !== 1}
+              onClick={handleKitCheck}
+            >
+              {t('mrp.productionOrders.kitCheck')}
+            </Button>
+            <Button
+              icon={<ExportOutlined />}
+              loading={generating}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleGenerateIssue}
+            >
+              {t('mrp.productionOrders.generateIssue')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
             <Input.Search
               allowClear
               placeholder={t('mrp.productionOrders.searchPlaceholder')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onSearch={fetchOrders}
-              style={{ width: 240 }}
+              style={{ width: 160 }}
             />
           </Space>
         }
       />
+
+      <Modal
+        title={`${t('mrp.productionOrders.kitCheck')}${kitOrderNo ? ` - ${kitOrderNo}` : ""}`}
+        open={isKitModalOpen}
+        onCancel={() => setIsKitModalOpen(false)}
+        footer={
+          <Button onClick={() => setIsKitModalOpen(false)}>
+            {t('common.close')}
+          </Button>
+        }
+        width={1100}
+      >
+        <Table
+          columns={kitColumns}
+          dataSource={kitRows}
+          rowKey={(row) => `${row.product_id}-${row.warehouse_id ?? 0}`}
+          loading={kitLoading}
+          pagination={false}
+          size="small"
+          scroll={{ y: 420, x: 1040 }}
+          locale={{ emptyText: t('mrp.productionOrders.kitEmpty') }}
+        />
+      </Modal>
 
       <SupaModal
         title={editingOrder ? t('mrp.productionOrders.edit') : t('mrp.productionOrders.addTitle')}
@@ -449,6 +826,24 @@ export function ProductionOrders() {
                     {routings.map((r) => (
                       <Option key={r.id} value={r.id}>
                         {r.routing_no}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+                <Form.Item
+                  label={t('mrp.productionOrders.materialWarehouse')}
+                  name="warehouse_id"
+                  extra={t('mrp.productionOrders.materialWarehouseHint')}
+                >
+                  <Select
+                    placeholder={t('mrp.productionOrders.materialWarehousePrompt')}
+                    allowClear
+                    showSearch
+                    optionFilterProp="children"
+                  >
+                    {warehouses.map((w) => (
+                      <Option key={w.id} value={w.id}>
+                        {w.name}
                       </Option>
                     ))}
                   </Select>
@@ -546,8 +941,9 @@ export function ProductionOrders() {
             </Button>
           </Space>
         }
-        width={'60%'}
+        width={'80%'}
         height={'80%'}
+        workflowDocumentType={DOC_TYPE}
       />
     </div>
   );

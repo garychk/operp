@@ -270,13 +270,18 @@ BEGIN
     RAISE EXCEPTION 'No active workflow process for document type %', p_document_type;
   END IF;
 
+  -- ⚠️ 冲突目标必须与 deploy_41 多租户化后的唯一约束一致：
+  --    uq_wf_process_instances_t (tenant_id, document_type, document_id)。
+  --    旧的 UNIQUE(document_type, document_id) 已被替换，写旧列组会报
+  --    42P10 "no unique or exclusion constraint matching the ON CONFLICT specification"。
+  --    tenant_id 省略时走 DEFAULT current_tenant_id()，与既有行同租户才冲突，语义正确。
   INSERT INTO public.wf_process_instances (
     process_id, document_type, document_id, document_no, status, started_by, started_at
   ) VALUES (
     v_process_id, p_document_type, p_document_id, p_document_no, 'draft',
     public.current_sys_user_id(), NOW()
   )
-  ON CONFLICT (document_type, document_id)
+  ON CONFLICT (tenant_id, document_type, document_id)
   DO UPDATE SET updated_at = NOW()
   RETURNING id INTO v_instance_id;
 

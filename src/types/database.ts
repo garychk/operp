@@ -287,9 +287,81 @@ export interface ErpGlEntriesRow {
   source_detail_id: number | null;
   posted_at: string | null;
   posted_by: number | null;
+  /** 该总账行的原币币种；NULL = 本位币行（deploy_72 新增） */
+  currency: string | null;
+  exchange_rate: number | null;
+  debit_fc: number | null;
+  credit_fc: number | null;
+  tenant_id: number | null;
 }
 export type ErpGlEntriesInsert = Omit<ErpGlEntriesRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpGlEntriesUpdate = Partial<ErpGlEntriesInsert>;
+
+/**
+ * 应收应付核销记录（deploy_73 起带双币与汇兑损益）。
+ * fx_gain_loss = 6603 的净借方发生额：正数 = 汇兑损失，负数 = 汇兑收益。
+ */
+export interface ErpArApSettlementsRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  settlement_type: string;  // receivable | payable
+  source_id: number;
+  period_id: number | null;  // FK -> erp_accounting_periods_s_539dcf81_b.id
+  /** 原币核销金额 */
+  amount: number;
+  settlement_date: string;
+  remark: string | null;
+  idempotency_key: string | null;
+  settled_by: number | null;
+  voucher_id: number | null;  // FK -> erp_vouchers_s_539dcf81_b.id
+  tenant_id: number | null;
+  /** 核销日汇率；本位币单据为 1（deploy_72 新增） */
+  settlement_rate: number | null;
+  /** 实际收付的本位币 = amount x settlement_rate */
+  base_amount: number | null;
+  /** 被冲减的账面本位币；按核销时账面余额比率冲减，故调汇后 ≠ amount x 单据汇率 */
+  book_base_amount: number | null;
+  fx_gain_loss: number | null;
+}
+export type ErpArApSettlementsInsert = Omit<ErpArApSettlementsRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpArApSettlementsUpdate = Partial<ErpArApSettlementsInsert>;
+
+/**
+ * 期末调汇记录（deploy_74）。每个 (租户, 期间, 币种) 同时只能有一条有效记录，
+ * 想重估必须先 reverse_fx_revaluation。
+ */
+export interface ErpFxRevaluationS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  revaluation_no: string;
+  period_id: number | null;  // FK -> erp_accounting_periods_s_539dcf81_b.id
+  revaluation_date: string;
+  currency: string;
+  /** 期末汇率：1 外币 = rate 本位币 */
+  rate: number;
+  ar_original_amount: number | null;
+  ar_base_before: number | null;
+  ar_base_after: number | null;
+  ap_original_amount: number | null;
+  ap_base_before: number | null;
+  ap_base_after: number | null;
+  fx_gain_loss: number | null;
+  voucher_id: number | null;  // FK -> erp_vouchers_s_539dcf81_b.id
+  status: string | null;  // posted | cancelled
+  idempotency_key: string | null;
+  created_by: number | null;
+  tenant_id: number | null;
+}
+export type ErpFxRevaluationS539Dcf81BInsert = Omit<ErpFxRevaluationS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpFxRevaluationS539Dcf81BUpdate = Partial<ErpFxRevaluationS539Dcf81BInsert>;
 
 export interface ErpInventoryS539Dcf81BRow {
   id: number;
@@ -374,6 +446,8 @@ export interface ErpMaterialIssueDetailsS539Dcf81BRow {
   amount: number | null;
   batch_no: string | null;
   remark: string | null;
+  order_detail_id: number | null;  // FK -> erp_production_order_details_s_539dcf81_b.id（deploy_57）
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（deploy_58，过账时决定扣哪个库位的库存）
 }
 export type ErpMaterialIssueDetailsS539Dcf81BInsert = Omit<ErpMaterialIssueDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMaterialIssueDetailsS539Dcf81BUpdate = Partial<ErpMaterialIssueDetailsS539Dcf81BInsert>;
@@ -392,6 +466,10 @@ export interface ErpMaterialIssuesS539Dcf81BRow {
   total_amount: number | null;
   remark: string | null;
   status: string | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
 }
 export type ErpMaterialIssuesS539Dcf81BInsert = Omit<ErpMaterialIssuesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMaterialIssuesS539Dcf81BUpdate = Partial<ErpMaterialIssuesS539Dcf81BInsert>;
@@ -410,9 +488,99 @@ export interface ErpMrpPlansS539Dcf81BRow {
   plan_type: string | null;
   status: string | null;
   remark: string | null;
+  /** deploy_60：运算完成后由 ai-server 写入的分析报告（LLM 生成或确定性摘要） */
+  analysis_report: string | null;
 }
 export type ErpMrpPlansS539Dcf81BInsert = Omit<ErpMrpPlansS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMrpPlansS539Dcf81BUpdate = Partial<ErpMrpPlansS539Dcf81BInsert>;
+
+/** 主生产计划头（deploy_63）：draft | confirmed */
+export interface ErpMpsPlansS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  plan_no: string;
+  plan_date: string;
+  start_date: string;
+  end_date: string;
+  frozen_days: number | null;
+  status: string | null;
+  remark: string | null;
+  tenant_id: number | null;
+}
+export type ErpMpsPlansS539Dcf81BInsert = Omit<ErpMpsPlansS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpMpsPlansS539Dcf81BUpdate = Partial<ErpMpsPlansS539Dcf81BInsert>;
+
+/** 主生产计划行（deploy_63）：产品 × 日期，forecast 仅展示，mps_qty 为计划产出 */
+export interface ErpMpsPlanDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  plan_id: number;  // FK -> erp_mps_plans_s_539dcf81_b.id
+  product_id: number;  // FK -> erp_products_s_539dcf81_b.id
+  requirement_date: string;
+  forecast_qty: number | null;
+  mps_qty: number | null;
+  /** 已下推生产订单数量（doc_flow 台账回写） */
+  pushed_quantity: number | null;
+  remark: string | null;
+  tenant_id: number | null;
+}
+export type ErpMpsPlanDetailsS539Dcf81BInsert = Omit<ErpMpsPlanDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpMpsPlanDetailsS539Dcf81BUpdate = Partial<ErpMpsPlanDetailsS539Dcf81BInsert>;
+
+/** 币别主数据（deploy_65）：每租户一份，is_base 唯一决定本位币 */
+export interface ErpCurrenciesS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  /** ISO 4217 大写代码（CNY / USD / EUR ...），单据上的 currency 列软引用此列 */
+  code: string;
+  name: string;
+  symbol: string | null;
+  /** 该币别金额的小数位（JPY = 0），供 formatMoney 使用 */
+  decimal_places: number | null;
+  /** 本位币标记；切换走 RPC set_base_currency() */
+  is_base: boolean | null;
+  status: string | null;
+  sort_order: number | null;
+  remark: string | null;
+  tenant_id: number | null;
+}
+export type ErpCurrenciesS539Dcf81BInsert = Omit<ErpCurrenciesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpCurrenciesS539Dcf81BUpdate = Partial<ErpCurrenciesS539Dcf81BInsert>;
+
+/** 汇率（deploy_65）：1 单位 currency_code = rate 单位本位币 */
+export interface ErpExchangeRatesS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  /** 外币代码（本位币本身不设汇率） */
+  currency_code: string;
+  /** spot = 即期 / monthly = 月初 / custom = 自定义 */
+  rate_type: string | null;
+  effective_date: string;
+  /** 1 单位外币 = rate 单位本位币，方向写死不可反用 */
+  rate: number;
+  source: string | null;
+  remark: string | null;
+  tenant_id: number | null;
+}
+export type ErpExchangeRatesS539Dcf81BInsert = Omit<ErpExchangeRatesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpExchangeRatesS539Dcf81BUpdate = Partial<ErpExchangeRatesS539Dcf81BInsert>;
+
 
 export interface ErpMrpRequirementsS539Dcf81BRow {
   id: number;
@@ -433,6 +601,12 @@ export interface ErpMrpRequirementsS539Dcf81BRow {
   order_release_date: string | null;
   source_type: string | null;
   source_id: number | null;
+  // 转单追踪（deploy_61）：转成了哪张下游单据
+  converted_document_type: string | null;  // 'purchase_order' | 'production_order'
+  converted_document_id: number | null;
+  converted_document_no: string | null;
+  converted_at: string | null;
+  converted_by_user_id: number | null;
 }
 export type ErpMrpRequirementsS539Dcf81BInsert = Omit<ErpMrpRequirementsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpMrpRequirementsS539Dcf81BUpdate = Partial<ErpMrpRequirementsS539Dcf81BInsert>;
@@ -477,6 +651,9 @@ export interface ErpPayablesS539Dcf81BRow {
   balance: number | null;
   currency: string | null;
   exchange_rate: number | null;
+  base_amount: number | null;  // 本位币金额 = amount x exchange_rate（第 2 期新增）
+  base_paid_amount: number | null;  // 已核销本位币累计（第 3 期新增，deploy_72）
+  base_balance: number | null;  // 账面本位币余额；被期末调汇改写（第 3 期新增）
   status: string | null;
   remark: string | null;
 }
@@ -540,6 +717,7 @@ export interface ErpProductionOrdersS539Dcf81BRow {
   priority: number | null;
   remark: string | null;
   status: string | null;
+  warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id（领料仓库，deploy_57）
 }
 export type ErpProductionOrdersS539Dcf81BInsert = Omit<ErpProductionOrdersS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpProductionOrdersS539Dcf81BUpdate = Partial<ErpProductionOrdersS539Dcf81BInsert>;
@@ -563,9 +741,60 @@ export interface ErpProductionReceiptsS539Dcf81BRow {
   quality_status: string | null;
   remark: string | null;
   status: string | null;
+  location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（deploy_58，完工入库的收货库位）
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
 }
 export type ErpProductionReceiptsS539Dcf81BInsert = Omit<ErpProductionReceiptsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpProductionReceiptsS539Dcf81BUpdate = Partial<ErpProductionReceiptsS539Dcf81BInsert>;
+
+/** 物料图片（deploy_79）：每行对应 uploadfiles 桶里的一张图，首图 = sort_order 最小 */
+export interface ErpProductImagesS539Dcf81BRow {
+  id: number;
+  tenant_id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  product_id: number;
+  bucket: string;
+  /** 对象在桶内的路径，展示 URL 由 getPublicUrl(storage_path) 派生 */
+  storage_path: string;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  sort_order: number;
+  remark: string | null;
+}
+export type ErpProductImagesS539Dcf81BInsert = Omit<ErpProductImagesS539Dcf81BRow, 'id' | 'tenant_id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpProductImagesS539Dcf81BUpdate = Partial<ErpProductImagesS539Dcf81BInsert>;
+
+/** 业务附件（deploy_80）：通用 (biz_type, biz_id) 引用所属单据/档案，文件存 uploadfiles 桶 */
+export interface ErpAttachmentsS539Dcf81BRow {
+  id: number;
+  tenant_id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  /** 所属业务类型，如 sales_order / purchase_order / supplier / bom ... */
+  biz_type: string;
+  /** 所属业务记录 id（跨表引用，故无外键） */
+  biz_id: number;
+  bucket: string;
+  /** 对象在桶内的路径，下载 URL 由 getPublicUrl(storage_path) 派生 */
+  storage_path: string;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  remark: string | null;
+}
+export type ErpAttachmentsS539Dcf81BInsert = Omit<ErpAttachmentsS539Dcf81BRow, 'id' | 'tenant_id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpAttachmentsS539Dcf81BUpdate = Partial<ErpAttachmentsS539Dcf81BInsert>;
 
 export interface ErpProductionReportsS539Dcf81BRow {
   id: number;
@@ -632,6 +861,8 @@ export interface ErpPurchaseOrderDetailsS539Dcf81BRow {
   quantity: number | null;
   unit_price: number | null;
   amount: number | null;
+  base_unit_price: number | null;  // 原币单价折本位币（第 2 期新增）
+  base_amount: number | null;      // 本位币行金额（第 2 期新增）
   tax_rate: number | null;
   tax_amount: number | null;
   received_quantity: number | null;
@@ -655,6 +886,9 @@ export interface ErpPurchaseOrdersS539Dcf81BRow {
   tax_amount: number | null;
   discount_amount: number | null;
   payable_amount: number | null;
+  base_total_amount: number | null;    // 本位币金额（第 2 期新增）
+  base_tax_amount: number | null;      // 本位币税额（第 2 期新增）
+  base_discount_amount: number | null; // 本位币折扣（第 2 期新增）
   currency: string | null;
   exchange_rate: number | null;
   delivery_address: string | null;
@@ -682,6 +916,8 @@ export interface ErpPurchaseReceiptDetailsS539Dcf81BRow {
   quantity: number | null;
   unit_price: number | null;
   amount: number | null;
+  base_unit_price: number | null;  // 原币单价折本位币（第 2 期新增）
+  base_amount: number | null;      // 本位币行金额（第 2 期新增）
   batch_no: string | null;
   expiry_date: string | null;
   location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
@@ -704,6 +940,9 @@ export interface ErpPurchaseReceiptsS539Dcf81BRow {
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
   location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（默认库位）
   total_amount: number | null;
+  currency: string | null;       // 原币币种，从来源采购订单继承（第 2 期新增）
+  exchange_rate: number | null;  // 冻结汇率（第 2 期新增）
+  base_total_amount: number | null;  // 本位币金额（第 2 期新增）
   remark: string | null;
   status: string | null;
   posting_idempotency_key: string | null;
@@ -724,6 +963,9 @@ export interface ErpReceivablesS539Dcf81BRow {
   customer_id: number | null;  // FK -> erp_customers_s_539dcf81_b.id
   doc_type: string | null;
   doc_no: string;
+  source_type: string | null;
+  source_id: number | null;
+  source_no: string | null;
   doc_date: string;
   due_date: string | null;
   amount: number | null;
@@ -731,6 +973,9 @@ export interface ErpReceivablesS539Dcf81BRow {
   balance: number | null;
   currency: string | null;
   exchange_rate: number | null;
+  base_amount: number | null;  // 本位币金额 = amount x exchange_rate（第 2 期新增）
+  base_paid_amount: number | null;  // 已核销本位币累计（第 3 期新增，deploy_72）
+  base_balance: number | null;  // 账面本位币余额；被期末调汇改写（第 3 期新增）
   status: string | null;
   remark: string | null;
 }
@@ -791,6 +1036,9 @@ export interface ErpSalesDeliveriesS539Dcf81BRow {
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id
   location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id（默认库位）
   total_amount: number | null;
+  currency: string | null;       // 原币币种，从来源销售订单继承（第 2 期新增）
+  exchange_rate: number | null;  // 冻结汇率（第 2 期新增）
+  base_total_amount: number | null;  // 本位币金额（第 2 期新增）
   remark: string | null;
   status: string | null;
   posting_idempotency_key: string | null;
@@ -815,6 +1063,8 @@ export interface ErpSalesDeliveryDetailsS539Dcf81BRow {
   quantity: number | null;
   unit_price: number | null;
   amount: number | null;
+  base_unit_price: number | null;  // 原币单价折本位币（第 2 期新增）
+  base_amount: number | null;      // 本位币行金额（第 2 期新增）
   batch_no: string | null;
   location_id: number | null;  // FK -> erp_bins_s_539dcf81_b.id
   remark: string | null;
@@ -835,6 +1085,8 @@ export interface ErpSalesOrderDetailsS539Dcf81BRow {
   quantity: number | null;
   unit_price: number | null;
   amount: number | null;
+  base_unit_price: number | null;  // 原币单价折本位币（第 2 期新增）
+  base_amount: number | null;      // 本位币行金额（第 2 期新增）
   tax_rate: number | null;
   tax_amount: number | null;
   delivered_quantity: number | null;
@@ -858,6 +1110,9 @@ export interface ErpSalesOrdersS539Dcf81BRow {
   tax_amount: number | null;
   discount_amount: number | null;
   receivable_amount: number | null;
+  base_total_amount: number | null;    // 本位币金额（第 2 期新增）
+  base_tax_amount: number | null;      // 本位币税额（第 2 期新增）
+  base_discount_amount: number | null; // 本位币折扣（第 2 期新增）
   currency: string | null;
   exchange_rate: number | null;
   delivery_address: string | null;
@@ -906,10 +1161,19 @@ export interface ErpVoucherDetailsS539Dcf81BRow {
   line_no: number;
   subject_id: number | null;  // FK -> erp_account_subjects_s_539dcf81_b.id
   summary: string | null;
+  /** 本位币金额（第 3 期明确口径：这一对列恒为本位币，不再混装原币） */
   debit_amount: number | null;
   credit_amount: number | null;
   auxiliary_type: string | null;
   auxiliary_id: number | null;
+  /** 该分录行的原币币种；NULL = 本位币行（deploy_72 新增） */
+  currency: string | null;
+  /** 原币 → 本位币汇率，1 外币 = rate 本位币（deploy_72 新增） */
+  exchange_rate: number | null;
+  /** 原币金额，与 debit_amount / credit_amount 成对（deploy_72 新增） */
+  debit_fc: number | null;
+  credit_fc: number | null;
+  tenant_id: number | null;
 }
 export type ErpVoucherDetailsS539Dcf81BInsert = Omit<ErpVoucherDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpVoucherDetailsS539Dcf81BUpdate = Partial<ErpVoucherDetailsS539Dcf81BInsert>;
@@ -932,6 +1196,10 @@ export interface ErpVouchersS539Dcf81BRow {
   status: string | null;
   posted_at: string | null;
   posted_by: number | null;
+  /** 凭证头币种；NULL = 本位币（deploy_72 新增） */
+  currency: string | null;
+  exchange_rate: number | null;
+  tenant_id: number | null;
 }
 export type ErpVouchersS539Dcf81BInsert = Omit<ErpVouchersS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpVouchersS539Dcf81BUpdate = Partial<ErpVouchersS539Dcf81BInsert>;
@@ -1007,6 +1275,36 @@ export interface SysFormsRow {
 }
 export type SysFormsInsert = Omit<SysFormsRow, 'id' | 'corp_id' | 'emp_id' | 'created_at'>;
 export type SysFormsUpdate = Partial<SysFormsInsert>;
+
+/**
+ * MCP 服务 API Key（deploy_55_mcp_api_keys.sql）。
+ *
+ * 明文永不入库，这里能拿到的只有 key_prefix（展示用）与 key_hash（不可逆摘要）。
+ * user_id / tenant_id 由数据库的 DEFAULT current_sys_user_id() / current_tenant_id()
+ * 自动填充，前端不要也**不应该**显式传 —— 传了也会被 RLS 的 WITH CHECK 拦住。
+ */
+export interface SysMcpApiKeysRow {
+  id: number;
+  user_id: number;
+  tenant_id: number | null;
+  name: string;
+  key_prefix: string;
+  key_hash: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string | null;
+  is_deleted: string | null;
+}
+/** 前端只会 insert 这三项 + 可选过期时间，其余交给数据库默认值 */
+export interface SysMcpApiKeysInsert {
+  name?: string;
+  key_prefix: string;
+  key_hash: string;
+  expires_at?: string | null;
+}
+/** 列级授权只放开了这三列，多传会被数据库拒绝 */
+export type SysMcpApiKeysUpdate = Partial<Pick<SysMcpApiKeysRow, 'name' | 'revoked_at' | 'is_deleted'>>;
 
 export interface ErpUomGroupsS539Dcf81BRow {
   id: number;

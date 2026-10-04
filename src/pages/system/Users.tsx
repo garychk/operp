@@ -569,7 +569,7 @@ const columns: ColumnsType<User> = [
     },
   ];
   return (
-    <Card className='mainContent' variant="borderless" title={t('users.title')} extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('users.addUser')}</Button>}>      
+    <Card variant="borderless" title={t('users.title')} extra={<Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('users.addUser')}</Button>}>      
       
       <Table
         columns={columns}

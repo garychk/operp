@@ -13,6 +13,10 @@ const normalizePath = (path: string) => {
   return normalized || '/';
 };
 
+// 个人页面（不属于任何业务菜单，也不参与基线-副本菜单授权）：
+// 只要登录成功就允许访问，否则非超管用户点开会被判成「无权限」。
+const PERSONAL_PATHS = new Set<string>(['/workbench']);
+
 export function ProtectedRoute({ children }: RouteGuardProps) {
   const { user, loading } = useAuth();
   const location = useLocation();
@@ -50,7 +54,7 @@ export function MenuPermissionGuard({ children }: RouteGuardProps) {
     (path) => normalizePath(path) === currentPath,
   );
 
-  if (currentPath !== '/' && !user.isSuperAdmin && !hasMenuPermission) {
+  if (currentPath !== '/' && !PERSONAL_PATHS.has(currentPath) && !user.isSuperAdmin && !hasMenuPermission) {
     return <Forbidden />;
   }
 

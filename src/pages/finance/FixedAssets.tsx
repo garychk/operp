@@ -8,6 +8,7 @@ import { generateIdempotencyKey } from '../../utils/uuid';
 import type { Tables } from '../../utils/supabase';
 import dayjs from 'dayjs';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney } from '../../utils/money';
 import { useTranslation } from 'react-i18next';
 import SimpleModal from '../../components/SimpleModal';
 
@@ -227,13 +228,13 @@ export function FixedAssets() {
       title: t('fixedAssets.originalValue'),
       dataIndex: 'original_value',
       key: 'original_value',
-      render: (value: number) => `¥${(value ?? 0).toLocaleString()}`,
+      render: (value: number) => formatMoney(value),
     },
     {
       title: t('fixedAssets.netValue'),
       dataIndex: 'net_value',
       key: 'net_value',
-      render: (value: number) => `¥${(value ?? 0).toLocaleString()}`,
+      render: (value: number) => formatMoney(value),
     },
     {
       title: t('common.status'),
@@ -262,7 +263,7 @@ export function FixedAssets() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredAssets}

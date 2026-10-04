@@ -1,4 +1,8 @@
-CREATE EXTENSION IF NOT EXISTS vector;
+-- vector 必须显式装到 extensions schema：
+-- 不带 SCHEMA 时 CREATE EXTENSION 会落到 search_path 里第一个可写 schema，
+-- 本地实例（"$user", public, extensions）会落到 public，
+-- 而 deploy_30 / deploy_48 里写的是 extensions.vector(768) → 报 type does not exist。
+CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;
 
 CREATE TABLE IF NOT EXISTS public.sys_ai_knowledge_chunks (
   id BIGSERIAL PRIMARY KEY,

@@ -19,6 +19,7 @@ import type { ColumnsType } from "antd/es/table";
 import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined, SyncOutlined } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import { useAuth } from "../../contexts/AuthContext";
 
 const resolveAIBaseUrl = () => {
   const explicitUrl = import.meta.env.VITE_AI_SERVER_URL;
@@ -76,6 +77,7 @@ function normalizeTags(value?: string | null) {
 export function KnowledgeBase() {
   const { t } = useTranslation();
   const defaultImportText = t('knowledgeBase.importExample');
+  const { user } = useAuth();
 
   const [rows, setRows] = useState<KnowledgeDoc[]>([]);
   const [loading, setLoading] = useState(false);
@@ -233,16 +235,30 @@ export function KnowledgeBase() {
   };
 
   const handleReindex = async (docId?: number) => {
+    // ai-server 走 service_role，绕过 RLS，必须显式告诉它索引哪个租户的文档；
+    // 不带 tenant_id 时它只会扫 tenant_id IS NULL 的平台基线行，结果恒为 total=0。
+    if (!user?.tenantId) {
+      message.warning(t('knowledgeBase.reindexNoTenant'));
+      return;
+    }
     setReindexing(true);
     try {
+      // ai-server 已启用 JWT 鉴权：租户以 Authorization 头解析为准
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       const response = await fetch(`${AI_SERVER_URL}/knowledge/reindex`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
         },
-        body: JSON.stringify(
-          Number.isFinite(docId) ? { doc_id: docId } : {},
-        ),
+        body: JSON.stringify({
+          ...(Number.isFinite(docId) ? { doc_id: docId } : {}),
+          tenant_id: user.tenantId,
+        }),
       });
       const result = (await response.json()) as {
         ok?: boolean;

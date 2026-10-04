@@ -1,415 +1,387 @@
-# OPERP 管理系统
+# OPERP · AI 原生智能 ERP 平台
 
-一个功能完整的企业资源计划（ERP）系统，采用现代前端技术栈构建，并集成 AI 智能对话能力。
+一个面向制造企业的**多租户、AI 原生**企业资源计划（ERP）系统。
+
+它不只是「给 ERP 加了个聊天框」——系统把 **AI 智能体、BAQ 业务活动查询、DocType 单据类型、Workflow 审批流、单据转换（DocFlow）** 五件事做成了平台级底座：业务元数据全部可配置，单据流转规则全部声明式定义，用户既能在界面上点，也能用自然语言让 AI 直接建单、过账、审批、转单。
+
 ![alt text](image.png)
----
-
-## 🛠️ 技术栈
-
-### 前端框架与工具
-- **React 18.2** - UI 组件库
-- **TypeScript 5.9** - 类型安全的 JavaScript
-- **Vite 5.4** - 构建工具（快速开发体验）
-- **React Router DOM 6.26** - 路由管理
-
-### UI 组件库
-- **Ant Design 6.3** - 企业级 UI 组件库
-- **Ant Design X 2.8** - AI 对话组件与智能交互能力
-- **Pro Components 3.1** - 专业组件（表格、表单等）
-- **Tailwind CSS 3.4** - 实用优先的 CSS 框架
-- **Lucide React 0.436** - 图标库
-
-### 数据库与后端服务
-- **Supabase** - 后端即服务（BaaS）平台
-  - PostgreSQL 数据库
-  - 实时数据库、认证、存储等功能
-  - @supabase/supabase-js 2.45
-
-### AI 与大模型
-- **@ant-design/x** - AI 对话 UI 组件
-- **Ollama** - 支持本地大模型对话，例如 Qwen、Llama、DeepSeek 等
-- **LocalStorage 模型配置** - 支持在浏览器中维护多个模型服务配置
-- **OPERP 数据增强** - 对话前自动查询真实 ERP 数据并注入 prompt
-
-### 工具库
-- **dayjs 1.11** - 轻量级日期处理库
-- **rc-field-form 2.7** - 表单管理库
 
 ---
 
-## 🏗️ 架构设计
+## ✨ 核心亮点
 
-### 架构类型
-- 前端 SPA（单页面应用）架构
-- 无独立后端，使用 Supabase 作为 BaaS 服务
-- 前后端通过 Supabase SDK 直接交互
-- AI 能力运行在前端侧：先识别用户意图，再按需查询 Supabase 或调用大模型服务
-
-### 目录结构
-```
-src/
-├── components/       # 公共组件（Layout、ProLayout、AIChatDrawer）
-│   ├── AIChatDrawer.tsx # AI 智能对话侧边栏
-│   └── AIChatDrawer.css # AI 对话样式
-├── pages/            # 页面组件（按业务模块划分）
-│   ├── finance/      # 财务模块
-│   ├── inventory/    # 进销存模块
-│   ├── mrp/          # 生产制造模块
-│   └── system/       # 系统管理模块
-├── types/            # TypeScript 类型定义
-├── utils/            # 工具函数（Supabase 客户端、日志、AI 工具）
-│   ├── aiAnalysisTools.ts # AI 财务/库存/生产数据分析工具
-│   └── aiCreateTools.ts   # AI 创建业务数据工具
-├── App.tsx           # 主应用组件（路由配置）
-└── main.tsx          # 应用入口
-```
-
-### 路由结构
-- `/` - 首页（Dashboard）
-- `/finance/*` - 财务管理模块
-- `/inventory/*` - 进销存管理模块
-- `/mrp/*` - 生产制造 MRP 模块
-- `/system/*` - 系统管理模块
+| 亮点 | 说明 | 实现落点 |
+|------|------|----------|
+| 🤖 **AI 智能体（LangGraph）** | 意图路由 → 规划 → 工具执行 → 记忆 → 回复组装，全链路可编排、可审计；不只是问答，能**直接操作业务单据** | `ai-server/src/ai/` |
+| 🧩 **DocType 单据类型引擎** | 单据类型即元数据（表名、主键、命名规则、是否可提交、审批流、表单/列表配置），驱动取名、状态回写、页面生成 | `deploy_15` / `sys_document_types` |
+| 🔀 **单据转换（DocFlow）** | 声明式「源单 → 目标单」字段映射 + **追加式数量台账**，防止超下推，支持整单反冲 | `deploy_35~38` |
+| ✅ **Workflow 审批流** | 可视化流程定义、条件分支、多级审批、驳回/撤回、审批历史，审批结果自动回写单据状态 | `deploy_14/16/49` |
+| 🔎 **BAQ 业务活动查询** | 不写 SQL，可视化拼装主表/关联/筛选/聚合/排序，发布后可作页面数据源，也可被 AI 调用 | `deploy_12` / `src/features/baq` |
+| 🎨 **动态页面设计器** | 拖拽组件、绑定多数据源（静态 JSON / 表 / BAQ），发布即生成菜单 | `src/features/page-builder` |
+| 🏢 **多租户 + 多币别** | 基线-副本双层授权、行级 RLS 隔离；双金额记账、汇率冻结、汇兑损益与期末调汇 | `deploy_41~78` |
+| 🧠 **RAG 知识库** | pgvector 向量检索，制度/流程/手册问答，回答带出处 | `deploy_25/28/29` |
 
 ---
 
-## 🗄️ 数据库设计
+## 🤖 AI 能力（核心）
 
-### 数据库平台
-Supabase PostgreSQL
+AI 是本系统的一等公民。它运行在一个独立服务 **`ai-server`**（Express 5 + LangGraph + MCP）中，而不是散落在前端的临时脚本里。
 
-### 数据表（40+ 张表）
+### 1. 智能体编排（LangGraph 状态图）
 
-| 模块 | 主要表 |
-|------|--------|
-| **系统管理** | `sys_users`、`sys_roles`、`sys_menus`、`sys_logs` |
-| **基础数据** | `erp_companies`、`erp_departments`、`erp_employees` |
-| **进销存** | `erp_customers`、`erp_suppliers`、`erp_products`、`erp_warehouses`、`erp_inventory`、`erp_purchase_orders`、`erp_sales_orders`、`erp_purchase_receipts`、`erp_sales_deliveries` |
-| **财务** | `erp_account_subjects`、`erp_vouchers`、`erp_receivables`、`erp_payables`、`erp_fixed_assets` |
-| **生产 MRP** | `erp_boms`、`erp_routing_operations`、`erp_work_centers`、`erp_operations`、`erp_production_orders`、`erp_mrp_plans` |
+`ai-server/src/ai/graph.ts` 用 LangGraph 把一次对话拆成可测试、可观测的节点流水线：
 
-### 数据库特点
-- 所有表都有标准字段：`id`、`corp_id`、`emp_id`、`is_deleted`、`created_at`、`updated_at`
-- 完整的外键关联设计
-- 支持软删除（`is_deleted` 字段）
-- TypeScript 类型自动生成（`types/database.ts`）
-- AI 创建业务数据时通过 Supabase SDK 直接写入对应业务表
-
----
-
-## 🤖 AI 智能对话
-
-系统已集成基于 **Ant Design X** 的 AI 智能对话侧边栏。用户可以在任意业务页面点击右上角的 OpenAI 图标打开右侧抽屉，与本地或远程大模型进行 ERP 业务问答、数据分析和业务数据创建。
-
-### 入口与交互
-- 入口位置：顶部导航栏右上角 OpenAI 图标
-- 展示方式：右侧 Drawer 侧边栏，不打断当前业务页面
-- 对话组件：使用 `@ant-design/x` 的 `Bubble`、`Sender`、`Prompts`、`Welcome`、`XProvider`
-- 快捷提示：内置财务分析、库存排查、生产分析、新增业务等提示词
-- 多轮创建：当用户提供的信息不足时，AI 会保留当前创建上下文，继续追问缺失字段
-- 清空对话：清空消息时会同步清除当前待补充的创建上下文
-
-### 大模型配置
-
-AI 模型配置保存在浏览器 `localStorage`，不需要写死在环境变量中。用户可以在 AI 对话窗口底部点击齿轮按钮维护多个模型配置。
-
-支持的配置项：
-- **显示名称**：例如 `Ollama 本地`、`Qwen 本地`、`OpenAI 代理`
-- **接口类型**：`Ollama` 或 `Proxy`
-- **接口地址**：模型服务请求地址
-- **模型名称**：例如 `qwen2.5`、`llama3.1`、`deepseek-r1`
-- **API Key**：可选，Ollama 本地通常不需要
-
-Ollama 本地服务推荐配置：
-
-```text
-接口类型：Ollama
-接口地址：http://localhost:11434/api/chat
-模型名称：填写本机已拉取的模型，例如 qwen2.5、llama3.1
-API Key：留空
+```
+START → contextLoader → intentRouter → planner → toolExecutor → memoryWriter → responseComposer → END
+                                            ↑____________|
+                                        （多步计划循环，上限 5 步）
 ```
 
-Ollama 请求格式已做兼容，系统会向 `/api/chat` 发送如下结构：
-
-```json
-{
-  "model": "qwen2.5",
-  "messages": [
-    { "role": "user", "content": "用户输入内容" }
-  ],
-  "stream": false
-}
-```
-
-普通代理接口会发送 `model`、`messages`、`stream: false`，并在配置了 API Key 时自动携带 `Authorization: Bearer <API Key>` 请求头。
-
-### ERP 数据分析能力
-
-AI 在发送请求给大模型前，会先根据用户问题自动识别是否需要读取 ERP 真实数据。如果识别到财务、库存或生产相关意图，系统会查询 Supabase，将数据摘要注入 prompt，再交给大模型生成回答。
-
-支持的分析域：
-
-| 分析域 | 识别关键词示例 | 查询数据 |
-|--------|----------------|----------|
-| 财务分析 | 财务、应收、应付、凭证、资产、账款、成本 | 应收、应付、凭证、固定资产 |
-| 库存分析 | 库存、存货、物料、仓库、低库存、积压、采购、销售出货 | 库存、物料、仓库、采购订单、销售订单 |
-| 生产分析 | 生产、工单、生产订单、MRP、BOM、工序、工作中心、延期 | 生产订单、MRP 计划、MRP 需求、工作中心、物料 |
-
-AI 分析会尽量输出：
-- 关键指标：数量、金额、状态分布、完成率、报废率等
-- 异常风险：逾期应收/应付、低库存、负库存、延期订单、MRP 净需求等
-- 可能原因：基于摘要数据推断，不编造没有查询到的数据
-- 处理建议：给出可执行的业务处理方向
-
-示例问题：
-
-```text
-帮我分析一下财务情况，有没有逾期应收和应付风险？
-查询一下库存情况，哪些物料低于安全库存？
-分析当前生产订单，有没有延期和报废异常？
-```
-
-### ERP 业务数据创建能力
-
-AI 对话支持通过自然语言创建业务数据。系统会先在前端识别创建意图并解析字段，字段完整且格式正确时直接写入 Supabase；如果字段缺失或格式不正确，会继续向用户索要更正后的详细数据。
-
-已支持创建的业务对象：
-
-| 模块 | 支持对象 |
-|------|----------|
-| 基础资料 | 客户、供应商、物料、仓库、部门 |
-| 采购销售 | 采购订单、销售订单、采购入库、销售出货 |
-| 生产制造 | BOM、工艺路线、工作中心、工序、生产订单 |
-
-创建流程：
-1. 用户输入新增指令，例如“帮我新增物料”
-2. 系统识别业务对象和已提供字段
-3. 如果缺少必填字段，AI 回复缺失字段清单和示例格式
-4. 用户继续补充字段，系统合并多轮上下文
-5. 字段校验通过后，系统调用 Supabase 插入数据
-6. AI 返回创建成功信息、记录 ID 和创建内容摘要
-
-示例：
-
-```text
-新增物料，物料编码 M001，物料名称 轴承A，单位 个，采购价 10，销售价 15，安全库存 100
-```
-
-```text
-新增供应商，供应商编码 S001，供应商名称 华东五金，联系人 张三，电话 13800000000
-```
-
-```text
-新增生产订单，产品ID 12，计划数量 100，计划开始日期 2026-07-01，计划结束日期 2026-07-05
-```
-
-字段校验能力：
-- 数字字段会校验是否为数字，例如金额、价格、数量、库存、ID
-- 日期字段建议使用 `YYYY-MM-DD`，也支持“今天”
-- 枚举字段会校验可选值，例如状态、类型、等级
-- 布尔字段支持“是/否”“启用/停用”“允许/不允许”
-
-当前创建能力说明：
-- 采购入库、销售出货、BOM、工艺路线、生产订单目前创建主表记录
-- 明细行、库存数量联动、订单状态流转等复杂业务动作后续可继续扩展
-- 所有写入动作都会通过 `logWithTiming` 记录操作日志，便于排查请求和性能
-
-### AI 相关文件
-
-| 文件 | 说明 |
+| 节点 | 职责 |
 |------|------|
-| `src/components/AIChatDrawer.tsx` | AI 对话抽屉、模型配置、发送逻辑、创建/分析工具调度 |
-| `src/components/AIChatDrawer.css` | AI 对话窗口样式 |
-| `src/utils/aiAnalysisTools.ts` | 财务、库存、生产分析工具，负责查询 Supabase 并生成数据摘要 |
-| `src/utils/aiCreateTools.ts` | 业务数据创建工具，负责意图识别、字段解析、校验、追问和插入 |
-| `src/components/ProLayout.tsx` | 顶部 OpenAI 图标入口和 AI 抽屉挂载 |
+| `contextLoader` | 加载会话记忆、最近消息、当前页面上下文、租户身份 |
+| `intentRouter` | 意图识别 + 技能路由 + 业务对象识别（规则强信号优先，LLM 兜底） |
+| `planner` | 复杂诉求拆解为多步计划；写步骤先产草稿并冻结剩余计划 |
+| `toolExecutor` | 调用工具/单据 RPC；支持 `$prev.<field>` 引用上一步产出 |
+| `memoryWriter` | 落库会话记忆（意图、目标、聚焦对象），支撑「它/这个/刚才那单」 |
+| `responseComposer` | 组装回复（文本 / 表格 / 卡片 / 跳转链接），统一剥离租户后缀 |
+
+**意图与技能**：`chat`、`knowledge`、`create`、`update`、`baq`、`analysis`、`document`（单据操作）、`confirm_execute` / `cancel_action`（草稿确认回路）。
+**前端技能选择器**：自动 / 数据分析 / 创建业务 / 业务动作 / 创建 BAQ / 普通对话。
+
+### 2. 能力矩阵
+
+| 能力 | 用户怎么用 | 系统做了什么 |
+|------|-----------|-------------|
+| **数据问答与分析** | 「帮我分析本月应收应付风险」「哪些物料低于安全库存」 | 识别分析意图 → 查询真实租户数据 → 生成指标、异常、成因、建议；SQL 执行有 5s 超时 + 强制 LIMIT + 危险函数黑名单 |
+| **自然语言建单** | 「建一张采购订单给上海钢铁，物料 A 100 个」 | LLM 抽取字段 → 名称解析为 ID → **生成草稿** → 用户回复「确认」才落库 |
+| **单据动作** | 「把这张采购订单过账」「反过账」「驳回」「转成入库单」 | 调用库内 RPC，走统一的单据状态闸门与幂等键 |
+| **多步计划** | 「新建客户，然后给它开一张销售订单」 | 确定性组合成计划，逐步产草稿/执行，`$prev` 串联前后步骤 |
+| **知识问答（RAG）** | 「入库流程应该怎么走」「XX 制度怎么规定」 | 向量检索知识库 → 回答附来源 |
+| **BAQ 生成** | 「我要查各客户的销售额汇总」 | 生成 BAQ 配置草稿，确认后保存 |
+
+### 3. 两段式写库确认（安全底线）
+
+AI **不会**在没有确认的情况下写业务数据：
+
+```
+用户指令 → prepareEntityUpsert → 草稿写入 sys_ai_pending_actions（30 分钟 TTL）
+        → 用户回复「确认」/ 调 POST /api/ai/confirm → 才真正执行
+```
+
+- 草稿带**用户 + 租户归属校验**、**一次性执行**（重复提交返回 already_handled），天然幂等。
+- 单据类写入（建单/过账/反过账/审批/转单）走库内 RPC（`deploy_83`），在同一事务内注入身份，**租户隔离与单据号取号都按真实租户工作**。
+- 所有 AI 动作落审计表 `sys_ai_operation_logs`（`services/aiAudit.ts`）。
+
+### 4. 信任边界（AI 不是后门）
+
+| 措施 | 说明 |
+|------|------|
+| **统一鉴权** | `/api/ai/*`、`/api/mrp|mps|finance/*` 全部过 `requireAuth`（Supabase JWT → `sys_users.auth_id` → 租户上下文），请求体里的 `user_id` 只做一致性校验 |
+| **服务端角色校验** | 角色从 `sys_user_roles` 查（`services/roleGuard.ts`），不看请求体声明；租户错配/无权限 403，状态不允许 409 |
+| **限流** | 挂在鉴权之后，避免匿名请求污染配额 |
+| **SQL 加固** | `execute_ai_analysis` 限制超时、行数与可用函数 |
+| **身份注入** | service_role 路径通过 `service_*` 包装在同一事务内注入 `app.tenant_id` + JWT claims，不另起一套租户逻辑 |
+
+### 5. MCP 服务（把 ERP 变成 Agent 工具）
+
+`ai-server/src/mcp/` 提供标准 **Model Context Protocol** 服务，可接入 Claude Desktop / WorkBuddy / Cursor 等客户端，让外部智能体直接使用 ERP 能力。共 **10 个工具**：
+
+**只读（6）**：`erp_list_entities`、`erp_describe_entity`、`erp_count_records`、`erp_finance_summary`、`erp_business_analysis`、`erp_search_knowledge`
+**单据（4）**：`erp_query_documents`（只读）、`erp_create_document` / `erp_document_action`（产草稿）、`erp_commit_document`（写库）
+
+- 写操作拆成 **「草稿 → 提交」两次调用**（MCP 里没有「回复确认」这一轮），草稿 30 分钟 TTL、一次性执行。
+- 身份解析采用**数据库优先**：`MCP_API_KEY` → `sys_mcp_api_keys`（只存 sha256 摘要，前端「我的密钥」自助签发），`.env` 仅兜底。
+- 客户端接入位置：连接器管理 → 右上角「自定义连接器」。
+
+---
+
+## 🧩 DocType 单据类型引擎
+
+参考 ERPNext / Frappe 的 DocType 思路，把「一张单据是什么」收敛成一份**元数据**（`sys_document_types`），业务代码与单据类型解耦。
+
+| 元数据字段 | 作用 |
+|-----------|------|
+| `document_type` / `document_name` | 唯一类型码与展示名 |
+| `table_name` / `primary_key_field` | 物理表与主键 → 审批结果能**自动回写**单据状态 |
+| `naming_rule` | 单号规则，如 `PO{YYYY}{####}` |
+| `is_submittable` / `is_single` / `is_child` / `is_tree` | 单据形态 |
+| `workflow_process_id` | 绑定的审批流 |
+| `form_config` / `list_config` / `permission_config` | 表单、列表、权限配置（JSONB） |
+
+**统一取号**：`generate_document_no()`（`deploy_32`）按 `naming_rule` 原子取号，支持 `{YYYY} {YY} {MM} {DD} {####}` 令牌，计数器在日期令牌进位时自动归零——采购/销售/出入库/调拨/盘点/调整/凭证/生产订单/领料/MRP 计划全部走它，不再依赖前端时间戳。
+**字段自动同步**：`sync_document_type_fields()` 让表结构变化与元数据保持一致。
+**管理界面**：`/system/document-types`（DocType 构建器）。
+
+---
+
+## 🔀 单据转换引擎（DocFlow）
+
+单据转换回答的是「**一张单能生成什么**」——与「谁审批、按什么顺序审批」的工作流刻意分离。核心是**声明式规则 + 追加式台账**（`deploy_35` ~ `deploy_38`）。
+
+| 表 | 作用 |
+|----|------|
+| `doc_flow_rules` | 源单 → 目标单的转换规则（含数量字段、过账要求等） |
+| `doc_flow_field_maps` | 单头 / 明细的字段映射（支持取值、引用、常量、表达式） |
+| `doc_flow_transfers` | **追加式数量台账**：已转数量、目标单、反向冲销行 |
+| `doc_flow_source_meta` / `doc_flow_doc_meta` | 源单/目标单的元信息 |
+
+**设计取舍**：
+
+- **台账只追加、从不物理删除**：反冲是插入一条负数行并指向原行（`reversed_transfer_id`），任何源单行都能审计回每一次转换与冲销。
+- **已转数量 = 台账 `SUM(quantity)`**：负数行自然抵消，不需要额外的「是否有效」标志位去同步。
+- **台账由目标明细表上的触发器维护**，而不是由生成函数维护——手工建的单和转来的单走完全相同的路径，不会出现两套口径。
+- **防超下推**：部分唯一索引 + `doc_flow_ledger_convert` 兜住并发。
+- **可视化**：`doc_flow_connections()` 输出单据连接图，前端用 `DocFlowConnectionsGraph` 展示，工具栏 `DocFlowGenerateButton` 一键下推。
+
+**AI 与它是同一套**：`FLOW_RULES` 里注册的三条主线（采购订单→采购入库、销售订单→销售出货、生产订单→生产领料）既是界面上的按钮，也是 AI 说的「转成入库单」。订单类单据不可直接过账，AI 的计划器会自动把第二步换成「转单」。
+
+---
+
+## ✅ Workflow 审批流引擎
+
+轻量但可配置的工作流引擎（`deploy_14` / `deploy_16` / `deploy_49`），支持多级顺序审批、驳回、撤回与完整历史。
+
+| 表 | 作用 |
+|----|------|
+| `wf_process_definitions` | 流程定义（流程码、单据类型、版本、是否启用） |
+| `wf_process_nodes` | 流程节点（审批角色、顺序、条件） |
+| `wf_process_actions` | 流转动作（提交、通过、驳回、撤回） |
+| `wf_process_instances` | 运行实例（按「租户 + 单据类型 + 单据 ID」唯一） |
+
+**关键设计**：
+
+- **状态双写在一个事务内**：`workflow_execute_action` 从持久化的图边与结构化条件里解析下一节点，并通过 DocType 元数据把审批结果**写回真实业务表的状态列**，`wf_process_instances` 与单据自身的 `status` 不会漂移。
+- **条件求值**：`workflow_evaluate_condition` / `workflow_compare_value` 支持结构化条件分支。
+- **前端组件**：`WorkflowDiagram`（流程图）、`ConditionEditor`（条件编辑）、`WorkflowActionBar`（单据页动作条）、`WorkflowHistoryCard`（审批历史）。
+- **每个单据动作不变量只有一份实现**：`services/documentService.ts` 的 `validateDocumentAction()` 同时被 HTTP 与 MCP 调用，不在别处另写状态闸门。
 
 ---
 
 ## 🔎 BAQ 业务活动查询
 
-系统内置 BAQ（Business Activity Query，业务活动查询）能力，用于通过可视化方式构建面向业务场景的数据查询。BAQ 适合在不编写 SQL 的情况下快速拼装主表、关联表、筛选条件、排序和聚合逻辑，并将结果作为页面、报表或其他业务能力的数据来源。
+BAQ（Business Activity Query，业务活动查询）让业务人员在**不写 SQL** 的前提下，可视化拼装面向场景的数据查询（`deploy_12`）。
 
-### BAQ 的核心能力
-- 可视化配置主表、关联表和表别名
-- 支持字段选择、分组、聚合、筛选和排序
-- 支持草稿保存、发布和结果预览
-- 支持表名称维护，便于面向业务人员阅读
-- 已发布 BAQ 可直接作为动态页面的数据源
+- 可视化配置**主表 / 关联表 / 表别名**
+- 字段选择、**分组、聚合、筛选、排序**
+- **草稿 → 发布** 两态管理，实时结果预览
+- 表/字段名称维护，面向业务人员可读
+- 已发布 BAQ 可直接作为**动态页面的数据源**，也可被 **AI 调用**生成
 
-### 典型应用场景
-- 财务对账与应收应付清单
-- 库存明细、采购与销售汇总分析
-- 生产订单、MRP 计划与工序进度查询
-- 作为页面设计器的数据底座，快速组合业务看板
+`baq_catalog()` 会输出可用的表与列清单，`aiBaqTools.ts` 用它把自然语言转换成 BAQ 配置草稿。
 
-### 相关文件
-- `src/features/baq/BaqDesigner.tsx` - BAQ 设计、预览、发布与表名称维护
-- `src/features/baq/api.ts` - BAQ 保存、执行与目录加载接口
-- `src/features/baq/types.ts` - BAQ 配置、查询与结果类型定义
+管理界面：`/system/baq`。
 
 ---
 
-## 🧩 动态页面设计
+## 🎨 动态页面设计器
 
-系统提供动态页面设计器，用于把页面组件、布局和数据源可视化编排出来。页面设计器支持拖拽式布局、属性配置和多种数据源接入方式，可以快速生成适合不同业务场景的个性化页面。
+可视化把组件、布局和数据源编排成页面，发布即生成菜单（`deploy_08`，路由 `/custom/:slug`）。
 
-### 页面设计器能力
-- 可视化添加文本、指标、按钮、表格和图表组件
-- 支持拖拽布局与尺寸调整
-- 支持静态 JSON、Supabase 表和 BAQ 三种数据源
-- 支持页面草稿保存与发布生成菜单
-- 可结合 BAQ 构建专用业务页面和管理看板
+- 拖拽添加文本、指标、按钮、表格、图表等组件，支持网格布局与尺寸调整
+- 三种数据源：**静态 JSON / Supabase 表 / BAQ**
+- 草稿保存与发布，发布后成为正式菜单项
+- 适合业务看板、经营仪表盘、专题分析页、基于 BAQ 的查询展示页
 
-### 适用场景
-- 业务看板和经营仪表盘
-- 专题分析页面
-- 轻量级业务门户
-- 基于 BAQ 的查询展示页
-
-### 相关文件
-- `src/features/page-builder/PageDesigner.tsx` - 页面设计器主界面
-- `src/features/page-builder/PageRenderer.tsx` - 页面渲染与预览
-- `src/features/page-builder/types.ts` - 页面组件与布局类型定义
+管理界面：`/system/page-designer`。
 
 ---
 
-## 📦 依赖分析
+## 🏢 业务模块
 
-### 生产依赖
-```json
-{
-  "@ant-design/icons": "^6.1.1",          // 图标
-  "@ant-design/pro-components": "3.1.12-0", // Pro 组件
-  "@ant-design/x": "^2.8.0",              // AI 对话组件
-  "@antv/x6": "^3.1.7",                  // 图形/流程能力
-  "antd": "^6.3.5",                       // Ant Design 组件库
-  "bcryptjs": "^3.0.3",                   // 密码哈希
-  "dayjs": "^1.11.20",                    // 日期处理
-  "operp-print-designer": "^1.1.3",       // 打印设计器
-  "rc-field-form": "^2.7.1",              // 表单管理
-  "react": "^18.2.0",                     // React
-  "react-dom": "^18.2.0"                  // React DOM
-}
+系统包含 **5 大模块、60+ 业务页面**，菜单名全量中英双语（i18n 键当前 **3034 × 2**）。
+
+### 🏠 首页与工作台
+- 经营驾驶舱（Dashboard）、工作台（Workbench）
+
+### 💰 财务
+会计科目、凭证（支持多币种分录）、总账余额、试算平衡（本位币/按币种双口径）、科目明细账、会计期间、应收、应付、固定资产、资产类别
+> 含**汇兑损益**：核销差额 + 期末调汇，`fx_gain_loss` 取 6603 净借方（正=损失，负=收益）。
+
+### 📦 进销存
+客户、供应商、物料（含图片）、仓库、库位、库存查询、采购订单、采购入库、销售订单、销售出货、库存流水、库存调拨、盘点、库存调整、单位换算（UOM）、物料分类
+
+### 🏭 生产制造
+部门、BOM（含可编辑树图）、工艺路线（含流程图）、工作中心、工序、生产订单、生产领料、生产入库、生产报工、成本核算、MRP 计划、MPS 主生产计划、质量检验
+
+### ⚙️ 系统
+用户、租户、角色、菜单、系统设置、数据字典、单位、**币别与汇率**、**工作流配置**、**单据转换配置**、**单据类型（DocType）**、日志、**页面设计器**、**BAQ**、**知识库**、我的 MCP 密钥
+
+---
+
+## 🗄️ 数据库与多租户
+
+- **PostgreSQL（Supabase）**，**104 张表**：66 张 `erp_*` 业务表 + 29 张 `sys_*` 系统/元数据表 + 4 张 `wf_*` 工作流表 + 5 张 `doc_flow_*` 转换表
+- **85 个迁移脚本**（`supabase/tables/deploy_01` ~ `deploy_83`），可按编号顺序整体重放
+- **多租户隔离**：`sys_tenants` 上触发器自动为新租户物化基线（菜单、角色、字典、表权限、币别）；行级 RLS + 表权限 + 基线/副本双层授权
+- **RLS 语义**：`erp_*` 物理表带租户后缀 `_s_539dcf81_b`（设计如此）；`sys_*` 无后缀
+- **多币别**：双金额（原币 + 本位币）、汇率冻结在单据上、库存/凭证/报表一律本位币记账，汇率方向恒为「1 单位外币 = rate 单位本位币」
+- 全站金额展示统一走 `src/utils/money.ts`，输入用 `MoneyInput`
+
+---
+
+## 🛠️ 技术栈
+
+### 前端
+- **React 18.2** + **TypeScript 5.9** + **Vite 5.4** + **React Router 6**
+- **Ant Design 6** + **Pro Components 3.1** + **Ant Design X 2.8**（AI 对话组件）
+- **@ant-design/charts**（图表）、**@antv/x6**（流程图/关系图）、**react-grid-layout**（拖拽布局）
+- **Tailwind CSS 3.4**、**i18next / react-i18next**（中英双语）
+- **operp-print-designer**（打印设计器）
+
+### 后端（`ai-server`）
+- **Express 5** + **Zod**（校验）
+- **LangGraph / LangChain**（智能体编排）
+- **@modelcontextprotocol/sdk**（MCP 服务）
+- **Supabase JS**（service_role 直连，显式租户过滤）
+
+### 数据与模型
+- **Supabase / PostgreSQL**，**pgvector**（知识库向量检索）
+- **Ollama / OpenAI 兼容代理**（多套模型配置，存于 `sys_config` 的 `ai` 分类，支持**按租户覆盖**基线配置；API Key 建议放服务端环境变量）
+
+---
+
+## 🏗️ 架构概览
+
+```
+┌──────────────────────────────┐        ┌──────────────────────────────┐
+│  前端 SPA (React + Vite)      │        │  外部 AI 客户端                │
+│  ├─ 业务页面 / BAQ / 页面设计器 │        │  (Claude Desktop / Cursor…)   │
+│  ├─ AI 对话抽屉 (antd/x)      │        └───────────────┬──────────────┘
+│  └─ Supabase SDK（直接读写）   │                        │ MCP (stdio)
+└───────────┬──────────────────┘                        │
+            │  REST (Bearer JWT)                        │
+            ▼                                           ▼
+┌───────────────────────────────────────────────────────────────────────┐
+│                        ai-server (Express 5 :3001)                     │
+│  鉴权 / 限流 / 角色校验  →  AI 编排 (LangGraph)  →  工具层 / 单据动作      │
+│                                           └──→  MCP 服务（10 工具）      │
+└───────────────────────────────┬───────────────────────────────────────┘
+                                │ service_role（显式租户过滤）
+                                ▼
+┌───────────────────────────────────────────────────────────────────────┐
+│              Supabase / PostgreSQL（RLS + 104 张表）                     │
+│  业务内核全部落在库内 RPC：取号 / 过账 / 反过账 / 审批 / 转单 / 核销 / 调汇  │
+│  保证多表写入的单事务原子性、行级锁、租户兜底                              │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-### 开发依赖
-```json
-{
-  "@supabase/supabase-js": "^2.45.0",  // Supabase 客户端
-  "@types/react": "^18.3.3",           // React 类型
-  "@types/react-dom": "^18.3.0",       // React DOM 类型
-  "@vitejs/plugin-react": "^4.3.1",    // Vite React 插件
-  "autoprefixer": "^10.4.19",          // CSS 前缀
-  "eslint": "^9.9.0",                  // 代码检查
-  "postcss": "^8.4.39",                // CSS 处理
-  "react-router-dom": "^6.26.0",       // 路由
-  "tailwindcss": "^3.4.7",             // Tailwind CSS
-  "typescript": "^5.9.3",              // TypeScript
-  "vite": "^5.4.0"                     // 构建工具
-}
+**业务内核放哪**：多表写入的原子性、`pg_advisory_xact_lock` 行级锁、RLS 与 `current_sys_user_id()` 兜底这三件事只有数据库里能做——因此**默认写库内 RPC**；ai-server 只承接外部 IO（LLM/HTTP）、跨事务的长流程、纯计算（MRP 展开、成本卷积）以及拿不到 JWT 的调用方（定时任务、MCP）。
+
+---
+
+## 📁 目录结构
+
+```
+supabase-erp/
+├── src/                           # 前端
+│   ├── components/                # 公共组件（AI 抽屉、工作流、单据转换、附件、通知…）
+│   │   ├── AIChatPanel.tsx        # AI 对话主面板
+│   │   ├── McpGuideDrawer.tsx     # MCP 接入指引
+│   │   ├── WorkflowActionBar.tsx  # 单据审批动作条
+│   │   ├── DocFlowGenerateButton.tsx  # 单据下推按钮
+│   │   └── workflow/              # 流程设计器组件
+│   ├── features/
+│   │   ├── baq/                   # BAQ 设计器
+│   │   └── page-builder/          # 动态页面设计器
+│   ├── pages/                     # 业务页面（finance / inventory / mrp / system）
+│   ├── locales/                   # i18n（zh-CN / en-US）
+│   └── utils/                     # supabase 客户端、money、AI 工具、单据转换规则…
+├── ai-server/                     # AI 服务
+│   └── src/
+│       ├── ai/                    # LangGraph 编排（graph + nodes + planRunner）
+│       ├── api/                   # 路由（ai / mrp / mps / finance / health）
+│       ├── services/              # 单据动作、MRP 引擎、成本卷积、知识库、审计…
+│       ├── tools/                 # 实体注册表、ERP 查询工具
+│       └── mcp/                   # MCP 服务（stdio）
+├── supabase/
+│   ├── tables/                    # 85 个迁移脚本（deploy_01 ~ deploy_83）
+│   └── functions/                 # Edge Functions（建租户用户、重置密码）
+├── docs/                          # 设计与评估文档
+└── README.md
 ```
 
 ---
 
-## 🎯 业务模块
+## 🚀 快速开始
 
-系统包含 **4 大核心模块**，共 **20+ 业务功能页面**：
+### 前置要求
+- Node.js 18+、Docker（运行本地 Supabase）
 
-### 1. 🏠 首页
-- Dashboard 仪表盘
-
-### 2. 💰 财务管理模块
-- 会计科目管理
-- 凭证管理
-- 应收账款管理
-- 应付账款管理
-- 固定资产管理
-- AI 财务情况分析
-
-### 3. 📦 进销存管理模块
-- 客户管理
-- 供应商管理
-- 物料管理
-- 仓库管理
-- 库存查询
-- 采购订单管理
-- 销售订单管理
-- 采购入库管理
-- 销售出货管理
-- AI 库存分析与业务数据创建
-
-### 4. 🏭 生产制造 MRP 模块
-- BOM（物料清单）管理
-- 工艺路线管理
-- 工作中心管理
-- 工序管理
-- 生产订单管理
-- MRP 计划管理
-- AI 生产情况分析与生产基础数据创建
-
-### 5. ⚙️ 系统管理模块
-- 用户管理
-- 角色管理
-- 菜单管理
-- 日志管理
-
----
-
-## 🔑 关键特性
-
-1. **企业级设计** - 使用 Ant Design + Pro Components
-2. **类型安全** - 完整的 TypeScript 类型定义
-3. **现代化工具链** - Vite 快速开发
-4. **无服务器架构** - Supabase 简化后端开发
-5. **完整的 ERP 业务流程** - 覆盖制造企业核心流程
-6. **模块化设计** - 业务模块清晰分离
-7. **响应式布局** - Tailwind CSS 实现
-8. **AI 智能对话** - 支持多模型配置、Ollama 本地模型、ERP 数据分析和业务数据创建
-9. **真实数据增强回答** - AI 回答财务、库存、生产问题前会读取 Supabase 数据摘要
-10. **自然语言创建业务数据** - 支持客户、供应商、物料、仓库、订单、BOM、工艺路线、生产订单等创建
-11. **BAQ 业务活动查询** - 面向业务场景的可视化查询构建与结果预览
-12. **动态页面设计** - 支持基于组件和多数据源的可视化页面搭建
-
----
-
-## 🚀 启动方式
+### 1. 启动数据库
 
 ```bash
-# 安装依赖
+# 在 Supabase 本地实例目录下启动（本仓库只含 tables/functions，不含 config.toml）
+supabase start
+
+# 按编号顺序部署全部表结构（脚本已按依赖排序）
+bash supabase/tables/000_run_all.local.sh
+```
+
+默认端口：`54321` Kong 网关、`54322` Postgres、`54323` Studio、`54324` Mailpit。
+
+### 2. 启动 AI 服务
+
+```bash
+cd ai-server
 npm install
-
-# 启动开发服务器
-npm run dev
-
-# 构建生产版本
-npm run build
-
-# 代码检查
-npm run lint
+cp .env.example .env          # 填入 SUPABASE_URL / SERVICE_ROLE_KEY / 模型配置
+npm run dev                   # http://localhost:3001
 ```
 
-### Ollama 本地模型准备
-
-如果使用 Ollama 本地模型，需要先启动 Ollama 服务，并拉取至少一个模型：
+### 3. 启动前端
 
 ```bash
-ollama serve
-ollama pull qwen2.5
+npm install
+npm run dev                   # http://localhost:5173
 ```
 
-然后在 AI 对话窗口模型配置中填写：
+### 4. （可选）接入 MCP 客户端
 
-```text
-接口地址：http://localhost:11434/api/chat
-模型名称：qwen2.5
+```bash
+cd ai-server && npm run build
+# 在 ~/.workbuddy/mcp.json（或等价客户端配置）中注册 stdio 服务，
+# 指向 node 绝对路径 + ai-server/dist/mcp/server.js，
+# env 里放 MCP_API_KEY（在系统 →「我的密钥」中生成）
+```
+
+### 常用命令
+
+```bash
+npm run dev        # 前端开发服务器
+npm run build      # 前端生产构建
+npm run lint       # 代码检查
+
+cd ai-server
+npm run dev        # AI 服务开发（tsx watch）
+npm run build      # 编译到 dist/
+npm run mcp:smoke  # MCP 工具冒烟测试（默认不写业务数据）
+```
+
+### 默认账号
+
+```
+超管：admin@operp.com / admin123（上线请立即修改）
 ```
 
 ---
 
-## 📝 项目概述
+## 📚 相关文档
 
-这是一个功能完整、架构清晰的 **现代化 ERP 前端系统**，适合作为制造企业的信息化管理平台。系统不仅提供传统 ERP 的财务、库存、采购、销售和生产制造功能，还集成了 AI 智能对话能力，可基于真实 opelix 数据进行分析，并通过自然语言创建常用业务数据。
+| 文档 | 内容 |
+|------|------|
+| `docs/page-designer.md` | 动态页面设计器设计说明 |
+| `docs/production-planning-implementation.md` | MRP / MPS 生产计划实现 |
+| `docs/production-planning-marketing.md` | 生产计划能力对外说明 |
+| `docs/multi-currency-assessment.md` | 多币别方案评估 |
+| `docs/posting-logic.md` | 单据过账逻辑 |
+| `docs/inventory-transaction-types.md` | 库存交易类型设计 |
+| `docs/custom-menu-architecture.md` | 自定义菜单架构 |
+| `docs/database-types.md` | 数据库类型设计 |
+| `docs/notification-center.md` | 通知中心 |
+| `docs/subscription-billing-design.md` | 订阅计费设计 |
+| `docs/saas-transformation-assessment.md` | SaaS 化改造评估 |
+| `supabase/tables/README_DEPLOYMENT.md` | 数据库部署说明 |
 
 ---
 

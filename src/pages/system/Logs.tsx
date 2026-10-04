@@ -37,7 +37,7 @@ export function Logs() {
   const [searchUsername, setSearchUsername] = useState('');
   const [searchOperation, setSearchOperation] = useState('');
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [currentLog, setCurrentLog] = useState<Log | null>(null);
@@ -238,20 +238,17 @@ export function Logs() {
     {
       title: t('common.actions'),
       key: 'action',
+      width: 90,
       render: (_, record) => (
         <Space>
-          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-            {t('logs.detail')}
-          </Button>
+          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}></Button>
           <Popconfirm
             title={t('logs.deleteSingleConfirm')}
             onConfirm={() => handleDelete(record.id)}
             okText={t('logs.confirm')}
             cancelText={t('common.cancel')}
           >
-            <Button type="text" danger icon={<DeleteOutlined />}>
-              {t('common.delete')}
-            </Button>
+            <Button type="text" danger icon={<DeleteOutlined />}></Button>
           </Popconfirm>
         </Space>
       ),
@@ -273,7 +270,7 @@ export function Logs() {
 
   return (
     <>
-      <Card className='mainContent' variant="borderless" title={t('logs.title')} extra={
+      <Card variant="borderless" title={t('logs.title')} extra={
         <Space size="middle">
           {selectedRowKeys.length > 0 && (
             <Popconfirm

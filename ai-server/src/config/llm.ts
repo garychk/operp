@@ -1,3 +1,5 @@
+import { logger } from "../services/logger.js";
+
 export interface LlmProviderConfig {
   endpoint?: string;
   apiKey?: string;
@@ -11,45 +13,108 @@ interface ChatMessage {
   content: string;
 }
 
+/**
+ * LLM 调用可靠性（#6）：
+ * - 超时：非流式整体超时 LLM_TIMEOUT_MS（默认 30s），流式用「空闲超时」
+ *   （每收到一个 chunk 就重置，默认 60s 没有新数据才中断）；
+ * - 重试：网络错误 / 超时 / 429 / 5xx 指数退避重试 LLM_MAX_RETRIES 次（默认 2）；
+ * - 降级：主模型重试耗尽后，若配置了 LLM_FALLBACK_BASE_URL 则用备模型再试一轮。
+ *
+ * 注意：流式请求一旦开始吐字就不重试（重试会导致前端出现重复文本），
+ * 只覆盖「连不上 / 首包超时」阶段。
+ */
+
+const TIMEOUT_MS = Number(process.env.LLM_TIMEOUT_MS || 30_000);
+const STREAM_IDLE_TIMEOUT_MS = Number(process.env.LLM_STREAM_IDLE_TIMEOUT_MS || 60_000);
+const MAX_RETRIES = Math.max(0, Number(process.env.LLM_MAX_RETRIES ?? 2));
+
+const FALLBACK_BASE_URL = process.env.LLM_FALLBACK_BASE_URL;
+const FALLBACK_API_KEY = process.env.LLM_FALLBACK_API_KEY;
+const FALLBACK_MODEL = process.env.LLM_FALLBACK_MODEL;
+
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
 const toResponseUrl = (baseUrl: string) =>
   baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/$/, "")}/chat/completions`;
 
-export async function callChatModel(
-  messages: ChatMessage[],
+const toChatUrl = (endpoint: string, apiType?: LlmProviderConfig["apiType"]) =>
+  apiType === "ollama" ? endpoint : toResponseUrl(endpoint);
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** 指数退避：0ms、800ms、1600ms…封顶 8s */
+const backoffMs = (attempt: number) => Math.min(800 * 2 ** attempt, 8_000);
+
+const isRetryableError = (error: unknown, status?: number) => {
+  if (status !== undefined) return RETRYABLE_STATUS.has(status);
+  // fetch 网络层错误（ECONNREFUSED / ETIMEDOUT / AbortError…）与解析失败都可重试
+  return true;
+};
+
+/**
+ * 带重试 + 降级的执行器。
+ * fn(provider) 在每次尝试时重新构建请求（主/备模型的 provider 不同）。
+ */
+async function withRetryAndFallback<T>(
+  scope: string,
+  build: (provider: LlmProviderConfig | undefined) => Promise<T>,
   provider?: LlmProviderConfig,
-) {
-  const endpoint = provider?.endpoint;
-  // console.log("[ai-server] callChatModel provider:", {
-  //   endpoint: provider?.endpoint,
-  //   model: provider?.model,
-  //   apiType: provider?.apiType,
-  //   hasApiKey: Boolean(provider?.apiKey),
-  //   temperature: provider?.temperature,
-  // });
-  if (!endpoint) {
-    throw new Error("No model endpoint configured");
+): Promise<T> {
+  const attempts: Array<LlmProviderConfig | undefined> = [provider];
+  if (FALLBACK_BASE_URL) {
+    attempts.push({
+      ...provider,
+      endpoint: FALLBACK_BASE_URL,
+      apiKey: FALLBACK_API_KEY || provider?.apiKey,
+      model: FALLBACK_MODEL || provider?.model,
+    });
   }
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(provider?.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
-    },
-    body: JSON.stringify({
-      model: provider?.model,
-      messages,
-      stream: false,
-      temperature: provider?.temperature ?? 0.3,
-    }),
-  });
+  let lastError: unknown = null;
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`LLM request failed: ${response.status}${errorText ? ` ${errorText}` : ""}`);
+  for (let p = 0; p < attempts.length; p += 1) {
+    const current = attempts[p];
+    const isFallback = p > 0;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+      try {
+        return await build(current);
+      } catch (error) {
+        lastError = error;
+        const status =
+          error instanceof LlmHttpError ? error.status : undefined;
+        if (!isRetryableError(error, status)) throw error;
+
+        const isLastAttemptOfProvider = attempt === MAX_RETRIES;
+        logger.warn("llm", `${scope} attempt failed`, {
+          attempt: attempt + 1,
+          maxRetries: MAX_RETRIES + 1,
+          isFallback,
+          status: status ?? null,
+          error: logger.normalizeError(error),
+        });
+
+        if (!isLastAttemptOfProvider) {
+          await sleep(backoffMs(attempt));
+        }
+      }
+    }
   }
 
-  const data = (await response.json()) as Record<string, unknown>;
+  throw lastError;
+}
+
+export class LlmHttpError extends Error {
+  constructor(
+    readonly status: number,
+    body: string,
+  ) {
+    super(`LLM request failed: ${status}${body ? ` ${body.slice(0, 400)}` : ""}`);
+    this.name = "LlmHttpError";
+  }
+}
+
+const extractContent = (data: Record<string, unknown>) => {
   const choices = Array.isArray(data.choices) ? (data.choices as Record<string, unknown>[]) : [];
   const first = choices[0] || {};
   const content =
@@ -58,11 +123,191 @@ export async function callChatModel(
       : "") ||
     String(first.text || "") ||
     String(data.reply || data.content || data.response || "");
+  return content;
+};
 
-  return {
-    raw: data,
-    content,
-  };
+export async function callChatModel(
+  messages: ChatMessage[],
+  provider?: LlmProviderConfig,
+) {
+  const endpoint = provider?.endpoint;
+  if (!endpoint) {
+    throw new Error("No model endpoint configured");
+  }
+
+  return withRetryAndFallback(
+    "chat",
+    async (activeProvider) => {
+      const activeEndpoint = activeProvider?.endpoint || endpoint;
+      const startedAt = Date.now();
+      const response = await fetch(toChatUrl(activeEndpoint, activeProvider?.apiType), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(activeProvider?.apiKey ? { Authorization: `Bearer ${activeProvider.apiKey}` } : {}),
+        },
+        body: JSON.stringify({
+          model: activeProvider?.model,
+          messages,
+          stream: false,
+          temperature: activeProvider?.temperature ?? 0.3,
+        }),
+        // 整体超时：面向「小 JSON 任务」（意图路由 / 字段提取）场景
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new LlmHttpError(response.status, errorText);
+      }
+
+      const data = (await response.json()) as Record<string, unknown>;
+      logger.info("llm", "chat ok", {
+        durationMs: Date.now() - startedAt,
+        model: activeProvider?.model,
+        chars: extractContent(data).length,
+      });
+      return { raw: data, content: extractContent(data) };
+    },
+    provider,
+  );
+}
+
+/**
+ * 流式对话（#7 真流式）。
+ *
+ * - proxy（OpenAI 兼容）：SSE，`data: {"choices":[{"delta":{"content":"..."}}]}`，
+ *   以 `data: [DONE]` 结束；
+ * - ollama /api/chat：NDJSON，每行 `{"message":{"content":"..."},"done":false}`。
+ *
+ * onDelta 每收到一段增量文本回调一次；返回完整拼接后的内容。
+ * 出错语义：首包之前（连接 / 握手 / 状态码）可安全重试；开始吐字后失败直接抛错，
+ * 由调用方决定降级（此时前端已收到部分文本，不能重放整段）。
+ */
+export async function callChatModelStream(
+  messages: ChatMessage[],
+  provider: LlmProviderConfig | undefined,
+  onDelta: (text: string) => void,
+): Promise<string> {
+  const endpoint = provider?.endpoint;
+  if (!endpoint) {
+    throw new Error("No model endpoint configured");
+  }
+
+  return withRetryAndFallback(
+    "chat-stream",
+    async (activeProvider) => {
+      const activeEndpoint = activeProvider?.endpoint || endpoint;
+      const startedAt = Date.now();
+      let received = "";
+
+      const controller = new AbortController();
+      // 空闲超时：每次收到数据都重置；连接阶段同样受此约束
+      let idleTimer: NodeJS.Timeout | undefined;
+      const resetIdleTimer = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => controller.abort(), STREAM_IDLE_TIMEOUT_MS);
+      };
+      resetIdleTimer();
+
+      try {
+        const response = await fetch(toChatUrl(activeEndpoint, activeProvider?.apiType), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(activeProvider?.apiKey
+              ? { Authorization: `Bearer ${activeProvider.apiKey}` }
+              : {}),
+          },
+          body: JSON.stringify({
+            model: activeProvider?.model,
+            messages,
+            stream: true,
+            temperature: activeProvider?.temperature ?? 0.3,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok || !response.body) {
+          const errorText = await response.text().catch(() => "");
+          // 首包之前失败：走重试 / 降级是安全的（前端还没收到任何字）
+          throw new LlmHttpError(response.status, errorText);
+        }
+
+        const isOllama = activeProvider?.apiType === "ollama";
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+
+        const handlePayload = (payload: string) => {
+          if (isOllama) {
+            // NDJSON：每行一个完整 JSON
+            for (const line of payload.split("\n")) {
+              const trimmed = line.trim();
+              if (!trimmed) continue;
+              try {
+                const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+                const message = parsed.message as Record<string, unknown> | undefined;
+                const piece = String(message?.content ?? parsed.response ?? "");
+                if (piece) {
+                  received += piece;
+                  onDelta(piece);
+                }
+              } catch {
+                // 忽略不完整行
+              }
+            }
+            return;
+          }
+          // OpenAI 兼容 SSE
+          for (const line of payload.split("\n")) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const data = trimmed.slice(5).trim();
+            if (!data || data === "[DONE]") continue;
+            try {
+              const parsed = JSON.parse(data) as Record<string, unknown>;
+              const choices = Array.isArray(parsed.choices)
+                ? (parsed.choices as Record<string, unknown>[])
+                : [];
+              const delta = choices[0]?.delta as Record<string, unknown> | undefined;
+              const piece = String(delta?.content ?? "");
+              if (piece) {
+                received += piece;
+                onDelta(piece);
+              }
+            } catch {
+              // 忽略无法解析的心跳 / 注释行
+            }
+          }
+        };
+
+        while (true) {
+          resetIdleTimer();
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          buffer += chunk;
+          const lastDoubleNewline = buffer.lastIndexOf("\n\n");
+          if (lastDoubleNewline >= 0) {
+            handlePayload(buffer.slice(0, lastDoubleNewline + 2));
+            buffer = buffer.slice(lastDoubleNewline + 2);
+          }
+        }
+        handlePayload(buffer);
+
+        logger.info("llm", "chat-stream ok", {
+          durationMs: Date.now() - startedAt,
+          model: activeProvider?.model,
+          chars: received.length,
+        });
+        return received;
+      } finally {
+        if (idleTimer) clearTimeout(idleTimer);
+      }
+    },
+    provider,
+  );
 }
 
 export async function callEmbeddingModel(
@@ -74,61 +319,69 @@ export async function callEmbeddingModel(
     throw new Error("No model endpoint configured");
   }
 
-  const normalizedEndpoint = endpoint.replace(/\/$/, "");
-  const embeddingEndpoint = provider?.apiType === "ollama"
-    ? normalizedEndpoint.endsWith("/embed")
-      ? normalizedEndpoint
-      : normalizedEndpoint.endsWith("/embeddings")
-        ? normalizedEndpoint.replace(/\/embeddings$/, "/embed")
-        : normalizedEndpoint.endsWith("/chat")
-          ? normalizedEndpoint.replace(/\/chat$/, "/embed")
-          : `${normalizedEndpoint}/embed`
-    : normalizedEndpoint.endsWith("/embeddings")
-      ? normalizedEndpoint
-    : normalizedEndpoint.endsWith("/chat/completions")
-      ? normalizedEndpoint.replace(/\/chat\/completions$/, "/embeddings")
-      : normalizedEndpoint.endsWith("/chat")
-        ? normalizedEndpoint.replace(/\/chat$/, "/embeddings")
-        : `${normalizedEndpoint}/embeddings`;
+  return withRetryAndFallback(
+    "embedding",
+    async (activeProvider) => {
+      const activeEndpoint = activeProvider?.endpoint || endpoint;
+      const normalized = activeEndpoint.replace(/\/$/, "");
+      const target = provider?.apiType === "ollama"
+        ? normalized.endsWith("/embed")
+          ? normalized
+          : normalized.endsWith("/embeddings")
+            ? normalized.replace(/\/embeddings$/, "/embed")
+            : normalized.endsWith("/chat")
+              ? normalized.replace(/\/chat$/, "/embed")
+              : `${normalized}/embed`
+        : normalized.endsWith("/embeddings")
+          ? normalized
+        : normalized.endsWith("/chat/completions")
+          ? normalized.replace(/\/chat\/completions$/, "/embeddings")
+          : normalized.endsWith("/chat")
+            ? normalized.replace(/\/chat$/, "/embeddings")
+            : `${normalized}/embeddings`;
 
-  const response = await fetch(embeddingEndpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(provider?.apiKey ? { Authorization: `Bearer ${provider.apiKey}` } : {}),
+      const response = await fetch(target, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(activeProvider?.apiKey
+            ? { Authorization: `Bearer ${activeProvider.apiKey}` }
+            : {}),
+        },
+        body: JSON.stringify({
+          model: activeProvider?.model,
+          input,
+          ...(provider?.apiType === "ollama" ? { truncate: true } : {}),
+        }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => "");
+        throw new LlmHttpError(response.status, errorText);
+      }
+
+      const data = (await response.json()) as Record<string, unknown>;
+      const first = Array.isArray(data.data)
+        ? (data.data[0] as Record<string, unknown> | undefined)
+        : undefined;
+      const embedding = Array.isArray(data.embeddings)
+        ? ((data.embeddings[0] as unknown[]) || [])
+        : Array.isArray(first?.embedding)
+          ? (first.embedding as unknown[])
+          : Array.isArray(data.embedding)
+            ? (data.embedding as unknown[])
+            : [];
+      const vector = embedding.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+
+      if (!vector.length) {
+        throw new Error(
+          `Embedding model returned empty vector. endpoint=${target}, model=${activeProvider?.model || "unknown"}`,
+        );
+      }
+
+      return vector;
     },
-    body: JSON.stringify({
-      model: provider?.model,
-      input,
-      ...(provider?.apiType === "ollama" ? { truncate: true } : {}),
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(
-      `Embedding request failed: ${response.status}${errorText ? ` ${errorText}` : ""}`,
-    );
-  }
-
-  const data = (await response.json()) as Record<string, unknown>;
-  const first = Array.isArray(data.data)
-    ? (data.data[0] as Record<string, unknown> | undefined)
-    : undefined;
-  const embedding = Array.isArray(data.embeddings)
-    ? ((data.embeddings[0] as unknown[]) || [])
-    : Array.isArray(first?.embedding)
-      ? (first.embedding as unknown[])
-      : Array.isArray(data.embedding)
-        ? (data.embedding as unknown[])
-        : [];
-  const vector = embedding.map((value) => Number(value)).filter((value) => Number.isFinite(value));
-
-  if (!vector.length) {
-    throw new Error(
-      `Embedding model returned empty vector. endpoint=${embeddingEndpoint}, model=${provider?.model || "unknown"}`,
-    );
-  }
-
-  return vector;
+    provider,
+  );
 }

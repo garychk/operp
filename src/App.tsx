@@ -4,6 +4,7 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 import { ProLayout } from './components/ProLayout';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { Workbench } from './pages/Workbench';
 import { AccountSubjects } from './pages/finance/AccountSubjects';
 import { Vouchers } from './pages/finance/Vouchers';
 import { GeneralLedgerBalance } from './pages/finance/GeneralLedgerBalance';
@@ -19,6 +20,7 @@ import { Suppliers } from './pages/inventory/Suppliers';
 import { Products } from './pages/inventory/Products';
 import { Warehouses } from './pages/inventory/Warehouses';
 import { Uoms } from './pages/system/Uoms';
+import { Currencies } from './pages/system/Currencies';
 import { Inventory } from './pages/inventory/Inventory';
 import { PurchaseOrders } from './pages/inventory/PurchaseOrders';
 import { SalesOrders } from './pages/inventory/SalesOrders';
@@ -35,7 +37,11 @@ import { WorkCenters } from './pages/mrp/WorkCenters';
 import { Operations } from './pages/mrp/Operations';
 import { ProductionOrders } from './pages/mrp/ProductionOrders';
 import { MaterialIssues } from './pages/mrp/MaterialIssues';
+import { ProductionReceipts } from './pages/mrp/ProductionReceipts';
+import { ProductionReports } from './pages/mrp/ProductionReports';
+import { CostCalculations } from './pages/mrp/CostCalculations';
 import { MrpPlans } from './pages/mrp/MrpPlans';
+import { MpsPlans } from './pages/mrp/MpsPlans';
 import { QualityInspections } from './pages/mrp/QualityInspections';
 import { Users } from './pages/system/Users';
 import { Tenants } from './pages/system/Tenants';
@@ -87,6 +93,9 @@ function AppContent() {
         }
       >
         <Route index element={<Dashboard />} />
+
+        {/* 个人工作台：不挂在业务菜单下，任何登录用户都可访问（见 MenuPermissionGuard） */}
+        <Route path="workbench" element={<Workbench />} />
         
         <Route path="finance">
           <Route index element={<Navigate to="subjects" replace />} />
@@ -128,7 +137,11 @@ function AppContent() {
           <Route path="operations" element={<Operations />} />
           <Route path="production" element={<ProductionOrders />} />
           <Route path="material-issues" element={<MaterialIssues />} />
+          <Route path="production-receipts" element={<ProductionReceipts />} />
+          <Route path="production-reports" element={<ProductionReports />} />
+          <Route path="cost-calculations" element={<CostCalculations />} />
           <Route path="plans" element={<MrpPlans />} />
+          <Route path="mps" element={<MpsPlans />} />
           <Route path="quality" element={<QualityInspections />} />
         </Route>
         
@@ -141,6 +154,7 @@ function AppContent() {
           <Route path="settings" element={<Settings />} />
           <Route path="dictionaries" element={<Dictionaries />} />
           <Route path="uoms" element={<Uoms />} />
+          <Route path="currencies" element={<Currencies />} />
           <Route path="workflow" element={<WorkflowConfig />} />
           <Route path="doc-flow" element={<DocFlowConfig />} />
           <Route path="document-types" element={<DocumentTypeBuilder />} />

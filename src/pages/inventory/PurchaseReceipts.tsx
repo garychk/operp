@@ -11,7 +11,9 @@ import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
+import { BizAttachments } from '../../components/BizAttachments';
 import { SuperTable } from '../../components/SuperTable';
+import { formatMoney, useCurrencyRegistry, currencyLabel } from '../../utils/money';
 import { ProductUnit } from '../../components/ProductUnit';
 import SimpleModal from '../../components/SimpleModal';
 import { WarehouseBinSelect } from '../../components/WarehouseBinSelect';
@@ -47,6 +49,11 @@ export function PurchaseReceipts() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
   const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null);
+
+  // 币别：入库单币种从来源采购订单流转继承（deploy_69 已配字段映射）。
+  // 金额一律按单据币种展示；本位币金额由过账时折汇落定并写入 base_total_amount。
+  const { baseCurrency } = useCurrencyRegistry();
+  const baseCurrencyCode = (baseCurrency || 'CNY').toUpperCase();
   const [details, setDetails] = useState<PurchaseReceiptDetail[]>([]);
   const [editingDetail, setEditingDetail] = useState<PurchaseReceiptDetail | null>(null);
   const [detailForm] = Form.useForm();
@@ -534,11 +541,25 @@ export function PurchaseReceipts() {
       width: 180,
     },
     {
+      title: t('currency.field.currency'),
+      dataIndex: 'currency',
+      key: 'currency',
+      width: 100,
+      render: (code: string) => (code ? `${code} · ${currencyLabel(code)}` : '-'),
+    },
+    {
       title: t('purchaseReceipts.amount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
       width: 100,
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number, record: PurchaseReceipt) => formatMoney(amount, record.currency),
+    },
+    {
+      title: t('currency.field.baseAmount'),
+      dataIndex: 'base_total_amount',
+      key: 'base_total_amount',
+      width: 110,
+      render: (amount: number) => formatMoney(amount, baseCurrencyCode),
     },
     {
       title: t('common.status'),
@@ -622,13 +643,13 @@ export function PurchaseReceipts() {
       title: t('purchaseReceipts.unitPrice'),
       dataIndex: 'unit_price',
       key: 'unit_price',
-      render: (price: number) => `¥${(price ?? 0).toFixed(2)}`,
+      render: (price: number) => formatMoney(price, selectedReceipt?.currency ?? undefined),
     },
     {
       title: t('purchaseReceipts.amount'),
       dataIndex: 'amount',
       key: 'amount',
-      render: (amount: number) => `¥${(amount ?? 0).toFixed(2)}`,
+      render: (amount: number) => formatMoney(amount, selectedReceipt?.currency ?? undefined),
     },
     {
       title: t('purchaseReceipts.batchNo'),
@@ -669,7 +690,7 @@ export function PurchaseReceipts() {
   }), { amount: 0 });
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredReceipts}
@@ -716,6 +737,16 @@ export function PurchaseReceipts() {
         detailPanelTitle={t('purchaseReceipts.detailPanelTitle')}
         historyTable={purchaseReceiptTable}
         historyRecordId={editingReceipt?.id}
+        detailItems={[
+          {
+            key: "attachments",
+            label: t('attachments.title'),
+            disabled: !editingReceipt?.id,
+            children: (
+              <BizAttachments bizType="purchase_receipt" bizId={editingReceipt?.id} />
+            ),
+          },
+        ]}
         workflowDocumentType="purchase_receipt"
         onDataChanged={fetchReceipts}
         form={form}
@@ -816,7 +847,7 @@ export function PurchaseReceipts() {
           summary={() => (
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>{t('purchaseReceipts.totalText')}</strong></Table.Summary.Cell>
-              <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right"><strong>{formatMoney(detailTotal.amount)}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={2} colSpan={4}></Table.Summary.Cell>
             </Table.Summary.Row>
           )}

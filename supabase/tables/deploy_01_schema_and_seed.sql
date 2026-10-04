@@ -123,10 +123,52 @@ CREATE INDEX IF NOT EXISTS idx_sys_config_category_code
 
 CREATE INDEX IF NOT EXISTS idx_sys_config_config_json_gin
   ON public.sys_config USING gin (config_json);
+-- 种子用户：只保留超管一个账号。
+-- 登录走 Supabase Auth（GoTrue），不读 sys_users.password_hash（此处仍是占位符），
+-- 所以必须在同一事务内把 GoTrue 账号建出来并回填 auth_id，db reset 后超管才能直接登录。
+-- 初始密码：admin123（bcrypt），上线后请尽快修改。
 INSERT INTO public.sys_users (username, password_hash, real_name, email, phone, status) VALUES
-('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '系统管理员', 'admin@erp.com', '13800138000', '1'),
-('zhangsan', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '张三', 'zhangsan@erp.com', '13800138001', '1'),
-('lisi', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '李四', 'lisi@erp.com', '13800138002', '1');
+('admin', '$2a$10$N.zmdr9k7uOCQb376NoUnuTJ8iAt6Z5EHsM8lE9lBOsl7iAt6Z5EO', '系统管理员', 'admin@operp.com', '13800138000', '1');
+
+-- GoTrue 建号：auth.users + auth.identities 必须成对插入 ——
+-- identities 缺失时 supabase-js 返回的 user.identities 是空数组，
+-- 前端注册流程会把它误判为「邮箱已注册」的混淆假 user。
+INSERT INTO auth.users (
+    instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+    raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    -- GoTrue 的 Go 代码按非空字符串扫描这些 token 列，SQL 直插必须给空串，
+    -- 否则密码登录报 500「converting NULL to string is unsupported」
+    confirmation_token, recovery_token, email_change, email_change_token_new
+)
+VALUES (
+    '00000000-0000-0000-0000-000000000000',
+    gen_random_uuid(),
+    'authenticated',
+    'authenticated',
+    'admin@operp.com',
+    extensions.crypt('admin123', extensions.gen_salt('bf', 10)),
+    NOW(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"username":"admin","real_name":"系统管理员"}'::jsonb,
+    NOW(),
+    NOW(),
+    '', '', '', ''
+);
+
+INSERT INTO auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+SELECT u.id, u.id,
+       jsonb_build_object('sub', u.id, 'email', u.email,
+                          'email_verified', true, 'phone_verified', false),
+       'email', NOW(), NOW(), NOW()
+FROM auth.users u
+WHERE u.email = 'admin@operp.com'
+  AND NOT EXISTS (
+      SELECT 1 FROM auth.identities i
+      WHERE i.user_id = u.id AND i.provider = 'email'
+  );
+
+-- 注意：sys_users.auth_id 列在本文件靠后位置（约 1150 行处）才 add column，
+-- 此处不能回填；auth_id 的绑定统一由 deploy_54_auth_seed_users.sql 完成。
 
 INSERT INTO public.sys_roles (role_code, role_name, description, sort_order, status) VALUES
 ('super_admin', '超级管理员', '拥有所有权限', 1, '1'),
@@ -136,10 +178,7 @@ INSERT INTO public.sys_roles (role_code, role_name, description, sort_order, sta
 ('operator', '普通操作员', '基本操作权限', 5, '1');
 
 INSERT INTO public.sys_user_roles (user_id, role_id) VALUES
-(1, 1),
-(2, 2),
-(2, 3),
-(3, 5);
+(1, 1);
 
 INSERT INTO public.sys_menus (parent_id, menu_name, menu_code, menu_type, icon, path, component, sort_order, status) VALUES
 (0, '系统管理', 'system', 'M', 'SettingOutlined', '/system', NULL, 100, '1'),
@@ -163,10 +202,7 @@ INSERT INTO public.sys_config (category_code, category_name, config_json, descri
 ('quality', '检验设置', '{"incomingInspectionEnabled":true,"productionInspectionEnabled":true,"outgoingInspectionEnabled":false,"defaultSamplingRate":10,"blockUnqualifiedStock":true,"autoCreateInspectionTask":true}'::jsonb, '来料、生产和出货检验策略。', 4, '1'),
 ('ai', 'AI设置', '{"enabled":true,"providers":[{"id":"ollama","name":"Ollama 本地","endpoint":"http://localhost:11434/api/chat","model":"qwen2.5","apiType":"ollama"},{"id":"demo","name":"演示模式","endpoint":"","model":"demo","apiType":"proxy"}],"activeProviderId":"ollama","temperature":0.3,"redactSensitiveData":true,"maxContextMessages":12}'::jsonb, 'AI 助手、模型和生成参数。密钥建议放在服务端环境变量。', 5, '1');
 INSERT INTO public.sys_logs (user_id, username, operation, method, params, ip, status, created_at) VALUES
-(1, 'admin', '用户登录', 'POST /api/login', '{"username":"admin"}', '192.168.1.100', '1', NOW() - INTERVAL '1 hour'),
-(1, 'admin', '创建用户', 'POST /api/users', '{"username":"zhangsan"}', '192.168.1.100', '1', NOW() - INTERVAL '30 minutes'),
-(2, 'zhangsan', '用户登录', 'POST /api/login', '{"username":"zhangsan"}', '192.168.1.101', '1', NOW() - INTERVAL '20 minutes'),
-(2, 'zhangsan', '查询库存', 'GET /api/inventory', '{}', '192.168.1.101', '1', NOW() - INTERVAL '10 minutes');
+(1, 'admin', '用户登录', 'POST /api/login', '{"username":"admin"}', '192.168.1.100', '1', NOW() - INTERVAL '1 hour');
 
 -- ============================================================
 -- End: supabase\tables\system_management_20240331.sql

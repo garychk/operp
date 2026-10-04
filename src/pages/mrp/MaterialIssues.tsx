@@ -20,12 +20,16 @@ import {
   PlusOutlined,
   DeleteOutlined,
   EditOutlined,
+  ThunderboltOutlined,
+  UndoOutlined,
+  ImportOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
+import { formatMoney } from "../../utils/money";
 import { SupaModal } from "../../components/SupaModal";
 import SimpleModal from "../../components/SimpleModal";
 import dayjs from "dayjs";
@@ -35,13 +39,27 @@ type MaterialIssueDetail = Tables["erp_material_issue_details_s_539dcf81_b"]["Ro
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductionOrder = Tables["erp_production_orders_s_539dcf81_b"]["Row"];
 type Warehouse = Tables["erp_warehouses_s_539dcf81_b"]["Row"];
+type Bin = Tables["erp_bins_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 const materialIssueTable = "erp_material_issues_s_539dcf81_b";
 const materialIssueDetailTable = "erp_material_issue_details_s_539dcf81_b";
 
-const formatMoney = (value: number | null | undefined) =>
-  `¥${(value ?? 0).toFixed(2)}`;
+// 与 deploy_56 的 post_production_document / reverse_production_document 对应
+const POST_DOCUMENT_RPC = "post_production_document";
+const REVERSE_DOCUMENT_RPC = "reverse_production_document";
+const DOCUMENT_TYPE = "material_issue";
+// RPC 允许过账的来源状态；cancelled 与 posted 不在其中
+const POSTABLE_STATUSES = ["draft", "approved", "issued"];
+const POSTED_STATUS = "posted";
+// 与 deploy_57 对应：把生产订单未领的物料需求带进当前领料单
+const PULL_ORDER_LINES_RPC = "pull_order_lines_into_issue";
+
+const isPosted = (record: { status: string | null }) =>
+  record.status === POSTED_STATUS;
+
+const formatDateTime = (value: string | null | undefined) =>
+  value ? dayjs(value).format("YYYY-MM-DD HH:mm") : "-";
 
 export function MaterialIssues() {
   const { t } = useTranslation();
@@ -49,6 +67,7 @@ export function MaterialIssues() {
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [bins, setBins] = useState<Bin[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -60,12 +79,19 @@ export function MaterialIssues() {
   const [editingDetail, setEditingDetail] = useState<MaterialIssueDetail | null>(null);
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
+  const [posting, setPosting] = useState(false);
+  const [reversing, setReversing] = useState(false);
+  const [pulling, setPulling] = useState(false);
+  // 明细的库位下拉要按「本单的领料仓库」过滤，所以把表头仓库提成受控值；
+  // 直接读 selectedIssue.warehouse_id 会在「改了仓库还没重载」时拿到旧值。
+  const [headerWarehouseId, setHeaderWarehouseId] = useState<number | undefined>();
 
   useEffect(() => {
     fetchIssues();
     fetchProducts();
     fetchOrders();
     fetchWarehouses();
+    fetchBins();
   }, []);
 
   const fetchIssues = async () => {
@@ -126,6 +152,19 @@ export function MaterialIssues() {
     }
   };
 
+  const fetchBins = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("erp_bins_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n");
+      if (error) throw error;
+      setBins(data || []);
+    } catch (error) {
+      console.error("Error fetching bins:", error);
+    }
+  };
+
   const fetchDetails = async (issueId: number) => {
     try {
       const { data, error } = await supabase
@@ -173,6 +212,7 @@ export function MaterialIssues() {
       setIsModalOpen(false);
       form.resetFields();
       setEditingIssue(null);
+      setHeaderWarehouseId(undefined);
       fetchIssues();
     } catch (error) {
       console.error("Error saving material issue:", error);
@@ -246,8 +286,13 @@ export function MaterialIssues() {
   };
 
   const handleEdit = async (record: MaterialIssue) => {
+    if (isPosted(record)) {
+      message.warning(t("mrp.materialIssues.postedLocked"));
+      return;
+    }
     setEditingIssue(record);
     setSelectedIssue(record);
+    setHeaderWarehouseId(record.warehouse_id ?? undefined);
     form.setFieldsValue({
       ...record,
       issue_date: dayjs(record.issue_date),
@@ -257,6 +302,11 @@ export function MaterialIssues() {
   };
 
   const handleDelete = async (id: number) => {
+    const target = issues.find((issue) => issue.id === id);
+    if (target && isPosted(target)) {
+      message.warning(t("mrp.materialIssues.postedLocked"));
+      return;
+    }
     Modal.confirm({
       title: t("common.confirmDelete"),
       content: t("mrp.materialIssues.deleteConfirm"),
@@ -284,6 +334,134 @@ export function MaterialIssues() {
     });
   };
 
+  // 过账 / 反过账走工具栏按钮，作用于当前勾选的领料单（支持多选批量）。
+  // 逐单执行而非单事务批处理：一张失败不影响其它张，失败原因逐条汇总。
+  const runSequential = async (
+    targets: MaterialIssue[],
+    action: (record: MaterialIssue) => Promise<void>,
+    fallbackMessage: string,
+  ) => {
+    let success = 0;
+    const failures: string[] = [];
+    for (const record of targets) {
+      try {
+        await action(record);
+        success += 1;
+      } catch (error: any) {
+        console.error("Error running material issue batch action:", error);
+        failures.push(`${record.issue_no}：${error?.message || fallbackMessage}`);
+      }
+    }
+    setSelectedRowKeys([]);
+    await fetchIssues();
+    return { success, failures };
+  };
+
+  const handleBatchPost = () => {
+    const selectedIds = new Set(selectedRowKeys.map((key) => Number(key)));
+    const targets = issues.filter(
+      (row) =>
+        selectedIds.has(row.id) &&
+        POSTABLE_STATUSES.includes((row.status || "").toLowerCase()),
+    );
+    if (targets.length === 0) {
+      message.warning(t("mrp.materialIssues.postNoTarget"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.materialIssues.post"),
+      content: t("mrp.materialIssues.postConfirmContentMany", {
+        count: targets.length,
+      }),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setPosting(true);
+        try {
+          const { success, failures } = await runSequential(
+            targets,
+            async (record) => {
+              const { error } = await supabase.rpc(POST_DOCUMENT_RPC, {
+                p_document_type: DOCUMENT_TYPE,
+                p_document_id: record.id,
+                p_idempotency_key: crypto.randomUUID(),
+              });
+              if (error) throw error;
+            },
+            t("mrp.materialIssues.postFailed"),
+          );
+          if (failures.length === 0) {
+            message.success(
+              t("mrp.materialIssues.postSuccessMany", { count: success }),
+            );
+          } else {
+            message.error(
+              t("mrp.materialIssues.postPartialFailed", {
+                success,
+                failed: failures.length,
+                detail: failures.join("；"),
+              }),
+            );
+          }
+        } finally {
+          setPosting(false);
+        }
+      },
+    });
+  };
+
+  const handleBatchReverse = () => {
+    const selectedIds = new Set(selectedRowKeys.map((key) => Number(key)));
+    const targets = issues.filter(
+      (row) => selectedIds.has(row.id) && isPosted(row),
+    );
+    if (targets.length === 0) {
+      message.warning(t("mrp.materialIssues.reverseNoTarget"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.materialIssues.reverse"),
+      content: t("mrp.materialIssues.reverseConfirmContentMany", {
+        count: targets.length,
+      }),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      okButtonProps: { danger: true },
+      onOk: async () => {
+        setReversing(true);
+        try {
+          const { success, failures } = await runSequential(
+            targets,
+            async (record) => {
+              const { error } = await supabase.rpc(REVERSE_DOCUMENT_RPC, {
+                p_document_type: DOCUMENT_TYPE,
+                p_document_id: record.id,
+                p_idempotency_key: crypto.randomUUID(),
+              });
+              if (error) throw error;
+            },
+            t("mrp.materialIssues.reverseFailed"),
+          );
+          if (failures.length === 0) {
+            message.success(
+              t("mrp.materialIssues.reverseSuccessMany", { count: success }),
+            );
+          } else {
+            message.error(
+              t("mrp.materialIssues.reversePartialFailed", {
+                success,
+                failed: failures.length,
+                detail: failures.join("；"),
+              }),
+            );
+          }
+        } finally {
+          setReversing(false);
+        }
+      },
+    });
+  };
+
   const handleAdd = async () => {
     let issueNo: string;
     try {
@@ -295,6 +473,7 @@ export function MaterialIssues() {
     setEditingIssue(null);
     setSelectedIssue(null);
     setDetails([]);
+    setHeaderWarehouseId(undefined);
     form.setFieldsValue({
       issue_no: issueNo,
       issue_date: dayjs(new Date()),
@@ -307,11 +486,78 @@ export function MaterialIssues() {
     setIsModalOpen(true);
   };
 
+  // 把生产订单里还没领的物料需求带进当前领料单。
+  // 带出的行写入 order_detail_id，流转台账据此回写订单的已领数量 —— 所以手工
+  // 录入的行只要带了来源行，账也是准的。
+  const handlePullFromOrder = () => {
+    if (!selectedIssue) {
+      message.warning(t("mrp.materialIssues.saveHeaderFirst"));
+      return;
+    }
+    if (isPosted(selectedIssue)) {
+      message.warning(t("mrp.materialIssues.postedLocked"));
+      return;
+    }
+    const orderId = form.getFieldValue("production_order_id");
+    if (!orderId) {
+      message.warning(t("mrp.materialIssues.pullNoOrder"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.materialIssues.pullFromOrder"),
+      content: t("mrp.materialIssues.pullConfirm"),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setPulling(true);
+        try {
+          const { data, error } = await supabase.rpc(PULL_ORDER_LINES_RPC, {
+            p_issue_id: selectedIssue.id,
+            p_order_id: Number(orderId),
+          });
+          if (error) throw error;
+          const result = data as { inserted_lines?: number };
+          message.success(
+            t("mrp.materialIssues.pullSuccess", {
+              count: result?.inserted_lines ?? 0,
+            }),
+          );
+          await fetchDetails(selectedIssue.id);
+          await fetchIssues();
+          // 主表金额与来源订单由 RPC 落库，回读一次把表单同步过来
+          const { data: header } = await supabase
+            .from(materialIssueTable)
+            .select("*")
+            .eq("id", selectedIssue.id)
+            .single();
+          if (header) {
+            setSelectedIssue(header);
+            setHeaderWarehouseId(header.warehouse_id ?? undefined);
+            form.setFieldsValue({
+              production_order_id: header.production_order_id,
+              warehouse_id: header.warehouse_id,
+              total_amount: header.total_amount,
+            });
+          }
+        } catch (error: any) {
+          console.error("Error pulling production order lines:", error);
+          message.error(error?.message || t("mrp.materialIssues.pullFailed"));
+        } finally {
+          setPulling(false);
+        }
+      },
+    });
+  };
+
   const handleAddDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     if (!selectedIssue) {
       message.warning(t("mrp.materialIssues.saveHeaderFirst"));
+      return;
+    }
+    if (isPosted(selectedIssue)) {
+      message.warning(t("mrp.materialIssues.postedLocked"));
       return;
     }
     setEditingDetail(null);
@@ -322,18 +568,27 @@ export function MaterialIssues() {
       unit_cost: 0,
       amount: 0,
       batch_no: "",
+      location_id: undefined,
       remark: "",
     });
     setIsDetailModalOpen(true);
   };
 
   const handleEditDetail = (record: MaterialIssueDetail) => {
+    if (selectedIssue && isPosted(selectedIssue)) {
+      message.warning(t("mrp.materialIssues.postedLocked"));
+      return;
+    }
     setEditingDetail(record);
     detailForm.setFieldsValue(record);
     setIsDetailModalOpen(true);
   };
 
   const handleDeleteDetail = async (id: number) => {
+    if (selectedIssue && isPosted(selectedIssue)) {
+      message.warning(t("mrp.materialIssues.postedLocked"));
+      return;
+    }
     Modal.confirm({
       title: t("common.confirmDelete"),
       content: t("mrp.materialIssues.itemDeleteConfirm"),
@@ -371,6 +626,18 @@ export function MaterialIssues() {
     return warehouse?.name || "-";
   };
 
+  const getBinLabel = (binId: number | null) => {
+    if (!binId) return "-";
+    const bin = bins.find((b) => b.id === binId);
+    return bin ? `${bin.code} - ${bin.name}` : "-";
+  };
+
+  // 明细的库位下拉只列「本单领料仓库」下的货位。
+  // 过账时会用 erp_bins.warehouse_id 校验，这里先过滤掉必然失败的选项。
+  const detailBinOptions = bins.filter(
+    (b) => headerWarehouseId != null && b.warehouse_id === headerWarehouseId,
+  );
+
   const filteredIssues = issues.filter(
     (i) =>
       i.issue_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -379,9 +646,12 @@ export function MaterialIssues() {
         .includes(searchTerm.toLowerCase()),
   );
 
+  // posted 只由过账动作产生，表单里不提供；approved / issued 保留用于渲染存量数据
   const statusLabels: Record<string, { text: string; color: string }> = {
     draft: { text: t("mrp.materialIssues.statusDraft"), color: "default" },
+    approved: { text: t("mrp.materialIssues.statusApproved"), color: "blue" },
     issued: { text: t("mrp.materialIssues.statusIssued"), color: "success" },
+    posted: { text: t("mrp.materialIssues.statusPosted"), color: "green" },
     cancelled: { text: t("mrp.materialIssues.statusCancelled"), color: "error" },
   };
 
@@ -428,6 +698,12 @@ export function MaterialIssues() {
       },
     },
     {
+      title: t("mrp.materialIssues.postedAt"),
+      dataIndex: "posted_at",
+      key: "posted_at",
+      render: (text: string) => formatDateTime(text),
+    },
+    {
       title: t("common.actions"),
       key: "action",
       render: (_: any, record: MaterialIssue) => (
@@ -435,6 +711,7 @@ export function MaterialIssues() {
           <Button
             type="text"
             icon={<EditOutlined />}
+            disabled={isPosted(record)}
             onClick={() => handleEdit(record)}
           >
             {t("common.edit")}
@@ -443,6 +720,7 @@ export function MaterialIssues() {
             type="text"
             danger
             icon={<DeleteOutlined />}
+            disabled={isPosted(record)}
             onClick={() => handleDelete(record.id)}
           >
             {t("common.delete")}
@@ -457,6 +735,7 @@ export function MaterialIssues() {
       title: t("mrp.materialIssues.lineNo"),
       dataIndex: "line_no",
       key: "line_no",
+      width: 80,
     },
     {
       title: t("mrp.materialIssues.material"),
@@ -486,25 +765,52 @@ export function MaterialIssues() {
       title: t("mrp.materialIssues.batchNo"),
       dataIndex: "batch_no",
       key: "batch_no",
+      width: 120,
+      ellipsis: true,
       render: (text: string) => text || "-",
+    },
+    {
+      title: t("mrp.materialIssues.location"),
+      dataIndex: "location_id",
+      key: "location_id",
+      render: (binId: number | null) =>
+        binId ? (
+          getBinLabel(binId)
+        ) : (
+          <Tag color="orange">{t("mrp.materialIssues.locationUnset")}</Tag>
+        ),
+    },
+    {
+      title: t("mrp.materialIssues.source"),
+      dataIndex: "order_detail_id",
+      key: "order_detail_id",
+      width: 110,
+      render: (orderDetailId: number | null) =>
+        orderDetailId ? (
+          <Tag color="blue">{t("mrp.materialIssues.sourceOrder")}</Tag>
+        ) : (
+          <Tag>{t("mrp.materialIssues.sourceManual")}</Tag>
+        ),
     },
     {
       title: t("mrp.materialIssues.remark"),
       dataIndex: "remark",
       key: "remark",
+      width: 100,
+      ellipsis: true,
       render: (text: string) => text || "-",
     },
     {
       title: t("common.actions"),
       key: "action",
+      width: 160,
       render: (_: any, record: MaterialIssueDetail) => (
-        <Space size="middle">
+        <Space size="small">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
             {t("common.edit")}
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)}>
-            {t("common.delete")}
-          </Button>
+          <Button type="text" danger icon={<DeleteOutlined />} 
+          onClick={() => handleDeleteDetail(record.id)} />
         </Space>
       ),
     },
@@ -516,7 +822,7 @@ export function MaterialIssues() {
   );
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredIssues}
@@ -525,6 +831,7 @@ export function MaterialIssues() {
         pagination={{ pageSize: 10 }}
         storageKey="material-issues"
         headerTitle={t("mrp.materialIssues.title")}
+        toolbarActions={["delete" , "export"]}
         rowSelection={{
           selectedRowKeys,
           onChange: setSelectedRowKeys,
@@ -533,6 +840,26 @@ export function MaterialIssues() {
           <Space wrap>
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
               {t("mrp.materialIssues.add")}
+            </Button>
+            <Button
+              type="primary"
+              icon={<ThunderboltOutlined />}
+              loading={posting}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchPost}
+            >
+              {t("mrp.materialIssues.post")}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
+            <Button
+              danger
+              icon={<UndoOutlined />}
+              loading={reversing}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchReverse}
+            >
+              {t("mrp.materialIssues.reverse")}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
             </Button>
             <Input.Search
               allowClear
@@ -611,6 +938,7 @@ export function MaterialIssues() {
                     placeholder={t("mrp.materialIssues.warehousePrompt")}
                     showSearch
                     optionFilterProp="children"
+                    onChange={(value: number) => setHeaderWarehouseId(value)}
                   >
                     {warehouses.map((w) => (
                       <Option key={w.id} value={w.id}>
@@ -629,7 +957,6 @@ export function MaterialIssues() {
                 <Form.Item label={t("common.status")} name="status" initialValue="draft">
                   <Select>
                     <Option value="draft">{t("mrp.materialIssues.statusDraft")}</Option>
-                    <Option value="issued">{t("mrp.materialIssues.statusIssued")}</Option>
                     <Option value="cancelled">{t("mrp.materialIssues.statusCancelled")}</Option>
                   </Select>
                 </Form.Item>
@@ -641,14 +968,27 @@ export function MaterialIssues() {
           </Form>
         }
         detailExtra={
-          <Button
-            type="link"
-            size="small"
-            onClick={handleAddDetail}
-            icon={<PlusOutlined />}
-          >
-            {t("mrp.materialIssues.addDetail")}
-          </Button>
+          <Space size={4}>
+            <Button
+              type="link"
+              size="small"
+              loading={pulling}
+              disabled={!!selectedIssue && isPosted(selectedIssue)}
+              onClick={handlePullFromOrder}
+              icon={<ImportOutlined />}
+            >
+              {t("mrp.materialIssues.pullFromOrder")}
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              disabled={!!selectedIssue && isPosted(selectedIssue)}
+              onClick={handleAddDetail}
+              icon={<PlusOutlined />}
+            >
+              {t("mrp.materialIssues.addDetail")}
+            </Button>
+          </Space>
         }
         tableEle={
           <Table
@@ -664,7 +1004,7 @@ export function MaterialIssues() {
                 <Table.Summary.Cell index={1} colSpan={2} align="right">
                   <strong>{formatMoney(detailTotal)}</strong>
                 </Table.Summary.Cell>
-                <Table.Summary.Cell index={2} colSpan={2} />
+                <Table.Summary.Cell index={2} colSpan={4} />
               </Table.Summary.Row>
             )}
           />
@@ -677,7 +1017,7 @@ export function MaterialIssues() {
             </Button>
           </Space>
         }
-        width={"60%"}
+        width={"80%"}
         height={"80%"}
       />
 
@@ -755,6 +1095,29 @@ export function MaterialIssues() {
           </Row>
           <Form.Item label={t("mrp.materialIssues.batchNo")} name="batch_no">
             <Input placeholder={t("mrp.materialIssues.batchNoPrompt")} />
+          </Form.Item>
+          <Form.Item
+            label={t("mrp.materialIssues.location")}
+            name="location_id"
+            extra={
+              headerWarehouseId == null
+                ? t("mrp.materialIssues.locationNeedWarehouse")
+                : t("mrp.materialIssues.locationHint")
+            }
+          >
+            <Select
+              allowClear
+              placeholder={t("mrp.materialIssues.locationPrompt")}
+              disabled={headerWarehouseId == null}
+              showSearch
+              optionFilterProp="children"
+            >
+              {detailBinOptions.map((b) => (
+                <Option key={b.id} value={b.id}>
+                  {b.code} - {b.name}
+                </Option>
+              ))}
+            </Select>
           </Form.Item>
           <Form.Item label={t("mrp.materialIssues.remark")} name="remark">
             <Input.TextArea rows={2} placeholder={t("mrp.materialIssues.remarkPrompt")} />

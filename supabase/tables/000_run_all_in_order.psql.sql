@@ -4,6 +4,14 @@
 --
 -- Do not paste this whole file into Supabase SQL Editor. The \i directives are
 -- psql meta commands. In SQL Editor, execute the deploy_*.sql files one by one.
+--
+-- 顺序必须与 ../000_run_all.local.sh 里的 ORDER 数组保持一致（共 65 个步骤）。
+-- 顺序即纯编号顺序，没有额外的前置步骤：
+--   - deploy_24_erp_bins.sql 与 deploy_24_inventory_document_ops.sql 同号，
+--     前者天然排在前者之前，解开 24 <-> 25 的循环依赖（不要打乱这两个的相对次序）；
+--   - deploy_25_ai_memory_and_knowledge.sql、deploy_25_baq_catalog_for_ai.sql、
+--     deploy_25_bins_and_location.sql 三个同号脚本都必须在 deploy_24 之后。
+-- 建议在干净库上执行；deploy_01 含初始 INSERT，重复跑会撞唯一约束。
 
 \i supabase/tables/deploy_01_schema_and_seed.sql
 \i supabase/tables/deploy_02_permissions_core.sql
@@ -30,9 +38,12 @@
 \i supabase/tables/deploy_21_finance_required_subjects.sql
 \i supabase/tables/deploy_22_accounting_period_generation.sql
 \i supabase/tables/deploy_23_fix_voucher_posting_rls.sql
+\i supabase/tables/deploy_24_erp_bins.sql
 \i supabase/tables/deploy_24_inventory_document_ops.sql
 \i supabase/tables/deploy_25_ai_memory_and_knowledge.sql
 \i supabase/tables/deploy_25_baq_catalog_for_ai.sql
+\i supabase/tables/deploy_25_bins_and_location.sql
+
 \i supabase/tables/deploy_26_ai_analysis_executor.sql
 \i supabase/tables/deploy_27_ai_chat_sessions_and_messages.sql
 \i supabase/tables/deploy_28_ai_rag.sql
@@ -47,3 +58,50 @@
 \i supabase/tables/deploy_37_doc_flow_ledger_rule_ref.sql
 \i supabase/tables/deploy_38_doc_flow_connections.sql
 \i supabase/tables/deploy_39_ai_entity_catalog.sql
+
+\i supabase/tables/deploy_40_inventory_transaction_types.sql
+\i supabase/tables/deploy_41_tenant_isolation.sql
+\i supabase/tables/deploy_42_ai_tenant.sql
+\i supabase/tables/deploy_43_custom_access_token_hook.sql
+\i supabase/tables/deploy_44_tenant_menu.sql
+\i supabase/tables/deploy_45_sys_logs_tenant.sql
+\i supabase/tables/deploy_46_ai_chat_tenant.sql
+\i supabase/tables/deploy_47_naming_counter_tenant.sql
+\i supabase/tables/deploy_48_platform_metadata_tenant.sql
+\i supabase/tables/deploy_49_workflow_runtime_tenant.sql
+\i supabase/tables/deploy_50_tenant_signup.sql
+\i supabase/tables/deploy_51_erp_unique_key_tenant.sql
+\i supabase/tables/deploy_52_platform_metadata_materialize.sql
+\i supabase/tables/deploy_53_fix_sys_config_super_admin.sql
+\i supabase/tables/deploy_54_auth_seed_users.sql
+\i supabase/tables/deploy_55_mcp_api_keys.sql
+
+\i supabase/tables/deploy_56_production_posting.sql
+\i supabase/tables/deploy_57_bom_explosion_kit_check.sql
+\i supabase/tables/deploy_58_production_receipt_and_locations.sql
+\i supabase/tables/deploy_59_production_receipt_menu.sql
+\i supabase/tables/deploy_60_mrp_planning_parameters.sql
+\i supabase/tables/deploy_61_planned_conversion_and_cost.sql
+\i supabase/tables/deploy_62_production_report_and_cost_menu.sql
+\i supabase/tables/deploy_63_mps_master_schedule.sql
+\i supabase/tables/deploy_64_mps_menu.sql
+
+\i supabase/tables/deploy_65_currency_master.sql
+\i supabase/tables/deploy_66_currency_menu.sql
+\i supabase/tables/deploy_67_currency_tenant_scope.sql
+\i supabase/tables/deploy_68_document_currency_columns.sql
+\i supabase/tables/deploy_69_post_stock_base_currency.sql
+
+\i supabase/tables/deploy_71_finance_fx_subject.sql
+\i supabase/tables/deploy_72_finance_double_amount_columns.sql
+\i supabase/tables/deploy_73_finance_fx_settlement.sql
+\i supabase/tables/deploy_74_finance_fx_revaluation.sql
+\i supabase/tables/deploy_75_finance_report_currency_views.sql
+\i supabase/tables/deploy_76_service_role_finance_entry.sql
+\i supabase/tables/deploy_77_finance_report_currency_dimension.sql
+\i supabase/tables/deploy_78_ar_ap_base_balance_guard.sql
+\i supabase/tables/deploy_79_product_images.sql
+\i supabase/tables/deploy_80_attachments.sql
+\i supabase/tables/deploy_81_ai_analysis_hardening.sql
+\i supabase/tables/deploy_82_ai_pending_actions.sql
+\i supabase/tables/deploy_83_ai_document_tools.sql

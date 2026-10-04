@@ -1,11 +1,34 @@
 import { Router } from "express";
 import { z } from "zod";
-import { supabase } from "../config/supabase.js";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
+import { nextPendingActionId, runRemainingPlan } from "../ai/planRunner.js";
+import type { AiGraphState } from "../ai/state.js";
 import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
+import { executePendingAction, PendingActionError } from "../services/pendingActions.js";
+import {
+  resolveEmbeddingProviderConfig,
+  resolveProviderConfig,
+} from "../services/aiProvider.js";
 import { TenantScopeError } from "../config/tenantContext.js";
+import { getIdentity, requireAuth } from "../services/authGuard.js";
+import { chatRateLimit, reindexRateLimit, heavyActionRateLimit } from "../services/rateLimit.js";
 
 export const aiRouter = Router();
+
+/**
+ * ⚠️ 鉴权：/api/ai 下所有端点都必须过 requireAuth。
+ * 此前 chat 完全不验 JWT、身份取自请求体 user_id，等于对内网裸奔；
+ * 现在身份链路 = Supabase JWT → sys_users.auth_id → resolveTenantContext，
+ * 请求体里的 user_id/tenant_id 只做一致性/越权校验，不再作为身份来源。
+ *
+ * ⚠️ 限流（#8）：chat 是 LLM 成本入口，reindex 是批量 embedding 入口，
+ * confirm 是写库入口 —— 都按「用户」窗口限流，防止单租户刷爆模型配额。
+ * ⚠️ 顺序：必须先 requireAuth 再限流 —— 限流 key 取 identity.userId，
+ * 反过来的话匿名请求会污染 per-IP 桶，把真实用户一起限死（真实踩过）。
+ */
+aiRouter.use("/chat", requireAuth, chatRateLimit);
+aiRouter.use("/knowledge", requireAuth, reindexRateLimit);
+aiRouter.use("/confirm", requireAuth, heavyActionRateLimit);
 
 const chatSchema = z.object({
   session_id: z.string().min(1),
@@ -28,62 +51,15 @@ const chatSchema = z.object({
     .optional(),
 });
 
-const providerSchema = z.object({
-  id: z.string().min(1),
-  name: z.string().optional(),
-  endpoint: z.string().optional(),
-  model: z.string().optional(),
-  apiType: z.enum(["proxy", "ollama"]).optional(),
-  apiKey: z.string().optional(),
-  temperature: z.number().optional(),
-});
-
-const aiSettingsSchema = z.object({
-  enabled: z.boolean().optional(),
-  providers: z.array(providerSchema).default([]),
-  activeProviderId: z.string().optional(),
-  temperature: z.number().optional(),
-  redactSensitiveData: z.boolean().optional(),
-  maxContextMessages: z.number().optional(),
-});
-
 const reindexSchema = z.object({
   doc_id: z.number().int().optional(),
   tenant_id: z.number().int().optional(),
+  user_id: z.number().int().optional(),
 });
 
-async function resolveProviderConfig(
-  provider?: { id?: string; name?: string },
-  tenantId?: number | null,
-) {
-  // sys_config 里同一 category_code 可能同时有平台基线行和租户私有行，
-  // 直接查表会拿到多行。RPC 内部「私有优先、回退基线」并接受显式 tenant_id。
-  const { data, error } = await supabase.rpc("get_tenant_config", {
-    p_category_code: "ai",
-    p_tenant_id: tenantId ?? null,
-  });
-
-  if (error) throw error;
-
-  const settings = aiSettingsSchema.parse(data || {});
-  const matched = settings.providers.find((item) => {
-    if (!provider?.id) return false;
-    if (item.id === provider.id) return true;
-    if (provider.name && item.name === provider.name) return true;
-    return false;
-  });
-
-  if (!matched) {
-    throw new Error(`未找到对应的 AI provider：${provider?.id || provider?.name || "unknown"}`);
-  }
-
-  // console.log("[ai-server] resolved provider:", {
-  //   requestProvider: provider,
-  //   matchedProvider: matched,
-  // });
-
-  return matched;
-}
+const confirmSchema = z.object({
+  pending_action_id: z.number().int().positive(),
+});
 
 const wantsStream = (req: { body?: { stream?: unknown }; headers: Record<string, unknown> }) => {
   const accept = String(req.headers.accept || "");
@@ -115,22 +91,14 @@ aiRouter.post("/chat", async (req, res) => {
   }
 
   try {
-    const resolvedProvider = parsed.data.provider
-      ? await resolveProviderConfig(parsed.data.provider, parsed.data.tenant_id)
-      : undefined;
-
+    // 身份以 JWT 为准（requireAuth 已校验 user_id 一致性）。
+    // tenant_id 允许超管显式切换租户（resolveRequestIdentity 里已做过越权校验）。
+    const identity = getIdentity(req);
     const requestBody = {
       ...parsed.data,
-      provider: resolvedProvider
-        ? {
-            id: resolvedProvider.id,
-            name: resolvedProvider.name,
-            endpoint: resolvedProvider.endpoint,
-            model: resolvedProvider.model,
-            apiType: resolvedProvider.apiType,
-            apiKey: resolvedProvider.apiKey,
-            temperature: resolvedProvider.temperature,
-          }
+      user_id: identity.userId,
+      provider: parsed.data.provider
+        ? await resolveProviderConfig(parsed.data.provider, identity.tenantId)
         : undefined,
     };
 
@@ -149,6 +117,10 @@ aiRouter.post("/chat", async (req, res) => {
       await runChatGraphStream(requestBody, async (event) => {
         if (event.type === "step") {
           send("step", event);
+          return;
+        }
+        if (event.type === "delta") {
+          send("delta", event);
           return;
         }
         send("final", event.result);
@@ -201,27 +173,17 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
   }
 
   try {
-    const tenantId = parsed.data.tenant_id ?? null;
-    const resolvedProvider = await resolveProviderConfig({ id: "ollama" }, tenantId).catch(
-      async () => {
-        const { data, error } = await supabase.rpc("get_tenant_config", {
-          p_category_code: "ai",
-          p_tenant_id: tenantId,
-        });
-        if (error) throw error;
-        const settings = aiSettingsSchema.parse(data || {});
-        const candidates = settings.providers.filter(
-          (item) =>
-            item.apiType === "ollama" ||
-            /embed/i.test(String(item.model || "")) ||
-            /embeddings/i.test(String(item.endpoint || "")),
-        );
-        if (!candidates.length) {
-          throw new Error("未找到可用于知识库向量化的 embedding provider");
-        }
-        return candidates[0];
-      },
-    );
+    const identity = getIdentity(req);
+    // 租户以 JWT 身份为准；仅超管可通过 body.tenant_id 指定其他租户。
+    const tenantId =
+      parsed.data.tenant_id && identity.isSuperAdmin ? parsed.data.tenant_id : identity.tenantId;
+
+    // 优先用 id=ollama 的 provider；没有则按 embedding 特征自动挑。
+    // 规则收在 services/aiProvider.ts，与 MCP 链路共用同一份。
+    const resolvedProvider = await resolveEmbeddingProviderConfig(
+      { id: "ollama" },
+      tenantId,
+    ).catch(() => resolveEmbeddingProviderConfig(undefined, tenantId));
 
     const result = await reindexKnowledgeDocuments(
       resolvedProvider,
@@ -230,9 +192,81 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
     );
     res.json({ ok: true, ...result });
   } catch (error) {
+    if (error instanceof TenantScopeError) {
+      res.status(403).json({ ok: false, error: errorToMessage(error) });
+      return;
+    }
     res.status(500).json({
       ok: false,
       error: errorToMessage(error),
     });
+  }
+});
+
+/**
+ * 确认回路执行端点：确认对话草稿（AI 创建/修改实体的第二段）。
+ * 对话式确认（回复「确认」）走 chat 链路；UI 按钮式确认走这里。
+ */
+aiRouter.post("/confirm", async (req, res) => {
+  const parsed = confirmSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: "Invalid request",
+      issues: parsed.error.issues,
+    });
+  }
+
+  try {
+    const identity = getIdentity(req);
+    const result = await executePendingAction(parsed.data.pending_action_id, identity);
+
+    // 多步计划（第三批）：草稿上挂着剩余步骤时，在同一请求里继续跑。
+    // 续跑遇到下一个写操作会再产一份草稿 → 返回 need_confirmation + 新的 pending id。
+    if (Array.isArray(result.remainingPlan) && result.remainingPlan.length) {
+      const baseState: AiGraphState = {
+        sessionId: String(req.body?.session_id || "confirm"),
+        userId: identity.userId,
+        tenantId: identity.tenantId,
+        text: String(req.body?.text || ""),
+        skill: "auto",
+        provider: req.body?.provider as AiGraphState["provider"],
+        recentMessages: [],
+        toolResults: [],
+        planOutputs: [result.output || {}],
+      };
+      const continued = await runRemainingPlan(result.remainingPlan, baseState);
+      const nextId = nextPendingActionId(continued);
+      res.json({
+        ok: true,
+        status: "success",
+        reply: [result.reply, continued.reply].filter(Boolean).join("\n\n"),
+        focus: continued.focus || result.focus,
+        route: continued.route || result.route,
+        routeLabel: continued.routeLabel || result.routeLabel,
+        need_confirmation: Boolean(continued.needConfirmation),
+        next_pending_action_id: nextId ?? null,
+        tool_results: continued.toolResults,
+      });
+      return;
+    }
+
+    res.json({ ok: true, status: "success", ...result });
+  } catch (error) {
+    if (error instanceof PendingActionError) {
+      const statusByCode: Record<string, number> = {
+        not_found: 404,
+        expired: 410,
+        forbidden: 403,
+        already_handled: 409,
+      };
+      res.status(statusByCode[error.code] ?? 400).json({ ok: false, error: error.message });
+      return;
+    }
+    if (error instanceof TenantScopeError) {
+      res.status(403).json({ ok: false, error: errorToMessage(error) });
+      return;
+    }
+    res.status(500).json({ ok: false, error: errorToMessage(error) });
   }
 });

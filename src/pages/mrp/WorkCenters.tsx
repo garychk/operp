@@ -19,7 +19,9 @@ import {
   EditOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
+import { useCurrencyRegistry } from "../../utils/money";
 import { SuperTable } from "../../components/SuperTable";
+import type { SuperTableColumn } from "../../components/SuperTable";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import SimpleModal from "../../components/SimpleModal";
@@ -33,6 +35,9 @@ const workCenterTable = "erp_work_centers_s_539dcf81_b";
 
 export function WorkCenters() {
   const { t } = useTranslation();
+  // 工时/制费费率为本位币单价，符号跟随币别主数据
+  const { getMeta } = useCurrencyRegistry();
+  const baseCurrencySymbol = getMeta().symbol;
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
@@ -173,7 +178,7 @@ export function WorkCenters() {
     other: t("mrp.workCenters.typeOther"),
   };
 
-  const columns = [
+  const columns: SuperTableColumn<WorkCenter>[] = [
     {
       title: t("common.code"),
       dataIndex: "code",
@@ -189,7 +194,8 @@ export function WorkCenters() {
       title: t("common.type"),
       dataIndex: "type",
       key: "type",
-      width: 200,
+      width: 100,
+      align: "center",
       render: (type: string) => typeLabels[type] || type,
     },
     {
@@ -202,29 +208,39 @@ export function WorkCenters() {
       title: t("mrp.workCenters.capacity"),
       dataIndex: "capacity_per_day",
       key: "capacity_per_day",
-      width: 200,
+      width: 120,
+      align: "center",
     },
     {
       title: t("mrp.workCenters.laborRate"),
       dataIndex: "labor_rate",
       key: "labor_rate",
-      width: 200,
+      width: 120,
+      align: "center",
       render: (rate: number) =>
-        t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
+        t("mrp.ratePerHour", {
+          symbol: baseCurrencySymbol,
+          rate: (rate ?? 0).toLocaleString(),
+        }),
     },
     {
       title: t("mrp.workCenters.overheadRate"),
       dataIndex: "overhead_rate",
       key: "overhead_rate",
-      width: 200,
+      width: 120,
+      align: "center",
       render: (rate: number) =>
-        t("mrp.ratePerHour", { rate: (rate ?? 0).toLocaleString() }),
+        t("mrp.ratePerHour", {
+          symbol: baseCurrencySymbol,
+          rate: (rate ?? 0).toLocaleString(),
+        }),
     },
     {
       title: t("common.status"),
       dataIndex: "status",
       key: "status",
-      width: 200,
+      width: 100,
+      align: "center",
       render: (status: string) => (
         <Tag color={status === "active" ? "success" : "default"}>
           {status === "active" ? t("common.enabled") : t("mrp.inactive")}
@@ -236,7 +252,7 @@ export function WorkCenters() {
       key: "action",
       width: 200,
       render: (_: any, record: WorkCenter) => (
-        <Space size="middle">
+        <Space size="small">
           <Button
             type="text"
             icon={<EditOutlined />}
@@ -258,7 +274,7 @@ export function WorkCenters() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredWorkCenters}

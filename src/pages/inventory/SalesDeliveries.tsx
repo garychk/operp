@@ -11,7 +11,9 @@ import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
-import { SuperTable } from '../../components/SuperTable';
+import { BizAttachments } from '../../components/BizAttachments';
+import { SuperTable, SuperTableColumn } from '../../components/SuperTable';
+import { formatMoney, useCurrencyRegistry, currencyLabel } from '../../utils/money';
 import { ProductUnit } from '../../components/ProductUnit';
 import { InventoryInfo, invalidateInventoryCache } from '../../components/InventoryInfo';
 import SimpleModal from '../../components/SimpleModal';
@@ -47,6 +49,11 @@ export function SalesDeliveries() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingDelivery, setEditingDelivery] = useState<SalesDelivery | null>(null);
   const [selectedDelivery, setSelectedDelivery] = useState<SalesDelivery | null>(null);
+
+  // 币别：出货单币种从来源销售订单流转继承（deploy_69 已配字段映射）。
+  // 金额一律按单据币种展示；本位币金额由过账折汇落定，并据此生成应收。
+  const { baseCurrency } = useCurrencyRegistry();
+  const baseCurrencyCode = (baseCurrency || 'CNY').toUpperCase();
   const [details, setDetails] = useState<SalesDeliveryDetail[]>([]);
   const [editingDetail, setEditingDetail] = useState<SalesDeliveryDetail | null>(null);
   const [detailForm] = Form.useForm();
@@ -433,11 +440,6 @@ export function SalesDeliveries() {
     setIsModalOpen(true);
   };
 
-  const handleViewDetails = (record: SalesDelivery) => {
-    setSelectedDelivery(record);
-    fetchDetails(record.id);
-  };
-
   const handleAddDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
     setEditingDetail(null);
@@ -576,7 +578,7 @@ export function SalesDeliveries() {
     cancelled: { text: t('salesDeliveries.statusCancelled'), color: 'error' },
   };
 
-  const columns = [
+  const columns: SuperTableColumn<SalesDelivery>[] = [
     {
       title: t('salesDeliveries.deliveryNo'),
       dataIndex: 'delivery_no',
@@ -606,10 +608,24 @@ export function SalesDeliveries() {
       key: 'delivery_date',
     },
     {
+      title: t('currency.field.currency'),
+      dataIndex: 'currency',
+      key: 'currency',
+      width: 100,
+      render: (code: string) => (code ? `${code} · ${currencyLabel(code)}` : '-'),
+    },
+    {
       title: t('salesDeliveries.amount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number, record: SalesDelivery) => formatMoney(amount, record.currency),
+    },
+    {
+      title: t('currency.field.baseAmount'),
+      dataIndex: 'base_total_amount',
+      key: 'base_total_amount',
+      width: 110,
+      render: (amount: number) => formatMoney(amount, baseCurrencyCode),
     },
     {
       title: t('common.status'),
@@ -623,11 +639,10 @@ export function SalesDeliveries() {
     {
       title: t('common.actions'),
       key: 'action',
+      width: 120,
+      fixed: "right",
       render: (_: any, record: SalesDelivery) => (
-        <Space size="middle">
-          <Button type="text" icon={<EyeOutlined />} onClick={() => handleViewDetails(record)}>
-            {t('salesDeliveries.details')}
-          </Button>
+        <Space>
           {record.status === 'draft' && (
             <Button type="text" onClick={() => runDeliveryAction('submit', record)} disabled={record.status !== 'draft'}>{t('salesDeliveries.submit')}</Button>
           )}
@@ -692,13 +707,13 @@ export function SalesDeliveries() {
       title: t('salesDeliveries.unitPrice'),
       dataIndex: 'unit_price',
       key: 'unit_price',
-      render: (price: number) => `¥${(price ?? 0).toFixed(2)}`,
+      render: (price: number) => formatMoney(price, selectedDelivery?.currency ?? undefined),
     },
     {
       title: t('salesDeliveries.amount'),
       dataIndex: 'amount',
       key: 'amount',
-      render: (amount: number) => `¥${(amount ?? 0).toFixed(2)}`,
+      render: (amount: number) => formatMoney(amount, selectedDelivery?.currency ?? undefined),
     },
     {
       title: t('salesDeliveries.batchNo'),
@@ -744,7 +759,7 @@ export function SalesDeliveries() {
   }), { amount: 0 });
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredDeliveries}
@@ -799,6 +814,19 @@ export function SalesDeliveries() {
         detailPanelTitle={t('salesDeliveries.detailPanelTitle')}
         historyTable={salesDeliveryTable}
         historyRecordId={editingDelivery?.id || selectedDelivery?.id}
+        detailItems={[
+          {
+            key: "attachments",
+            label: t('attachments.title'),
+            disabled: !(editingDelivery?.id || selectedDelivery?.id),
+            children: (
+              <BizAttachments
+                bizType="sales_delivery"
+                bizId={editingDelivery?.id || selectedDelivery?.id}
+              />
+            ),
+          },
+        ]}
         workflowDocumentType="sales_delivery"
         onDataChanged={fetchDeliveries}
         form={form}
@@ -906,7 +934,7 @@ export function SalesDeliveries() {
           summary={() => (
             <Table.Summary.Row>
               <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>{t('salesDeliveries.totalText')}</strong></Table.Summary.Cell>
-              <Table.Summary.Cell index={1} align="right"><strong>¥{detailTotal.amount.toFixed(2)}</strong></Table.Summary.Cell>
+              <Table.Summary.Cell index={1} align="right"><strong>{formatMoney(detailTotal.amount)}</strong></Table.Summary.Cell>
               <Table.Summary.Cell index={2} colSpan={4}></Table.Summary.Cell>
             </Table.Summary.Row>
           )}
@@ -919,7 +947,7 @@ export function SalesDeliveries() {
             </Button>
           </Space>
         }
-        width={'70%'}
+        width={'80%'}
         height={'80%'}
       />
 

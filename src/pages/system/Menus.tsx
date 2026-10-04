@@ -26,11 +26,12 @@ interface Menu {
 
 const iconOptions = [
   'DashboardOutlined', 'BookOutlined', 'ShoppingOutlined', 'ShoppingCartOutlined', 'ToolOutlined',
-  'TeamOutlined', 'ShopOutlined', 'InboxOutlined', 'AppstoreOutlined',
+  'TeamOutlined', 'ShopOutlined', 'InboxOutlined', 'ImportOutlined', 'AppstoreOutlined',
   'SettingOutlined', 'BuildOutlined', 'BranchesOutlined', 'ProfileOutlined', 'CalendarOutlined',
   'ContainerOutlined', 'FileTextOutlined', 'MenuOutlined', 'SafetyOutlined',
   'TruckOutlined', 'RiseOutlined', 'FallOutlined', 'TableOutlined', 'UnorderedListOutlined',
   'SwapOutlined', 'ExperimentOutlined', 'LineChartOutlined', 'BarChartOutlined',
+  'CheckCircleOutlined', 'CalculatorOutlined',
 ];
 
 const excludedStaticMenuPaths = new Set(['/']);
@@ -363,7 +364,7 @@ export function Menus() {
   ];
 
   return (
-    <Card className='mainContent' variant="borderless" title={t('menus.title')} extra={<Space><Button onClick={handleImportStaticMenus}>{t('menus.importStaticMenus')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('menus.addMenu')}</Button></Space>}>
+    <Card variant="borderless" title={t('menus.title')} extra={<Space><Button onClick={handleImportStaticMenus}>{t('menus.importStaticMenus')}</Button><Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>{t('menus.addMenu')}</Button></Space>}>
       <Table
         columns={columns}
         dataSource={menuTree}
@@ -373,7 +374,7 @@ export function Menus() {
           expandedRowKeys,
           onExpandedRowsChange: keys => setExpandedRowKeys([...keys]),
         }}
-        scroll={{ x: 1200, y: 600 }}
+        scroll={{ x: 1200, y: 'calc(100vh - 300px)' }}
         pagination={false}
       />
       <SimpleModal

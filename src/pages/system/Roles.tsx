@@ -518,7 +518,6 @@ export function Roles() {
 
   return (
     <Card
-      className="mainContent"
       variant="borderless"
       title={t('roles.title')}
       extra={

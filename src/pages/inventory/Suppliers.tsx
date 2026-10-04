@@ -7,6 +7,7 @@ import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
 import type { Tables } from '../../utils/supabase';
 import { SupaModal } from '../../components/SupaModal';
+import { BizAttachments } from '../../components/BizAttachments';
 import { SuperTable } from '../../components/SuperTable';
 
 type Supplier = Tables['erp_suppliers_s_539dcf81_b']['Row'];
@@ -193,7 +194,7 @@ export function Suppliers() {
   ];
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredSuppliers}
@@ -234,6 +235,16 @@ export function Suppliers() {
         headerPanelTitle={t('suppliers.headerPanelTitle')}
         historyTable={supplierTable}
         historyRecordId={editingSupplier?.id}
+        detailItems={[
+          {
+            key: "attachments",
+            label: t('attachments.title'),
+            disabled: !editingSupplier?.id,
+            children: (
+              <BizAttachments bizType="supplier" bizId={editingSupplier?.id} />
+            ),
+          },
+        ]}
         form={form}
         formEle={
           <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: "0 16px 0 0" }}>

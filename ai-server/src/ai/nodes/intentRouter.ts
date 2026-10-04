@@ -7,8 +7,15 @@ import type {
 } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
 import { describeWritableObjects } from "../../tools/entityRegistry.js";
+import { detectDocumentAction, detectDocumentType } from "../../services/documentService.js";
 
-const CREATE_WORDS = /(创建|新建|新增|生成|录入|保存|写入|建立)/i;
+/** 单据动作 / 单号的强信号（命中即按「单据操作」意图处理） */
+const DOC_ACTION_WORDS = /(过账|记账|入账|反过账|冲销|红冲|撤回审批|提交审批|送审|审批通过|审核通过|驳回|转单|下推|流转|转成)/i;
+const DOC_NO_PATTERN = /[A-Za-z]{2,4}\d{5,}/;
+
+// eval 教训：口语里「加一个 / 加个 / 建一张 / 添加」都是明确的创建意图，
+// 不加进去 ruleFallback 会把它们误判成 chat（真实 eval 失败用例，勿删）
+const CREATE_WORDS = /(创建|新建|新增|生成|录入|保存|写入|建立|建一张|建一张|建个|建一|添加|增加|加一个|加个)/i;
 const UPDATE_WORDS = /(修改|更新|编辑|调整|补充|修订|改一下|改成|变更|替换|优化)/i;
 const COUNT_WORDS = /(多少|几个|总数|数量|有几|有多少|一共|总共有|总计|合计)/i;
 const LIST_WORDS = /(哪些|列表|清单|明细|列出|展示|给我看)/i;
@@ -21,8 +28,18 @@ const ANALYSIS_WORDS = /(分析|统计|汇总|报表|经营|财务|采购|销售
 const MRP_WORDS = /(mrp|物料需求计划|产能|净需求)/i;
 
 const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }> = [
+  // 排序原则：越具体的单据 / 强信号越靠前，属性词（客户是xx、给供应商xx）在后。
+  // eval 教训：「建一张采购订单给供应商上海钢铁」若 customer/supplier 在前，
+  // 会被属性词抢走 target —— 单据词必须先判（真实 eval 失败用例，勿调回）。
   // 系统字典优先：与业务表（如 erp_uoms）同名概念共存，必须优先区分
   { target: "dictItem", pattern: /(数据字典|字典项|字典值|字典数据|字典)/i, domain: "system" },
+  { target: "salesOrder", pattern: /(销售订单|销售单)/i, domain: "sales" },
+  { target: "purchaseOrder", pattern: /(采购订单|采购单)/i, domain: "procurement" },
+  { target: "salesDelivery", pattern: /(销售出货|出货单)/i, domain: "sales" },
+  { target: "purchaseReceipt", pattern: /(采购入库|入库单)/i, domain: "procurement" },
+  { target: "productionOrder", pattern: /(生产订单|生产单|工单)/i, domain: "production" },
+  // mrp 强信号（缺料 / 净需求）优先于泛化的「物料」，否则「物料缺料预警」会命中 product
+  { target: "mrp", pattern: /(mrp|物料需求计划|净需求|缺料)/i, domain: "production" },
   { target: "customer", pattern: /(客户|客商)/i, domain: "master_data" },
   { target: "supplier", pattern: /(供应商)/i, domain: "master_data" },
   { target: "product", pattern: /(物料|产品|商品)/i, domain: "master_data" },
@@ -32,11 +49,6 @@ const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }
   { target: "operation", pattern: /(工序)/i, domain: "master_data" },
   { target: "bom", pattern: /(bom|物料清单)/i, domain: "engineering" },
   { target: "routing", pattern: /(工艺路线|路线)/i, domain: "engineering" },
-  { target: "purchaseOrder", pattern: /(采购订单|采购单)/i, domain: "procurement" },
-  { target: "purchaseReceipt", pattern: /(采购入库|入库单)/i, domain: "procurement" },
-  { target: "salesOrder", pattern: /(销售订单|销售单)/i, domain: "sales" },
-  { target: "salesDelivery", pattern: /(销售出货|出货单)/i, domain: "sales" },
-  { target: "productionOrder", pattern: /(生产订单|生产单|工单)/i, domain: "production" },
   { target: "uom", pattern: /(计量单位|单位|uom)/i, domain: "master_data" },
   { target: "bin", pattern: /(库位|货位)/i, domain: "inventory" },
   { target: "company", pattern: /(公司|组织)/i, domain: "master_data" },
@@ -51,7 +63,6 @@ const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }
   { target: "qualityInspection", pattern: /(质检|质量检验|检验单)/i, domain: "production" },
   { target: "finance", pattern: /(财务|应收|应付|凭证|利润|现金流|费用)/i, domain: "finance" },
   { target: "inventory", pattern: /(库存|存货|现存量)/i, domain: "inventory" },
-  { target: "mrp", pattern: /(mrp|物料需求计划|净需求|缺料)/i, domain: "production" },
   { target: "baq", pattern: /(baq|报表查询|查询设计)/i, domain: "baq" },
 ];
 
@@ -114,6 +125,7 @@ const detectResponseMode = (
   queryMode: AiQueryMode,
 ): AiResponseMode => {
   if (intent === "create" || intent === "update") return "card";
+  if (intent === "document") return "card";
   if (intent === "baq") return "card";
   if (queryMode === "count") return "text";
   if (queryMode === "list" || queryMode === "compare") return "table";
@@ -122,7 +134,23 @@ const detectResponseMode = (
   return "text";
 };
 
-const ruleFallback = (state: AiGraphState): RoutedIntent => {
+/** 单据意图判定：单据类型 + 动作/创建/查询信号，或单号 + 动作 */
+const detectDocumentIntent = (rawText: string, lowerText: string): boolean => {
+  const docType = detectDocumentType(rawText);
+  const docAction = detectDocumentAction(rawText);
+  const hasDocNo = DOC_NO_PATTERN.test(rawText);
+
+  // 有单号 + 动作词 → 单据操作（如「把 SO20260005 过账」）
+  if (docAction && (hasDocNo || DOC_ACTION_WORDS.test(rawText) && docType)) return true;
+  // 单据类型 + 创建/过账/审批/转单 → 单据
+  if (docType && (CREATE_WORDS.test(lowerText) || docAction)) return true;
+  // 单据类型 + 列表/明细查询 → 单据查询
+  if (docType && (LIST_WORDS.test(lowerText) || hasDocNo)) return true;
+  return false;
+};
+
+/** 规则兜底路由（确定性、不调 LLM）——eval 集也用它做回归测试 */
+export const ruleFallback = (state: AiGraphState): RoutedIntent => {
   const text = state.text.toLowerCase();
   const action = detectAction(text);
   const targetInfo = detectTarget(text, state.currentFocus);
@@ -145,6 +173,10 @@ const ruleFallback = (state: AiGraphState): RoutedIntent => {
   } else if (KNOWLEDGE_WORDS.test(text)) {
     intent = "knowledge";
     domain = targetInfo.domain === "general" ? "knowledge" : targetInfo.domain;
+  } else if (detectDocumentIntent(state.text, text)) {
+    // 单据优先于主数据：ERP 里「销售订单/采购订单/领料单」是单据，不是可直写的主数据
+    intent = "document";
+    domain = "document";
   } else if (action === "create") {
     intent = "create";
     domain = targetInfo.domain === "general" ? "master_data" : targetInfo.domain;
@@ -190,7 +222,8 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
   const prompt = [
     "你是 ERP 智能路由器，只能输出 JSON。",
     "你要判断：intent、target、queryMode、responseMode、action、domain、confidence。",
-    "intent 只能是：chat, knowledge, create, update, baq, analysis。",
+    "intent 只能是：chat, knowledge, create, update, baq, analysis, document。",
+    "document 指单据类操作：建单据（销售订单/采购订单/入库单/出货单/领料单/生产订单）、对单据过账/反过账/审批/转单，或查询某张单据的明细与状态。",
     "target 优先从下面的业务对象清单中选择，也可以用历史值：dictItem, customer, supplier, product, warehouse, department, workCenter, operation, bom, routing, purchaseOrder, purchaseReceipt, salesOrder, salesDelivery, productionOrder, uom, bin, company, employee, finance, inventory, mrp, baq, general。",
     "重要：dictItem 指系统字典项（sys_dict_items，挂在 sys_dict_types 类型下的枚举值）。用户说“在字典 XX 里加 / 加个字典项 / 字典值”时用 dictItem；说“加个计量单位、加个客户”这种业务数据时用对应业务 target。两者是不同的数据，不要混淆。",
     "queryMode 只能是：count, list, summary, detail, trend, compare, exception, definition, answer。",
@@ -226,6 +259,38 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
 }
 
 export async function intentRouterNode(state: AiGraphState): Promise<AiGraphState> {
+  // 确认回路短路：会话里有待确认草稿且用户回复了明确的「确认/取消」，
+  // 不再走 LLM 路由（避免小模型把「确认」误路由成别的意图）。
+  // 刻意只匹配近原样的短语，防止「确认一下库存数量」这种句子被误吞。
+  const pending = state.pendingAction;
+  if (pending) {
+    const trimmed = state.text.trim();
+    if (/^(确认|确定|同意|执行|就执行|执行吧|confirm|yes|ok)[\s!！。.~]*$/i.test(trimmed)) {
+      return {
+        ...state,
+        intent: "confirm_execute",
+        domain: "pending_action",
+        target: pending.entityKey,
+        action: "update",
+        queryMode: "answer",
+        responseMode: "text",
+        confidence: 0.98,
+      };
+    }
+    if (/^(取消|算了|不要了|放弃|先不|cancel|no)[\s!！。.~]*$/i.test(trimmed)) {
+      return {
+        ...state,
+        intent: "cancel_action",
+        domain: "pending_action",
+        target: pending.entityKey,
+        action: "chat",
+        queryMode: "answer",
+        responseMode: "text",
+        confidence: 0.98,
+      };
+    }
+  }
+
   const fallback = ruleFallback(state);
   const routed = (await routeByModel(state)) || {};
 

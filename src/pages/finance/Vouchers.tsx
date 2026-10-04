@@ -12,6 +12,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { SuperTable } from '../../components/SuperTable';
+import { useCurrencyRegistry, fetchExchangeRate } from '../../utils/money';
+import { MoneyInput } from '../../components/MoneyInput';
 
 type Voucher = Tables['erp_vouchers_s_539dcf81_b']['Row'];
 type VoucherDetail = Tables['erp_voucher_details_s_539dcf81_b']['Row'];
@@ -21,6 +23,16 @@ const { Option } = Select;
 const { TextArea } = Input;
 const voucherTable = 'erp_vouchers_s_539dcf81_b';
 const voucherDetailTable = 'erp_voucher_details_s_539dcf81_b';
+
+/** 币种代码规范化：空 / 本位币统一收敛成 null（= 本位币行） */
+function normalizeCcy(value?: string | null): string | null {
+  const text = String(value ?? '').trim().toUpperCase();
+  return text || null;
+}
+
+function round2(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
 
 export function Vouchers() {
   const { t } = useTranslation();
@@ -39,6 +51,63 @@ export function Vouchers() {
   const [detailForm] = Form.useForm();
   const [form] = Form.useForm();
   const { user } = useAuth();
+  const { formatMoney, currencies, baseCurrency, currencyLabel } = useCurrencyRegistry();
+
+  // 币种联动：凭证头决定分录行的默认币种，分录行决定原币/本位币双金额
+  const voucherCurrency = Form.useWatch('currency', form);
+  const voucherRate = Form.useWatch('exchange_rate', form);
+  const detailCurrency = Form.useWatch('currency', detailForm);
+  const detailFcAmount = Form.useWatch('amount_fc', detailForm);
+  const detailRate = Form.useWatch('exchange_rate', detailForm);
+
+  const baseCcy = normalizeCcy(baseCurrency) ?? 'CNY';
+  const isVoucherForeign = !!normalizeCcy(voucherCurrency) && normalizeCcy(voucherCurrency) !== baseCcy;
+  const isDetailForeign = !!normalizeCcy(detailCurrency) && normalizeCcy(detailCurrency) !== baseCcy;
+  /** 折合本位币 = 原币 × 汇率；与后端 post_voucher_document 的校验同口径（差额 ≤ 0.05） */
+  const detailBasePreview = round2(Number(detailFcAmount || 0) * Number(detailRate || 0));
+  const currencyOptions = currencies.map((c) => ({
+    value: c.code,
+    label: `${c.code} · ${currencyLabel(c.code, c.name)}`,
+  }));
+
+  /** 取凭证日期（单号/费率都按它取当日汇率） */
+  const voucherDateText = () => {
+    const value = form.getFieldValue('voucher_date');
+    return value ? dayjs(value).format('YYYY-MM-DD') : new Date().toISOString().slice(0, 10);
+  };
+
+  const handleVoucherCurrencyChange = async (code?: string) => {
+    const next = normalizeCcy(code);
+    if (!next || next === baseCcy) {
+      form.setFieldValue('exchange_rate', 1);
+      return;
+    }
+    const date = voucherDateText();
+    const rate = await fetchExchangeRate(next, date);
+    if (rate === null) {
+      message.warning(t('currency.rateMissing', { code: next, date }));
+      return;
+    }
+    form.setFieldValue('exchange_rate', rate);
+    message.success(t('currency.rateAutoFilled', { date }));
+  };
+
+  const handleDetailCurrencyChange = async (code?: string) => {
+    const next = normalizeCcy(code);
+    if (!next || next === baseCcy) {
+      detailForm.setFieldValue('exchange_rate', 1);
+      detailForm.setFieldValue('amount_fc', undefined);
+      return;
+    }
+    const date = voucherDateText();
+    const rate = await fetchExchangeRate(next, date);
+    if (rate === null) {
+      message.warning(t('currency.rateMissing', { code: next, date }));
+      return;
+    }
+    detailForm.setFieldValue('exchange_rate', rate);
+    message.success(t('currency.rateAutoFilled', { date }));
+  };
 
   useEffect(() => {
     fetchVouchers();
@@ -96,11 +165,21 @@ export function Vouchers() {
 
   const handleSubmit = async (values: any) => {
     try {
+      // 币种规范化：留空 / 选到本位币一律回落成本位币行（currency = null, rate = 1），
+      // 这样 post_voucher_document 不会对本位币行做「本位币 ≈ 原币 × 汇率」校验
+      const headerCcy = normalizeCcy(values.currency);
+      const headerForeign = !!headerCcy && headerCcy !== baseCcy;
+      const payload = {
+        ...values,
+        currency: headerForeign ? headerCcy : null,
+        exchange_rate: headerForeign ? Number(values.exchange_rate || 0) || 1 : 1,
+      };
+
       if (editingVoucher) {
         await logWithTiming(t('vouchers.log.updateAction'), 'UPDATE', async () => {
           const { error } = await supabase
             .from(voucherTable)
-            .update(values)
+            .update(payload)
             .eq('id', editingVoucher.id);
           if (error) throw error;
         }, { table: voucherTable, recordId: editingVoucher.id });
@@ -112,7 +191,7 @@ export function Vouchers() {
         const data = await logWithTiming(t('vouchers.log.createAction'), 'INSERT', async () => {
           const { data, error } = await supabase
             .from(voucherTable)
-            .insert([values])
+            .insert([payload])
             .select()
             .single();
           if (error) throw error;
@@ -145,23 +224,52 @@ export function Vouchers() {
         return;
       }
 
+      const lineCcy = normalizeCcy(values.currency);
+      const lineForeign = !!lineCcy && lineCcy !== baseCcy;
+      const lineRate = lineForeign ? Number(values.exchange_rate || 0) : 1;
+      if (lineForeign && !(lineRate > 0)) {
+        message.error(t('currency.form.ratePositive'));
+        return;
+      }
+
+      // 双金额一起落库：本位币列进 debit/credit_amount，原币列进 debit_fc/credit_fc。
+      // 本位币 = ROUND(原币 × 汇率, 2)，与后端 post_voucher_document 的 0.05 容差一致；
+      // 本位币行（currency = null）则原币列一律为 0 —— 后端明确拒绝「无币种却有原币金额」。
+      const payload: Record<string, unknown> = {
+        subject_id: values.subject_id,
+        summary: values.summary ?? '',
+        auxiliary_type: values.auxiliary_type ?? '',
+        auxiliary_id: values.auxiliary_id ?? null,
+        currency: lineForeign ? lineCcy : null,
+        exchange_rate: lineRate,
+        debit_amount: 0,
+        credit_amount: 0,
+        debit_fc: 0,
+        credit_fc: 0,
+      };
+
+      if (isDebit) {
+        const fc = lineForeign ? Number(values.amount_fc || 0) : 0;
+        payload.debit_fc = fc;
+        payload.debit_amount = lineForeign ? round2(fc * lineRate) : Number(values.debit_amount || 0);
+      } else {
+        const fc = lineForeign ? Number(values.amount_fc || 0) : 0;
+        payload.credit_fc = fc;
+        payload.credit_amount = lineForeign ? round2(fc * lineRate) : Number(values.credit_amount || 0);
+      }
+
       if (editingDetail) {
-        await supabase
+        const { error } = await supabase
           .from(voucherDetailTable)
-          .update(values)
+          .update(payload)
           .eq('id', editingDetail.id);
+        if (error) throw error;
         message.success(t('common.updateSuccess'));
       } else {
         const maxLineNo = details.length > 0 ? Math.max(...details.map(d => d.line_no)) : 0;
-        values.line_no = maxLineNo + 1;
-        values.voucher_id = voucherId;
-        values.debit_amount = values.debit_amount || 0;
-        values.credit_amount = values.credit_amount || 0;
-        values.is_deleted = 'n';
-
         const { error } = await supabase
           .from(voucherDetailTable)
-          .insert([values]);
+          .insert([{ ...payload, line_no: maxLineNo + 1, voucher_id: voucherId, is_deleted: 'n' }]);
         if (error) throw error;
         message.success(t('common.createSuccess'));
       }
@@ -202,10 +310,13 @@ export function Vouchers() {
 
   const handleEdit = async (record: Voucher) => {
     setEditingVoucher(record);
-    const formValues = { ...record };
+    const formValues: any = { ...record };
     if (formValues.voucher_date) {
       formValues.voucher_date = dayjs(formValues.voucher_date);
     }
+    // 留空表示本位币：把 'null' 收敛成 undefined，否则 antd Select 会显示成已选项
+    formValues.currency = normalizeCcy(record.currency) ?? undefined;
+    formValues.exchange_rate = record.exchange_rate ?? 1;
     form.setFieldsValue(formValues);
     setSelectedVoucher(record);
     await fetchDetails(record.id);
@@ -291,6 +402,8 @@ export function Vouchers() {
       voucher_date: dayjs(new Date()),
       type: 'general',
       total_amount: 0,
+      currency: undefined,
+      exchange_rate: 1,
       remark: '',
       status: 'draft',
     });
@@ -299,11 +412,18 @@ export function Vouchers() {
 
   const handleAddDetail = () => {
     setEditingDetail(null);
+    setIsDebit(true);
+    // 默认继承凭证头的币种与汇率，避免每行重选
+    const headerCcy = normalizeCcy(voucherCurrency);
+    const inheritForeign = !!headerCcy && headerCcy !== baseCcy;
     detailForm.setFieldsValue({
       subject_id: undefined,
       summary: '',
       debit_amount: 0,
       credit_amount: 0,
+      amount_fc: undefined,
+      exchange_rate: inheritForeign ? Number(form.getFieldValue('exchange_rate') || 1) : 1,
+      currency: inheritForeign ? headerCcy : undefined,
       auxiliary_type: '',
       auxiliary_id: undefined,
     });
@@ -312,10 +432,19 @@ export function Vouchers() {
 
   const handleEditDetail = (record: VoucherDetail) => {
     setEditingDetail(record);
-    if(record.debit_amount){
-      setIsDebit(record.debit_amount > 0);
-    }    
-    detailForm.setFieldsValue(record);
+    const isDebitLine = Number(record.debit_amount || 0) > 0;
+    setIsDebit(isDebitLine);
+    detailForm.setFieldsValue({
+      subject_id: record.subject_id,
+      summary: record.summary ?? '',
+      auxiliary_type: record.auxiliary_type ?? '',
+      auxiliary_id: record.auxiliary_id ?? undefined,
+      currency: normalizeCcy(record.currency) ?? undefined,
+      exchange_rate: record.exchange_rate ?? 1,
+      amount_fc: (isDebitLine ? record.debit_fc : record.credit_fc) ?? undefined,
+      debit_amount: record.debit_amount ?? 0,
+      credit_amount: record.credit_amount ?? 0,
+    });
     setIsDetailModalOpen(true);
   };
 
@@ -385,10 +514,22 @@ export function Vouchers() {
       render: (type: string) => (typeKeys[type] ? t(typeKeys[type]) : type),
     },
     {
-      title: t('vouchers.amount'),
+      title: t('currency.field.currency'),
+      dataIndex: 'currency',
+      key: 'currency',
+      width: 100,
+      render: (code: string | null) => {
+        const ccy = normalizeCcy(code);
+        if (!ccy) return <Tag>{t('currency.baseTag')}</Tag>;
+        return <Tag color="blue">{ccy}</Tag>;
+      },
+    },
+    {
+      // 凭证的 total_amount 与分录的 debit/credit_amount 恒为**本位币**口径
+      title: t('currency.field.baseAmount'),
       dataIndex: 'total_amount',
       key: 'total_amount',
-      render: (amount: number) => `¥${(amount ?? 0).toLocaleString()}`,
+      render: (amount: number) => formatMoney(amount, baseCurrency),
     },
     {
       title: t('vouchers.remark'),
@@ -437,6 +578,7 @@ export function Vouchers() {
       title: t('vouchers.lineNo'),
       dataIndex: 'line_no',
       key: 'line_no',
+      width: 60,
     },
     {
       title: t('vouchers.accountSubject'),
@@ -448,18 +590,48 @@ export function Vouchers() {
       title: t('vouchers.summary'),
       dataIndex: 'summary',
       key: 'summary',
+      ellipsis: true,
     },
     {
-      title: t('vouchers.debitAmount'),
+      title: t('currency.field.currency'),
+      dataIndex: 'currency',
+      key: 'currency',
+      width: 90,
+      render: (code: string | null) => {
+        const ccy = normalizeCcy(code);
+        if (!ccy) return <Tag>{t('currency.baseTag')}</Tag>;
+        return <Tag color="blue">{ccy}</Tag>;
+      },
+    },
+    {
+      title: t('currency.field.fcDebit'),
+      dataIndex: 'debit_fc',
+      key: 'debit_fc',
+      width: 120,
+      render: (amount: number, record: VoucherDetail) =>
+        record.currency && Number(amount || 0) > 0 ? formatMoney(amount, record.currency) : '-',
+    },
+    {
+      title: t('currency.field.fcCredit'),
+      dataIndex: 'credit_fc',
+      key: 'credit_fc',
+      width: 120,
+      render: (amount: number, record: VoucherDetail) =>
+        record.currency && Number(amount || 0) > 0 ? formatMoney(amount, record.currency) : '-',
+    },
+    {
+      title: t('currency.field.baseDebit'),
       dataIndex: 'debit_amount',
       key: 'debit_amount',
-      render: (amount: number) => amount > 0 ? `¥${amount.toFixed(2)}` : '-',
+      width: 120,
+      render: (amount: number) => Number(amount || 0) > 0 ? formatMoney(amount, baseCurrency) : '-',
     },
     {
-      title: t('vouchers.creditAmount'),
+      title: t('currency.field.baseCredit'),
       dataIndex: 'credit_amount',
       key: 'credit_amount',
-      render: (amount: number) => amount > 0 ? `¥${amount.toFixed(2)}` : '-',
+      width: 120,
+      render: (amount: number) => Number(amount || 0) > 0 ? formatMoney(amount, baseCurrency) : '-',
     },
     {
       title: t('vouchers.auxiliaryType'),
@@ -470,6 +642,7 @@ export function Vouchers() {
     {
       title: t('common.actions'),
       key: 'action',
+      width: 140,
       render: (_: any, record: VoucherDetail) => (
         <Space size="middle">
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
@@ -489,7 +662,7 @@ export function Vouchers() {
   }), { debit: 0, credit: 0 });
 
   return (
-    <div className="mainContent">
+    <div>
       <SuperTable
         columns={columns}
         dataSource={filteredVouchers}
@@ -565,8 +738,34 @@ export function Vouchers() {
                     <Option value="transfer">{t('vouchers.typeOptions.transfer')}</Option>
                   </Select>
                 </Form.Item>
-                <Form.Item label={t('vouchers.totalAmount')} name="total_amount" initialValue={0}>
-                  <InputNumber style={{ width: '100%' }} placeholder={t('vouchers.totalAmountPlaceholder')} />
+                <Form.Item
+                  label={t('currency.field.currency')}
+                  name="currency"
+                  extra={t('currency.baseHint')}
+                >
+                  <Select
+                    allowClear
+                    placeholder={t('currency.baseOption', { code: baseCurrency })}
+                    options={currencyOptions}
+                    onChange={handleVoucherCurrencyChange}
+                  />
+                </Form.Item>
+                <Form.Item
+                  label={t('currency.field.exchangeRate')}
+                  name="exchange_rate"
+                  initialValue={1}
+                  extra={isVoucherForeign ? t('currency.rateHint', { foreign: normalizeCcy(voucherCurrency), rate: voucherRate, base: baseCurrency }) : undefined}
+                >
+                  <InputNumber
+                    min={0}
+                    step={0.000001}
+                    precision={8}
+                    style={{ width: '100%' }}
+                    disabled={!isVoucherForeign}
+                  />
+                </Form.Item>
+                <Form.Item label={t('currency.field.baseAmount')} name="total_amount" initialValue={0}>
+                  <MoneyInput currency={baseCurrency} min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.totalAmountPlaceholder')} />
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -591,9 +790,9 @@ export function Vouchers() {
             pagination={false}
             summary={() => (
               <Table.Summary.Row>
-                <Table.Summary.Cell index={0} colSpan={3} align="right"><strong>{t('vouchers.total')}</strong></Table.Summary.Cell>
-                <Table.Summary.Cell index={1} align="left"><strong>¥{detailTotal.debit.toFixed(2)}</strong></Table.Summary.Cell>
-                <Table.Summary.Cell index={2} align="left"><strong>¥{detailTotal.credit.toFixed(2)}</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={0} colSpan={6} align="right"><strong>{t('vouchers.total')}</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={1} align="left"><strong>{formatMoney(detailTotal.debit, baseCurrency)}</strong></Table.Summary.Cell>
+                <Table.Summary.Cell index={2} align="left"><strong>{formatMoney(detailTotal.credit, baseCurrency)}</strong></Table.Summary.Cell>
                 <Table.Summary.Cell index={3} colSpan={2}></Table.Summary.Cell>
               </Table.Summary.Row>
             )}
@@ -622,8 +821,8 @@ export function Vouchers() {
             {t('common.save')}
           </Button>
         </Space>}
-        width={600}
-        height={450}
+        width={680}
+        height={620}
         form={detailForm}
       >
         <Form form={detailForm} layout="vertical" onFinish={handleDetailSubmit} style={{ padding: '0 16px 0 0' }}>
@@ -641,22 +840,80 @@ export function Vouchers() {
           
           <Row gutter={16}>
             <Col span={12}>
+              <Form.Item label={t('currency.field.currency')} name="currency" extra={t('currency.baseHint')}>
+                <Select
+                  allowClear
+                  placeholder={t('currency.baseOption', { code: baseCurrency })}
+                  options={currencyOptions}
+                  onChange={handleDetailCurrencyChange}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={t('currency.field.exchangeRate')}
+                name="exchange_rate"
+                initialValue={1}
+                extra={isDetailForeign ? t('currency.rateTooltip') : undefined}
+              >
+                <InputNumber
+                  min={0}
+                  step={0.000001}
+                  precision={8}
+                  style={{ width: '100%' }}
+                  disabled={!isDetailForeign}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
               <Form.Item label={t('vouchers.debitCreditDirection')}>
                 <Switch checkedChildren={t('vouchers.debit')} unCheckedChildren={t('vouchers.credit')} checked={isDebit} onChange={setIsDebit} />
               </Form.Item>
             </Col>
             <Col span={12}>
+              {/* 外币行：这一栏填**原币金额**，本位币由「原币 × 汇率」自动算出；
+                  本位币行（未选币种）：这一栏就是本位币金额，行为与本改造前完全一致 */}
               {isDebit ? (
-                <Form.Item label={t('vouchers.debitAmount')} name="debit_amount" initialValue={0}>
-                <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.debitAmountPlaceholder')} />
-              </Form.Item>
+                <Form.Item
+                  label={isDetailForeign ? t('currency.field.foreignAmount') : t('currency.field.baseDebit')}
+                  name={isDetailForeign ? 'amount_fc' : 'debit_amount'}
+                  initialValue={0}
+                >
+                  <MoneyInput
+                    currency={isDetailForeign ? detailCurrency : baseCurrency}
+                    min={0}
+                    step={0.01}
+                    style={{ width: '100%' }}
+                    placeholder={t('vouchers.debitAmountPlaceholder')}
+                  />
+                </Form.Item>
               ) : (
-                <Form.Item label={t('vouchers.creditAmount')} name="credit_amount" initialValue={0}>
-                  <InputNumber prefix="￥" min={0} step={0.01} style={{ width: '100%' }} placeholder={t('vouchers.creditAmountPlaceholder')} />
+                <Form.Item
+                  label={isDetailForeign ? t('currency.field.foreignAmount') : t('currency.field.baseCredit')}
+                  name={isDetailForeign ? 'amount_fc' : 'credit_amount'}
+                  initialValue={0}
+                >
+                  <MoneyInput
+                    currency={isDetailForeign ? detailCurrency : baseCurrency}
+                    min={0}
+                    step={0.01}
+                    style={{ width: '100%' }}
+                    placeholder={t('vouchers.creditAmountPlaceholder')}
+                  />
                 </Form.Item>
               )}
             </Col>
           </Row>
+
+          {isDetailForeign && (
+            <Form.Item label={t('currency.field.baseAmount')}>
+              <Input readOnly value={formatMoney(detailBasePreview, baseCurrency)} />
+            </Form.Item>
+          )}
+
           <Form.Item label={t('vouchers.auxiliaryType')} name="auxiliary_type">
             <Input placeholder={t('vouchers.auxiliaryTypePlaceholder')} />
           </Form.Item>

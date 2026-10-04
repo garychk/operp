@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { logWithTiming } from './logger';
 import { nextDocumentNo } from './documentNaming';
+import { getBaseCurrency } from './money';
 
 type CreateEntity =
   | 'customer'
@@ -181,7 +182,7 @@ const entityDefs: Record<CreateEntity, EntityDef> = {
     tableName: 'erp_purchase_orders_s_539dcf81_b',
     operation: 'AI新增采购订单',
     keywords: ['采购订单', '采购单'],
-    createDefaults: () => ({ order_no: serial('PO'), order_date: today(), total_amount: 0, tax_amount: 0, payable_amount: 0, currency: 'CNY', status: 'draft' }),
+    createDefaults: () => ({ order_no: serial('PO'), order_date: today(), total_amount: 0, tax_amount: 0, payable_amount: 0, currency: getBaseCurrency(), status: 'draft' }),
     fields: [
       { key: 'order_no', label: '订单号', aliases: ['订单号', '采购单号', '单号'], defaultValue: () => serial('PO') },
       { key: 'supplier_id', label: '供应商ID', required: true, type: 'number', aliases: ['供应商ID', 'supplier_id'] },
@@ -203,7 +204,7 @@ const entityDefs: Record<CreateEntity, EntityDef> = {
     tableName: 'erp_sales_orders_s_539dcf81_b',
     operation: 'AI新增销售订单',
     keywords: ['销售订单', '销售单'],
-    createDefaults: () => ({ order_no: serial('SO'), order_date: today(), total_amount: 0, tax_amount: 0, discount_amount: 0, receivable_amount: 0, currency: 'CNY', status: 'draft' }),
+    createDefaults: () => ({ order_no: serial('SO'), order_date: today(), total_amount: 0, tax_amount: 0, discount_amount: 0, receivable_amount: 0, currency: getBaseCurrency(), status: 'draft' }),
     fields: [
       { key: 'order_no', label: '订单号', aliases: ['订单号', '销售单号', '单号'], defaultValue: () => serial('SO') },
       { key: 'customer_id', label: '客户ID', required: true, type: 'number', aliases: ['客户ID', 'customer_id'] },
