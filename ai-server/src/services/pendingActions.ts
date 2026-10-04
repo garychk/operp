@@ -14,6 +14,8 @@
  */
 import { supabase } from "../config/supabase.js";
 import { logAiOperation } from "./aiAudit.js";
+// 仅用其纯函数（无环：entityRegistry 只依赖 config 层），展示时剥租户后缀
+import { baseTableName as displayTableName } from "../tools/entityRegistry.js";
 
 export const PENDING_ACTION_TTL_MINUTES = 30;
 
@@ -213,7 +215,7 @@ export async function executePendingAction(
 
   const display = ctx.display || String(written?.id ?? "-");
   return {
-    reply: `${isUpdate ? "已更新" : "已创建"}${ctx.label || ""}：${display}（写入表 ${ctx.tableTag || action.table_name}）`,
+    reply: `${isUpdate ? "已更新" : "已创建"}${ctx.label || ""}：${display}（写入表 ${ctx.tableTag || displayTableName(action.table_name)}）`,
     focus: {
       type: action.entity_key,
       id: rowId,

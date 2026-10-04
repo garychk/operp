@@ -266,7 +266,7 @@ async function extractEntityPayload(
     .join("; ");
   const prompt = [
     `你是ERP数据录入助手。请从用户描述中提取${entity.label}的字段值，只返回JSON，不要解释。`,
-    `实体表：${entity.tableName}`,
+    `实体表：${baseTableName(entity.tableName)}`,
     `允许字段：${entity.insertableFields.join(", ")}`,
     fieldHints ? `字段说明：${fieldHints}` : "",
     `必填字段：${entity.requiredFields.map((field) => `${field.key}(${field.label})`).join(", ")}`,
@@ -299,7 +299,7 @@ async function applyEntityHeuristics(
   draft: Record<string, unknown>,
 ): Promise<{ draft: Record<string, unknown>; reasoning: string[] }> {
   const reasoning: string[] = [];
-  const base = entity.tableName.replace(/_s_[0-9a-f]{6,}_[a-z]$/i, "");
+  const base = baseTableName(entity.tableName);
 
   if (base === "erp_uoms") {
     const name = String(draft.name || "").trim();
@@ -411,7 +411,7 @@ async function inferMissingFields(
 
   const prompt = [
     `你是ERP数据补全专家。用户想${action === "update" ? "修改" : "创建"}一个${entity.label}，但还缺少一些必填字段。`,
-    `实体表：${entity.tableName}`,
+    `实体表：${baseTableName(entity.tableName)}`,
     `字段定义：${columnDefs}`,
     `必填字段：${entity.requiredFields.map((field) => `${field.key}(${field.label})`).join(", ")}`,
     `当前已确定的字段：${JSON.stringify(draft)}`,

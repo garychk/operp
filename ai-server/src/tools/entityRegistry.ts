@@ -86,6 +86,21 @@ const NON_INSERTABLE_COLUMNS = new Set(["id", "created_at", "updated_at"]);
 /** 去掉租户后缀：erp_uoms_s_539dcf81_b -> erp_uoms */
 const baseTableName = (table: string) => table.replace(/_s_[0-9a-f]{6,}_[a-z]$/i, "");
 
+/**
+ * 用户可见文本里的物理表名统一剥租户后缀。
+ *
+ * 背景：物理表名带 `_s_<项目id>_<字母>` 后缀（多租户设计如此），但这个内部
+ * 实现细节不应出现在给用户看的回复里。LLM 的 prompt 里会出现物理表名
+ * （分析 SQL 生成必须要用），模型可能原样复述 → 在 responseComposer
+ * 对最终回复统一清洗一遍，静态拼接的回复也在源头剥掉。
+ *
+ * 注意：只用于「展示文本」。真正要执行/落库的地方（supabase.from、SQL）
+ * 必须继续使用物理表名。
+ */
+const TENANT_SUFFIX_IN_TEXT_RE = /\b([A-Za-z][A-Za-z0-9_]*?)_s_[0-9a-f]{6,}_[a-z]\b/g;
+const stripTenantSuffixInText = (text: string): string =>
+  text.replace(TENANT_SUFFIX_IN_TEXT_RE, (_match, base: string) => base);
+
 /** 人工语义配置用的短键：erp_uoms -> uoms */
 const shortKeyOf = (table: string) => baseTableName(table).replace(/^(erp|sys|wf|doc_flow)_/, "");
 
@@ -124,7 +139,7 @@ const TARGET_TO_TABLE: Record<string, string> = {
   voucher: "erp_vouchers",
 };
 
-export { baseTableName, shortKeyOf };
+export { baseTableName, shortKeyOf, stripTenantSuffixInText };
 
 /**
  * 人工语义层：只给需要特殊默认值 / 关键词 / 字段说明的表写配置，
