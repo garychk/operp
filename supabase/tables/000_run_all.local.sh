@@ -120,6 +120,8 @@ ORDER=(
   deploy_78_ar_ap_base_balance_guard.sql
   deploy_79_product_images.sql
   deploy_80_attachments.sql
+  deploy_81_ai_analysis_hardening.sql
+  deploy_82_ai_pending_actions.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

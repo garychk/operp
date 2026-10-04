@@ -226,6 +226,38 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
 }
 
 export async function intentRouterNode(state: AiGraphState): Promise<AiGraphState> {
+  // 确认回路短路：会话里有待确认草稿且用户回复了明确的「确认/取消」，
+  // 不再走 LLM 路由（避免小模型把「确认」误路由成别的意图）。
+  // 刻意只匹配近原样的短语，防止「确认一下库存数量」这种句子被误吞。
+  const pending = state.pendingAction;
+  if (pending) {
+    const trimmed = state.text.trim();
+    if (/^(确认|确定|同意|执行|就执行|执行吧|confirm|yes|ok)[\s!！。.~]*$/i.test(trimmed)) {
+      return {
+        ...state,
+        intent: "confirm_execute",
+        domain: "pending_action",
+        target: pending.entityKey,
+        action: "update",
+        queryMode: "answer",
+        responseMode: "text",
+        confidence: 0.98,
+      };
+    }
+    if (/^(取消|算了|不要了|放弃|先不|cancel|no)[\s!！。.~]*$/i.test(trimmed)) {
+      return {
+        ...state,
+        intent: "cancel_action",
+        domain: "pending_action",
+        target: pending.entityKey,
+        action: "chat",
+        queryMode: "answer",
+        responseMode: "text",
+        confidence: 0.98,
+      };
+    }
+  }
+
   const fallback = ruleFallback(state);
   const routed = (await routeByModel(state)) || {};
 

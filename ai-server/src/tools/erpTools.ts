@@ -2,6 +2,8 @@ import { supabase } from "../config/supabase.js";
 import { callChatModel } from "../config/llm.js";
 import { TenantScopeError } from "../config/tenantContext.js";
 import type { AiChatRequest, AiGraphState } from "../ai/state.js";
+import { createPendingAction, PENDING_ACTION_TTL_MINUTES } from "../services/pendingActions.js";
+import { logAiOperation } from "../services/aiAudit.js";
 import {
   baseTableName,
   evaluateDeletePolicy,
@@ -454,14 +456,42 @@ const toFieldKey = (entity: EntityDef, value: string) => {
   return byLabel?.key || null;
 };
 
-async function upsertEntity(
+export interface EntityUpsertPlan {
+  action: "create" | "update";
+  entityKey: string;
+  tableName: string;
+  payload: Record<string, unknown>;
+  existingId: number | null;
+  tenantScoped: boolean;
+  context: {
+    action: "create" | "update";
+    label: string;
+    tableTag: string;
+    display: string;
+    fieldLines: string[];
+    route?: string;
+    routeLabel?: string;
+    tenantScoped: boolean;
+  };
+}
+
+export type EntityUpsertPreparation =
+  | { kind: "needs_more"; reply: string; nextQuestions?: string[] }
+  | { kind: "error"; reply: string }
+  | { kind: "ready"; plan: EntityUpsertPlan };
+
+/**
+ * 实体新增/修改的「准备」阶段：推断、补全、查重，产出一份**未写入**的 payload。
+ * 真正落库由确认回路负责（services/pendingActions.executePendingAction）。
+ */
+async function prepareEntityUpsert(
   entity: EntityDef,
   tenantId: number,
   text: string,
   currentFocus?: unknown,
   provider?: AiChatRequest["provider"],
   action: "create" | "update" = "create",
-) {
+): Promise<EntityUpsertPreparation> {
   const current = currentFocus && typeof currentFocus === "object" ? currentFocus as Record<string, unknown> : null;
   const existing =
     action === "update"
@@ -509,7 +539,7 @@ async function upsertEntity(
 
   if (missingLabels.length > 0 && !existing) {
     return {
-      status: "needs_more" as const,
+      kind: "needs_more" as const,
       reply: ambiguousLabels.length
         ? `${action === "update" ? "修改" : "创建"}${entity.label}时，这些字段有多种可能的取值，需要你确认：${ambiguousLabels.join("、")}`
         : `${action === "update" ? "修改" : "创建"}${entity.label}还缺少这些信息：${missingLabels.join("、")}`,
@@ -539,7 +569,7 @@ async function upsertEntity(
   const isUpdate = !!existing?.id;
   if (action === "update" && !isUpdate) {
     return {
-      status: "needs_more" as const,
+      kind: "needs_more" as const,
       reply: `没有找到可修改的${entity.label}，请先明确要修改哪一条记录。`,
       nextQuestions: [`请提供要修改的${entity.label}名称或编码`],
     };
@@ -557,33 +587,52 @@ async function upsertEntity(
           ? "如果你要加的是物料级业务数据（如 erp_uoms），请去掉“字典”二字再说一次。"
           : "如果你说的是系统字典（sys_dict_items 下的数据），请明确说“在字典里加”。";
       return {
-        status: "error" as const,
+        kind: "error" as const,
         reply: `${entity.label}「${dupName}」已存在于表 ${tableTag}，无法重复创建。${crossHint}如需修改，请说“修改${entity.label} ${dupName}”。`,
       };
     }
   }
 
-  // UPDATE 同样要限定租户：只按 id 更新等于可以改到别的租户的行
-  const response = isUpdate
-    ? await (isTenantScopedTable(entity.tableName)
-        ? supabase.from(entity.tableName).update(payload).eq("id", existing.id).eq("tenant_id", tenantId)
-        : supabase.from(entity.tableName).update(payload).eq("id", existing.id)
-      ).select().single()
-    : await supabase.from(entity.tableName).insert(payload).select().single();
-  if (response.error) throw response.error;
-  const row = response.data as Record<string, unknown>;
-  const displayName = String(row[entity.nameField || entity.codeField || "id"] || row.id || "-");
+  // 草稿预览：只列业务字段（隐藏 tenant_id / is_deleted / updated_at 等系统列）
+  const fieldLabelOf = (key: string) =>
+    entity.requiredFields.find((field) => field.key === key)?.label ||
+    entity.optionalFields?.find((field) => field.key === key)?.label ||
+    key;
+  const systemKeys = new Set(["tenant_id", "is_deleted", "updated_at"]);
+  const fieldLines = Object.entries(payload)
+    .filter(([key]) => !systemKeys.has(key))
+    .map(([key, value]) => {
+      const shown =
+        value !== null && typeof value === "object" ? JSON.stringify(value) : String(value ?? "");
+      return `${fieldLabelOf(key)}：${shown}`;
+    });
+
   const routeInfo = await findEntityRoute(entity).catch(() => null);
+  const displayName = String(
+    draft[entity.nameField || entity.codeField || "id"] || draft.id || "-",
+  );
   const autoFillNotes = [...heuristic.reasoning, ...inferred.reasoning];
+
   return {
-    status: "success" as const,
-    reply: `${isUpdate ? "已更新" : "已创建"}${entity.label}：${displayName}（写入表 ${tableTag}）${extracted.summary ? `\n${extracted.summary}` : ""}${
-      fkResult.resolved.length ? `\n已自动解析关联字段：${fkResult.resolved.join("、")}` : ""
-    }${autoFillNotes.length ? `\n自动补全：${autoFillNotes.join("；")}` : ""}`,
-    data: row,
-    route: routeInfo?.route,
-    routeLabel: routeInfo?.routeLabel,
-    focus: { type: entity.key, id: row.id, code: row[entity.codeField || "code"], name: row[entity.nameField || entity.codeField || "name"], route: routeInfo?.route },
+    kind: "ready" as const,
+    plan: {
+      action,
+      entityKey: entity.key,
+      tableName: entity.tableName,
+      payload,
+      existingId: isUpdate ? Number(existing!.id) : null,
+      tenantScoped: isTenantScopedTable(entity.tableName),
+      context: {
+        action,
+        label: entity.label,
+        tableTag,
+        display: displayName,
+        fieldLines,
+        route: routeInfo?.route,
+        routeLabel: routeInfo?.routeLabel,
+        tenantScoped: isTenantScopedTable(entity.tableName),
+      },
+    },
   };
 }
 
@@ -935,6 +984,15 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
     : await supabase.from("sys_baq_queries").insert(payload).select().single();
   if (response.error) throw response.error;
   const saved = response.data as Record<string, unknown>;
+  await logAiOperation({
+    operation: "ai.baq.upsert",
+    tenantId,
+    userId: state.userId,
+    sessionId: state.sessionId,
+    targetTable: "sys_baq_queries",
+    targetId: Number(saved.id),
+    request: payload,
+  });
   const definitionSummary = `数据源：${String((definition.source as Record<string, unknown>).table || "-")}\n关联表：${Array.isArray(definition.joins) ? definition.joins.length : 0} 张\n输出字段：${Array.isArray(definition.fields) ? definition.fields.length : 0} 个\n筛选条件：${Array.isArray(definition.filters) ? definition.filters.length : 0} 个\n排序条件：${Array.isArray(definition.sorts) ? definition.sorts.length : 0} 个`;
   return {
     status: "success",
@@ -969,7 +1027,69 @@ export async function createOrUpdateEntityTool(
     return { status: "error", reply: `${entity.label}不支持 AI 删除：${policy.reason}。` };
   }
   const tenantId = requireTenantId(state);
-  return upsertEntity(entity, tenantId, state.text, state.currentFocus, state.provider, action);
+
+  // 两段式写入：这里只产出草稿（不落业务表），用户确认后才执行。
+  const sessionId = state.sessionId;
+  const userId = state.userId;
+  if (!sessionId || typeof userId !== "number") {
+    return { status: "error", reply: "缺少会话或用户上下文，无法发起写入草稿。" };
+  }
+
+  const preparation = await prepareEntityUpsert(
+    entity,
+    tenantId,
+    state.text,
+    state.currentFocus,
+    state.provider,
+    action,
+  );
+
+  if (preparation.kind === "needs_more") {
+    return {
+      status: "needs_more",
+      reply: preparation.reply,
+      nextQuestions: preparation.nextQuestions,
+    };
+  }
+  if (preparation.kind === "error") {
+    return { status: "error", reply: preparation.reply };
+  }
+
+  const plan = preparation.plan;
+  const pendingActionId = await createPendingAction({
+    sessionId,
+    userId,
+    tenantId,
+    actionType: action === "update" ? "entity.update" : "entity.create",
+    entityKey: plan.entityKey,
+    tableName: plan.tableName,
+    payload: plan.payload,
+    existingId: plan.existingId,
+    context: plan.context,
+  });
+  await logAiOperation({
+    operation: action === "update" ? "ai.entity.draft_update" : "ai.entity.draft_create",
+    tenantId,
+    userId,
+    sessionId,
+    targetTable: plan.tableName,
+    request: plan.payload,
+    result: { pending_action_id: pendingActionId },
+  });
+
+  const preview = plan.context.fieldLines.length
+    ? plan.context.fieldLines.join("\n")
+    : "（无业务字段）";
+  return {
+    status: "success",
+    needConfirmation: true,
+    reply:
+      `已准备好${action === "update" ? "修改" : "创建"}${entity.label}的草稿，尚未写入数据库：\n` +
+      `${preview}\n\n` +
+      `回复「确认」执行写入，回复「取消」放弃（${PENDING_ACTION_TTL_MINUTES} 分钟内有效）。`,
+    data: { pending_action_id: pendingActionId, payload: plan.payload },
+    focus: state.currentFocus,
+  };
 }
 
 export async function businessAnalysisTool(state: AiGraphState): Promise<ToolResult> {
@@ -1026,6 +1146,14 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
   console.log("[ai-server] analysis plan normalized SQL:", plan.sql);
   validateAnalysisSql(plan.sql, selectedCatalog.length ? selectedCatalog : catalog, tenantId);
   const executed = await executeAiAnalysisSql(plan.sql, tenantId);
+  await logAiOperation({
+    operation: "ai.analysis.sql",
+    tenantId,
+    userId: state.userId,
+    sessionId: state.sessionId,
+    request: { title: plan.title, sql: plan.sql },
+    result: { rowCount: executed?.rowCount ?? 0 },
+  });
   const rows = Array.isArray(executed?.rows) ? executed!.rows! : [];
 
   const previewRows = rows.slice(0, 20);

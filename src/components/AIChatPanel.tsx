@@ -38,6 +38,7 @@ import {
 import type { ThoughtChainItemType } from "@ant-design/x/es/thought-chain";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
+import { supabase } from "../utils/supabase";
 import {
   createId,
   createProvider,
@@ -610,11 +611,19 @@ const streamAIReply = async (
   onEvent: (event: AiChatStreamPacket) => void | Promise<void>,
   t: (key: string, options?: Record<string, unknown>) => string,
 ) => {
+  // ai-server 侧已启用 JWT 鉴权（requireAuth）：身份以 Authorization 头为准，
+  // 请求体里的 user_id 只做一致性校验。token 过期会得到 401，由上层错误提示兜住。
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
   const response = await fetch(`${AI_SERVER_URL}/chat`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
+      ...(session?.access_token
+        ? { Authorization: `Bearer ${session.access_token}` }
+        : {}),
     },
     body: JSON.stringify({ ...payload, stream: true }),
   });

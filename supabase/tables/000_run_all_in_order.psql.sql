@@ -102,3 +102,5 @@
 \i supabase/tables/deploy_78_ar_ap_base_balance_guard.sql
 \i supabase/tables/deploy_79_product_images.sql
 \i supabase/tables/deploy_80_attachments.sql
+\i supabase/tables/deploy_81_ai_analysis_hardening.sql
+\i supabase/tables/deploy_82_ai_pending_actions.sql

@@ -243,10 +243,17 @@ export function KnowledgeBase() {
     }
     setReindexing(true);
     try {
+      // ai-server 已启用 JWT 鉴权：租户以 Authorization 头解析为准
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       const response = await fetch(`${AI_SERVER_URL}/knowledge/reindex`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...(session?.access_token
+            ? { Authorization: `Bearer ${session.access_token}` }
+            : {}),
         },
         body: JSON.stringify({
           ...(Number.isFinite(docId) ? { doc_id: docId } : {}),

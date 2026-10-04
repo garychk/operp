@@ -2,10 +2,75 @@ import type { AiGraphState } from "../state.js";
 import { callChatModel } from "../../config/llm.js";
 import { businessAnalysisTool, countMasterDataTool, createOrUpdateBaqTool, createOrUpdateEntityTool, financeSummaryTool } from "../../tools/erpTools.js";
 import { searchKnowledgeRag } from "../../services/knowledgeBase.js";
+import {
+  cancelPendingAction,
+  executePendingAction,
+  PendingActionError,
+} from "../../services/pendingActions.js";
+import { TenantScopeError } from "../../config/tenantContext.js";
+
+const requireConfirmIdentity = (state: AiGraphState) => {
+  if (typeof state.userId !== "number" || typeof state.tenantId !== "number") {
+    throw new TenantScopeError("缺少用户或租户上下文，已拒绝执行确认操作。");
+  }
+  return { userId: state.userId, tenantId: state.tenantId };
+};
+
+const pendingErrorReply = (error: unknown) => {
+  if (error instanceof PendingActionError) return error.message;
+  if (error instanceof TenantScopeError) return error.message;
+  return "确认操作执行失败，请稍后重试。";
+};
 
 export async function toolExecutorNode(state: AiGraphState): Promise<AiGraphState> {
   const plan = Array.isArray(state.plan) ? state.plan : [];
   const tool = plan[0] as { tool?: string } | undefined;
+
+  if (tool?.tool === "entity.execute_pending") {
+    const pendingActionId = state.pendingAction?.id;
+    if (!pendingActionId) {
+      return { ...state, toolResults: [{ step: "execute_pending", ok: false }], reply: "没有找到待确认的草稿。" };
+    }
+    try {
+      const result = await executePendingAction(pendingActionId, requireConfirmIdentity(state));
+      return {
+        ...state,
+        toolResults: [{ step: "execute_pending", ok: true, output: result.focus }],
+        reply: result.reply,
+        focus: result.focus,
+        route: result.route,
+        routeLabel: result.routeLabel,
+        needConfirmation: false,
+      };
+    } catch (error) {
+      return {
+        ...state,
+        toolResults: [{ step: "execute_pending", ok: false, error: pendingErrorReply(error) }],
+        reply: pendingErrorReply(error),
+      };
+    }
+  }
+
+  if (tool?.tool === "entity.cancel_pending") {
+    const pendingActionId = state.pendingAction?.id;
+    if (!pendingActionId) {
+      return { ...state, toolResults: [{ step: "cancel_pending", ok: false }], reply: "没有找到待确认的草稿。" };
+    }
+    try {
+      await cancelPendingAction(pendingActionId, requireConfirmIdentity(state));
+      return {
+        ...state,
+        toolResults: [{ step: "cancel_pending", ok: true }],
+        reply: "已取消，草稿未写入数据库。",
+      };
+    } catch (error) {
+      return {
+        ...state,
+        toolResults: [{ step: "cancel_pending", ok: false, error: pendingErrorReply(error) }],
+        reply: pendingErrorReply(error),
+      };
+    }
+  }
 
   if (tool?.tool === "baq.upsert") {
     const result = await createOrUpdateBaqTool(state);

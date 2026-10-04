@@ -2,7 +2,11 @@ import type { AiGraphState } from "../state.js";
 
 export async function plannerNode(state: AiGraphState): Promise<AiGraphState> {
   const plan =
-    state.intent === "baq"
+    state.intent === "confirm_execute"
+      ? [{ step: "execute_pending_action", tool: "entity.execute_pending", input: { pendingActionId: state.pendingAction?.id } }]
+      : state.intent === "cancel_action"
+        ? [{ step: "cancel_pending_action", tool: "entity.cancel_pending", input: { pendingActionId: state.pendingAction?.id } }]
+      : state.intent === "baq"
       ? [{ step: "create_or_update_baq", tool: "baq.upsert", input: { text: state.text, currentFocus: state.currentFocus } }]
       : state.intent === "create"
         ? [{ step: "create_entity", tool: "entity.create", input: { text: state.text } }]

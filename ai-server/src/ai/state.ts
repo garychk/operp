@@ -1,5 +1,15 @@
 export type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
-export type AiIntent = "chat" | "knowledge" | "create" | "update" | "baq" | "analysis";
+export type AiIntent =
+  | "chat"
+  | "knowledge"
+  | "create"
+  | "update"
+  | "baq"
+  | "analysis"
+  /** 会话里有待确认草稿且用户回复了「确认」 */
+  | "confirm_execute"
+  /** 会话里有待确认草稿且用户回复了「取消」 */
+  | "cancel_action";
 export type AiAction = "create" | "update" | "chat";
 export type AiQueryMode =
   | "count"
@@ -77,6 +87,8 @@ export interface AiGraphState {
   currentFocus?: unknown;
   recentMessages: unknown[];
   memory?: AiSessionMemory | null;
+  /** 会话里最新一条待确认草稿（contextLoader 预取，「确认/取消」短路命中用） */
+  pendingAction?: { id: number; actionType: string; entityKey: string } | null;
   intent?: AiIntent;
   action?: AiAction;
   domain?: string;

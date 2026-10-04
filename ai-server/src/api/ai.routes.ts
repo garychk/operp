@@ -2,13 +2,25 @@ import { Router } from "express";
 import { z } from "zod";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
 import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
+import { executePendingAction, PendingActionError } from "../services/pendingActions.js";
 import {
   resolveEmbeddingProviderConfig,
   resolveProviderConfig,
 } from "../services/aiProvider.js";
-import { TenantScopeError, resolveTenantContext } from "../config/tenantContext.js";
+import { TenantScopeError } from "../config/tenantContext.js";
+import { getIdentity, requireAuth } from "../services/authGuard.js";
 
 export const aiRouter = Router();
+
+/**
+ * ⚠️ 鉴权：/api/ai 下所有端点都必须过 requireAuth。
+ * 此前 chat 完全不验 JWT、身份取自请求体 user_id，等于对内网裸奔；
+ * 现在身份链路 = Supabase JWT → sys_users.auth_id → resolveTenantContext，
+ * 请求体里的 user_id/tenant_id 只做一致性/越权校验，不再作为身份来源。
+ */
+aiRouter.use("/chat", requireAuth);
+aiRouter.use("/knowledge", requireAuth);
+aiRouter.use("/confirm", requireAuth);
 
 const chatSchema = z.object({
   session_id: z.string().min(1),
@@ -35,6 +47,10 @@ const reindexSchema = z.object({
   doc_id: z.number().int().optional(),
   tenant_id: z.number().int().optional(),
   user_id: z.number().int().optional(),
+});
+
+const confirmSchema = z.object({
+  pending_action_id: z.number().int().positive(),
 });
 
 const wantsStream = (req: { body?: { stream?: unknown }; headers: Record<string, unknown> }) => {
@@ -67,22 +83,14 @@ aiRouter.post("/chat", async (req, res) => {
   }
 
   try {
-    const resolvedProvider = parsed.data.provider
-      ? await resolveProviderConfig(parsed.data.provider, parsed.data.tenant_id)
-      : undefined;
-
+    // 身份以 JWT 为准（requireAuth 已校验 user_id 一致性）。
+    // tenant_id 允许超管显式切换租户（resolveRequestIdentity 里已做过越权校验）。
+    const identity = getIdentity(req);
     const requestBody = {
       ...parsed.data,
-      provider: resolvedProvider
-        ? {
-            id: resolvedProvider.id,
-            name: resolvedProvider.name,
-            endpoint: resolvedProvider.endpoint,
-            model: resolvedProvider.model,
-            apiType: resolvedProvider.apiType,
-            apiKey: resolvedProvider.apiKey,
-            temperature: resolvedProvider.temperature,
-          }
+      user_id: identity.userId,
+      provider: parsed.data.provider
+        ? await resolveProviderConfig(parsed.data.provider, identity.tenantId)
         : undefined,
     };
 
@@ -153,18 +161,11 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
   }
 
   try {
-    // service_role 绕过 RLS，租户必须显式传入或从 user_id 解析。
-    // 两者都没有时不报错（保持 fail-closed），但会只扫 tenant_id IS NULL 的平台基线行，
-    // 表现为 total=0 的静默空跑——打日志，免得下次又查半天。
-    let tenantId = parsed.data.tenant_id ?? null;
-    if (tenantId === null && parsed.data.user_id !== undefined) {
-      tenantId = (await resolveTenantContext(parsed.data.user_id)).tenantId;
-    }
-    if (tenantId === null) {
-      console.warn(
-        "[ai-server] /knowledge/reindex 缺少租户上下文（既无 tenant_id 也无 user_id），只会索引平台基线文档",
-      );
-    }
+    const identity = getIdentity(req);
+    // 租户以 JWT 身份为准；仅超管可通过 body.tenant_id 指定其他租户。
+    const tenantId =
+      parsed.data.tenant_id && identity.isSuperAdmin ? parsed.data.tenant_id : identity.tenantId;
+
     // 优先用 id=ollama 的 provider；没有则按 embedding 特征自动挑。
     // 规则收在 services/aiProvider.ts，与 MCP 链路共用同一份。
     const resolvedProvider = await resolveEmbeddingProviderConfig(
@@ -187,5 +188,42 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
       ok: false,
       error: errorToMessage(error),
     });
+  }
+});
+
+/**
+ * 确认回路执行端点：确认对话草稿（AI 创建/修改实体的第二段）。
+ * 对话式确认（回复「确认」）走 chat 链路；UI 按钮式确认走这里。
+ */
+aiRouter.post("/confirm", async (req, res) => {
+  const parsed = confirmSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: "Invalid request",
+      issues: parsed.error.issues,
+    });
+  }
+
+  try {
+    const identity = getIdentity(req);
+    const result = await executePendingAction(parsed.data.pending_action_id, identity);
+    res.json({ ok: true, status: "success", ...result });
+  } catch (error) {
+    if (error instanceof PendingActionError) {
+      const statusByCode: Record<string, number> = {
+        not_found: 404,
+        expired: 410,
+        forbidden: 403,
+        already_handled: 409,
+      };
+      res.status(statusByCode[error.code] ?? 400).json({ ok: false, error: error.message });
+      return;
+    }
+    if (error instanceof TenantScopeError) {
+      res.status(403).json({ ok: false, error: errorToMessage(error) });
+      return;
+    }
+    res.status(500).json({ ok: false, error: errorToMessage(error) });
   }
 });
