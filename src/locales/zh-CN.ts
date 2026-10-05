@@ -760,6 +760,7 @@ const zhCN = {
     "settings.fields.documentNoPrefix": "单据号前缀",
     "settings.fields.enableOperationLog": "启用操作日志",
     "settings.fields.baseCurrency": "本位币",
+    "settings.fields.baseCurrencyHint": "本位币由「币别管理」中的本位币标记决定，此处只读。切换后不会重算历史金额。如需切换请前往",
     "settings.fields.defaultTaxRate": "默认税率(%)",
     "settings.fields.accountingYearStartMonth": "会计年度起始月",
     "settings.fields.voucherAutoPost": "凭证自动过账",

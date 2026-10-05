@@ -87,7 +87,7 @@
 | 项 | 现状 |
 |---|---|
 | **期末调汇前端页面** | 无；只能走 `run_fx_revaluation` / `reverse_fx_revaluation` RPC 或 `POST /api/finance/fx-revaluation/{run,reverse}`。要做界面需重走菜单三步 + 路由 + `ProLayout` 映射 + `menu.*` 键 |
-| **设置页 `baseCurrency` 配置** | 仍是自由文本框，改了不生效（`current_base_currency()` 先读 `erp_currencies.is_base`）—— 既有问题；收口需改只读或接 `set_base_currency()` RPC |
+| ~~**设置页 `baseCurrency` 配置**~~ | **已收口（2026-10-05）**：改成只读展示（`kind: 'readonly'`），值取 `useCurrencyRegistry().baseCurrency`，下方提示跳转「币别管理」。切换入口只剩币别页的「设为本位币」→ `set_base_currency()`；反向写 sys_config 的路径已封死 |
 | 客户/供应商结算币别 | 未加 `settlement_currency` 列（第 4 期定价增强的一部分） |
 | 物料定价多币别 | `purchase_price`/`sale_price` 仍一律本位币口径 |
 | 汇率自动取数 | 无外部汇率源接入，手工维护 |
