@@ -760,6 +760,7 @@ const enUS = {
     "settings.fields.documentNoPrefix": "Document Number Prefix",
     "settings.fields.enableOperationLog": "Enable Operation Log",
     "settings.fields.baseCurrency": "Base Currency",
+    "settings.fields.baseCurrencyHint": "The base currency is decided by the base flag in currency management and is read-only here. Changing it does not restate historical amounts. To change it, go to",
     "settings.fields.defaultTaxRate": "Default Tax Rate (%)",
     "settings.fields.accountingYearStartMonth": "Fiscal Year Start Month",
     "settings.fields.voucherAutoPost": "Automatically Post Vouchers",
@@ -3077,6 +3078,13 @@ const enUS = {
     "subscription.history.col.months": "Months",
     "subscription.history.col.until": "Extended to",
     "subscription.history.col.mode": "Mode",
+    "legal.terms": "Terms of Service",
+    "legal.privacy": "Privacy Policy",
+    "legal.toc": "Contents",
+    "legal.lastUpdated": "Last updated",
+    "legal.backToLogin": "Back to sign in",
+    "login.agreeLegalPrefix": "By submitting you agree to the",
+    "login.and": "and",
   },
 };
 export default enUS;

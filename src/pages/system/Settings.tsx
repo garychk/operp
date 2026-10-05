@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   Alert,
   Button,
@@ -21,9 +22,11 @@ import {
 } from 'antd';
 import { DeleteOutlined, PlusOutlined, ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
+import { useCurrencyRegistry } from '../../utils/money';
 import { logWithTiming } from '../../utils/logger';
 import { createProvider, defaultAISettings, normalizeAISettings, providerTypeOptions } from '../../utils/aiConfig';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 type ConfigValue = string | number | boolean | null | ConfigObject | ConfigValue[];
 type ConfigObject = { [key: string]: ConfigValue };
@@ -38,7 +41,7 @@ interface SysConfig {
   sort_order: number | null;
 }
 
-type FieldKind = 'text' | 'number' | 'switch' | 'select' | 'textarea';
+type FieldKind = 'text' | 'number' | 'switch' | 'select' | 'textarea' | 'readonly';
 
 interface SettingField {
   name: string;
@@ -112,7 +115,10 @@ const settingCategories: SettingCategory[] = [
       amountPrecision: 2,
     },
     fields: [
-      { name: 'baseCurrency', label: 'settings.fields.baseCurrency', kind: 'text' },
+      // 本位币的唯一真相源是 erp_currencies.is_base（经 current_base_currency() 读取），
+      // 这里只做只读展示：改了也不会生效（is_base 优先级高于 sys_config 的同名键），
+      // 反而会让人误以为切换成功。切换入口只保留在「币别管理」。
+      { name: 'baseCurrency', label: 'settings.fields.baseCurrency', kind: 'readonly' },
       { name: 'defaultTaxRate', label: 'settings.fields.defaultTaxRate', kind: 'number', min: 0, max: 100, step: 0.01 },
       { name: 'accountingYearStartMonth', label: 'settings.fields.accountingYearStartMonth', kind: 'number', min: 1, max: 12 },
       { name: 'voucherAutoPost', label: 'settings.fields.voucherAutoPost', kind: 'switch' },
@@ -183,7 +189,7 @@ function mergeDefaults(category: SettingCategory, config?: ConfigObject | null) 
   };
 }
 
-function renderField(field: SettingField) {
+function renderField(field: SettingField, extraNode?: ReactNode) {
   if (field.kind === 'switch') {
     return (
       <Form.Item key={field.name} name={field.name} label={field.label} valuePropName="checked">
@@ -208,6 +214,14 @@ function renderField(field: SettingField) {
     );
   }
 
+  if (field.kind === 'readonly') {
+    return (
+      <Form.Item key={field.name} name={field.name} label={field.label} extra={extraNode}>
+        <Input readOnly />
+      </Form.Item>
+    );
+  }
+
   if (field.kind === 'textarea') {
     return (
       <Form.Item key={field.name} name={field.name} label={field.label}>
@@ -225,6 +239,9 @@ function renderField(field: SettingField) {
 
 export function Settings() {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
+  // 本位币只展示、不编辑：权威值来自 current_base_currency()（即 erp_currencies.is_base）
+  const { baseCurrency, loaded: currencyLoaded } = useCurrencyRegistry();
   const localizedCategories = useMemo(() => settingCategories.map((category) => ({
     ...category,
     name: t(category.name),
@@ -281,9 +298,14 @@ export function Settings() {
 
   useEffect(() => {
     const values = mergeDefaults(activeCategory, activeConfig?.config_json);
+    // 财务分类：本位币以币别管理为准，避免把 sys_config 里可能过期的旧值呈到界面上。
+    // 只认 loaded 之后的值 —— 未加载时仍是兜底的 CNY，拿来覆盖会短暂显示错值。
+    if (activeCategory.code === 'finance' && currencyLoaded && baseCurrency) {
+      values.baseCurrency = baseCurrency;
+    }
     form.setFieldsValue(values);
     setPreview(values);
-  }, [activeCategory, activeConfig, form]);
+  }, [activeCategory, activeConfig, form, baseCurrency, currencyLoaded]);
 
   const handleSave = async () => {
     const values = await form.validateFields();
@@ -480,7 +502,17 @@ export function Settings() {
                 <Row gutter={16}>
                   {activeCategory.fields.map((field) => (
                     <Col xs={24} md={12} key={field.name}>
-                      {renderField(field)}
+                      {renderField(
+                        field,
+                        field.name === 'baseCurrency' ? (
+                          <Typography.Text type="secondary">
+                            {t('settings.fields.baseCurrencyHint')}{' '}
+                            <Typography.Link onClick={() => navigate('/system/currencies')}>
+                              {t('menu.currencies')}
+                            </Typography.Link>
+                          </Typography.Text>
+                        ) : undefined,
+                      )}
                     </Col>
                   ))}
                 </Row>

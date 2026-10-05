@@ -92,6 +92,13 @@ dist/
 ai-server/
 docker-compose.yml
 nginx.conf
+scripts/
+```
+
+首次部署前先在服务器跑一次初始化脚本，它会创建 `certs/`、`certbot-webroot/` 并装好 certbot：
+
+```bash
+sudo bash scripts/server-init.sh <部署目录>
 ```
 
 #### 3. 启动容器
@@ -102,11 +109,12 @@ docker compose up -d
 
 #### 4. 访问应用
 
-默认访问地址：
-
 ```text
-http://localhost:8080
+https://operp.oplug.cn
 ```
+
+HTTP 访问会 301 跳到 HTTPS。若证书尚未签发，此时是自签占位证书（浏览器会告警），
+按下面「HTTPS 证书」一节签发真证书即可。
 
 #### 5. 停止服务
 
@@ -136,6 +144,46 @@ git push origin master
 
 构建与部署日志在 Gitee 仓库的「Gitee Go」页查看。注意 Gitee Go 免费额度有构建时长限制。
 
+## HTTPS 证书
+
+站点域名 `operp.oplug.cn`，证书由 Let's Encrypt 签发，nginx 终结 TLS，AI 服务仍在容器内网走 HTTP。
+
+### 一次性准备
+
+1. **云安全组放行 TCP 80 与 443**。ACME 的 HTTP-01 校验必须能从公网访问 `http://operp.oplug.cn/.well-known/acme-challenge/`。
+   校验命令：`curl -I http://operp.oplug.cn` 应返回 301，而不是超时。
+2. **域名解析**：`nslookup operp.oplug.cn` 应指向本机公网 IP。
+3. 在服务器执行 `sudo bash scripts/server-init.sh <部署目录>`，安装 certbot 并生成自签占位证书。
+
+### 签发
+
+```bash
+cd <部署目录>
+CERTBOT_EMAIL=you@example.com bash scripts/issue-cert.sh
+```
+
+脚本用 webroot 模式（`-w ./certbot-webroot`），不需要停 nginx；签发成功后会把证书复制到
+`certs/fullchain.pem` 与 `certs/privkey.pem`，然后 `nginx -s reload`。
+
+### 自动续期
+
+`server-init.sh` 已写入续期钩子 `/etc/letsencrypt/renewal-hooks/deploy/operp-sync.sh`，
+certbot 自带的定时器续期成功后会自动把新证书同步进 `certs/` 并重载 nginx。
+
+手动检查：`certbot renew --dry-run`；查看证书有效期：
+`openssl x509 -in certs/fullchain.pem -noout -dates`。
+
+### 改域名要动的地方
+
+`nginx.conf` 的两处 `server_name`、`scripts/issue-cert.sh` 的 `DOMAIN` 默认值、
+`docker-compose.yml` 里 `ALLOWED_ORIGIN` 的默认值、以及续期钩子里的路径（重跑 `server-init.sh` 会重写）。
+
+### Supabase 侧配套
+
+在 Supabase 控制台 → Authentication → URL Configuration 里，把 Site URL 设为
+`https://operp.oplug.cn`，并在 Redirect URLs 加上 `https://operp.oplug.cn/**`，
+否则邮箱验证、密码重置等跳转会落在旧地址上。
+
 ## 常见问题
 
 ### 1. 端口被占用
@@ -156,14 +204,16 @@ export default defineConfig({
 
 ```bash
 VITE_SUPABASE_URL=
+SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 LLM_API_KEY=
 LLM_BASE_URL=
 LLM_MODEL=
-ALLOWED_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
+ALLOWED_ORIGIN=https://operp.oplug.cn
 ```
 
-如果前端和 AI 服务通过同域 `/api` 访问，浏览器侧不会再直接碰到 `3001` 端口。
+前端和 AI 服务通过同域 `/api` 访问，浏览器侧不会直接碰到 `3001` 端口，
+所以 `ALLOWED_ORIGIN` 只需要填站点自己的 HTTPS 地址（默认已带，`.env` 里可覆盖）。
 
 ### 3. 依赖安装失败
 

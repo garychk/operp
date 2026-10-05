@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Form, Input, Button, Card, Typography, Alert, Tabs, Dropdown, Row, Col } from 'antd';
 import { TranslationOutlined } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 import { useTranslation } from 'react-i18next';
 import type { SupportedLanguage } from '../i18n';
@@ -335,6 +335,13 @@ export const Login: React.FC = () => {
               {t('login.registerTenantHint')}
             </div>
 
+            <div style={{ marginBottom: 16, fontSize: 12, color: '#8c8c8c' }}>
+              {t('login.agreeLegalPrefix')}
+              <Link to="/terms" style={{ margin: '0 2px' }}>《{t('legal.terms')}》</Link>
+              {t('login.and')}
+              <Link to="/privacy" style={{ margin: '0 2px' }}>《{t('legal.privacy')}》</Link>
+            </div>
+
             <Form.Item style={{ marginBottom: 0 }}>
               <Button
                 type="primary"
@@ -420,6 +427,12 @@ export const Login: React.FC = () => {
           items={items}
           centered
         />
+
+        <div style={{ marginTop: 18, textAlign: 'center', fontSize: 12, color: '#94a3b8' }}>
+          <Link to="/terms">{t('legal.terms')}</Link>
+          <span style={{ margin: '0 8px' }}>·</span>
+          <Link to="/privacy">{t('legal.privacy')}</Link>
+        </div>
       </Card>
     </div>
   );
