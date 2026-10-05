@@ -3,6 +3,8 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { ProLayout } from './components/ProLayout';
 import { Login } from './pages/Login';
+import Terms from './pages/legal/Terms';
+import Privacy from './pages/legal/Privacy';
 import { Dashboard } from './pages/Dashboard';
 import { Workbench } from './pages/Workbench';
 import { AccountSubjects } from './pages/finance/AccountSubjects';
@@ -83,6 +85,9 @@ function AppContent() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      {/* 法务静态页：与登录页同级，不套 ProtectedRoute，未登录可直接访问 */}
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
       
       <Route 
         path="/" 

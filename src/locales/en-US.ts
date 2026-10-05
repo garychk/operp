@@ -3078,6 +3078,13 @@ const enUS = {
     "subscription.history.col.months": "Months",
     "subscription.history.col.until": "Extended to",
     "subscription.history.col.mode": "Mode",
+    "legal.terms": "Terms of Service",
+    "legal.privacy": "Privacy Policy",
+    "legal.toc": "Contents",
+    "legal.lastUpdated": "Last updated",
+    "legal.backToLogin": "Back to sign in",
+    "login.agreeLegalPrefix": "By submitting you agree to the",
+    "login.and": "and",
   },
 };
 export default enUS;

@@ -1,0 +1,4 @@
+# shell 脚本与 nginx 配置最终在 Linux 容器/主机上执行，必须保持 LF，
+# 否则 Windows checkout 出的 CRLF 会让 bash 报 bad interpreter。
+*.sh text eol=lf
+nginx.conf text eol=lf

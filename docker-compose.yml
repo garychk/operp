@@ -6,9 +6,12 @@ services:
       - ai-server
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./dist:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+      - ./certbot-webroot:/var/www/certbot:ro
     restart: unless-stopped
 
   ai-server:
@@ -24,7 +27,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_MODEL: ${LLM_MODEL:-gpt-5.1}
-      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-http://localhost:5173,http://127.0.0.1:5173}
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-https://operp.oplug.cn,http://localhost:5173,http://127.0.0.1:5173}
     expose:
       - "3001"
     restart: unless-stopped
