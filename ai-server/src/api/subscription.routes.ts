@@ -155,7 +155,6 @@ subscriptionRouter.post("/checkout", async (req, res) => {
     // metadata 透传到 webhook 的 event.data —— 续租时靠它定位租户与月数
     const session = await client.checkout.createSession({
       productId: env.WAFFO_MONTHLY_PRODUCT_ID,
-      productType: "subscription",
       currency: env.WAFFO_CHECKOUT_CURRENCY,
       successUrl: parsed.data.success_url ?? undefined,
       metadata: { tenant_id: String(tenantId), months: "1" },
