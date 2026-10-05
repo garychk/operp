@@ -105,3 +105,4 @@
 \i supabase/tables/deploy_81_ai_analysis_hardening.sql
 \i supabase/tables/deploy_82_ai_pending_actions.sql
 \i supabase/tables/deploy_83_ai_document_tools.sql
+\i supabase/tables/deploy_84_tenant_subscription.sql

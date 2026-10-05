@@ -123,6 +123,7 @@ ORDER=(
   deploy_81_ai_analysis_hardening.sql
   deploy_82_ai_pending_actions.sql
   deploy_83_ai_document_tools.sql
+  deploy_84_tenant_subscription.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

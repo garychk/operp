@@ -9,6 +9,7 @@ import { aiRouter } from "./api/ai.routes.js";
 import { mrpRouter } from "./api/mrp.routes.js";
 import { mpsRouter } from "./api/mps.routes.js";
 import { financeRouter } from "./api/finance.routes.js";
+import { subscriptionRouter, waffoWebhookHandler } from "./api/subscription.routes.js";
 
 /** 请求 ID：每条 HTTP 请求一个，日志里全链路携带，便于聚合检索 */
 const requestIdMiddleware: RequestHandler = (req, res, next) => {
@@ -50,6 +51,14 @@ export function createApp() {
       credentials: true,
     }),
   );
+  // ⚠️ Waffo webhook 必须在 express.json 之前挂载：验签需要原始报文，
+  // JSON 解析后再序列化会破坏 RSA-SHA256 签名（见 subscription.routes.ts）。
+  app.post(
+    "/api/subscription/webhook",
+    express.raw({ type: "application/json", limit: "256kb" }),
+    waffoWebhookHandler,
+  );
+
   app.use(express.json({ limit: "2mb" }));
   app.use(requestIdMiddleware);
   app.use(accessLogMiddleware);
@@ -59,6 +68,7 @@ export function createApp() {
   app.use("/api/mrp", mrpRouter);
   app.use("/api/mps", mpsRouter);
   app.use("/api/finance", financeRouter);
+  app.use("/api/subscription", subscriptionRouter);
 
   return app;
 }
