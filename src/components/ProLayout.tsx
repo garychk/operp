@@ -62,12 +62,14 @@ import {
   BarChartOutlined,
   TableOutlined,
   IdcardOutlined,
+  PayCircleOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { MenuPermissionGuard } from "./ProtectedRoute";
 import { AIChatDrawer } from "./AIChatDrawer";
 import { McpGuideDrawer } from "./McpGuideDrawer";
 import { NotificationBell } from "./NotificationBell";
+import { SubscriptionDrawer } from "./SubscriptionDrawer";
 import { MenuSearch } from "./MenuSearch";
 import heroLogo from "../assets/opelix.svg";
 import defaultAvatar from "../assets/avatar.png";
@@ -669,6 +671,7 @@ export function ProLayout() {
   });
   const [aiChatOpen, setAiChatOpen] = useState(false);
   const [mcpGuideOpen, setMcpGuideOpen] = useState(false);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
   const [databaseMenus, setDatabaseMenus] = useState<MenuRoute[]>([]);
 
@@ -1049,6 +1052,12 @@ export function ProLayout() {
             onSelect={openMenuInNewTab}
           />,
           <NotificationBell key="notifications" />,
+          <PayCircleOutlined
+            key="subscription"
+            title={t("subscription.entry")}
+            aria-label={t("subscription.entry")}
+            onClick={() => setSubscriptionOpen(true)}
+          />,
           dark ? (
             <MoonOutlined key="theme" onClick={() => setDark(false)} />
           ) : (
@@ -1298,6 +1307,7 @@ export function ProLayout() {
         </PageContainer>
         <AIChatDrawer open={aiChatOpen} onClose={() => setAiChatOpen(false)} />
         <McpGuideDrawer open={mcpGuideOpen} onClose={() => setMcpGuideOpen(false)} />
+        <SubscriptionDrawer open={subscriptionOpen} onClose={() => setSubscriptionOpen(false)} />
         <Modal
           open={isInfoModalOpen}
           title={t("layout.aboutTitle")}

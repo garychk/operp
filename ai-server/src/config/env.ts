@@ -42,6 +42,20 @@ const schema = z.object({
   MCP_USER_ID: z.preprocess(emptyToUndefined, z.coerce.number().int().optional()),
   /** 显式指定租户；仅当该用户是超管时才允许与自身租户不同 */
   MCP_TENANT_ID: z.preprocess(emptyToUndefined, z.coerce.number().int().optional()),
+
+  /**
+   * Waffo Pancake 在线订阅收款（deploy_84）。
+   * 全部可选：未配置时订阅相关端点返回 503，不影响其余功能。
+   * 私钥两种给法：WAFFO_PRIVATE_KEY（支持字面量 \n）或 WAFFO_PRIVATE_KEY_BASE64（CI 推荐）。
+   */
+  WAFFO_MERCHANT_ID: z.string().optional(),
+  WAFFO_PRIVATE_KEY: z.string().optional(),
+  WAFFO_PRIVATE_KEY_BASE64: z.string().optional(),
+  WAFFO_STORE_ID: z.string().optional(),
+  /** 按月订阅商品 ID（Dashboard 创建或 scripts/waffo-setup.ts 生成） */
+  WAFFO_MONTHLY_PRODUCT_ID: z.string().optional(),
+  WAFFO_ENVIRONMENT: z.enum(["test", "prod"]).default("test"),
+  WAFFO_CHECKOUT_CURRENCY: z.string().default("USD"),
 });
 
 export const env = schema.parse(process.env);
