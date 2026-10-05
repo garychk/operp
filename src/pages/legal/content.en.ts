@@ -1,7 +1,7 @@
 import type { LegalDoc } from './types';
 
 /**
- * English copy. Bracketed values (e.g. [Full legal entity name]) must be replaced
+ * English copy. Bracketed values (e.g. OPERP) must be replaced
  * with real operator details before publishing.
  * Section ids must stay identical to content.zh.ts, otherwise TOC anchors break
  * when switching languages.
@@ -9,8 +9,8 @@ import type { LegalDoc } from './types';
 
 const CONTACT_BLOCKS = [
   { kind: 'list' as const, items: [
-    'Operating entity: [Full legal entity name]',
-    'Registered address: [Registered business address]',
+    'Operating entity: OPERP',
+    'Registered address: Wuxi.JiangSu.China',
     'Privacy & data protection: privacy@oplug.cn',
     'Customer support: support@oplug.cn',
     'Service hours: Monday to Friday, 09:00-18:00 (UTC+8)',
@@ -23,7 +23,7 @@ const terms: LegalDoc = {
   updatedAt: '2026-10-05',
   summary: 'The agreement between you and us governing your use of the OPERP business management platform.',
   intro:
-    'Welcome to OPERP. These Terms of Service ("Terms") are a legal agreement between you and [Full legal entity name] ("we", "us") regarding your access to and use of the OPERP cloud platform together with its website, clients, APIs and AI-assisted features (collectively, the "Service").',
+    'Welcome to OPERP. These Terms of Service ("Terms") are a legal agreement between you and OPERP ("we", "us") regarding your access to and use of the OPERP cloud platform together with its website, clients, APIs and AI-assisted features (collectively, the "Service").',
   sections: [
     {
       id: 'acceptance',
@@ -140,7 +140,7 @@ const terms: LegalDoc = {
       id: 'law',
       heading: '10. Governing Law and Dispute Resolution',
       blocks: [
-        { kind: 'p', text: 'These Terms are governed by the laws of the People\'s Republic of China. Disputes shall first be resolved through friendly negotiation; failing that, either party may bring an action before the competent people\'s court at the location of [Full legal entity name].' },
+        { kind: 'p', text: 'These Terms are governed by the laws of the People\'s Republic of China. Disputes shall first be resolved through friendly negotiation; failing that, either party may bring an action before the competent people\'s court at the location of OPERP.' },
       ],
     },
     {
@@ -152,7 +152,7 @@ const terms: LegalDoc = {
       ],
     },
   ],
-  footer: '[Full legal entity name] · OPERP',
+  footer: 'OPERP · OPERP',
 };
 
 const privacy: LegalDoc = {
@@ -161,13 +161,13 @@ const privacy: LegalDoc = {
   updatedAt: '2026-10-05',
   summary: 'What we collect, why we collect it, how it is stored and shared, and the rights you have over your information.',
   intro:
-    '[Full legal entity name] ("we", "us") understands how important personal information is to you. This Privacy Policy explains how we collect, use, store, share and protect your personal information and business data when you use the OPERP cloud service (the "Service"), and the rights you have under applicable law.',
+    'OPERP ("we", "us") understands how important personal information is to you. This Privacy Policy explains how we collect, use, store, share and protect your personal information and business data when you use the OPERP cloud service (the "Service"), and the rights you have under applicable law.',
   sections: [
     {
       id: 'controller',
       heading: '1. Data Controller',
       blocks: [
-        { kind: 'p', text: 'The controller of personal information for the Service is [Full legal entity name], registered at [Registered business address]. If you have questions or complaints about our processing, contact us using the details in section 10.' },
+        { kind: 'p', text: 'The controller of personal information for the Service is OPERP, registered at Wuxi.JiangSu.China. If you have questions or complaints about our processing, contact us using the details in section 10.' },
       ],
     },
     {
@@ -299,7 +299,7 @@ const privacy: LegalDoc = {
       ],
     },
   ],
-  footer: '[Full legal entity name] · OPERP',
+  footer: 'OPERP · OPERP',
 };
 
 export const legalEn: Record<'terms' | 'privacy', LegalDoc> = { terms, privacy };
