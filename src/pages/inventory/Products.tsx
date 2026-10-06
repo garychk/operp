@@ -24,6 +24,7 @@ import {
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import { Categories } from "./Categories";
 import { ProductUoms } from "./ProductUoms";
 import { ProductImages, IMAGE_BUCKET, imagePublicUrl } from "./ProductImages";
@@ -44,6 +45,7 @@ const productImageTable = "erp_product_images_s_539dcf81_b";
 const { Option } = Select;
 const productTable = "erp_products_s_539dcf81_b";
 const uomTable = "erp_uoms_s_539dcf81_b";
+const docType = "products";
 
 export function Products() {
   const { t } = useTranslation();
@@ -218,10 +220,17 @@ export function Products() {
     setIsModalOpen(true);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
+    let code: string;
+    try {
+      code = await nextDocumentNo(docType);
+    } catch (error) {
+      message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
+      return;
+    }
     setEditingProduct(null);
     form.setFieldsValue({
-      code: "",
+      code,
       name: "",
       short_name: "",
       category_id: undefined,
@@ -388,7 +397,7 @@ export function Products() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        storageKey="products"
+        storageKey={docType}
         tableName={productTable}
         headerTitle={t("products.title")}
         rowSelection={{
@@ -608,6 +617,7 @@ export function Products() {
         }
         width={"80%"}
         height={500}
+        workflowDocumentType={docType}
       />
 
       <SimpleModal

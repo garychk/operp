@@ -9,6 +9,7 @@ import { aiRouter } from "./api/ai.routes.js";
 import { mrpRouter } from "./api/mrp.routes.js";
 import { mpsRouter } from "./api/mps.routes.js";
 import { financeRouter } from "./api/finance.routes.js";
+import { fxRouter } from "./api/fx.routes.js";
 import { subscriptionRouter, waffoWebhookHandler } from "./api/subscription.routes.js";
 
 /** 请求 ID：每条 HTTP 请求一个，日志里全链路携带，便于聚合检索 */
@@ -68,6 +69,7 @@ export function createApp() {
   app.use("/api/mrp", mrpRouter);
   app.use("/api/mps", mpsRouter);
   app.use("/api/finance", financeRouter);
+  app.use("/api/fx", fxRouter);
   app.use("/api/subscription", subscriptionRouter);
 
   return app;
