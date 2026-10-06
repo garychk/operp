@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
+  Card,
   DatePicker,
   Form,
   Input,
@@ -613,7 +614,7 @@ export function Currencies() {
   ];
 
   return (
-    <div style={{ minHeight: 320 }}>
+    <Card variant="borderless" title={t('currency.title')}>
       <Alert
         type="info"
         closable
@@ -632,7 +633,6 @@ export function Currencies() {
             label: t("currency.tabs.currencies"),
             children: (
               <SuperTable
-                headerTitle={t("currency.title")}
                 columns={currencyColumns}
                 dataSource={filteredCurrencies}
                 rowKey="id"
@@ -905,7 +905,7 @@ export function Currencies() {
           </Form.Item>
         </Form>
       </SimpleModal>
-    </div>
+    </Card>
   );
 }
 
