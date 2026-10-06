@@ -127,6 +127,20 @@ ORDER=(
   deploy_85_inventory_unique_key_fix.sql
   deploy_86_reverse_inventory_document.sql
   deploy_87_inventory_gl_linkage.sql
+  deploy_88_inventory_stock_status_and_reservations.sql
+  deploy_89_purchase_return.sql
+  deploy_90_sales_return.sql
+  deploy_91_material_return.sql
+  deploy_92_inventory_voucher_exceptions.sql
+  deploy_93_inventory_posting_rpcs.sql
+  deploy_94_sales_return_status_check.sql
+  deploy_95_reservation_unique_key_fix.sql
+  deploy_96_inventory_report_views.sql
+  deploy_97_inventory_gl_reconciliation_views.sql
+  deploy_98_p1_menus_and_workflows.sql
+  deploy_99_inventory_query_views.sql
+  deploy_100_inventory_business_rpcs.sql
+  deploy_101_reserve_stock_spread.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

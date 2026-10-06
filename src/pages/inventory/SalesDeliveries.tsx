@@ -13,7 +13,8 @@ import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventor
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { BizAttachments } from '../../components/BizAttachments';
-import { SuperTable, SuperTableColumn } from '../../components/SuperTable';
+import { SuperTable } from '../../components/SuperTable';
+import type { SuperTableColumn } from '../../components/SuperTable';
 import { formatMoney, useCurrencyRegistry, currencyLabel } from '../../utils/money';
 import { ProductUnit } from '../../components/ProductUnit';
 import { InventoryInfo, invalidateInventoryCache } from '../../components/InventoryInfo';

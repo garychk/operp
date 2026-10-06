@@ -27,11 +27,16 @@ import { Inventory } from './pages/inventory/Inventory';
 import { PurchaseOrders } from './pages/inventory/PurchaseOrders';
 import { SalesOrders } from './pages/inventory/SalesOrders';
 import { PurchaseReceipts } from './pages/inventory/PurchaseReceipts';
+import { PurchaseReturns } from './pages/inventory/PurchaseReturns';
 import { SalesDeliveries } from './pages/inventory/SalesDeliveries';
+import { SalesReturns } from './pages/inventory/SalesReturns';
 import { InventoryTransfers } from './pages/inventory/InventoryTransfers';
 import { StockCounts } from './pages/inventory/StockCounts';
 import { StockAdjustments } from './pages/inventory/StockAdjustments';
 import { InventoryTransactions } from './pages/inventory/InventoryTransactions';
+import { InventoryReports } from './pages/inventory/InventoryReports';
+import { InventoryReconciliation } from './pages/inventory/InventoryReconciliation';
+import { InventorySubjectMap } from './pages/inventory/InventorySubjectMap';
 import { Boms } from './pages/mrp/Boms';
 import { Departments } from './pages/mrp/Departments';
 import { RoutingOperations } from './pages/mrp/RoutingOperations';
@@ -39,6 +44,7 @@ import { WorkCenters } from './pages/mrp/WorkCenters';
 import { Operations } from './pages/mrp/Operations';
 import { ProductionOrders } from './pages/mrp/ProductionOrders';
 import { MaterialIssues } from './pages/mrp/MaterialIssues';
+import { MaterialReturns } from './pages/mrp/MaterialReturns';
 import { ProductionReceipts } from './pages/mrp/ProductionReceipts';
 import { ProductionReports } from './pages/mrp/ProductionReports';
 import { CostCalculations } from './pages/mrp/CostCalculations';
@@ -125,12 +131,17 @@ function AppContent() {
           <Route path="stock" element={<Inventory />} />
           <Route path="purchase" element={<PurchaseOrders />} />
           <Route path="purchase-receipts" element={<PurchaseReceipts />} />
+          <Route path="purchase-returns" element={<PurchaseReturns />} />
           <Route path="sales" element={<SalesOrders />} />
           <Route path="sales-deliveries" element={<SalesDeliveries />} />
+          <Route path="sales-returns" element={<SalesReturns />} />
           <Route path="transactions" element={<InventoryTransactions />} />
           <Route path="transfers" element={<InventoryTransfers />} />
           <Route path="stock-counts" element={<StockCounts />} />
           <Route path="stock-adjustments" element={<StockAdjustments />} />
+          <Route path="reports" element={<InventoryReports />} />
+          <Route path="reconciliation" element={<InventoryReconciliation />} />
+          <Route path="subject-map" element={<InventorySubjectMap />} />
         </Route>
         
         <Route path="mrp">
@@ -142,6 +153,7 @@ function AppContent() {
           <Route path="operations" element={<Operations />} />
           <Route path="production" element={<ProductionOrders />} />
           <Route path="material-issues" element={<MaterialIssues />} />
+          <Route path="material-returns" element={<MaterialReturns />} />
           <Route path="production-receipts" element={<ProductionReceipts />} />
           <Route path="production-reports" element={<ProductionReports />} />
           <Route path="cost-calculations" element={<CostCalculations />} />

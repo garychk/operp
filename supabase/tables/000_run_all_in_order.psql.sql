@@ -5,7 +5,7 @@
 -- Do not paste this whole file into Supabase SQL Editor. The \i directives are
 -- psql meta commands. In SQL Editor, execute the deploy_*.sql files one by one.
 --
--- 顺序必须与 ../000_run_all.local.sh 里的 ORDER 数组保持一致（共 65 个步骤）。
+-- 顺序必须与 ../000_run_all.local.sh 里的 ORDER 数组保持一致（共 103 个步骤）。
 -- 顺序即纯编号顺序，没有额外的前置步骤：
 --   - deploy_24_erp_bins.sql 与 deploy_24_inventory_document_ops.sql 同号，
 --     前者天然排在前者之前，解开 24 <-> 25 的循环依赖（不要打乱这两个的相对次序）；
@@ -109,3 +109,17 @@
 \i supabase/tables/deploy_85_inventory_unique_key_fix.sql
 \i supabase/tables/deploy_86_reverse_inventory_document.sql
 \i supabase/tables/deploy_87_inventory_gl_linkage.sql
+\i supabase/tables/deploy_88_inventory_stock_status_and_reservations.sql
+\i supabase/tables/deploy_89_purchase_return.sql
+\i supabase/tables/deploy_90_sales_return.sql
+\i supabase/tables/deploy_91_material_return.sql
+\i supabase/tables/deploy_92_inventory_voucher_exceptions.sql
+\i supabase/tables/deploy_93_inventory_posting_rpcs.sql
+\i supabase/tables/deploy_94_sales_return_status_check.sql
+\i supabase/tables/deploy_95_reservation_unique_key_fix.sql
+\i supabase/tables/deploy_96_inventory_report_views.sql
+\i supabase/tables/deploy_97_inventory_gl_reconciliation_views.sql
+\i supabase/tables/deploy_98_p1_menus_and_workflows.sql
+\i supabase/tables/deploy_99_inventory_query_views.sql
+\i supabase/tables/deploy_100_inventory_business_rpcs.sql
+\i supabase/tables/deploy_101_reserve_stock_spread.sql

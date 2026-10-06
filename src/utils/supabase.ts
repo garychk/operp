@@ -22,6 +22,16 @@ import type {
   ErpSalesOrderDetailsS539Dcf81BRow,
   ErpSalesDeliveriesS539Dcf81BRow,
   ErpSalesDeliveryDetailsS539Dcf81BRow,
+  // deploy_88 ~ deploy_91（P1 业务闭环）新增表
+  ErpPurchaseReturnsS539Dcf81BRow,
+  ErpPurchaseReturnDetailsS539Dcf81BRow,
+  ErpSalesReturnsS539Dcf81BRow,
+  ErpSalesReturnDetailsS539Dcf81BRow,
+  ErpMaterialReturnsS539Dcf81BRow,
+  ErpMaterialReturnDetailsS539Dcf81BRow,
+  ErpInventoryReservationsS539Dcf81BRow,
+  ErpInventoryVoucherExceptionsS539Dcf81BRow,
+  ErpInventorySubjectMapS539Dcf81BRow,
   ErpAccountSubjectsS539Dcf81BRow,
   ErpAccountingPeriodsS539Dcf81BRow,
   ErpVouchersS539Dcf81BRow,
@@ -203,5 +213,14 @@ export type Tables = {
   sys_mcp_api_keys: { Row: SysMcpApiKeysRow };
   sys_inventory_transaction_types: { Row: SysInventoryTransactionTypesRow };
   sys_document_transaction_types: { Row: SysDocumentTransactionTypesRow };
+  erp_purchase_returns_s_539dcf81_b: { Row: ErpPurchaseReturnsS539Dcf81BRow };
+  erp_purchase_return_details_s_539dcf81_b: { Row: ErpPurchaseReturnDetailsS539Dcf81BRow };
+  erp_sales_returns_s_539dcf81_b: { Row: ErpSalesReturnsS539Dcf81BRow };
+  erp_sales_return_details_s_539dcf81_b: { Row: ErpSalesReturnDetailsS539Dcf81BRow };
+  erp_material_returns_s_539dcf81_b: { Row: ErpMaterialReturnsS539Dcf81BRow };
+  erp_material_return_details_s_539dcf81_b: { Row: ErpMaterialReturnDetailsS539Dcf81BRow };
+  erp_inventory_reservations_s_539dcf81_b: { Row: ErpInventoryReservationsS539Dcf81BRow };
+  erp_inventory_voucher_exceptions_s_539dcf81_b: { Row: ErpInventoryVoucherExceptionsS539Dcf81BRow };
+  erp_inventory_subject_map_s_539dcf81_b: { Row: ErpInventorySubjectMapS539Dcf81BRow };
 };
 

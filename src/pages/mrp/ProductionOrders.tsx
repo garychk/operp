@@ -462,6 +462,55 @@ export function ProductionOrders() {
     },
   ];
 
+  /**
+   * 生产订单下达 → 按用料明细预占库存（P1-5）。
+   * 与销售订单同一套语义：开关关闭 / 没配领料仓 / 用料已领完都属于「不需要做」，
+   * 返回 skipped + reason，提示即可，不当错误弹。
+   */
+  const reserveStock = async (orderId: number) => {
+    const { data, error } = await supabase.rpc("reserve_production_order_stock", {
+      p_order_id: orderId,
+    });
+    if (error) {
+      message.warning(`${t("mrp.productionOrders.reserveFailed")}：${error.message}`);
+      return;
+    }
+    const res = (data || {}) as {
+      skipped?: boolean;
+      reason?: string;
+      reservation?: { idempotent?: boolean; reserved_quantity?: number; shortage_quantity?: number };
+    };
+    if (res.skipped) {
+      message.info(
+        `${t("mrp.productionOrders.reserveSkipped")}：${
+          {
+            warehouse_not_set: t("mrp.productionOrders.reserveSkipNoWarehouse"),
+            config_disabled: t("mrp.productionOrders.reserveSkipConfigOff"),
+            no_open_lines: t("mrp.productionOrders.reserveSkipNoLines"),
+          }[res.reason || ""] || res.reason || ""
+        }`,
+      );
+      return;
+    }
+    if (res.reservation?.idempotent) {
+      message.info(t("mrp.productionOrders.reserveAlreadyDone"));
+      return;
+    }
+    const shortage = Number(res.reservation?.shortage_quantity || 0);
+    if (shortage > 0) {
+      message.warning(
+        t("mrp.productionOrders.reserveDoneWithShortage", {
+          qty: res.reservation?.reserved_quantity ?? 0,
+          shortage,
+        }),
+      );
+    } else {
+      message.success(
+        t("mrp.productionOrders.reserveDone", { qty: res.reservation?.reserved_quantity ?? 0 }),
+      );
+    }
+  };
+
   const handleSubmit = async (values: any) => {
     try {
       if (editingOrder) {
@@ -473,6 +522,10 @@ export function ProductionOrders() {
           if (error) throw error;
         }, { table: productionOrderTable, recordId: editingOrder.id });
         message.success(t('common.updateSuccess'));
+        // 本次把状态推到「已下达」→ 按用料明细预占库存（P1-5，后端幂等）
+        if (values.status === "released" && editingOrder.status !== "released") {
+          await reserveStock(editingOrder.id);
+        }
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: productionOrderTable,
@@ -489,6 +542,7 @@ export function ProductionOrders() {
         }, logParams);
         setEditingOrder(data);
         message.success(t('common.createSuccess'));
+        if (data.status === "released") await reserveStock(data.id);
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -550,7 +604,8 @@ export function ProductionOrders() {
       product_id: undefined,
       bom_id: undefined,
       routing_id: undefined,
-      warehouse_id: undefined,
+      // 领料仓：下达时按该仓预占用料，默认给第一个仓库，下拉可改
+      warehouse_id: warehouses[0]?.id,
       planned_quantity: 1,
       completed_quantity: 0,
       scrapped_quantity: 0,
@@ -672,6 +727,11 @@ export function ProductionOrders() {
           >
             {t('common.edit')}
           </Button>
+          {record.status === "released" && (
+            <Button type="text" onClick={() => void reserveStock(record.id)}>
+              {t("mrp.productionOrders.reserveStock")}
+            </Button>
+          )}
           <Button
             type="text"
             danger

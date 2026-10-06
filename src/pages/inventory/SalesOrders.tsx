@@ -29,7 +29,8 @@ import { nextDocumentNo } from "../../utils/documentNaming";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
 import { BizAttachments } from "../../components/BizAttachments";
-import { SuperTable, SuperTableColumn } from "../../components/SuperTable";
+import { SuperTable } from "../../components/SuperTable";
+import type { SuperTableColumn } from "../../components/SuperTable";
 import { formatMoney, useCurrencyRegistry, currencyLabel, fetchExchangeRate } from "../../utils/money";
 import { ProductUnit } from "../../components/ProductUnit";
 import SimpleModal from "../../components/SimpleModal";
@@ -38,6 +39,7 @@ type SalesOrder = Tables["erp_sales_orders_s_539dcf81_b"]["Row"];
 type SalesOrderDetail = Tables["erp_sales_order_details_s_539dcf81_b"]["Row"];
 type Customer = Tables["erp_customers_s_539dcf81_b"]["Row"];
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
+type Warehouse = Tables["erp_warehouses_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 const { TextArea } = Input;
@@ -54,6 +56,7 @@ export function SalesOrders() {
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -124,6 +127,7 @@ export function SalesOrders() {
     fetchOrders();
     fetchCustomers();
     fetchProducts();
+    fetchWarehouses();
   }, []);
 
   const fetchOrders = async () => {
@@ -170,6 +174,69 @@ export function SalesOrders() {
       setProducts(data || []);
     } catch (error) {
       console.error("Error fetching products:", error);
+    }
+  };
+
+  const fetchWarehouses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("erp_warehouses_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n");
+      if (error) throw error;
+      setWarehouses(data || []);
+    } catch (error) {
+      console.error("Error fetching warehouses:", error);
+    }
+  };
+
+  /**
+   * 订单审核通过 → 按未发量预占库存（P1-5）。
+   * 后端 reserve_sales_order_stock 是幂等的，并且对「开关关闭 / 没配仓库 / 没有未结明细」
+   * 返回 skipped + reason —— 这些都属于**不需要做**，提示一句就够了，不能弹错误吓人。
+   */
+  const reserveStock = async (orderId: number) => {
+    const { data, error } = await supabase.rpc("reserve_sales_order_stock", {
+      p_order_id: orderId,
+    });
+    if (error) {
+      message.warning(`${t("salesOrders.reserveFailed")}：${error.message}`);
+      return;
+    }
+    const res = (data || {}) as {
+      skipped?: boolean;
+      reason?: string;
+      line_count?: number;
+      reservation?: { idempotent?: boolean; reserved_quantity?: number; shortage_quantity?: number };
+    };
+    if (res.skipped) {
+      message.info(
+        `${t("salesOrders.reserveSkipped")}：${
+          {
+            warehouse_not_set: t("salesOrders.reserveSkipNoWarehouse"),
+            config_disabled: t("salesOrders.reserveSkipConfigOff"),
+            no_open_lines: t("salesOrders.reserveSkipNoLines"),
+          }[res.reason || ""] || res.reason || ""
+        }`,
+      );
+      return;
+    }
+    if (res.reservation?.idempotent) {
+      message.info(t("salesOrders.reserveAlreadyDone"));
+      return;
+    }
+    const shortage = Number(res.reservation?.shortage_quantity || 0);
+    if (shortage > 0) {
+      message.warning(
+        t("salesOrders.reserveDoneWithShortage", {
+          qty: res.reservation?.reserved_quantity ?? 0,
+          shortage,
+        }),
+      );
+    } else {
+      message.success(
+        t("salesOrders.reserveDone", { qty: res.reservation?.reserved_quantity ?? 0 }),
+      );
     }
   };
 
@@ -238,6 +305,10 @@ export function SalesOrders() {
           if (error) throw error;
         }, { table: salesOrderTable, recordId: editingOrder.id });
         message.success(t("common.updateSuccess"));
+        // 本次把状态推到「已审核」→ 触发预占（重复保存不会重复占用，后端幂等）
+        if (payload.status === "approved" && editingOrder.status !== "approved") {
+          await reserveStock(editingOrder.id);
+        }
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: salesOrderTable,
@@ -254,6 +325,7 @@ export function SalesOrders() {
         }, logParams);
         setSelectedOrder(data);
         message.success(t("common.createSuccess"));
+        if (data.status === "approved") await reserveStock(data.id);
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -411,6 +483,8 @@ export function SalesOrders() {
       contact_phone: "",
       remark: "",
       status: "draft",
+      // 发货仓：预占库存必须知道从哪个仓发货，默认给第一个仓库，下拉可改
+      warehouse_id: warehouses[0]?.id,
     });
     setIsModalOpen(true);
   };
@@ -519,6 +593,16 @@ export function SalesOrders() {
       render: (text: string) => text || "-",
     },
     {
+      title: t("salesOrders.deliveryWarehouse"),
+      dataIndex: "warehouse_id",
+      key: "warehouse_id",
+      width: 150,
+      render: (id: number | null) => {
+        const w = warehouses.find((x) => x.id === id);
+        return w ? `${w.code} · ${w.name}` : "-";
+      },
+    },
+    {
       title: t("salesOrders.currency"),
       dataIndex: "currency",
       key: "currency",
@@ -562,7 +646,7 @@ export function SalesOrders() {
     {
       title: t("common.actions"),
       key: "action",
-      width: 120,
+      width: 210,
       fixed: "right",
       render: (_: any, record: SalesOrder) => (
         <Space>
@@ -573,6 +657,14 @@ export function SalesOrders() {
           >
             {t("common.edit")}
           </Button>
+          {record.status === "approved" && (
+            <Button
+              type="text"
+              onClick={() => void reserveStock(record.id)}
+            >
+              {t("salesOrders.reserveStock")}
+            </Button>
+          )}
           <Button
             type="text"
             danger
@@ -878,6 +970,23 @@ export function SalesOrders() {
                     />
                   </Form.Item>
                 )}
+                <Form.Item
+                  label={t("salesOrders.deliveryWarehouse")}
+                  name="warehouse_id"
+                  tooltip={t("salesOrders.deliveryWarehouseTooltip")}
+                  extra={t("salesOrders.deliveryWarehouseHint")}
+                >
+                  <Select
+                    allowClear
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder={t("salesOrders.deliveryWarehousePlaceholder")}
+                    options={warehouses.map((w) => ({
+                      value: w.id,
+                      label: `${w.code} · ${w.name}`,
+                    }))}
+                  />
+                </Form.Item>
                 <Form.Item label={t("salesOrders.deliveryAddress")} name="delivery_address">
                   <Input placeholder={t("salesOrders.deliveryAddressPlaceholder")} />
                 </Form.Item>

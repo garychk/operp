@@ -1501,9 +1501,229 @@ export interface SysDocumentTransactionTypesRow {
 export type SysDocumentTransactionTypesInsert = Omit<SysDocumentTransactionTypesRow, 'id' | 'created_at' | 'updated_at'>;
 export type SysDocumentTransactionTypesUpdate = Partial<SysDocumentTransactionTypesInsert>;
 
+// ---- deploy_88 ~ deploy_91 新增表（P1 业务闭环）----
+export interface ErpPurchaseReturnsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  return_no: string;
+  return_date: string;
+  receipt_id: number | null;
+  supplier_id: number | null;
+  warehouse_id: number | null;
+  location_id: number | null;
+  total_amount: number;
+  currency: string;
+  exchange_rate: number;
+  base_total_amount: number;
+  reason: string | null;
+  remark: string | null;
+  status: string;
+  approved_at: string | null;
+  approved_by: number | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
+  tenant_id: number;
+}
+export type ErpPurchaseReturnsS539Dcf81BInsert = Omit<ErpPurchaseReturnsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpPurchaseReturnsS539Dcf81BUpdate = Partial<ErpPurchaseReturnsS539Dcf81BInsert>;
 
+export interface ErpPurchaseReturnDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  return_id: number;
+  line_no: number;
+  receipt_detail_id: number | null;
+  product_id: number;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+  base_unit_price: number;
+  base_amount: number;
+  batch_no: string | null;
+  location_id: number | null;
+  expiry_date: string | null;
+  reason: string | null;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpPurchaseReturnDetailsS539Dcf81BInsert = Omit<ErpPurchaseReturnDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpPurchaseReturnDetailsS539Dcf81BUpdate = Partial<ErpPurchaseReturnDetailsS539Dcf81BInsert>;
 
+export interface ErpSalesReturnsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  return_no: string;
+  return_date: string;
+  customer_id: number | null;
+  delivery_id: number | null;
+  warehouse_id: number | null;
+  reason: string | null;
+  status: string | null;
+  tenant_id: number;
+  total_amount: number;
+  currency: string;
+  exchange_rate: number;
+  base_total_amount: number;
+  location_id: number | null;
+  approved_at: string | null;
+  approved_by: number | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
+}
+export type ErpSalesReturnsS539Dcf81BInsert = Omit<ErpSalesReturnsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpSalesReturnsS539Dcf81BUpdate = Partial<ErpSalesReturnsS539Dcf81BInsert>;
 
+export interface ErpSalesReturnDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  return_id: number;
+  line_no: number;
+  delivery_detail_id: number | null;
+  product_id: number;
+  quantity: number;
+  batch_no: string | null;
+  reason: string | null;
+  tenant_id: number;
+  unit_price: number;
+  amount: number;
+  base_unit_price: number;
+  base_amount: number;
+  location_id: number | null;
+  expiry_date: string | null;
+}
+export type ErpSalesReturnDetailsS539Dcf81BInsert = Omit<ErpSalesReturnDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpSalesReturnDetailsS539Dcf81BUpdate = Partial<ErpSalesReturnDetailsS539Dcf81BInsert>;
 
+export interface ErpMaterialReturnsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  return_no: string;
+  return_date: string;
+  production_order_id: number | null;
+  issue_id: number | null;
+  warehouse_id: number | null;
+  location_id: number | null;
+  total_amount: number;
+  reason: string | null;
+  remark: string | null;
+  status: string;
+  approved_at: string | null;
+  approved_by: number | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
+  tenant_id: number;
+}
+export type ErpMaterialReturnsS539Dcf81BInsert = Omit<ErpMaterialReturnsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpMaterialReturnsS539Dcf81BUpdate = Partial<ErpMaterialReturnsS539Dcf81BInsert>;
 
+export interface ErpMaterialReturnDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  return_id: number;
+  line_no: number;
+  material_id: number;
+  quantity: number;
+  unit_cost: number;
+  amount: number;
+  batch_no: string | null;
+  location_id: number | null;
+  issue_detail_id: number | null;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpMaterialReturnDetailsS539Dcf81BInsert = Omit<ErpMaterialReturnDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpMaterialReturnDetailsS539Dcf81BUpdate = Partial<ErpMaterialReturnDetailsS539Dcf81BInsert>;
 
+export interface ErpInventoryReservationsS539Dcf81BRow {
+  id: number;
+  tenant_id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  product_id: number;
+  warehouse_id: number;
+  location_id: number | null;
+  batch_no: string | null;
+  stock_status: string;
+  quantity: number;
+  consumed_quantity: number;
+  released_quantity: number;
+  source_type: string;
+  source_id: number;
+  source_detail_id: number | null;
+  source_no: string | null;
+  status: string;
+  remark: string | null;
+}
+export type ErpInventoryReservationsS539Dcf81BInsert = Omit<ErpInventoryReservationsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpInventoryReservationsS539Dcf81BUpdate = Partial<ErpInventoryReservationsS539Dcf81BInsert>;
+
+export interface ErpInventoryVoucherExceptionsS539Dcf81BRow {
+  id: number;
+  tenant_id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  source_type: string;
+  source_id: number;
+  document_no: string | null;
+  document_date: string | null;
+  reason: string;
+  detail: string | null;
+  transaction_type: string | null;
+  attempts: number;
+}
+export type ErpInventoryVoucherExceptionsS539Dcf81BInsert = Omit<ErpInventoryVoucherExceptionsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpInventoryVoucherExceptionsS539Dcf81BUpdate = Partial<ErpInventoryVoucherExceptionsS539Dcf81BInsert>;
+
+export interface ErpInventorySubjectMapS539Dcf81BRow {
+  id: number;
+  tenant_id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  source_type: string;
+  transaction_type_code: string;
+  stock_subject_code: string | null;
+  counter_subject_code: string | null;
+  generate_voucher: boolean;
+  remark: string | null;
+}
+export type ErpInventorySubjectMapS539Dcf81BInsert = Omit<ErpInventorySubjectMapS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpInventorySubjectMapS539Dcf81BUpdate = Partial<ErpInventorySubjectMapS539Dcf81BInsert>;

@@ -298,6 +298,49 @@ export function QualityInspections() {
     });
     setInspectOpen(true);
   };
+  // 质检完成 → 把「待检」库存按结果搬进 available / hold / rejected（deploy_100 的业务级 RPC）。
+  // 跳过是**正常分支**：例如入库时 receiptStockStatus='available'，压根没有待检桶，
+  // 这时不该弹错误，只提示原因即可。RPC 自身幂等，重复点不会重复搬。
+  const skipReasonLabels: Record<string, string> = {
+    no_inspection_stock: t("mrp.quality.skipNoInspectionStock"),
+    warehouse_not_resolved: t("mrp.quality.skipWarehouseNotResolved"),
+    nothing_to_move: t("mrp.quality.skipNothingToMove"),
+  };
+  const moveStock = async (r: Inspection) => {
+    const { data, error } = await supabase.rpc(
+      "apply_quality_inspection_stock_move",
+      { p_inspection_id: r.id },
+    );
+    if (error) {
+      message.warning(`${t("mrp.quality.stockMoveFailed")}：${error.message}`);
+      return;
+    }
+    const res = (data || {}) as {
+      skipped?: boolean;
+      idempotent?: boolean;
+      reason?: string;
+      available_quantity?: number;
+      bad_quantity?: number;
+      bad_status?: string;
+    };
+    if (res.skipped) {
+      message.info(
+        `${t("mrp.quality.stockMoveSkipped")}：${
+          skipReasonLabels[res.reason || ""] || res.reason || ""
+        }`,
+      );
+      return;
+    }
+    message.success(
+      res.idempotent
+        ? t("mrp.quality.stockMoveAlreadyDone")
+        : t("mrp.quality.stockMoveDone", {
+            available: res.available_quantity ?? 0,
+            bad: res.bad_quantity ?? 0,
+            status: res.bad_status || "-",
+          }),
+    );
+  };
   const save = async (v: any, complete: boolean) => {
     if (!current) return;
     const sample = Number(v.sample_quantity),
@@ -339,6 +382,7 @@ export function QualityInspections() {
           : t("mrp.quality.savedTemp"),
       );
       setInspectOpen(false);
+      if (complete) await moveStock(current);
       void load();
     } catch {
       message.error(t("common.saveFailed"));
@@ -398,13 +442,20 @@ export function QualityInspections() {
     {
       title: t("common.actions"),
       fixed: "right",
-      width: 90,
+      width: 170,
       render: (_: unknown, r: Inspection) => (
-        <Button type="link" onClick={() => inspect(r)}>
-          {r.status === "completed"
-            ? t("mrp.quality.reInspect")
-            : t("mrp.quality.inspect")}
-        </Button>
+        <Space size={4}>
+          <Button type="link" onClick={() => inspect(r)}>
+            {r.status === "completed"
+              ? t("mrp.quality.reInspect")
+              : t("mrp.quality.inspect")}
+          </Button>
+          {r.status === "completed" && (
+            <Button type="link" onClick={() => void moveStock(r)}>
+              {t("mrp.quality.moveStock")}
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];
