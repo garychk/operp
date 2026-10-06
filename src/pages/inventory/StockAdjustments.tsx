@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Form, Input, InputNumber, Modal, Select, Space, message, DatePicker, Table } from 'antd';
-import { PlusOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, ThunderboltOutlined, UndoOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
+import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventoryVoucher';
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
 import SimpleModal from '../../components/SimpleModal';
@@ -57,12 +58,14 @@ export function StockAdjustments() {
       .eq('id', id);
     if (approveError) throw approveError;
 
-    const { error } = await supabase.rpc('post_inventory_document', {
+    const { data, error } = await supabase.rpc('post_inventory_document', {
       p_document_type: 'stock_adjustment',
       p_document_id: id,
       p_idempotency_key: crypto.randomUUID(),
     });
     if (error) throw error;
+    // deploy_87：库存过账会顺带生成会计凭证；会计侧问题不阻断过账，但要提示。
+    return data as { voucher?: InventoryVoucherResult } | null;
   };
 
   // 审核并过账走工具栏按钮，作用于当前勾选的调整单（支持多选批量）。
@@ -82,11 +85,14 @@ export function StockAdjustments() {
         setPosting(true);
         let success = 0;
         const failures: string[] = [];
+        const voucherGaps: string[] = [];
         try {
           for (const record of targets) {
             try {
-              await postStockAdjustment(record.id);
+              const result = await postStockAdjustment(record.id);
               success += 1;
+              const notice = voucherNotice(result, t);
+              if (notice) voucherGaps.push(`${record.adjust_no}：${notice}`);
             } catch (error: any) {
               console.error('Error posting stock adjustment:', error);
               failures.push(`${record.adjust_no}：${error?.message || t('stockAdjustments.messages.postFailed')}`);
@@ -103,6 +109,9 @@ export function StockAdjustments() {
               }),
             );
           }
+          if (voucherGaps.length > 0) {
+            message.warning(voucherGaps.join('；'), 10);
+          }
           setSelectedRowKeys([]);
           await fetchAll();
         } finally {
@@ -111,6 +120,72 @@ export function StockAdjustments() {
       },
     });
   };
+  // 反过账：冲回已生成的调整流水，把库存恢复成调整前状态。
+  // 冲销由 reverse_inventory_document 负责（deploy_86），失败原因逐单回报，不静默。
+  const runReverseAdjustments = async (targets: Header[]) => {
+    setPosting(true);
+    let success = 0;
+    const failures: string[] = [];
+    const voucherGaps: string[] = [];
+    try {
+      for (const record of targets) {
+        try {
+          const { data, error } = await supabase.rpc('reverse_inventory_document', {
+            p_document_type: 'stock_adjustment',
+            p_document_id: record.id,
+            p_idempotency_key: crypto.randomUUID(),
+          });
+          if (error) throw error;
+          success += 1;
+          // deploy_87：反过账会顺带作废对应凭证；作废失败要在界面上看得见。
+          const notice = voucherNotice(data as { voucher?: InventoryVoucherResult } | null, t);
+          if (notice) voucherGaps.push(`${record.adjust_no}：${notice}`);
+        } catch (error: any) {
+          console.error('Error reversing stock adjustment:', error);
+          failures.push(`${record.adjust_no}：${error?.message || t('stockAdjustments.messages.reverseFailed')}`);
+        }
+      }
+      if (failures.length === 0) {
+        message.success(t('stockAdjustments.messages.reverseSuccessMany', { count: success }));
+      } else {
+        message.error(
+          t('stockAdjustments.messages.reversePartialFailed', {
+            success,
+            failed: failures.length,
+            detail: failures.join('；'),
+          }),
+        );
+      }
+      if (voucherGaps.length > 0) {
+        message.warning(voucherGaps.join('；'), 10);
+      }
+      setSelectedRowKeys([]);
+      await fetchAll();
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const confirmReverseAdjustments = (targets: Header[]) => {
+    Modal.confirm({
+      title: t('stockAdjustments.reverse'),
+      content: t('stockAdjustments.reverseConfirmContentMany', { count: targets.length }),
+      okText: t('common.continue'),
+      cancelText: t('common.cancel'),
+      onOk: () => runReverseAdjustments(targets),
+    });
+  };
+
+  const handleBatchReverse = () => {
+    const selectedIds = new Set(selectedRowKeys.map((key) => Number(key)));
+    const targets = rows.filter((row) => selectedIds.has(row.id) && row.status === 'posted');
+    if (targets.length === 0) {
+      message.warning(t('stockAdjustments.messages.reverseNoTarget'));
+      return;
+    }
+    confirmReverseAdjustments(targets);
+  };
+
   const columns = [
     { title: t('stockAdjustments.adjustNo'), key: 'adjust_no', dataIndex: 'adjust_no' },
     { title: t('stockAdjustments.date'), key: 'adjust_date', dataIndex: 'adjust_date' },
@@ -121,6 +196,9 @@ export function StockAdjustments() {
     { title: t('common.actions'), key: 'action', render: (_: any, record: Header) => <Space>
       <Button onClick={async () => { setSelected(record); await fetchDetails(record.id); setDetailOpen(true); }}>{t('stockAdjustments.detail')}</Button>
       <Button onClick={() => { setEditing(record); form.setFieldsValue({ ...record, adjust_date: dayjs(record.adjust_date) }); setOpen(true); }}>{t('common.edit')}</Button>
+      {record.status === 'posted' && (
+        <Button danger icon={<UndoOutlined />} onClick={() => confirmReverseAdjustments([record])}>{t('stockAdjustments.reverse')}</Button>
+      )}
       <Button danger icon={<DeleteOutlined />} onClick={async () => { await supabase.from(tableName).update({ is_deleted: 'y' }).eq('id', record.id); await fetchAll(); }}>{t('common.delete')}</Button>
     </Space>},
   ];
@@ -167,6 +245,16 @@ export function StockAdjustments() {
               onClick={handleBatchPost}
             >
               {t('stockAdjustments.approveAndPost')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
+            <Button
+              danger
+              icon={<UndoOutlined />}
+              loading={posting}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchReverse}
+            >
+              {t('stockAdjustments.reverse')}
               {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
             </Button>
           </Space>

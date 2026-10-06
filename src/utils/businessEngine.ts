@@ -239,8 +239,15 @@ export async function runBusinessAction(params: RunBusinessActionParams) {
 
   if (documentType === 'purchase_receipt' || documentType === 'sales_delivery') {
     if (action === 'post' || action === 'reverse_post') {
-      await runStockPostingRpc(action, documentType, documentId, user);
-      return { ok: true, message: action === 'post' ? '库存单据已过账' : '库存单据已反过账' };
+      const result = await runStockPostingRpc(action, documentType, documentId, user);
+      const rpcResult = result as { voucher?: unknown } | null | undefined;
+      // deploy_87：库存过账/反过账会顺带同步会计凭证。把会计侧的结果一并带出去，
+      // 由调用方决定怎么提示（会计问题不阻断库存过账，但绝不能静默）。
+      return {
+        ok: true,
+        voucher: rpcResult?.voucher,
+        message: action === 'post' ? '库存单据已过账' : '库存单据已反过账',
+      };
     }
   }
 

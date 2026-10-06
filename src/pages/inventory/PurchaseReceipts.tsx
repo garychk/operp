@@ -9,6 +9,7 @@ import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
+import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventoryVoucher';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { BizAttachments } from '../../components/BizAttachments';
@@ -285,9 +286,12 @@ export function PurchaseReceipts() {
 
   const runReceiptAction = async (action: 'submit' | 'approve' | 'post' | 'reverse_post', record: PurchaseReceipt) => {
     try {
-      await runBusinessAction({ action, documentType: 'purchase_receipt', documentId: record.id, user: businessUser });
+      const result = await runBusinessAction({ action, documentType: 'purchase_receipt', documentId: record.id, user: businessUser });
       const successText = action === 'submit' ? t('purchaseReceipts.submitSuccess') : action === 'approve' ? t('purchaseReceipts.approveSuccess') : action === 'post' ? t('purchaseReceipts.postSuccess') : t('purchaseReceipts.reversePostSuccess');
       message.success(successText);
+      // deploy_87：过账/反过账会同步会计凭证，会计侧问题不阻断过账但必须提示。
+      const notice = voucherNotice(result as { voucher?: InventoryVoucherResult } | null, t);
+      if (notice) message.warning(notice, 10);
       fetchReceipts();
       if (selectedReceipt?.id === record.id) {
         fetchDetails(record.id);

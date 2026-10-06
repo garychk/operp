@@ -9,6 +9,7 @@ import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
+import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventoryVoucher';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { BizAttachments } from '../../components/BizAttachments';
@@ -359,9 +360,12 @@ export function SalesDeliveries() {
 
   const runDeliveryAction = async (action: 'submit' | 'approve' | 'post' | 'reverse_post', record: SalesDelivery) => {
     try {
-      await runBusinessAction({ action, documentType: 'sales_delivery', documentId: record.id, user: businessUser });
+      const result = await runBusinessAction({ action, documentType: 'sales_delivery', documentId: record.id, user: businessUser });
       const successText = action === 'submit' ? t('salesDeliveries.submitSuccess') : action === 'approve' ? t('salesDeliveries.approveSuccess') : action === 'post' ? t('salesDeliveries.postSuccess') : t('salesDeliveries.reversePostSuccess');
       message.success(successText);
+      // deploy_87：过账/反过账会同步会计凭证，会计侧问题不阻断过账但必须提示。
+      const notice = voucherNotice(result as { voucher?: InventoryVoucherResult } | null, t);
+      if (notice) message.warning(notice, 10);
       // 过账/冲销会改变库存，清缓存以便明细的可用库存重新拉取。
       invalidateInventoryCache();
       fetchDeliveries();

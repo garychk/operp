@@ -25,3 +25,9 @@ dist-ssr
 reports/*
 .workbuddy/*
 ai-server/.env
+
+# 本机 dev 库的迁移执行器 + 回归验收脚本。
+# 这些脚本写死了本机 dev 环境的假设（127.0.0.1:54320、租户 1/3、特定的种子数据），
+# 属于「开发机工具」而非团队/CI 资产，故不进版本库。
+# 用法见 scripts/verify/db.cjs 头部注释；口令走 PGPASSWORD 环境变量，不落盘。
+scripts/verify/

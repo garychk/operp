@@ -106,3 +106,6 @@
 \i supabase/tables/deploy_82_ai_pending_actions.sql
 \i supabase/tables/deploy_83_ai_document_tools.sql
 \i supabase/tables/deploy_84_tenant_subscription.sql
+\i supabase/tables/deploy_85_inventory_unique_key_fix.sql
+\i supabase/tables/deploy_86_reverse_inventory_document.sql
+\i supabase/tables/deploy_87_inventory_gl_linkage.sql

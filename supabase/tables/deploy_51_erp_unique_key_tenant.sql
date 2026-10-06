@@ -47,6 +47,13 @@
 --      脚本只报告不删除任何数据。
 --   4) 其它任何意外错误 —— 每个索引都在自己的子事务里处理，出错只跳过那一个，
 --      并收回本次已建的新索引，不会让整批失败，也不会留下「新旧并存」的半改状态。
+--   5) **显式跳过名单 v_skip_tables** —— 语义已经被「带库位维度 / 表达式的部分索引」
+--      覆盖的表，机械套一层 (tenant_id, 原列) 会造出语义更弱的重复键。
+--      当前名单：erp_inventory_s_539dcf81_b
+--        （deploy_01 内联 UNIQUE(product_id, warehouse_id, batch_no) 在这里会被
+--         改成不含 location_id 的键 → 同仓同批次两个库位直接 23505；
+--         deploy_85 已把库存唯一键合并为 uq_erp_inventory_active_stock_t。）
+--      新增跳过项时必须在该处写清理由，不要只加表名。
 --
 -- 安全顺序
 -- --------
@@ -72,7 +79,10 @@ DO $$
 DECLARE
     idx_item RECORD;
     v_count  INTEGER := 0;
+    -- 与第 2 节保持同一份跳过名单（理由见第 2 节注释）
+    v_skip_tables TEXT[] := ARRAY['erp_inventory_s_539dcf81_b'];
 BEGIN
+    RAISE NOTICE '--- 显式跳过名单（不参与改造）: % ---', array_to_string(v_skip_tables, ', ');
     RAISE NOTICE '--- 待改造的跨租户唯一键清单 ---';
     FOR idx_item IN
         SELECT
@@ -89,6 +99,7 @@ BEGIN
           AND ix.indpred IS NULL                                  -- 排除部分索引
           AND ix.indkey::text !~ '(^| )0( |$)'                    -- 排除表达式索引
           AND pg_get_indexdef(ix.indexrelid) NOT ILIKE '%tenant_id%'
+          AND t.relname <> ALL (v_skip_tables)
           AND EXISTS (                                            -- 只处理 fail-closed 表
                 SELECT 1 FROM pg_attribute at
                 WHERE at.attrelid = t.oid
@@ -118,6 +129,17 @@ DECLARE
     v_done     INTEGER := 0;
     v_skipped  INTEGER := 0;
     v_created  BOOLEAN;
+    -- 显式跳过名单：这些表「同一组业务列」的唯一性已经由带库位维度 / 表达式的
+    -- 部分索引承担，机械地再套一层 (tenant_id, 原列) 会造出一个语义更弱的
+    -- 重复键，反而把部分索引允许的行组合挡掉。
+    --
+    -- erp_inventory：deploy_01 内联 UNIQUE(product_id, warehouse_id, batch_no)
+    --   在这里会被改造成 (tenant_id, product_id, warehouse_id, batch_no)，
+    --   不含 location_id → 同一仓库同一批次放两个库位直接 23505，
+    --   而 deploy_25/34 补的 v2 部分索引本来是允许的。
+    --   deploy_85 已把两者合并为 uq_erp_inventory_active_stock_t，
+    --   这里必须跳过，否则任何一次「deploy_01 → deploy_51」的新建库都会把缺陷带回来。
+    v_skip_tables TEXT[] := ARRAY['erp_inventory_s_539dcf81_b'];
 BEGIN
     FOR idx_item IN
         SELECT
@@ -137,6 +159,7 @@ BEGIN
           AND ix.indpred IS NULL
           AND ix.indkey::text !~ '(^| )0( |$)'
           AND pg_get_indexdef(ix.indexrelid) NOT ILIKE '%tenant_id%'
+          AND t.relname <> ALL (v_skip_tables)
           AND EXISTS (
                 SELECT 1 FROM pg_attribute at
                 WHERE at.attrelid = t.oid
@@ -283,6 +306,8 @@ DO $$
 DECLARE
     idx_item RECORD;
     v_left   INTEGER := 0;
+    -- 与第 2 节保持同一份跳过名单（理由见第 2 节注释）
+    v_skip_tables TEXT[] := ARRAY['erp_inventory_s_539dcf81_b'];
 BEGIN
     RAISE NOTICE '--- 改造后仍跨租户唯一的键 ---';
     FOR idx_item IN
@@ -300,6 +325,7 @@ BEGIN
           AND ix.indpred IS NULL
           AND ix.indkey::text !~ '(^| )0( |$)'
           AND pg_get_indexdef(ix.indexrelid) NOT ILIKE '%tenant_id%'
+          AND t.relname <> ALL (v_skip_tables)
           AND EXISTS (
                 SELECT 1 FROM pg_attribute at
                 WHERE at.attrelid = t.oid

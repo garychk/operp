@@ -124,6 +124,9 @@ ORDER=(
   deploy_82_ai_pending_actions.sql
   deploy_83_ai_document_tools.sql
   deploy_84_tenant_subscription.sql
+  deploy_85_inventory_unique_key_fix.sql
+  deploy_86_reverse_inventory_document.sql
+  deploy_87_inventory_gl_linkage.sql
 )
 
 # ---------------------------------------------------------------- 文件自检
