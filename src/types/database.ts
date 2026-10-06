@@ -1727,3 +1727,315 @@ export interface ErpInventorySubjectMapS539Dcf81BRow {
 }
 export type ErpInventorySubjectMapS539Dcf81BInsert = Omit<ErpInventorySubjectMapS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpInventorySubjectMapS539Dcf81BUpdate = Partial<ErpInventorySubjectMapS539Dcf81BInsert>;
+
+// ---- deploy_102 / deploy_103 新增表（P2-10 委外/外协闭环）----
+/** 委外订单头（deploy_102）：draft | approved | released | in_progress | completed | closed | cancelled */
+export interface ErpSubcontractOrdersS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  order_no: string;
+  order_date: string;
+  supplier_id: number;
+  product_id: number;
+  quantity: number;
+  /** 单位加工费（不含材料） */
+  unit_price: number;
+  amount: number;
+  currency: string;
+  exchange_rate: number;
+  base_amount: number;
+  warehouse_id: number | null;
+  location_id: number | null;
+  bom_id: number | null;
+  required_date: string | null;
+  /** 已发料量，派生自应发料明细 SUM(issued_quantity) */
+  issued_quantity: number;
+  /** 已入库量，过账时 += 入库单数量 */
+  received_quantity: number;
+  /** 已结算量，结算确认时推进 */
+  settled_quantity: number;
+  status: string;
+  approved_at: string | null;
+  approved_by: number | null;
+  released_at: string | null;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpSubcontractOrdersS539Dcf81BInsert = Omit<ErpSubcontractOrdersS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'issued_quantity' | 'received_quantity' | 'settled_quantity' | 'status'>;
+export type ErpSubcontractOrdersS539Dcf81BUpdate = Partial<ErpSubcontractOrdersS539Dcf81BInsert>;
+
+/** 委外订单应发料明细（deploy_102）：由 build_subcontract_order_materials 按 BOM 展开 */
+export interface ErpSubcontractOrderDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  order_id: number;
+  line_no: number;
+  material_id: number;
+  /** BOM 用量 × 委外数量 × (1 + 损耗率) */
+  required_quantity: number;
+  issued_quantity: number;
+  consumed_quantity: number;
+  unit_cost: number;
+  /** deploy_102：已发料金额（过账回写，反过账按原值冲回） */
+  issued_amount: number;
+  /** deploy_102：已核销金额（入库核销回写） */
+  consumed_amount: number;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpSubcontractOrderDetailsS539Dcf81BInsert = Omit<ErpSubcontractOrderDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'issued_quantity' | 'consumed_quantity' | 'issued_amount' | 'consumed_amount'>;
+export type ErpSubcontractOrderDetailsS539Dcf81BUpdate = Partial<ErpSubcontractOrderDetailsS539Dcf81BInsert>;
+
+/** 委外发料单头（deploy_102）：出库，扣原料 */
+export interface ErpSubcontractIssuesS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  issue_no: string;
+  issue_date: string;
+  supplier_id: number;
+  order_id: number | null;
+  warehouse_id: number;
+  location_id: number | null;
+  total_cost: number;
+  status: string;
+  approved_at: string | null;
+  approved_by: number | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpSubcontractIssuesS539Dcf81BInsert = Omit<ErpSubcontractIssuesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'total_cost' | 'status' | 'posting_idempotency_key' | 'reversal_idempotency_key' | 'posted_at' | 'reversed_at'>;
+export type ErpSubcontractIssuesS539Dcf81BUpdate = Partial<ErpSubcontractIssuesS539Dcf81BInsert>;
+
+/** 委外发料明细（deploy_102）：order_detail_id 非空时回写订单已发料跟踪 */
+export interface ErpSubcontractIssueDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  issue_id: number;
+  line_no: number;
+  order_detail_id: number | null;
+  material_id: number;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  batch_no: string | null;
+  location_id: number | null;
+  expiry_date: string | null;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpSubcontractIssueDetailsS539Dcf81BInsert = Omit<ErpSubcontractIssueDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'total_cost'>;
+export type ErpSubcontractIssueDetailsS539Dcf81BUpdate = Partial<ErpSubcontractIssueDetailsS539Dcf81BInsert>;
+
+/** 委外入库单头（deploy_102）：成品入库 + 核销应发料 + 确认加工费应付 */
+export interface ErpSubcontractReceiptsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  receipt_no: string;
+  receipt_date: string;
+  supplier_id: number;
+  order_id: number | null;
+  product_id: number;
+  quantity: number;
+  /** 加工费（不含材料），单独一条「数量 0」流水腿，凭证贷 2202 */
+  processing_fee: number;
+  /** 过账时按 BOM 比例核销出来的材料成本 */
+  material_cost: number;
+  total_cost: number;
+  unit_cost: number;
+  currency: string;
+  exchange_rate: number;
+  base_amount: number;
+  warehouse_id: number;
+  location_id: number | null;
+  batch_no: string | null;
+  expiry_date: string | null;
+  status: string;
+  approved_at: string | null;
+  approved_by: number | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
+  remark: string | null;
+  tenant_id: number;
+  /** 过账时落库的逐条核销明细 JSONB，反过账按原样退回（不重算，避免漂移） */
+  consumed_materials: Array<{ order_detail_id: number; material_id: number; quantity: number; unit_cost: number; amount: number }>;
+}
+export type ErpSubcontractReceiptsS539Dcf81BInsert = Omit<ErpSubcontractReceiptsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'material_cost' | 'total_cost' | 'unit_cost' | 'base_amount' | 'status' | 'posting_idempotency_key' | 'reversal_idempotency_key' | 'posted_at' | 'reversed_at' | 'consumed_materials'>;
+export type ErpSubcontractReceiptsS539Dcf81BUpdate = Partial<ErpSubcontractReceiptsS539Dcf81BInsert>;
+
+/** 委外结算单（deploy_102）：只做加工费差异确认，不重复出凭证（入库时已挂应付） */
+export interface ErpSubcontractSettlementsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  settlement_no: string;
+  settlement_date: string;
+  supplier_id: number;
+  order_id: number | null;
+  quantity: number;
+  /** 系统侧加工费（来自入库单） */
+  processing_fee_amount: number;
+  /** 供应商开票金额 */
+  invoiced_amount: number;
+  /** 差异 = invoiced_amount - processing_fee_amount */
+  variance_amount: number;
+  invoice_no: string | null;
+  currency: string;
+  exchange_rate: number;
+  status: string;
+  confirmed_at: string | null;
+  confirmed_by: number | null;
+  confirm_idempotency_key: string | null;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpSubcontractSettlementsS539Dcf81BInsert = Omit<ErpSubcontractSettlementsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'variance_amount' | 'status' | 'confirmed_at' | 'confirmed_by' | 'confirm_idempotency_key'>;
+export type ErpSubcontractSettlementsS539Dcf81BUpdate = Partial<ErpSubcontractSettlementsS539Dcf81BInsert>;
+
+// ---- deploy_104 / deploy_105 新增表（P2-11 其他出入库 + 期初库存）----
+export type OtherStockDirection = 'in' | 'out';
+/** 业务类型：决定交易类型 → 决定对方科目。报废与损耗单独落科目，其余按方向兜底。 */
+export type OtherStockBusinessType =
+  | 'gift'
+  | 'sample'
+  | 'lending'
+  | 'lending_return'
+  | 'scrap'
+  | 'loss'
+  | 'overturn'
+  | 'other';
+
+/** 其他出入库单头（deploy_104）：方向在表头，明细行方向一律跟随表头 */
+export interface ErpOtherStockDocumentsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  document_no: string;
+  document_date: string;
+  /** in = 其他入库（收），out = 其他出库（发） */
+  direction: OtherStockDirection;
+  /** gift 赠品 / sample 样品 / lending 借出 / lending_return 借出归还 / scrap 报废 / loss 损耗 / overturn 盘盈 / other 其他 */
+  business_type: string;
+  warehouse_id: number;
+  location_id: number | null;
+  counterparty: string | null;
+  reason: string | null;
+  remark: string | null;
+  total_cost: number;
+  status: string;
+  approved_at: string | null;
+  approved_by: number | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
+  tenant_id: number;
+}
+export type ErpOtherStockDocumentsS539Dcf81BInsert = Omit<ErpOtherStockDocumentsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'total_cost' | 'status' | 'posting_idempotency_key' | 'reversal_idempotency_key' | 'posted_at' | 'reversed_at'>;
+export type ErpOtherStockDocumentsS539Dcf81BUpdate = Partial<ErpOtherStockDocumentsS539Dcf81BInsert>;
+
+/** 其他出入库明细（deploy_104）：出库可不填单价（取库存移动加权），入库必须 > 0 */
+export interface ErpOtherStockDocumentDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  document_id: number;
+  line_no: number;
+  product_id: number;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  location_id: number | null;
+  batch_no: string | null;
+  expiry_date: string | null;
+  stock_status: string;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpOtherStockDocumentDetailsS539Dcf81BInsert = Omit<ErpOtherStockDocumentDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'total_cost'>;
+export type ErpOtherStockDocumentDetailsS539Dcf81BUpdate = Partial<ErpOtherStockDocumentDetailsS539Dcf81BInsert>;
+
+/** 期初库存单头（deploy_104）：同一仓库只允许一份已过账期初；默认不进总账 */
+export interface ErpOpeningBalancesS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  document_no: string;
+  document_date: string;
+  warehouse_id: number;
+  location_id: number | null;
+  total_quantity: number;
+  total_cost: number;
+  status: string;
+  approved_at: string | null;
+  approved_by: number | null;
+  posting_idempotency_key: string | null;
+  reversal_idempotency_key: string | null;
+  posted_at: string | null;
+  reversed_at: string | null;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpOpeningBalancesS539Dcf81BInsert = Omit<ErpOpeningBalancesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'total_quantity' | 'total_cost' | 'status' | 'posting_idempotency_key' | 'reversal_idempotency_key' | 'posted_at' | 'reversed_at'>;
+export type ErpOpeningBalancesS539Dcf81BUpdate = Partial<ErpOpeningBalancesS539Dcf81BInsert>;
+
+/** 期初库存明细（deploy_104）：单价必填且 > 0（过账 RPC 强制） */
+export interface ErpOpeningBalanceDetailsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  document_id: number;
+  line_no: number;
+  product_id: number;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  location_id: number | null;
+  batch_no: string | null;
+  expiry_date: string | null;
+  stock_status: string;
+  remark: string | null;
+  tenant_id: number;
+}
+export type ErpOpeningBalanceDetailsS539Dcf81BInsert = Omit<ErpOpeningBalanceDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'total_cost'>;
+export type ErpOpeningBalanceDetailsS539Dcf81BUpdate = Partial<ErpOpeningBalanceDetailsS539Dcf81BInsert>;

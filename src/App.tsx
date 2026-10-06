@@ -33,6 +33,8 @@ import { SalesReturns } from './pages/inventory/SalesReturns';
 import { InventoryTransfers } from './pages/inventory/InventoryTransfers';
 import { StockCounts } from './pages/inventory/StockCounts';
 import { StockAdjustments } from './pages/inventory/StockAdjustments';
+import { OtherStockDocuments } from './pages/inventory/OtherStockDocuments';
+import { OpeningBalances } from './pages/inventory/OpeningBalances';
 import { InventoryTransactions } from './pages/inventory/InventoryTransactions';
 import { InventoryReports } from './pages/inventory/InventoryReports';
 import { InventoryReconciliation } from './pages/inventory/InventoryReconciliation';
@@ -51,6 +53,10 @@ import { CostCalculations } from './pages/mrp/CostCalculations';
 import { MrpPlans } from './pages/mrp/MrpPlans';
 import { MpsPlans } from './pages/mrp/MpsPlans';
 import { QualityInspections } from './pages/mrp/QualityInspections';
+import { SubcontractOrders } from './pages/mrp/SubcontractOrders';
+import { SubcontractIssues } from './pages/mrp/SubcontractIssues';
+import { SubcontractReceipts } from './pages/mrp/SubcontractReceipts';
+import { SubcontractSettlements } from './pages/mrp/SubcontractSettlements';
 import { Users } from './pages/system/Users';
 import { Tenants } from './pages/system/Tenants';
 import { Roles } from './pages/system/Roles';
@@ -139,6 +145,8 @@ function AppContent() {
           <Route path="transfers" element={<InventoryTransfers />} />
           <Route path="stock-counts" element={<StockCounts />} />
           <Route path="stock-adjustments" element={<StockAdjustments />} />
+          <Route path="other-stock" element={<OtherStockDocuments />} />
+          <Route path="opening-balances" element={<OpeningBalances />} />
           <Route path="reports" element={<InventoryReports />} />
           <Route path="reconciliation" element={<InventoryReconciliation />} />
           <Route path="subject-map" element={<InventorySubjectMap />} />
@@ -160,6 +168,14 @@ function AppContent() {
           <Route path="plans" element={<MrpPlans />} />
           <Route path="mps" element={<MpsPlans />} />
           <Route path="quality" element={<QualityInspections />} />
+          {/* P2-10 委外/外协闭环（deploy_102 / deploy_103） */}
+          <Route path="subcontract-orders" element={<SubcontractOrders />} />
+          <Route path="subcontract-issues" element={<SubcontractIssues />} />
+          <Route path="subcontract-receipts" element={<SubcontractReceipts />} />
+          <Route
+            path="subcontract-settlements"
+            element={<SubcontractSettlements />}
+          />
         </Route>
         
         <Route path="system">

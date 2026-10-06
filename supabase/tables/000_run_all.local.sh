@@ -141,6 +141,10 @@ ORDER=(
   deploy_99_inventory_query_views.sql
   deploy_100_inventory_business_rpcs.sql
   deploy_101_reserve_stock_spread.sql
+  deploy_102_subcontract_tables.sql
+  deploy_103_subcontract_rpcs.sql
+  deploy_104_other_stock_and_opening_tables.sql
+  deploy_105_other_stock_and_opening_rpcs.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

@@ -5,7 +5,7 @@
 -- Do not paste this whole file into Supabase SQL Editor. The \i directives are
 -- psql meta commands. In SQL Editor, execute the deploy_*.sql files one by one.
 --
--- 顺序必须与 ../000_run_all.local.sh 里的 ORDER 数组保持一致（共 103 个步骤）。
+-- 顺序必须与 ../000_run_all.local.sh 里的 ORDER 数组保持一致（共 107 个步骤）。
 -- 顺序即纯编号顺序，没有额外的前置步骤：
 --   - deploy_24_erp_bins.sql 与 deploy_24_inventory_document_ops.sql 同号，
 --     前者天然排在前者之前，解开 24 <-> 25 的循环依赖（不要打乱这两个的相对次序）；
@@ -123,3 +123,7 @@
 \i supabase/tables/deploy_99_inventory_query_views.sql
 \i supabase/tables/deploy_100_inventory_business_rpcs.sql
 \i supabase/tables/deploy_101_reserve_stock_spread.sql
+\i supabase/tables/deploy_102_subcontract_tables.sql
+\i supabase/tables/deploy_103_subcontract_rpcs.sql
+\i supabase/tables/deploy_104_other_stock_and_opening_tables.sql
+\i supabase/tables/deploy_105_other_stock_and_opening_rpcs.sql

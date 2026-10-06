@@ -71,6 +71,17 @@ import type {
   SysMcpApiKeysRow,
   SysInventoryTransactionTypesRow,
   SysDocumentTransactionTypesRow,
+  // deploy_102 / deploy_103（P2-10 委外/外协闭环）
+  ErpSubcontractOrdersS539Dcf81BRow,
+  ErpSubcontractOrderDetailsS539Dcf81BRow,
+  ErpSubcontractIssuesS539Dcf81BRow,
+  ErpSubcontractIssueDetailsS539Dcf81BRow,
+  ErpSubcontractReceiptsS539Dcf81BRow,
+  ErpSubcontractSettlementsS539Dcf81BRow,
+  ErpOtherStockDocumentsS539Dcf81BRow,
+  ErpOtherStockDocumentDetailsS539Dcf81BRow,
+  ErpOpeningBalancesS539Dcf81BRow,
+  ErpOpeningBalanceDetailsS539Dcf81BRow,
 } from '../types/database';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -222,5 +233,15 @@ export type Tables = {
   erp_inventory_reservations_s_539dcf81_b: { Row: ErpInventoryReservationsS539Dcf81BRow };
   erp_inventory_voucher_exceptions_s_539dcf81_b: { Row: ErpInventoryVoucherExceptionsS539Dcf81BRow };
   erp_inventory_subject_map_s_539dcf81_b: { Row: ErpInventorySubjectMapS539Dcf81BRow };
+  erp_subcontract_orders_s_539dcf81_b: { Row: ErpSubcontractOrdersS539Dcf81BRow };
+  erp_subcontract_order_details_s_539dcf81_b: { Row: ErpSubcontractOrderDetailsS539Dcf81BRow };
+  erp_subcontract_issues_s_539dcf81_b: { Row: ErpSubcontractIssuesS539Dcf81BRow };
+  erp_subcontract_issue_details_s_539dcf81_b: { Row: ErpSubcontractIssueDetailsS539Dcf81BRow };
+  erp_subcontract_receipts_s_539dcf81_b: { Row: ErpSubcontractReceiptsS539Dcf81BRow };
+  erp_subcontract_settlements_s_539dcf81_b: { Row: ErpSubcontractSettlementsS539Dcf81BRow };
+  erp_other_stock_documents_s_539dcf81_b: { Row: ErpOtherStockDocumentsS539Dcf81BRow };
+  erp_other_stock_document_details_s_539dcf81_b: { Row: ErpOtherStockDocumentDetailsS539Dcf81BRow };
+  erp_opening_balances_s_539dcf81_b: { Row: ErpOpeningBalancesS539Dcf81BRow };
+  erp_opening_balance_details_s_539dcf81_b: { Row: ErpOpeningBalanceDetailsS539Dcf81BRow };
 };
 
