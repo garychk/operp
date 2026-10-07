@@ -60,6 +60,9 @@ import { SubcontractIssues } from './pages/mrp/SubcontractIssues';
 import { SubcontractReceipts } from './pages/mrp/SubcontractReceipts';
 import { SubcontractSettlements } from './pages/mrp/SubcontractSettlements';
 import { ProductionAnalytics } from './pages/mrp/ProductionAnalytics';
+// P0-4（deploy_114）MRP 计划参数与工作日历
+import { PlanningParams } from './pages/mrp/PlanningParams';
+import { WorkCalendars } from './pages/mrp/WorkCalendars';
 import { Users } from './pages/system/Users';
 import { Tenants } from './pages/system/Tenants';
 import { Roles } from './pages/system/Roles';
@@ -183,6 +186,9 @@ function AppContent() {
           />
           {/* P0-5 生产报表（deploy_108 视图 + deploy_109 菜单） */}
           <Route path="production-analytics" element={<ProductionAnalytics />} />
+          {/* P0-4 计划基础参数（deploy_114 菜单） */}
+          <Route path="planning-params" element={<PlanningParams />} />
+          <Route path="work-calendars" element={<WorkCalendars />} />
         </Route>
         
         <Route path="system">

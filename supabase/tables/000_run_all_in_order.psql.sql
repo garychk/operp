@@ -132,3 +132,7 @@
 \i supabase/tables/deploy_108_production_report_views.sql
 \i supabase/tables/deploy_109_production_report_menu.sql
 \i supabase/tables/deploy_110_production_receipt_quality.sql
+\i supabase/tables/deploy_111_standard_cost_tables.sql
+\i supabase/tables/deploy_112_standard_cost_rollup_and_variance.sql
+\i supabase/tables/deploy_113_accounting_period_tenant_unique.sql
+\i supabase/tables/deploy_114_mrp_planning_params_and_work_calendar.sql

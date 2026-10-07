@@ -150,6 +150,10 @@ ORDER=(
   deploy_108_production_report_views.sql
   deploy_109_production_report_menu.sql
   deploy_110_production_receipt_quality.sql
+  deploy_111_standard_cost_tables.sql
+  deploy_112_standard_cost_rollup_and_variance.sql
+  deploy_113_accounting_period_tenant_unique.sql
+  deploy_114_mrp_planning_params_and_work_calendar.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

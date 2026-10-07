@@ -83,6 +83,9 @@ import type {
   ErpOpeningBalancesS539Dcf81BRow,
   ErpBatchesS539Dcf81BRow,
   ErpOpeningBalanceDetailsS539Dcf81BRow,
+  // deploy_114（P0-4）工作日历
+  ErpWorkCalendarsS539Dcf81BRow,
+  ErpWorkCalendarDaysS539Dcf81BRow,
 } from '../types/database';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -245,5 +248,8 @@ export type Tables = {
   erp_opening_balances_s_539dcf81_b: { Row: ErpOpeningBalancesS539Dcf81BRow };
   erp_opening_balance_details_s_539dcf81_b: { Row: ErpOpeningBalanceDetailsS539Dcf81BRow };
   erp_batches_s_539dcf81_b: { Row: ErpBatchesS539Dcf81BRow };
+  // deploy_114（P0-4）工作日历
+  erp_work_calendars_s_539dcf81_b: { Row: ErpWorkCalendarsS539Dcf81BRow };
+  erp_work_calendar_days_s_539dcf81_b: { Row: ErpWorkCalendarDaysS539Dcf81BRow };
 };
 

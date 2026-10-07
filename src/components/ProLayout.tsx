@@ -63,6 +63,8 @@ import {
   TableOutlined,
   IdcardOutlined,
   PayCircleOutlined,
+  SlidersOutlined,
+  ScheduleOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { MenuPermissionGuard } from "./ProtectedRoute";
@@ -134,6 +136,8 @@ const menuIconMap: Record<string, ReactNode> = {
   ExperimentOutlined: <ExperimentOutlined />,
   LineChartOutlined: <LineChartOutlined />,
   BarChartOutlined: <BarChartOutlined />,
+  SlidersOutlined: <SlidersOutlined />,
+  ScheduleOutlined: <ScheduleOutlined />,
 };
 
 const fixedMenuPathByCode: Record<string, string> = {
@@ -433,6 +437,9 @@ export const menuData: MenuRoute[] = [
       { path: "/mrp/plans", name: "MRP计划", icon: <CalendarOutlined /> },
       { path: "/mrp/mps", name: "主生产计划", icon: <CalendarOutlined /> },
       { path: "/mrp/quality", name: "检验管理", icon: <ExperimentOutlined /> },
+      // 计划基础参数（与 sys_menus sort_order=15/16 一致）
+      { path: "/mrp/planning-params", name: "物料计划参数", icon: <SlidersOutlined /> },
+      { path: "/mrp/work-calendars", name: "工作日历", icon: <ScheduleOutlined /> },
       { path: "/mrp/subcontract-orders", name: "委外订单", icon: <FileTextOutlined /> },
       { path: "/mrp/subcontract-issues", name: "委外发料", icon: <TruckOutlined /> },
       { path: "/mrp/subcontract-receipts", name: "委外入库", icon: <ImportOutlined /> },
@@ -540,6 +547,8 @@ const pathToNameMap: Record<string, string> = {
   "/mrp/subcontract-receipts": "委外入库",
   "/mrp/subcontract-settlements": "委外结算",
   "/mrp/production-analytics": "生产报表",
+  "/mrp/planning-params": "物料计划参数",
+  "/mrp/work-calendars": "工作日历",
   "/system/users": "用户管理",
   "/system/tenants": "租户管理",
   "/system/roles": "角色管理",
@@ -628,6 +637,8 @@ const pathToTranslationKey: Record<string, string> = {
   "/inventory/subject-map": "menu.inventorySubjectMap",
   "/mrp/material-returns": "menu.materialReturns",
   "/mrp/production-analytics": "menu.productionAnalytics",
+  "/mrp/planning-params": "menu.planningParams",
+  "/mrp/work-calendars": "menu.workCalendars",
 };
 
 export const staticComponentByPath: Record<string, string> = {
@@ -679,6 +690,8 @@ export const staticComponentByPath: Record<string, string> = {
   "/mrp/subcontract-receipts": "./pages/mrp/SubcontractReceipts",
   "/mrp/subcontract-settlements": "./pages/mrp/SubcontractSettlements",
   "/mrp/production-analytics": "./pages/mrp/ProductionAnalytics",
+  "/mrp/planning-params": "./pages/mrp/PlanningParams",
+  "/mrp/work-calendars": "./pages/mrp/WorkCalendars",
   "/system/users": "./pages/system/Users",
   "/system/tenants": "./pages/system/Tenants",
   "/system/roles": "./pages/system/Roles",

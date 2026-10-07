@@ -2068,6 +2068,44 @@ export interface ErpBatchesS539Dcf81BRow {
 export type ErpBatchesS539Dcf81BInsert = Omit<ErpBatchesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'source_type' | 'qc_status' | 'status' | 'unit_cost'>;
 export type ErpBatchesS539Dcf81BUpdate = Partial<ErpBatchesS539Dcf81BInsert>;
 
+// ---- deploy_114（P0-4）：工作日历 ----
+export interface ErpWorkCalendarsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  calendar_no: string;
+  calendar_name: string;
+  /** 周规律，ISO 星期（1=周一 … 7=周日） */
+  work_days: number[];
+  is_default: boolean;
+  is_active: boolean;
+  remark: string | null;
+  created_by: number | null;
+  tenant_id: number | null;
+}
+export type ErpWorkCalendarsS539Dcf81BInsert = Omit<ErpWorkCalendarsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'tenant_id' | 'calendar_no'>;
+export type ErpWorkCalendarsS539Dcf81BUpdate = Partial<ErpWorkCalendarsS539Dcf81BInsert>;
+
+export interface ErpWorkCalendarDaysS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  calendar_id: number;  // FK -> erp_work_calendars_s_539dcf81_b.id
+  calendar_date: string;
+  is_workday: boolean;
+  remark: string | null;
+  created_by: number | null;
+  tenant_id: number | null;
+}
+export type ErpWorkCalendarDaysS539Dcf81BInsert = Omit<ErpWorkCalendarDaysS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'tenant_id'>;
+export type ErpWorkCalendarDaysS539Dcf81BUpdate = Partial<ErpWorkCalendarDaysS539Dcf81BInsert>;
+
 /** 物料上的批次属性（deploy_106，erp_products 新增列） */
 export interface ErpProductBatchFields {
   is_batch_managed: boolean;

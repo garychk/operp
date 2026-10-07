@@ -63,6 +63,12 @@ interface ConversionResultState {
   items: ConversionItemResult[];
 }
 
+interface MrpRunWarning {
+  productId: number;
+  code: string;
+  message: string;
+}
+
 interface MrpRunResponse {
   ok: boolean;
   error?: string;
@@ -70,6 +76,9 @@ interface MrpRunResponse {
   report?: string;
   report_generated_by?: 'llm' | 'fallback';
   report_error?: string | null;
+  /** 引擎警告（P0-4 起在结果弹窗里展示，此前拿到就被丢掉） */
+  warnings?: MrpRunWarning[];
+  stats?: { workCalendar?: string | null } & Record<string, unknown>;
 }
 
 export function MrpPlans() {
@@ -87,6 +96,10 @@ export function MrpPlans() {
     report: string;
     generatedBy: 'llm' | 'fallback';
     llmError: string | null;
+    warnings: MrpRunWarning[];
+    workCalendar: string | null;
+    /** true = 本次运算的结果弹窗（warning / 日历提示有效）；false = 回看历史报告 */
+    fromRun: boolean;
   } | null>(null);
   const [convertPreview, setConvertPreview] = useState<ConversionPreviewState | null>(null);
   const [convertResult, setConvertResult] = useState<ConversionResultState | null>(null);
@@ -188,6 +201,9 @@ export function MrpPlans() {
             report: data.report || '',
             generatedBy: data.report_generated_by === 'llm' ? 'llm' : 'fallback',
             llmError: data.report_error ?? null,
+            warnings: data.warnings ?? [],
+            workCalendar: data.stats?.workCalendar ?? null,
+            fromRun: true,
           });
           fetchPlans();
         } catch (error) {
@@ -224,6 +240,10 @@ export function MrpPlans() {
         report: data.report || '',
         generatedBy: 'llm',
         llmError: null,
+        // 历史报告：引擎警告不落库，只在运算当次返回，所以这里没有可展示的内容
+        warnings: [],
+        workCalendar: null,
+        fromRun: false,
       });
     } catch (error) {
       console.error('Error fetching MRP report:', error);
@@ -564,6 +584,34 @@ export function MrpPlans() {
             style={{ marginBottom: 12 }}
             message={t('mrp.plans.reportFromFallback')}
             description={reportView.llmError || undefined}
+          />
+        )}
+        {/* P0-4：没有启用工作日历会让提前期退回自然日（下达日可能落在周末），必须提示 */}
+        {reportView?.fromRun && !reportView.workCalendar && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t('mrp.plans.noWorkCalendar')}
+          />
+        )}
+        {/* 引擎警告：max_qty 未维护上限 / 提前期倒排早于计划期 / 安全库存与订货点并存等 */}
+        {reportView && reportView.warnings.length > 0 && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t('mrp.plans.runWarningsTitle', { count: reportView.warnings.length })}
+            description={
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {reportView.warnings.map((w, index) => (
+                  <li key={`${w.productId}-${index}`}>
+                    {w.code ? `[${w.code}] ` : ''}
+                    {w.message}
+                  </li>
+                ))}
+              </ul>
+            }
           />
         )}
         <div style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>

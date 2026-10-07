@@ -33,6 +33,19 @@ function buildFallbackReport(plan: MrpPlanRow, result: MrpEngineResult): string 
     `- 生成计划订单：${stats.plannedOrders} 张`,
   ];
 
+  // P0-4：订货点补货与工作日历会影响数字解读，摘要里必须点出来
+  //（否则计划员看到「净需求」里混着补货量会以为哪里算错了）
+  if (stats.reorderPointProducts > 0) {
+    lines.push(
+      `- 订货点补货：${stats.reorderPointProducts} 个物料启用了订货点，本次触发 ${stats.reorderTriggers} 次补货（补货量已计入上面的净需求合计）`,
+    );
+  }
+  lines.push(
+    stats.workCalendar
+      ? `- 提前期口径：按工作日历「${stats.workCalendar}」倒推下达日`
+      : "- 提前期口径：未启用工作日历，按自然日倒推下达日（下达日可能落在周末/节假日）",
+  );
+
   if (stats.shortages.length > 0) {
     lines.push("", "### 缺口清单", "", "| 物料 | 首次缺口日 | 净需求合计 | 计划订单数 | 首次下达日 |", "|---|---|---|---|---|");
     for (const s of stats.shortages.slice(0, MAX_SHORTAGES)) {
@@ -67,6 +80,10 @@ function buildPrompt(plan: MrpPlanRow, result: MrpEngineResult): { system: strin
       productsWithShortage: stats.productsWithShortage,
       totalNetRequirement: stats.totalNetRequirement,
       plannedOrders: stats.plannedOrders,
+      // P0-4：让 LLM 知道净需求里含订货点补货、以及提前期是按哪种口径倒推的
+      reorderPointProducts: stats.reorderPointProducts,
+      reorderTriggers: stats.reorderTriggers,
+      workCalendar: stats.workCalendar,
     },
     // 只给 Top 缺口，不给全量需求行 —— 模型不需要也不应该看到逐行数据
     shortages: stats.shortages.slice(0, MAX_SHORTAGES),
