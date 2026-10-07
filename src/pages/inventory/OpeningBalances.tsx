@@ -33,6 +33,7 @@ import { useCurrencyRegistry } from '../../utils/money';
 import { SuperTable } from '../../components/SuperTable';
 import SimpleModal from '../../components/SimpleModal';
 import { SupaModal } from '../../components/SupaModal';
+import { WarehouseBinSelect } from '../../components/WarehouseBinSelect';
 import { logOperation } from '../../utils/logger';
 
 // ============================================================================
@@ -120,6 +121,20 @@ export function OpeningBalances() {
 
   const isLocked = readOnly || selected?.status === 'posted';
 
+  // 库位下拉选项依赖当前仓库；Form.useWatch 让仓库变化时触发重渲染（getFieldValue 不行）
+  const headerWarehouseId = Form.useWatch('warehouse_id', form);
+
+  /**
+   * 仓库切换：清空原库位（跨仓库的旧库位必然失效），
+   * 若新仓库恰好只有一个启用库位则自动带出，多个则留空让人选。
+   */
+  const handleWarehouseChange = (warehouseId: number) => {
+    const candidates = bins.filter((b) => b.warehouse_id === warehouseId);
+    form.setFieldsValue({
+      location_id: candidates.length === 1 ? candidates[0].id : undefined,
+    });
+  };
+
   useEffect(() => {
     void fetchAll();
   }, []);
@@ -149,6 +164,47 @@ export function OpeningBalances() {
     setDetails((data || []) as Detail[]);
   };
 
+  /**
+   * 明细增删改后重算表头合计并回写。
+   *
+   * 为什么必须前端回写：表头的 total_quantity / total_cost 只有一个写入点 ——
+   * `post_opening_balance_document()` 在**过账时**才算（deploy_105 第 585 行），
+   * 所以草稿/已审核状态下这两个字段一直是 NULL，列表页的「数量合计 / 金额合计」
+   * 两列就空着。项目里采购入库 / 销售发货等页面都是同一套做法：明细变更后由前端
+   * 重算 sum 回写表头（参见 PurchaseReceipts.tsx 的 updateReceiptTotal）。
+   */
+  const recalcTotals = async (documentId: number) => {
+    const { data, error } = await supabase
+      .from(detailTable)
+      .select('quantity, unit_cost')
+      .eq('is_deleted', 'n')
+      .eq('document_id', documentId);
+    if (error) {
+      console.error('Error recalculating opening balance totals:', error);
+      return;
+    }
+    const totalQty = (data || []).reduce((sum, d) => sum + Number(d.quantity || 0), 0);
+    const totalCost = (data || []).reduce(
+      (sum, d) => sum + Number(d.quantity || 0) * Number(d.unit_cost || 0),
+      0,
+    );
+    const { error: updateError } = await supabase
+      .from(tableName)
+      .update({ total_quantity: totalQty, total_cost: totalCost })
+      .eq('id', documentId);
+    if (updateError) {
+      console.error('Error writing back opening balance totals:', updateError);
+      return;
+    }
+    form.setFieldsValue({ total_quantity: totalQty, total_cost: totalCost });
+    setSelected((prev) =>
+      prev && prev.id === documentId
+        ? { ...prev, total_quantity: totalQty, total_cost: totalCost }
+        : prev,
+    );
+    await fetchAll();
+  };
+
   const warehouseLabel = (id: number | null) => warehouses.find((w) => w.id === id)?.name || '-';
   const productLabel = (id: number | null) => products.find((p) => p.id === id)?.name || '-';
 
@@ -163,8 +219,15 @@ export function OpeningBalances() {
       form.setFieldsValue({
         ...record,
         document_date: record.document_date ? dayjs(record.document_date) : undefined,
+        total_quantity: record.total_quantity ?? 0,
+        total_cost: record.total_cost ?? 0,
       });
       await fetchDetails(record.id);
+      // 存量草稿单（合计字段是后加的列，历史行只有过账后才有值）首次打开时补算一次，
+      // 避免列表页一直空着。已过账的单据合计由过账 RPC 落库，不覆盖。
+      if (!viewOnly && record.status !== 'posted' && (record.total_quantity == null || record.total_cost == null)) {
+        await recalcTotals(record.id);
+      }
     } else {
       let documentNo: string;
       try {
@@ -180,6 +243,8 @@ export function OpeningBalances() {
         warehouse_id: undefined,
         location_id: undefined,
         status: 'draft',
+        total_quantity: 0,
+        total_cost: 0,
       });
       setDetails([]);
     }
@@ -421,6 +486,7 @@ export function OpeningBalances() {
       setImportOpen(false);
       setImportText('');
       await fetchDetails(selected.id);
+      await recalcTotals(selected.id);
       if (errors.length > 0) {
         message.warning(
           t('openingBalances.import.partial', {
@@ -557,6 +623,7 @@ export function OpeningBalances() {
                 },
               });
               if (selected) await fetchDetails(selected.id);
+              if (selected) await recalcTotals(selected.id);
             }}
           >
             {t('common.delete')}
@@ -701,18 +768,24 @@ export function OpeningBalances() {
               <Form.Item name="warehouse_id" label={t('openingBalances.warehouse')} rules={[{ required: true }]}>
                 <Select
                   options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
-                  onChange={() => form.setFieldsValue({ location_id: undefined })}
+                  onChange={handleWarehouseChange}
                 />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="location_id" label={t('openingBalances.bin')}>
-                <Select
-                  allowClear
-                  options={bins
-                    .filter((b) => b.warehouse_id === form.getFieldValue('warehouse_id'))
-                    .map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
-                />
+                <WarehouseBinSelect warehouseId={headerWarehouseId} />
+              </Form.Item>
+            </Col>
+            {/* 合计由明细重算回写（recalcTotals），只读展示 */}
+            <Col span={12}>
+              <Form.Item name="total_quantity" label={t('openingBalances.totalQuantity')} initialValue={0}>
+                <InputNumber disabled style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="total_cost" label={t('openingBalances.totalCost')} initialValue={0}>
+                <InputNumber disabled style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={24}>
@@ -842,6 +915,7 @@ export function OpeningBalances() {
             }
             setDetailEditing(null);
             if (selected) await fetchDetails(selected.id);
+            if (selected) await recalcTotals(selected.id);
           }}
         >
           <Form.Item name="document_id" hidden>
@@ -879,12 +953,7 @@ export function OpeningBalances() {
             </Col>
             <Col span={12}>
               <Form.Item name="location_id" label={t('openingBalances.bin')}>
-                <Select
-                  allowClear
-                  options={bins
-                    .filter((b) => b.warehouse_id === selected?.warehouse_id)
-                    .map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
-                />
+                <WarehouseBinSelect warehouseId={selected?.warehouse_id} />
               </Form.Item>
             </Col>
             <Col span={12}>

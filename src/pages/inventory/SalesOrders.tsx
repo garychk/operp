@@ -872,7 +872,7 @@ export function SalesOrders() {
             style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
-              <Col span={12}>
+              <Col span={8}>
                 <Form.Item
                   label={t("salesOrders.orderNo")}
                   name="order_no"
@@ -909,7 +909,10 @@ export function SalesOrders() {
                     placeholder={t("salesOrders.totalAmountPlaceholder")}
                   />
                 </Form.Item>
-                <Form.Item label={t("salesOrders.taxAmount")} name="tax_amount" initialValue={0}>
+                
+              </Col>
+              <Col span={8}>
+              <Form.Item label={t("salesOrders.taxAmount")} name="tax_amount" initialValue={0}>
                   <InputNumber
                     style={{ width: "100%" }}
                     placeholder={t("salesOrders.taxAmountPlaceholder")}
@@ -925,8 +928,6 @@ export function SalesOrders() {
                     placeholder={t("salesOrders.discountAmountPlaceholder")}
                   />
                 </Form.Item>
-              </Col>
-              <Col span={12}>
                 <Form.Item
                   label={t("salesOrders.receivableAmount")}
                   name="receivable_amount"
@@ -987,7 +988,10 @@ export function SalesOrders() {
                     }))}
                   />
                 </Form.Item>
-                <Form.Item label={t("salesOrders.deliveryAddress")} name="delivery_address">
+                
+              </Col>
+              <Col span={8}>
+                    <Form.Item label={t("salesOrders.deliveryAddress")} name="delivery_address">
                   <Input placeholder={t("salesOrders.deliveryAddressPlaceholder")} />
                 </Form.Item>
                 <Form.Item label={t("salesOrders.contactPerson")} name="contact_person">

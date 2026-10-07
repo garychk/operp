@@ -538,6 +538,7 @@ export function SupaModal({
         <Spin spinning={templateLoading}>
           {!templateLoading && (
             <PrintDesigner
+              locale="auto"
               key={`${currentFormName || "unknown"}-${designerInstanceKey}`}
               isPreview={isPreview}
               initialTemplateData={templateData}

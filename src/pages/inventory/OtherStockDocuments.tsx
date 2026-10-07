@@ -17,6 +17,7 @@ import { useCurrencyRegistry } from '../../utils/money';
 import { SuperTable } from '../../components/SuperTable';
 import SimpleModal from '../../components/SimpleModal';
 import { SupaModal } from '../../components/SupaModal';
+import { WarehouseBinSelect } from '../../components/WarehouseBinSelect';
 import { logOperation } from '../../utils/logger';
 
 // ============================================================================
@@ -93,6 +94,20 @@ export function OtherStockDocuments() {
   const [posting, setPosting] = useState(false);
 
   const isLocked = readOnly || selected?.status === 'posted';
+
+  // 库位下拉依赖当前仓库；Form.useWatch 让仓库变化时触发重渲染（getFieldValue 不会）
+  const headerWarehouseId = Form.useWatch('warehouse_id', form);
+
+  /**
+   * 仓库切换：清空原库位（跨仓库的旧库位必然失效），
+   * 若新仓库恰好只有一个启用库位则自动带出，多个则留空让人选。
+   */
+  const handleWarehouseChange = (warehouseId: number) => {
+    const candidates = bins.filter((b) => b.warehouse_id === warehouseId);
+    form.setFieldsValue({
+      location_id: candidates.length === 1 ? candidates[0].id : undefined,
+    });
+  };
 
   useEffect(() => {
     void fetchAll();
@@ -631,18 +646,13 @@ export function OtherStockDocuments() {
               <Form.Item name="warehouse_id" label={t('otherStock.warehouse')} rules={[{ required: true }]}>
                 <Select
                   options={warehouses.map((w) => ({ value: w.id, label: w.name }))}
-                  onChange={() => form.setFieldsValue({ location_id: undefined })}
+                  onChange={handleWarehouseChange}
                 />
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="location_id" label={t('otherStock.bin')}>
-                <Select
-                  allowClear
-                  options={bins
-                    .filter((b) => b.warehouse_id === form.getFieldValue('warehouse_id'))
-                    .map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
-                />
+                <WarehouseBinSelect warehouseId={headerWarehouseId} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -783,12 +793,7 @@ export function OtherStockDocuments() {
             </Col>
             <Col span={12}>
               <Form.Item name="location_id" label={t('otherStock.bin')}>
-                <Select
-                  allowClear
-                  options={bins
-                    .filter((b) => b.warehouse_id === selected?.warehouse_id)
-                    .map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
-                />
+                <WarehouseBinSelect warehouseId={selected?.warehouse_id} />
               </Form.Item>
             </Col>
             <Col span={12}>
