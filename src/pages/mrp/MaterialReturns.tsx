@@ -814,7 +814,7 @@ export function MaterialReturns() {
           </Button>
         }
         formEle={
-          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: "0 16px 0 0" }}>
+          <Form form={form} layout="vertical" onFinish={handleSubmit}>
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item

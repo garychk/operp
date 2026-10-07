@@ -869,7 +869,6 @@ export function SalesOrders() {
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
               <Col span={8}>

@@ -2039,3 +2039,38 @@ export interface ErpOpeningBalanceDetailsS539Dcf81BRow {
 }
 export type ErpOpeningBalanceDetailsS539Dcf81BInsert = Omit<ErpOpeningBalanceDetailsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'total_cost'>;
 export type ErpOpeningBalanceDetailsS539Dcf81BUpdate = Partial<ErpOpeningBalanceDetailsS539Dcf81BInsert>;
+
+/** 批次主数据（deploy_106）：batch_no 存 BTRIM 后的值；批次号只在物料内唯一 */
+export interface ErpBatchesS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string;
+  created_at: string;
+  updated_at: string;
+  batch_no: string;
+  product_id: number;
+  production_date: string | null;
+  expiry_date: string | null;
+  shelf_life_days: number | null;
+  supplier_id: number | null;
+  supplier_batch_no: string | null;
+  source_type: string;
+  source_document_no: string | null;
+  source_document_id: number | null;
+  qc_status: string;
+  status: string;
+  unit_cost: number;
+  remark: string | null;
+  created_by: number | null;
+  tenant_id: number;
+}
+export type ErpBatchesS539Dcf81BInsert = Omit<ErpBatchesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'source_type' | 'qc_status' | 'status' | 'unit_cost'>;
+export type ErpBatchesS539Dcf81BUpdate = Partial<ErpBatchesS539Dcf81BInsert>;
+
+/** 物料上的批次属性（deploy_106，erp_products 新增列） */
+export interface ErpProductBatchFields {
+  is_batch_managed: boolean;
+  /** 保质期天数：仅页面辅助计算，过账路径不会用它隐式推算效期 */
+  shelf_life_days: number | null;
+}

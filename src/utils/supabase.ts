@@ -81,6 +81,7 @@ import type {
   ErpOtherStockDocumentsS539Dcf81BRow,
   ErpOtherStockDocumentDetailsS539Dcf81BRow,
   ErpOpeningBalancesS539Dcf81BRow,
+  ErpBatchesS539Dcf81BRow,
   ErpOpeningBalanceDetailsS539Dcf81BRow,
 } from '../types/database';
 
@@ -243,5 +244,6 @@ export type Tables = {
   erp_other_stock_document_details_s_539dcf81_b: { Row: ErpOtherStockDocumentDetailsS539Dcf81BRow };
   erp_opening_balances_s_539dcf81_b: { Row: ErpOpeningBalancesS539Dcf81BRow };
   erp_opening_balance_details_s_539dcf81_b: { Row: ErpOpeningBalanceDetailsS539Dcf81BRow };
+  erp_batches_s_539dcf81_b: { Row: ErpBatchesS539Dcf81BRow };
 };
 

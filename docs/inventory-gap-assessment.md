@@ -1,10 +1,10 @@
 # 库存业务 vs 标准 ERP 差距评估
 
 > 评估时间：2026-10-06
-> 末次更新：2026-10-06（第三轮）—— **P0 三条 + P1 全部（含 9b / 9c）+ P2-10 委外闭环 + P2-11 其他出入库/期初库存已落地并验收**，本文已按下线后的实际状态复核
-> 评估对象：`erp_inventory*` / `erp_*_details` / `erp_subcontract*` / `erp_other_stock*` / `erp_opening_balance*` / `post_*_document` 系列 RPC / `src/pages/inventory` / `src/pages/mrp` / `ai-server/src/services/mrp*`
+> 末次更新：2026-10-07（第四轮）—— **P0 三条 + P1 全部（含 9b / 9c）+ P2-10 委外闭环 + P2-11 其他出入库/期初库存 + P2-12 批次管理/追溯已落地并验收**，本文已按下线后的实际状态复核
+> 评估对象：`erp_inventory*` / `erp_batches*` / `erp_*_details` / `erp_subcontract*` / `erp_other_stock*` / `erp_opening_balance*` / `inventory_apply_move` / `post_*_document` 系列 RPC / `src/pages/inventory` / `src/pages/mrp` / `ai-server/src/services/mrp*`
 > 参照系：金蝶 K3/Cloud 库存管理、用友 U8/NC 库存管理、SAP MM-IM 的通用功能集
-> 验证方式：静态通读 **107** 个 SQL 部署脚本 + 前端页面 + ai-server 服务，并连本地 PG(54320) 核对实际库结构与函数体；修复项另有 11 个可复现的验收脚本（合计 **509 断言**）
+> 验证方式：静态通读 **109** 个 SQL 部署脚本 + 前端页面 + ai-server 服务，并连本地 PG(54320) 核对实际库结构与函数体；修复项另有 12 个可复现的验收脚本（合计 **611 断言**）
 
 ---
 
@@ -12,23 +12,24 @@
 
 **「事务内核」依旧是这个模块最强的部分；本轮补完 P0/P1 后，「业务覆盖广度」与「核算闭环」已经从明显短板追到及格线以上。**
 
-一句话概括：**能准确记流水、能算移动加权、能做 MRP；退货能录、存货能进总账、库存有状态维度、可用量能被预占、委外能闭环、其他收发与期初开账都有正规单据；剩下的缺口集中在批次/序列号追溯、计价方法扩展与行业化报表。**
+一句话概括：**能准确记流水、能算移动加权、能做 MRP；退货能录、存货能进总账、库存有状态维度、可用量能被预占、委外能闭环、其他收发与期初开账都有正规单据；批次也终于从「一个自由文本列」升级成「有主数据、有开关、有追溯、有效期预警」的管理维度。剩下的缺口集中在序列号、计价方法扩展与行业化报表。**
 
 | 维度 | 改造前 | 现在 | 说明 |
 |---|---|---|---|
 | 事务内核（原子性/并发/幂等） | ★★★★★ | ★★★★★ | 行锁 + advisory lock + 幂等键 + 冲销键；新增唯一入口 `inventory_apply_move` |
 | 出入库过账 | ★★★★☆ | ★★★★★ | 采购入库/销售出库/领料/完工入库/调拨/盘点/调整 + **采购退货/销售退货/生产退料** |
-| 主数据（物料/仓库/库位/多单位） | ★★★★☆ | ★★★★☆ | 多计量单位实现质量高；**仍缺物料管理属性开关** |
+| 主数据（物料/仓库/库位/多单位） | ★★★★☆ | ★★★★★ | 多计量单位实现质量高；**已补物料管理属性开关（批次 + 保质期天数）** |
 | 库位维度 | ★★★★☆ | ★★★★★ | 过账早已贯穿；**冲突唯一键已在 deploy_85 修掉**，库位级库存真正可存 |
 | 成本核算 | ★★☆☆☆ | ★★★☆☆ | 仍只有移动加权；但**库存过账已生成会计凭证**，存货账与总账自动勾稽 |
 | 库存状态/质量联动 | ★☆☆☆☆ | ★★★★☆ | `stock_status` 四态 + 质检完成自动流转 + 入库即待检开关 |
-| 批次/序列号/保质期 | ★★☆☆☆ | ★★☆☆☆ | 有批次列无批次管理；序列号为零；无有效期预警（未动） |
-| 报表体系 | ★☆☆☆☆ | ★★★☆☆ | 业务报表视图从 **0 个**到 **8 个**（收发存/明细账/库龄/对账等）；仍缺呆滞料/周转率/ABC |
+| 批次/序列号/保质期 | ★★☆☆☆ | ★★★★☆ | **批次管理开关 + 批次主数据 + 自动建批 + 效期复用/预警 + 正反向追溯已交付**；序列号仍为零 |
+| 报表体系 | ★☆☆☆☆ | ★★★☆☆ | 业务报表视图从 **0 个**到 **11 个**（收发存/明细账/库龄/对账/批次存量/效期预警/批次流水等）；仍缺呆滞料/周转率/ABC |
 | 计划（MRP/MPS） | ★★★★☆ | ★★★★☆ | 净需求+批量规则+提前期回退+转单；**新增 ATP 可用量承诺** |
 | 财务联动 | ★★☆☆☆ | ★★★★★ | 库存过账写凭证 + 存货 vs 总账对账视图 + 被跳过凭证落库 |
 | 单据覆盖完整度 | ★★☆☆☆ | ★★★★★ | 三类退货 + **委外全流程（订单/发料/入库/结算）** + **其他出入库** + **期初库存录入/导入** 已补 |
 | 委外/外协（A4） | ☆☆☆☆☆ | ★★★★★ | **P2-10 已交付**：6 表 + 4 RPC + 4 页面 + 4 菜单；发料/入库/反过账/结算全链路，凭证三行 1405/1408/2202 |
 | 其他出入库 / 期初开账（A5+A6） | ☆☆☆☆☆ | ★★★★★ | **P2-11 已交付**：4 表 + 4 RPC + 2 页面（含粘贴批量导入）+ 2 菜单；业务类型驱动对方科目，期初录入不再混进本期收入 |
+| 批次管理 / 追溯（E1+E2+E4+E5） | ☆☆☆☆☆ | ★★★★☆ | **P2-12 已交付**：1 表 + 3 RPC + 3 视图 + 2 页面 + 2 菜单；强制点收在唯一漏斗，全单据类型自动继承 |
 
 ---
 
@@ -63,11 +64,15 @@
 | 多租户 + RLS + 权限 | `deploy_41`~`deploy_51` | 全部 `erp_*` fail-closed |
 | 生产成本卷算 | `ai-server/src/services/costRollupService.ts` | 材料+人工+制造费用 → 单位成本 |
 | 多币别 | `deploy_65`~`deploy_69` | 流水/应付带原币与本币金额 |
+| **库存增减唯一漏斗（P2-12 起并入批次逻辑）** | `deploy_88` → **`deploy_107`（最新定义）** `inventory_apply_move` | 批次必填守卫 + 冻结守卫 + 效期补全 + 批次档案自动建档；11 类单据一次性继承 |
 
 > ⚠️ **改这 6 个过账函数请只改 `deploy_93_inventory_posting_rpcs.sql`** ——
 > 它是 `post_stock_document` / `reverse_stock_document` / `post_inventory_document` /
 > `reverse_inventory_document` / `post_production_document` / `reverse_production_document`
 > 的**唯一最新定义**，覆盖 deploy_13 / 24 / 56 / 58 / 69 / 86 / 87。回改老文件不会有任何效果。
+>
+> ⚠️ **改 `inventory_apply_move` 请只改 `deploy_107_batch_master_rpcs.sql`** ——
+> P2-12 之后它是该函数的最新定义（原定义在 `deploy_88`）。回改 deploy_88 不会生效。
 
 **这套事务内核的完成度，已经超过很多国产中小 ERP 的库存模块。** 下面的差距主要不在「写得对不对」，而在「场景够不够全」。
 
@@ -93,8 +98,12 @@
 | **I1** | 库存表两个唯一键互相冲突 | `deploy_85` 三条合并为 `uq_erp_inventory_active_stock_t (…, COALESCE(location_id,0), normalized_batch, tenant_id) WHERE is_deleted='n'`；`deploy_51` 已跳过该表 | `verify-85` 9/0 |
 | **I2** | `reverse_inventory_document` 是桩 | 同 B1 | `verify-86` |
 | **I3** | 库存过账不产生凭证 | 同 D1 | `verify-87` |
-| **F** | 报表视图 0 个 | `deploy_96`（3 个）+ `deploy_97`（3 个）+ `deploy_99`（2 个）= **8 个业务视图** | `verify-96` / `verify-99` 51/0 |
+| **F** | 报表视图 0 个 | `deploy_96`（3 个）+ `deploy_97`（3 个）+ `deploy_99`（2 个）+ `deploy_107`（3 个）= **11 个业务视图** | `verify-96` / `verify-99` 51/0 / `verify-106` 102/0 |
 | **G5** | 无 ATP / 销售承诺量 | `deploy_88` + `deploy_100` / `deploy_101` | `verify-100` |
+| **E1** | 无批次管理开关 | `deploy_106`：`erp_products.is_batch_managed`；**强制点做在 `deploy_107` 的 `inventory_apply_move` 唯一漏斗里**，9 个过账 RPC + 其他出入库/期初全部自动继承 | `verify-106` A1–A6（含零回归） |
+| **E2** | 无批次主数据 | `deploy_106`：`erp_batches`（生产日期/效期/保质期/供应商/供应商批号/质检状态/冻结状态/来源单据/参考成本）；`deploy_107`：随入库自动建档 + `erp_batch_upsert` 手工建档/批量导入 | `verify-106` B1–B12 / F1–F10 |
+| **E4** | 保质期只有一列 | `deploy_106`：`erp_products.shelf_life_days` + 批次效期；`deploy_107`：入库「只补不猜」的效期复用 + `vw_erp_batch_stock.expiry_state` 分桶 + `vw_erp_batch_expiry_alert` 预警视图 | `verify-106` C1–C6 / H1–H13 |
+| **E5** | 无追溯查询 | `deploy_107`：`trace_batch_upstream`（生产/委外**单据谱系**）+ `trace_batch_downstream`（**出库流水** + 谱系递归）+ `vw_erp_batch_movement` | `verify-106` G1–G14 / H14–H18 |
 
 ### A. 单据覆盖 —— 六类全部关闭（6/6）
 
@@ -139,19 +148,28 @@
 | **D6** | ❌ | 生产成本卷算刻意从简 | `costRollupService.ts` 头部注释明示：完工数量>0 时**全额结转、期末在制=0** | 有在制品的多工序场景成本失真 |
 | **D7** | ❌ | 流水缺本币金额列 | `erp_inventory_transactions` 只有 `unit_cost`/`total_cost` | 多币别下库存金额与总账币种口径需再核 |
 
-### E. 批次 / 序列号 / 保质期 —— 未动（除库龄分析外）
+### E. 批次 / 序列号 / 保质期 —— 批次全关闭（4/5），序列号仍缺
 
 | # | 状态 | 缺口 | 现状证据 | 影响 |
 |---|---|---|---|---|
-| E1 | ❌ | **无批次管理开关** | `erp_products` 无 `is_batch_managed` | 批次是「可填可不填的自由文本」，同一物料可能一半带批次一半不带 |
-| E2 | ❌ | 无批次主数据 | 无批次表（无生产日期/供应商/质检状态/效期属性） | 批次只是库存行上的一个字符串 |
-| E3 | ❌ | **序列号完全缺失** | 全库搜 `serial_no/serial_number/序列号` → **0 命中** | 3C、设备、医疗器械类客户无法做单件追溯 |
-| E4 | ⚠️ | 保质期只有一列 | `erp_inventory.expiry_date` 是 `DATE`；**`deploy_101` 起预占摊分已按 `expiry_date NULLS LAST, id` 做 FIFO**，但无主数据、无预警任务 | 近效期/过期预警仍缺；先进先出只在预占路径上部分生效 |
-| E5 | ❌ | 无追溯查询 | 无正/反向追溯视图或接口 | 客诉时无法从成品批次倒查原料批次 |
+| E1 | ✅ | 无批次管理开关 | `erp_products.is_batch_managed`（`NOT NULL DEFAULT FALSE`，存量物料零回归）+ `shelf_life_days`（deploy_106）；**校验落在 `inventory_apply_move`**（deploy_107），任何新单据自动继承 | 开了开关的物料，过账漏填批次号直接被拒（23514），不会再出现「同物料一半带批次一半不带」 |
+| E2 | ✅ | 无批次主数据 | `erp_batches`（deploy_106）：生产日期/效期/保质期/供应商+供应商批号/质检状态（pending·passed·failed·hold）/冻结状态/来源类型+来源单据/参考成本；**随入库自动建档**（`source_type='auto'`，只补不覆盖人工值）+ `erp_batch_upsert` 手工建档（deploy_107） | 批次从「库存行上的一个字符串」升级成有属性的主数据 |
+| E3 | ❌ | **序列号完全缺失** | 全库搜 `serial_no/serial_number/序列号` → **0 命中** | 3C、设备、医疗器械类客户仍无法做单件追溯（P2 第 12 项） |
+| E4 | ✅ | 保质期只有一列 | `erp_products.shelf_life_days` + `erp_batches.expiry_date`；入库时明细未填效期则复用档案效期（**只在入库方向补**）；`vw_erp_batch_stock` 按 ≤7 天 critical / ≤30 天 warning 分桶；`vw_erp_batch_expiry_alert` 只列仍有实体库存的近效期/过期批次 | 近效期/过期有视图可查。**刻意不用 `shelf_life_days` 隐式推算效期** —— 猜错的生产日期会静默造出错效期，比没有效期更糟 |
+| E5 | ✅ | 无追溯查询 | `trace_batch_upstream`（成品批 → 同生产订单领料批 / 同委外订单发料批，靠**单据谱系**）+ `trace_batch_downstream`（**出库流水**翻单据号与往来对象 + 被领用→产出新批的谱系递归）+ `vw_erp_batch_movement`（15 种 `reference_type` 全量映射） | 客诉时能从成品批倒查到原料批，也能正查这批货发给了谁 |
 
-### F. 报表体系 —— 从 0 到 8，但仍不成体系
+> **批次这块的设计要点**：强制校验放在 `inventory_apply_move()` 这一个漏斗里，
+> 而不是逐个改 9 个过账 RPC —— 这样将来新增的单据类型（组装拆卸、循环盘点……）
+> 不需要打补丁就自动获得批次校验，**也不会漏掉某一个 RPC**。
+> 代价是动了核心函数，所以 deploy_107 带了 6 条函数体自检，并跑了全量回归。
+>
+> **另一个刻意的设计：冻结批的反过账也被拦。** 冻结整批通常意味着质量事故，
+> 如果冲销能绕过去，错误批次就能先悄悄冲回库存、再悄悄出库，冻结形同虚设；
+> 报错信息里直接写明「请先在批次管理中解冻」，不让人卡死。
 
-**库存业务报表视图数量：0 → 8。**
+### F. 报表体系 —— 从 0 到 11，但仍不成体系
+
+**库存业务报表视图数量：0 → 11。**
 
 ```
 本轮新增（全部 security_invoker = true）：
@@ -163,6 +181,9 @@ deploy_97  vw_erp_inventory_gl_recon           存货 vs 总账 对账（按 期
 deploy_97  vw_erp_inventory_gl_recon_detail    差异明细（被跳过凭证 + 孤儿凭证行）
 deploy_99  vw_erp_inventory_stock_list         库存行 + 主数据名称 + 安全库存判定
 deploy_99  vw_erp_inventory_stock_totals       按仓库聚合的合计
+deploy_107 vw_erp_batch_movement               批次流水（15 种 reference_type → 单据号/日期/往来对象）
+deploy_107 vw_erp_batch_stock                  批次存量 + days_to_expiry + 效期分桶 expiry_state
+deploy_107 vw_erp_batch_expiry_alert           近效期/过期预警（只列仍有实体库存的批次）
 
 既有（财务域）：
 v_inventory_transaction_type_audit / vw_erp_ar_ap_open / vw_erp_gl_balance / vw_erp_gl_balance_fc
@@ -183,7 +204,8 @@ vw_erp_ledger_detail / vw_erp_subject_balance / vw_erp_trial_balance / vw_erp_tr
 | **存货周转率** | ❌ 无（Dashboard 只算了总值和总量） |
 | **ABC 分析** | ❌ 无 |
 | **安全库存预警报表** | ⚠️ 仅推送通知，无报表页 |
-| **批次追溯表** | ❌ 无 |
+| **批次存量 / 效期预警表** | ✅ 有（`vw_erp_batch_stock` / `vw_erp_batch_expiry_alert` + `Batches.tsx`，4 个效期/冻结统计卡 + 6 档筛选） |
+| **批次追溯表（正/反向）** | ✅ 有（`trace_batch_upstream` / `trace_batch_downstream` + `vw_erp_batch_movement` + `BatchTrace.tsx`，上游/下游/批次流水 3 个 Tab） |
 
 **`Inventory.tsx` 的扩展性风险已解除**：原实现把**全表库存 + 全部物料 + 全部仓库 + 全部库位**一次性拉进浏览器做 JS `find()` 关联，数据上千行必被 PostgREST 行数上限截断、首屏卡顿、且「合计金额」口径与分页不一致。现已改为查询 `vw_erp_inventory_stock_list`（服务端过滤：仓库/状态/低库存/关键字）+ `vw_erp_inventory_stock_totals`（按仓库聚合好再回传）。
 
@@ -228,21 +250,21 @@ vw_erp_ledger_detail / vw_erp_subject_balance / vw_erp_trial_balance / vw_erp_tr
 
 | 分类 | 标准功能点 | 改造前 | 现在 | 覆盖度 |
 |---|---|---|---|---|
-| 主数据 | 18 | 15 | 15 | 83% |
+| 主数据 | 18 | 15 | 16 | 89% |
 | 入库业务 | 14 | 6 | 10 | 71% |
 | 出库业务 | 13 | 5 | 8 | 62% |
 | 库内作业 | 15 | 4 | 6 | 40% |
 | 盘点 | 9 | 4 | 5 | 56% |
 | 成本核算 | 12 | 3 | 4 | 33% |
-| 报表 | 13 | 2 | 6 | 46% |
+| 报表 | 13 | 2 | 7 | 54% |
 | 计划 | 11 | 7 | 8 | 73% |
-| 质量/状态 | 7 | 1 | 2 | 29% |
-| 追溯（批次/序列号） | 6 | 1 | 1 | 17% |
-| **合计** | **118** | **48** | **65** | **≈ 55%** |
+| 质量/状态 | 7 | 1 | 3 | 43% |
+| 追溯（批次/序列号） | 6 | 1 | 4 | 67% |
+| **合计** | **118** | **48** | **71** | **≈ 60%** |
 
 > 若只按「核心出入库 + 账务正确性」口径（用户日常真正会用的子集，约 60 个功能点），
 > 覆盖度从 **≈72%** 提升到 **≈93%**（委外、其他收发、期初开账都是「不开这个就不能上线」的必备项）。
-> 全量口径从 **41% → 55%**，剩余缺口集中在**批次/序列号追溯、成本计价方法扩展、行业化报表**三块。
+> 全量口径从 **41% → 60%**，剩余缺口集中在**序列号追溯、成本计价方法扩展、行业化报表**三块。
 
 ---
 
@@ -310,7 +332,7 @@ vw_erp_ledger_detail / vw_erp_subject_balance / vw_erp_trial_balance / vw_erp_tr
 
 ### P2 — 行业适配（按客户行业点单）
 
-> 十二项里 **P2-10、P2-11 已交付**（见下），其余仍待点单推进。P2 的排序原则：先做「客户不能上线」的
+> 十二项里 **P2-10、P2-11、P2-12 已交付**（见下），其余仍待点单推进。P2 的排序原则：先做「客户不能上线」的
 > 阻断项，且优先选**全新表**（回归风险最低），再做「能用但不够好」的增强项。
 
 #### P2-10 委外/外协全流程 —— ✅ 已交付并验收
@@ -362,7 +384,7 @@ vw_erp_ledger_detail / vw_erp_subject_balance / vw_erp_trial_balance / vw_erp_tr
 
 11. ~~其他出入库单 + 期初库存录入/导入（A5 / A6）~~ —— **已交付，见下**
 12. 序列号管理（物料开关 + 序列号表 + 出入库绑定 + 追溯）（E3 / E5）
-13. 批次管理开关 + 批次主数据 + 近效期/过期预警任务 + 批次追溯查询（E1 / E2 / E4 / E5）
+13. ~~批次管理开关 + 批次主数据 + 近效期/过期预警任务 + 批次追溯查询（E1 / E2 / E4 / E5）~~ —— **已交付，见下**
 14. 计价方法扩展（至少补 FIFO 与个别计价）（D2 / D3）
 15. 成本调整/重估 + 存货跌价准备（D4 / D5）
 16. 调拨在途（虚拟在途仓 + 两阶段过账）（H3）
@@ -370,7 +392,7 @@ vw_erp_ledger_detail / vw_erp_subject_balance / vw_erp_trial_balance / vw_erp_tr
 18. 循环盘点 / 盲盘 / 盘点冻结（H4）
 19. MRP 补 `max_qty` 批量规则、DRP 多仓补货、CRP 产能校验（G1~G3）；订货点独立引擎（G4）
 20. 条码/RF 作业（H6）
-21. 呆滞料 / 存货周转率 / ABC / 安全库存报表页 / 批次追溯表（F 剩余项）
+21. 呆滞料 / 存货周转率 / ABC / 安全库存报表页（F 剩余项）
 
 #### P2-11 其他出入库单 + 期初库存 —— ✅ 已交付并验收
 
@@ -437,6 +459,84 @@ vw_erp_ledger_detail / vw_erp_subject_balance / vw_erp_trial_balance / vw_erp_tr
 > 缺陷 2 的修法对既有断言**零影响**：deploy_104 之前没有任何代码路径写
 > `opening_balance_in/out`，历史数据里这两类条数恒为 0，排除它们不改变任何一行数字。
 
+#### P2-12 批次管理 + 批次主数据 + 批次追溯 —— ✅ 已交付并验收
+
+**为什么选它**：E1/E2/E4/E5 是同一根绳上的四个结 —— 批次列早就有了，但**它只是个自由文本**。
+后果是三条都真实存在：① 同一物料一半带批次一半不带，那部分无批次库存**永远追溯不到源头**；
+② 批次上没有生产日期/效期/质检状态，业务要的信息无处可放；③ 客诉时无法从成品批倒查原料批。
+对食品、药品、化工、电子装配类客户，这是**上线阻断项**。
+
+**交付物**
+
+| 层 | 内容 |
+|---|---|
+| 表（deploy_106） | 1 张新表 `erp_batches`：批次号（**存 BTRIM 规范化值**）+ 物料 + 生产日期 + 效期 + 保质期天数 + 供应商 + **供应商批号** + 来源类型/来源单据 + **质检状态**（pending·passed·failed·hold）+ **冻结状态**（active·blocked·expired·closed）+ 参考成本 + 备注；5 个索引 + 唯一键 `(tenant_id, product_id, batch_no) WHERE is_deleted='n'`；GRANT + `install_role_table_rls()` + `refresh_sys_tables()`；**部署时按已有库存行回填批次档案**（多行同批次取 MAX 效期） |
+| 物料属性（deploy_106） | `erp_products.is_batch_managed`（`NOT NULL DEFAULT FALSE`）+ `shelf_life_days`（可空，CHECK > 0） |
+| 配置（deploy_106） | 1 个 DocType（`batch` / `LOT{YYYY}{MM}{####}`）；2 个菜单（批次管理 `ContainerOutlined` / 批次追溯 `BranchesOutlined`，挂在 inventory 下，含物化租户副本） |
+| RPC（deploy_107） | `inventory_apply_move` **重定义**（批次必填守卫 + 冻结守卫 + 效期补全 + 自动建档）、`erp_batch_upsert`（手工建档/批量导入）、`trace_batch_upstream`、`trace_batch_downstream` |
+| 视图（deploy_107） | `vw_erp_batch_movement` / `vw_erp_batch_stock` / `vw_erp_batch_expiry_alert` |
+| 前端 | 2 个页面：`Batches.tsx`（4 个效期/冻结统计卡 + 6 档筛选 + 搜索 + 建档/编辑/冻结/解冻/删除 + **切页粘贴批量导入**）、`BatchTrace.tsx`（物料→批次联动选择 + 档案卡 + 上游/下游/批次流水 3 个 Tab + 深度缩进）；`Products.tsx` 加批次开关与保质期；路由 + ProLayout 三张映射表 + 中英 i18n（各约 130 键，键集合严格一致） |
+| 验收 | `scripts/verify/verify-106-batch-master.cjs` —— **102 断言 / 0 失败** |
+
+**四个关键设计取舍（踩过才知道）**
+
+1. **强制点收在唯一漏斗，不撒在 9 个过账 RPC 上。**
+   自 deploy_88 起所有库存行的增减都必须经过 `inventory_apply_move()`（含反过账）。
+   批次必填、批次冻结、效期补全、自动建档这四段逻辑全部加在这一个函数里，
+   于是**采购入库/销售出库/领料/完工入库/调拨/盘点/调整/退货/委外/其他收发/期初**
+   这 11 类单据一次性全部继承，不需要逐个打补丁 —— 也不会漏掉某一个。
+   代价是动了核心函数，所以 deploy_107 带 6 条函数体自检（断言四段逻辑的关键字都在函数体里），
+   并跑了全量回归确认 9 类老单据行为未变。
+
+2. **批次冻结同时拦出库与反过账，进来照收。**
+   只拦出库是不够的：冻结批如果还能冲销，就等于「先冲回库存、再当正常货出库」，
+   冻结形同虚设。所以 `qty_delta < 0` 一律拦（出库与冲销都走这条），
+   入库方向（`qty_delta > 0`）不拦 —— 已经发生的进货不该被拒绝入账，
+   否则质量事故期间收的货只能堆在仓库外面。
+   报错文案直接给出下一步动作（「请先在批次管理中解冻」），不把人卡死。
+
+3. **效期「一次录入全链路复用」，但严格「只补不猜」。**
+   * 只在**入库**方向补：出库行的效期应忠于库存行本身，用档案去覆盖会让预警失真。
+   * **绝不**用 `shelf_life_days` 隐式推算 `production_date + shelf_life_days`：
+     猜错的生产日期会静默造出一个错误效期，比没有效期更糟 —— 预警误报漏报都查不出源头。
+     保质期天数只在**页面上提供一个「带出效期」按钮**，由人来确认。
+   * 自动建档时**只补缺失项，不覆盖人工值**：质检状态、冻结状态、供应商批号、人工备注、
+     已登记的非零成本，机器一律不按过账先后顺序改写。
+
+4. **追溯两条腿，实现方式必须不同 —— 这是本项最容易做错的地方。**
+   * **上游（我的料哪来的）只能靠单据谱系**：原料 → 成品是「物料变了」的转换，
+     库存流水根本表达不了。所以 `trace_batch_upstream` 从「生产入库单的批次」出发，
+     反查**同一生产订单**（委外则是同一委外订单）的领料明细批次。
+   * **下游（这批去哪了）主要靠库存流水**：`reference_type + reference_id` 本来就指向来源单据，
+     但对「被领用 → 产出新批」这一分支必须再做谱系递归，否则追到领料就断了。
+     递归在 `issue` 节点上终止，只对 `self` / `product` 展开。
+   * 两个方向都**硬顶 10 层**（`LEAST(COALESCE(p_max_depth,5),10)`）：
+     数据异常（批次号成环）会让递归停不下来，SQL 的递归 CTE 不会自动保护。
+
+**本波撞出的 3 个必须记住的坑**
+
+| # | 坑 | 症状 | 修法 |
+|---|---|---|---|
+| 1 | `erp_products.lot_policy` **不是**批次开关 | 光看名字（"lot" 就是批次）很容易直接复用，但它存的是 `lot_for_lot` —— **MRP 的批量规则**，字段语义完全不同 | 新增独立字段 `is_batch_managed`，并在文件头写明两者区别，避免后来人又合并回去 |
+| 2 | `source_type` 的 CHECK 里漏了 `'auto'` | deploy_106 已应用后才补上 `'auto'`，表上约束不会自动更新 —— 自动建档会在入库时静默失败 | 确认 `erp_batches` 仍为 0 行 → drop 表 → 重跑 deploy_106（幂等）→ 再跑 deploy_107；验收脚本 I7 断言约束里确实有 `'auto'` 与 `'backfill'` |
+| 3 | `erp_batch_upsert` 早期把「参数为空」当错误 | 原本写 `p_tenant_id IS NULL → 23502`，而前端经 PostgREST 调用**本来就不传** tenant_id（由 JWT 决定身份）→ 批次管理页的建档/批量导入会整页不可用 | 与同文件其余函数统一口径：先 `v_tenant := COALESCE(p_tenant_id, current_tenant_id())`，只有**解析不出租户**才抛 23502；验收 F9/F10 分别覆盖「解析不出 → 23502」与「能解析 → 落库到该租户」 |
+
+**一个必须知道的连带影响**
+
+`inventory_apply_move` 的**最新权威定义从 deploy_88 迁到了 deploy_107**。
+以前说「改 `inventory_apply_move` 只改 deploy_88」，现在要改成**只改 deploy_107**；
+回改 deploy_88 不会生效（它是 `CREATE OR REPLACE`，老定义不会覆盖新定义，但整包重跑时
+会先执行 deploy_88 再执行 deploy_107，所以最终态仍是 deploy_107）。
+验收脚本 I15/I16 分别断言「该函数只有一个定义」与「批次四段逻辑都在函数体里」。
+
+**已知的一个小口径缺口（不影响正确性，属有意取舍）**
+
+`vw_erp_batch_expiry_alert` 的过滤条件是 `expiry_state IN ('expired','critical','warning')`，
+而 `expiry_state` 在 `status='blocked'` 时优先返回 `'blocked'` —— 于是**同时「已冻结」又「已过期」
+的批次不会出现在效期预警里**，要靠批次管理页的「已冻结」筛选卡兜住。
+这么排是为了让冻结成为最醒目的状态（冻结通常意味着质量事故，比效期更紧急）；
+验收 H6/H9 断的就是这个既有口径。
+
 
 ---
 
@@ -454,7 +554,7 @@ vw_erp_ledger_detail / vw_erp_subject_balance / vw_erp_trial_balance / vw_erp_tr
 > $env:PGPASSWORD='<本机 dev 库口令>'; $env:NODE_PATH='C:/Users/Administrator/.workbuddy/binaries/node/workspace/node_modules'
 > ```
 
-### 全量回归（11 个脚本，合计 509 断言 / 0 失败）
+### 全量回归（12 个脚本，合计 611 断言 / 0 失败）
 
 ```bash
 node scripts/verify/verify-85-inventory-unique-key.cjs            # P0-1 唯一键                 期望 PASS 9  / FAIL 0
@@ -468,6 +568,7 @@ node scripts/verify/verify-99-inventory-query-views.cjs           # P1-6 查询�
 node scripts/verify/verify-100-inventory-business-rpcs.cjs        # P1-4/5 业务级 RPC           期望 PASS 74 / FAIL 0
 node scripts/verify/verify-102-subcontract.cjs                    # P2-10 委外全流程            期望 PASS 89 / FAIL 0
 node scripts/verify/verify-104-other-stock-opening.cjs            # P2-11 其他出入库 + 期初      期望 PASS 75 / FAIL 0
+node scripts/verify/verify-106-batch-master.cjs                   # P2-12 批次管理 + 追溯        期望 PASS 102 / FAIL 0
 ```
 
 > verify-102 的覆盖分区：A BOM 展开/幂等/重建保护；B 发料过账（成本、跟踪回写、凭证 1408/1403、
@@ -481,15 +582,27 @@ C 反过账；D 期初库存（0 成本与 0 数量拦截、`no_voucher_required
 反过账后可重过）；E 收发存口径（期初进 `opening_qty` **不**进 `in_qty`）；F 目录与授权
 （含**无租户映射时的内置科目兜底**）。
 
+verify-106 的覆盖分区：A 批次开关（**端到端过真实过账 RPC**：非批次物料零回归、
+批次物料漏填批次号被拦 23514、带批次正常落库）；B 随入库自动建档 + **不覆盖人工维护的值** +
+只出库不建档；C 效期（入库补全 / 出库不覆盖 / 明细优先 / **有保质期天数也不隐式推算**）；
+D 批次冻结（出库被拦、**反过账同样被拦**、入库不受影响、解冻后恢复、无档案的历史批次不误拦）；
+E 批次号 BTRIM 规范化与 `(tenant_id, product_id, batch_no)` 唯一性（含表级 CHECK）；
+F `erp_batch_upsert` 的四条错误路径 + 租户解析两条路径；G 追溯（生产与委外两条谱系、
+下游的流水腿与谱系腿、深度参数与硬顶 10 层、不存在的批次与带空格入参）；
+H 三个视图（效期四档分桶、「账上已出完的不报预警」、批次流水翻单据号与往来对象、`security_invoker`）；
+I 目录与授权（表 + RLS、唯一索引即 ON CONFLICT 推断目标、物料两属性、DocType、
+2 菜单 + 租户副本 + 角色授权、3 函数 3 视图授权、**`inventory_apply_move` 只有一个定义**）。
+
 ### 迁移应用
 
 ```bash
-node scripts/verify/run-migration.cjs supabase/tables/deploy_103_subcontract_rpcs.sql
 node scripts/verify/run-migration.cjs supabase/tables/deploy_104_other_stock_and_opening_tables.sql
 node scripts/verify/run-migration.cjs supabase/tables/deploy_105_other_stock_and_opening_rpcs.sql
+node scripts/verify/run-migration.cjs supabase/tables/deploy_106_batch_master_tables.sql
+node scripts/verify/run-migration.cjs supabase/tables/deploy_107_batch_master_rpcs.sql
 ```
 
-清单文件：`supabase/tables/000_run_all.local.sh`（本地，**107 步**）、
+清单文件：`supabase/tables/000_run_all.local.sh`（本地，**109 步**）、
 `000_run_all_in_order.psql.sql`（psql，同序）、`100_run_all.cloud.sh`（云端，从本地动态解析 ORDER）。
 跑完记得 `NOTIFY pgrst, 'reload schema'`，否则前端调新 RPC 报 `PGRST202`。
 
@@ -524,13 +637,20 @@ grep -rl "委外\|外协\|subcontract" supabase/tables src ai-server/src  # → 
   `opening_balance_in/out`（deploy_105 期初库存过账）与 `scrap_out`（deploy_105 其他出库-报废）
   **也已由 P2-11 接上**；现在**只剩 `cost_revaluation` 一条**没有任何写入路径
   → 字典里唯一「多余」的一项，属 D4「无成本调整/重估」未做范围。
-- `erp_products` 缺管理属性开关（批次/序列号/保质期/计价方法），导致「同一张表里的物料只能用同一种管理粒度」（E1）。
+- `erp_products` 的管理属性开关**已补前两项**（`is_batch_managed` / `shelf_life_days`，deploy_106）；
+  **仍缺**序列号开关与计价方法开关，所以「同一张表里的物料只能用同一种管理粒度」这条还剩一半（E1 已关、E3/D2 未关）。
+- **`erp_products.lot_policy` 不是批次开关**。它的取值是 `lot_for_lot`，语义是 **MRP 的批量规则**
+  （逐批对等），与批次管理毫无关系。名字里的 "lot" 极易误导，新增字段时不要合并回去。
 - 全库 `erp_*` 列注释仍为 0，MRP/成本引擎的中文语义只能从代码注释里读。
 - **`deploy_93` 是 6 个过账 RPC 的唯一最新定义**，任何改动请只改它，回改老文件不会生效（详见第二节末的警示）。
-  P2-10/P2-11 新增的过账 RPC（`post_subcontract_document` → deploy_103；
+  P2-10/P2-11/P2-12 新增的过账 RPC（`post_subcontract_document` → deploy_103；
   `post_other_stock_document` / `post_opening_balance_document` → deploy_105）**是各自独立的新函数**，
   不改这 6 个；但 `inventory_voucher_plan` 与 `vw_erp_inventory_summary` 被反复重定义，
   **当前最新定义都在 `deploy_105`**。
+- **`inventory_apply_move` 的最新权威定义已从 `deploy_88` 迁到 `deploy_107`**（P2-12 在里面加了
+  「批次必填 / 批次冻结 / 效期补全 / 自动建档」四段逻辑）。以前「改这个函数只改 deploy_88」的说法
+  现在要改成**只改 deploy_107**；整包重跑时 deploy_88 先执行、deploy_107 后执行，最终态仍是 deploy_107，
+  但直接回改 deploy_88 不会体现在库里。`verify-106` 的 I15/I16 会断言这一点。
 - `inventory_consume_reservations`（出库时消耗预占）仍按 `(location_id, batch_no)` **精确匹配**。
   若出库单实际填写的库位/批次与预占摊分到的行不一致，消耗会落空，需要靠
   `release_inventory_reservations` 人工释放 —— 属已知遗留，不影响可用量正确性（不会为负）。

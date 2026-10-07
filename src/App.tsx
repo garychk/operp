@@ -35,6 +35,8 @@ import { StockCounts } from './pages/inventory/StockCounts';
 import { StockAdjustments } from './pages/inventory/StockAdjustments';
 import { OtherStockDocuments } from './pages/inventory/OtherStockDocuments';
 import { OpeningBalances } from './pages/inventory/OpeningBalances';
+import { Batches } from './pages/inventory/Batches';
+import { BatchTrace } from './pages/inventory/BatchTrace';
 import { InventoryTransactions } from './pages/inventory/InventoryTransactions';
 import { InventoryReports } from './pages/inventory/InventoryReports';
 import { InventoryReconciliation } from './pages/inventory/InventoryReconciliation';
@@ -147,6 +149,8 @@ function AppContent() {
           <Route path="stock-adjustments" element={<StockAdjustments />} />
           <Route path="other-stock" element={<OtherStockDocuments />} />
           <Route path="opening-balances" element={<OpeningBalances />} />
+          <Route path="batches" element={<Batches />} />
+          <Route path="batch-trace" element={<BatchTrace />} />
           <Route path="reports" element={<InventoryReports />} />
           <Route path="reconciliation" element={<InventoryReconciliation />} />
           <Route path="subject-map" element={<InventorySubjectMap />} />

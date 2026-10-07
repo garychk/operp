@@ -448,7 +448,9 @@ export function SupaModal({
                   children: (
                     <Splitter>
                       <Splitter.Panel defaultSize="70%" min="20%" max="70%">
-                        {formEle}
+                        <div style={{ marginRight: 16 }}>
+                          {formEle}
+                          </div>
                       </Splitter.Panel>
                       <Splitter.Panel>
                         <Card

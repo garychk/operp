@@ -709,7 +709,6 @@ export function OpeningBalances() {
           form={form}
           layout="vertical"
           disabled={isLocked}
-          style={{ padding: "0 16px 0 0" }}
           onFinish={async (values) => {
             const payload = {
               ...values,

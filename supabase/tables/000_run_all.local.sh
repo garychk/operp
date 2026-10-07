@@ -145,6 +145,8 @@ ORDER=(
   deploy_103_subcontract_rpcs.sql
   deploy_104_other_stock_and_opening_tables.sql
   deploy_105_other_stock_and_opening_rpcs.sql
+  deploy_106_batch_master_tables.sql
+  deploy_107_batch_master_rpcs.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

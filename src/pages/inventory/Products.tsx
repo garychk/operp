@@ -247,6 +247,8 @@ export function Products() {
       is_sold: true,
       is_manufactured: false,
       status: "active",
+      is_batch_managed: false,
+      shelf_life_days: undefined,
     });
     setActiveTab("basic");
     setIsModalOpen(true);
@@ -336,6 +338,25 @@ export function Products() {
       key: "base_uom_id",
       width: 140,
       render: (_: any, record: Product) => renderUnitCell(record),
+    },
+    {
+      // 批次管理开关（deploy_106）：开了之后该物料过账必须带批次号，
+      // 由 inventory_apply_move 在唯一漏斗处强制，不只是页面提示。
+      title: t("products.batchManaged"),
+      dataIndex: "is_batch_managed",
+      key: "is_batch_managed",
+      width: 150,
+      render: (v: boolean, record: Product) => {
+        if (!v) return <Tag>{t("products.batchManagedOff")}</Tag>;
+        const days = (record as { shelf_life_days?: number | null }).shelf_life_days;
+        return (
+          <Tag color="blue">
+            {days
+              ? t("products.batchShelfLifeTag", { days })
+              : t("products.batchManagedOn")}
+          </Tag>
+        );
+      },
     },
     {
       title: t("products.purchasePrice"),
@@ -447,7 +468,6 @@ export function Products() {
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
                       <Col span={8}>
@@ -482,19 +502,6 @@ export function Products() {
                         </Form.Item>
                         <Form.Item label={t("products.spec")} name="specification">
                           <Input placeholder={t("products.specPlaceholder")} />
-                        </Form.Item>
-                        <Form.Item
-                          label={t("products.baseUnit")}
-                          name="base_uom_id"
-                          rules={[{ required: true, message: t("products.baseUnitRequired") }]}
-                          tooltip={t("products.unitConvHint")}
-                        >
-                          <Select
-                            showSearch
-                            placeholder={t("products.baseUnitPlaceholder")}
-                            optionFilterProp="label"
-                            options={uomOptions}
-                          />
                         </Form.Item>
                       </Col>
                       <Col span={8}>
@@ -547,6 +554,40 @@ export function Products() {
                             placeholder={t("products.minStockPlaceholder")}
                           />
                         </Form.Item>
+                        <Form.Item label={t("common.status")} name="status" initialValue="active">
+                          <Select>
+                            <Option value="active">{t("common.enabled")}</Option>
+                            <Option value="inactive">{t("products.disabled")}</Option>
+                          </Select>
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.shelfLifeDays")}
+                          name="shelf_life_days"
+                          tooltip={t("products.shelfLifeDaysHint")}
+                        >
+                          <InputNumber
+                            style={{ width: "100%" }}
+                            min={1}
+                            placeholder={t("products.shelfLifeDaysPlaceholder")}
+                          />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.baseUnit")}
+                          name="base_uom_id"
+                          rules={[{ required: true, message: t("products.baseUnitRequired") }]}
+                          tooltip={t("products.unitConvHint")}
+                        >
+                          <Select
+                            showSearch
+                            placeholder={t("products.baseUnitPlaceholder")}
+                            optionFilterProp="label"
+                            options={uomOptions}
+                          />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                    <Row gutter={16}>
+                      <Col span={6}>
                         <Form.Item
                           label={t("products.purchasable")}
                           name="is_purchased"
@@ -555,6 +596,8 @@ export function Products() {
                         >
                           <Checkbox />
                         </Form.Item>
+                      </Col>
+                      <Col span={6}>
                         <Form.Item
                           label={t("products.sellable")}
                           name="is_sold"
@@ -563,6 +606,8 @@ export function Products() {
                         >
                           <Checkbox />
                         </Form.Item>
+                      </Col>
+                      <Col span={6}>
                         <Form.Item
                           label={t("products.manufacturable")}
                           name="is_manufactured"
@@ -571,11 +616,16 @@ export function Products() {
                         >
                           <Checkbox />
                         </Form.Item>
-                        <Form.Item label={t("common.status")} name="status" initialValue="active">
-                          <Select>
-                            <Option value="active">{t("common.enabled")}</Option>
-                            <Option value="inactive">{t("products.disabled")}</Option>
-                          </Select>
+                      </Col>
+                      <Col span={6}>
+                        <Form.Item
+                          label={t("products.batchManaged")}
+                          name="is_batch_managed"
+                          valuePropName="checked"
+                          initialValue={false}
+                          tooltip={t("products.batchManagedHint")}
+                        >
+                          <Checkbox />
                         </Form.Item>
                       </Col>
                     </Row>
@@ -616,7 +666,7 @@ export function Products() {
           </Space>
         }
         width={"80%"}
-        height={500}
+        height={'80%'}
         workflowDocumentType={docType}
       />
 
