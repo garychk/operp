@@ -441,6 +441,12 @@ export const menuData: MenuRoute[] = [
         name: "委外结算",
         icon: <CalculatorOutlined />,
       },
+      // 生产报表固定在 mrp 目录最下方（与 sys_menus sort_order=74 保持一致）
+      {
+        path: "/mrp/production-analytics",
+        name: "生产报表",
+        icon: <BarChartOutlined />,
+      },
     ],
   },
   {
@@ -533,6 +539,7 @@ const pathToNameMap: Record<string, string> = {
   "/mrp/subcontract-issues": "委外发料",
   "/mrp/subcontract-receipts": "委外入库",
   "/mrp/subcontract-settlements": "委外结算",
+  "/mrp/production-analytics": "生产报表",
   "/system/users": "用户管理",
   "/system/tenants": "租户管理",
   "/system/roles": "角色管理",
@@ -620,6 +627,7 @@ const pathToTranslationKey: Record<string, string> = {
   "/inventory/reconciliation": "menu.inventoryReconciliation",
   "/inventory/subject-map": "menu.inventorySubjectMap",
   "/mrp/material-returns": "menu.materialReturns",
+  "/mrp/production-analytics": "menu.productionAnalytics",
 };
 
 export const staticComponentByPath: Record<string, string> = {
@@ -670,6 +678,7 @@ export const staticComponentByPath: Record<string, string> = {
   "/mrp/subcontract-issues": "./pages/mrp/SubcontractIssues",
   "/mrp/subcontract-receipts": "./pages/mrp/SubcontractReceipts",
   "/mrp/subcontract-settlements": "./pages/mrp/SubcontractSettlements",
+  "/mrp/production-analytics": "./pages/mrp/ProductionAnalytics",
   "/system/users": "./pages/system/Users",
   "/system/tenants": "./pages/system/Tenants",
   "/system/roles": "./pages/system/Roles",

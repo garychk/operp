@@ -59,6 +59,7 @@ import { SubcontractOrders } from './pages/mrp/SubcontractOrders';
 import { SubcontractIssues } from './pages/mrp/SubcontractIssues';
 import { SubcontractReceipts } from './pages/mrp/SubcontractReceipts';
 import { SubcontractSettlements } from './pages/mrp/SubcontractSettlements';
+import { ProductionAnalytics } from './pages/mrp/ProductionAnalytics';
 import { Users } from './pages/system/Users';
 import { Tenants } from './pages/system/Tenants';
 import { Roles } from './pages/system/Roles';
@@ -180,6 +181,8 @@ function AppContent() {
             path="subcontract-settlements"
             element={<SubcontractSettlements />}
           />
+          {/* P0-5 生产报表（deploy_108 视图 + deploy_109 菜单） */}
+          <Route path="production-analytics" element={<ProductionAnalytics />} />
         </Route>
         
         <Route path="system">

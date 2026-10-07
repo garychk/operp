@@ -147,6 +147,9 @@ ORDER=(
   deploy_105_other_stock_and_opening_rpcs.sql
   deploy_106_batch_master_tables.sql
   deploy_107_batch_master_rpcs.sql
+  deploy_108_production_report_views.sql
+  deploy_109_production_report_menu.sql
+  deploy_110_production_receipt_quality.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

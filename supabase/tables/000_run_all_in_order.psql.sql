@@ -129,3 +129,6 @@
 \i supabase/tables/deploy_105_other_stock_and_opening_rpcs.sql
 \i supabase/tables/deploy_106_batch_master_tables.sql
 \i supabase/tables/deploy_107_batch_master_rpcs.sql
+\i supabase/tables/deploy_108_production_report_views.sql
+\i supabase/tables/deploy_109_production_report_menu.sql
+\i supabase/tables/deploy_110_production_receipt_quality.sql

@@ -27,7 +27,11 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import SimpleModal from "../../components/SimpleModal";
 
-type SourceType = "purchase_receipt" | "sales_return" | "production_operation";
+type SourceType =
+  | "purchase_receipt"
+  | "sales_return"
+  | "production_operation"
+  | "production_receipt";
 type Inspection = {
   id: number;
   inspection_no: string;
@@ -70,6 +74,7 @@ export function QualityInspections() {
     purchase_receipt: t("mrp.quality.sourcePurchaseReceipt"),
     sales_return: t("mrp.quality.sourceSalesReturn"),
     production_operation: t("mrp.quality.sourceProductionOperation"),
+    production_receipt: t("mrp.quality.sourceProductionReceipt"),
   };
   const results: Record<string, [string, string]> = {
     pending: [t("mrp.quality.resultPending"), "default"],
@@ -177,6 +182,28 @@ export function QualityInspections() {
               quantity: Number(d.quantity),
               batchNo: d.batch_no,
               label: `${d.erp_sales_returns_s_539dcf81_b.return_no} / ${p?.name || d.product_id} / ${d.quantity}${p?.unit || ""}`,
+            };
+          }),
+        );
+      } else if (type === "production_receipt") {
+        // 成品入库检验（FQC）：完工入库单是「主表即唯一明细行」，没有明细表（deploy_58）
+        const { data, error } = await supabase
+          .from("erp_production_receipts_s_539dcf81_b")
+          .select("id,receipt_no,product_id,quantity,batch_no")
+          .eq("is_deleted", "n");
+        if (error) throw error;
+        setSources(
+          (data || []).map((h: any) => {
+            const p = productMap.get(h.product_id);
+            return {
+              key: String(h.id),
+              sourceId: h.id,
+              detailId: null,
+              sourceNo: h.receipt_no,
+              productId: h.product_id,
+              quantity: Number(h.quantity),
+              batchNo: h.batch_no,
+              label: `${h.receipt_no} / ${p?.name || h.product_id} / ${h.quantity}${p?.unit || ""}`,
             };
           }),
         );
