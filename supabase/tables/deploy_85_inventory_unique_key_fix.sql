@@ -93,13 +93,58 @@ END $$;
 
 
 -- ----------------------------------------------------------------------------
--- 2. 删除两个冲突索引
---    已核对：二者均不被任何外键依赖（pg_depend 无记录），可以直接 DROP。
+-- 2. 删除冲突索引 / 约束
+--    已核对：均不被任何外键依赖（pg_depend 无记录），可以直接 DROP。
+--
+--    ⚠️ 第 3 类必须按**约束**删，不能按索引名删：
+--    deploy_01 建表时内联了 `UNIQUE (product_id, warehouse_id, batch_no)`，
+--    PostgreSQL 会给它建一个同名唯一约束 + 同名索引
+--    （erp_inventory_s_539dcf81_b_product_id_warehouse_id_batch_no_key）。
+--    原先 deploy_51 会把它改造成 (tenant_id, product_id, warehouse_id, batch_no)
+--    并重命名成 uq_erp_inventory_s_539dcf81_t_4eb2af5d4a；但本次改动把
+--    erp_inventory 加进了 deploy_51 的 v_skip_tables 跳过名单，改造不再发生，
+--    于是**原始约束和原始名字原样留存**。
+--    约束拥有的索引不能 DROP INDEX（报 "cannot drop index ... because
+--    constraint ... requires it"），必须 ALTER TABLE ... DROP CONSTRAINT。
+--    而且它不含 tenant_id，是跨租户的全局唯一 —— 与多租户隔离直接冲突，
+--    留着不但自检过不去，两个租户还不能有相同的 物料+仓库+批次。
 -- ----------------------------------------------------------------------------
+
+-- 2a) 遗留的「普通（非部分）唯一约束」全部删除（按定义找，不硬编码名字，
+--     兼容 deploy_01 自动命名、deploy_51 重命名两种历史形态）
+DO $$
+DECLARE
+    r RECORD;
+    v_dropped INTEGER := 0;
+BEGIN
+    FOR r IN
+        SELECT c.conname
+        FROM pg_constraint c
+        JOIN pg_class     t  ON t.oid  = c.conrelid
+        JOIN pg_namespace n  ON n.oid  = t.relnamespace
+        JOIN pg_class     i  ON i.oid  = c.conindid
+        JOIN pg_index     ix ON ix.indexrelid = i.oid
+        WHERE n.nspname = 'public'
+          AND t.relname = 'erp_inventory_s_539dcf81_b'
+          AND c.contype = 'u'
+          AND ix.indpred IS NULL
+        ORDER BY c.conname
+    LOOP
+        RAISE NOTICE 'deploy_85：删除遗留唯一约束 %', r.conname;
+        EXECUTE format('ALTER TABLE public.erp_inventory_s_539dcf81_b DROP CONSTRAINT %I', r.conname);
+        v_dropped := v_dropped + 1;
+    END LOOP;
+    RAISE NOTICE 'deploy_85：共删除 % 个遗留唯一约束', v_dropped;
+END $$;
+
+-- 2b) 独立的唯一索引（不属于任何约束）
 DROP INDEX IF EXISTS public.uq_erp_inventory_active_stock_key_v2;
 DROP INDEX IF EXISTS public.uq_erp_inventory_s_539dcf81_t_4eb2af5d4a;
 -- deploy_13 时代的更早版本（不含库位），存量库里可能残留，一并清掉
 DROP INDEX IF EXISTS public.uq_erp_inventory_active_stock_key;
+-- deploy_01 内联约束若在某个环境里已被 deploy_51 拆成裸索引（历史形态），
+-- 这里再兜一次；已是约束的会在上面 2a 被删掉，此处 IF EXISTS 静默跳过。
+DROP INDEX IF EXISTS public.erp_inventory_s_539dcf81_b_product_id_warehouse_id_batch_no_key;
 
 
 -- ----------------------------------------------------------------------------

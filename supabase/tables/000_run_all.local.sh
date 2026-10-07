@@ -98,6 +98,7 @@ ORDER=(
   deploy_55_mcp_api_keys.sql
   deploy_56_production_posting.sql
   deploy_57_bom_explosion_kit_check.sql
+  deploy_58_platform_menu_baseline.sql
   deploy_58_production_receipt_and_locations.sql
   deploy_59_production_receipt_menu.sql
   deploy_60_mrp_planning_parameters.sql

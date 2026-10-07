@@ -78,6 +78,7 @@
 
 \i supabase/tables/deploy_56_production_posting.sql
 \i supabase/tables/deploy_57_bom_explosion_kit_check.sql
+\i supabase/tables/deploy_58_platform_menu_baseline.sql
 \i supabase/tables/deploy_58_production_receipt_and_locations.sql
 \i supabase/tables/deploy_59_production_receipt_menu.sql
 \i supabase/tables/deploy_60_mrp_planning_parameters.sql
