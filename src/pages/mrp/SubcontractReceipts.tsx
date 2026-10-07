@@ -190,7 +190,7 @@ export function SubcontractReceipts() {
       };
       if (editingReceipt) {
         await logWithTiming(
-          "更新委外入库单",
+          t("mrp.subcontractReceipts.logUpdate"),
           "UPDATE",
           async () => {
             const { error } = await supabase
@@ -207,7 +207,7 @@ export function SubcontractReceipts() {
           table: receiptTable,
         };
         const data = await logWithTiming(
-          "新增委外入库单",
+          t("mrp.subcontractReceipts.logCreate"),
           "INSERT",
           async () => {
             const { data, error } = await supabase
@@ -265,7 +265,7 @@ export function SubcontractReceipts() {
       onOk: async () => {
         try {
           await logWithTiming(
-            "删除委外入库单",
+            t("mrp.subcontractReceipts.logDelete"),
             "DELETE",
             async () => {
               const { error } = await supabase

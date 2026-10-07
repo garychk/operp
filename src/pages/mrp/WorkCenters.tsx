@@ -89,7 +89,7 @@ export function WorkCenters() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingWorkCenter) {
-        await logWithTiming("更新工作中心", "UPDATE", async () => {
+        await logWithTiming(t("mrp.workCenters.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(workCenterTable)
             .update(values)
@@ -98,7 +98,7 @@ export function WorkCenters() {
         });
         message.success(t("common.updateSuccess"));
       } else {
-        await logWithTiming("新增工作中心", "INSERT", async () => {
+        await logWithTiming(t("mrp.workCenters.logCreate"), "INSERT", async () => {
           const { error } = await supabase
             .from(workCenterTable)
             .insert([values]);
@@ -128,7 +128,7 @@ export function WorkCenters() {
       content: t("mrp.workCenters.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除工作中心", "DELETE", async () => {
+          await logWithTiming(t("mrp.workCenters.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(workCenterTable)
               .update({ is_deleted: "y" })

@@ -170,7 +170,7 @@ export function WorkCalendars() {
 
     try {
       setSaving(true);
-      await logWithTiming(editing ? "更新工作日历" : "新增工作日历", editing ? "UPDATE" : "POST", async () => {
+      await logWithTiming(editing ? t("mrp.workCalendars.logUpdate") : t("mrp.workCalendars.logCreate"), editing ? "UPDATE" : "POST", async () => {
         if (editing) {
           // 先把其他日历的默认标记清掉：唯一索引 uq_erp_work_calendars_default
           // 只允许每租户一个默认，不先清就会撞 23505（用户无从解决的报错）
@@ -222,7 +222,7 @@ export function WorkCalendars() {
       content: t("mrp.workCalendars.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除工作日历", "DELETE", async () => {
+          await logWithTiming(t("mrp.workCalendars.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(calendarTable)
               .update({ is_deleted: "y" })
@@ -515,7 +515,7 @@ export function WorkCalendars() {
           setDays([]);
           dayForm.resetFields();
         }}
-        width={760}
+        width={900}
         footer={
           <Button
             onClick={() => {

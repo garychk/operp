@@ -185,7 +185,7 @@ export function MaterialIssues() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingIssue) {
-        await logWithTiming("更新生产领料单", "UPDATE", async () => {
+        await logWithTiming(t("mrp.materialIssues.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(materialIssueTable)
             .update(values)
@@ -197,7 +197,7 @@ export function MaterialIssues() {
         const logParams: { table: string; recordId?: number } = {
           table: materialIssueTable,
         };
-        const data = await logWithTiming("新增生产领料单", "INSERT", async () => {
+        const data = await logWithTiming(t("mrp.materialIssues.logCreate"), "INSERT", async () => {
           const { data, error } = await supabase
             .from(materialIssueTable)
             .insert([values])
@@ -313,7 +313,7 @@ export function MaterialIssues() {
       content: t("mrp.materialIssues.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除生产领料单", "DELETE", async () => {
+          await logWithTiming(t("mrp.materialIssues.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(materialIssueTable)
               .update({ is_deleted: "y" })

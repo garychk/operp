@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Key } from "react";
 import {
   Button,
@@ -34,25 +34,21 @@ import { formatMoney } from "../../utils/money";
 import type { SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import { useTranslation } from "react-i18next";
+import { useUoms, buildUomOptions } from "../../hooks/useUoms";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
-type Uom = Tables["erp_uoms_s_539dcf81_b"]["Row"];
-type UomGroup = Tables["erp_uom_groups_s_539dcf81_b"]["Row"];
 
 const productImageTable = "erp_product_images_s_539dcf81_b";
 
 const { Option } = Select;
 const productTable = "erp_products_s_539dcf81_b";
-const uomTable = "erp_uoms_s_539dcf81_b";
 const docType = "products";
 
 export function Products() {
   const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
-  const [uoms, setUoms] = useState<Uom[]>([]);
-  const [groups, setGroups] = useState<UomGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -64,25 +60,19 @@ export function Products() {
   /** 产品 id -> 首图公开 URL（sort_order 最小者），列表缩略列使用 */
   const [firstImageUrls, setFirstImageUrls] = useState<Map<number, string>>(new Map());
 
+  // 单位主数据（erp_uoms + erp_uom_groups）唯一入口 —— BOM 等页面共用同一实现，
+  // 见 src/hooks/useUoms.ts。切勿再各自写一份查询。
+  const { uoms, groups, uomMap, groupNameMap } = useUoms();
+  const uomOptions = useMemo(
+    () => buildUomOptions(uoms, groupNameMap, "id"),
+    [uoms, groupNameMap],
+  );
+
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-    fetchUoms();
     fetchFirstImages();
   }, []);
-
-  const fetchUoms = async () => {
-    try {
-      const [{ data: g }, { data: u }] = await Promise.all([
-        supabase.from("erp_uom_groups_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("status", "active"),
-        supabase.from(uomTable).select("*").eq("is_deleted", "n").eq("is_active", true),
-      ]);
-      setGroups(g || []);
-      setUoms(u || []);
-    } catch (error) {
-      console.error("Error fetching uoms:", error);
-    }
-  };
 
   const fetchProducts = async () => {
     try {
@@ -136,14 +126,6 @@ export function Products() {
       console.error("Error fetching categories:", error);
     }
   };
-
-  const groupNameMap = new Map<number, string>(groups.map((g) => [g.id, g.name]));
-  const uomMap = new Map<number, Uom>(uoms.map((u) => [u.id, u]));
-
-  const uomOptions = uoms.map((u) => ({
-    value: u.id,
-    label: `${u.name}${u.symbol ? ` (${u.symbol})` : ""} · ${groupNameMap.get(u.group_id) || ""}`,
-  }));
 
   const handleSubmit = async (values: any) => {
     try {

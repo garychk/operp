@@ -136,3 +136,7 @@
 \i supabase/tables/deploy_112_standard_cost_rollup_and_variance.sql
 \i supabase/tables/deploy_113_accounting_period_tenant_unique.sql
 \i supabase/tables/deploy_114_mrp_planning_params_and_work_calendar.sql
+\i supabase/tables/deploy_115_production_order_operations.sql
+\i supabase/tables/deploy_116_production_operation_rpcs.sql
+\i supabase/tables/deploy_117_employee_menu.sql
+\i supabase/tables/deploy_118_employee_jobs_dict.sql

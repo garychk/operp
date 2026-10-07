@@ -154,6 +154,10 @@ ORDER=(
   deploy_112_standard_cost_rollup_and_variance.sql
   deploy_113_accounting_period_tenant_unique.sql
   deploy_114_mrp_planning_params_and_work_calendar.sql
+  deploy_115_production_order_operations.sql
+  deploy_116_production_operation_rpcs.sql
+  deploy_117_employee_menu.sql
+  deploy_118_employee_jobs_dict.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

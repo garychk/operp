@@ -43,6 +43,7 @@ import { InventoryReconciliation } from './pages/inventory/InventoryReconciliati
 import { InventorySubjectMap } from './pages/inventory/InventorySubjectMap';
 import { Boms } from './pages/mrp/Boms';
 import { Departments } from './pages/mrp/Departments';
+import { Employees } from './pages/mrp/Employees';
 import { RoutingOperations } from './pages/mrp/RoutingOperations';
 import { WorkCenters } from './pages/mrp/WorkCenters';
 import { Operations } from './pages/mrp/Operations';
@@ -163,6 +164,7 @@ function AppContent() {
         <Route path="mrp">
           <Route index element={<Navigate to="departments" replace />} />
           <Route path="departments" element={<Departments />} />
+          <Route path="employees" element={<Employees />} />
           <Route path="boms" element={<Boms />} />
           <Route path="routings" element={<RoutingOperations />} />
           <Route path="workcenters" element={<WorkCenters />} />

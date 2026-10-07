@@ -179,7 +179,7 @@ export function SubcontractOrders() {
       };
       if (editingOrder) {
         await logWithTiming(
-          "更新委外订单",
+          t("mrp.subcontractOrders.logUpdate"),
           "UPDATE",
           async () => {
             const { error } = await supabase
@@ -196,7 +196,7 @@ export function SubcontractOrders() {
           table: orderTable,
         };
         const data = await logWithTiming(
-          "新增委外订单",
+          t("mrp.subcontractOrders.logCreate"),
           "INSERT",
           async () => {
             const { data, error } = await supabase
@@ -293,7 +293,7 @@ export function SubcontractOrders() {
       onOk: async () => {
         try {
           await logWithTiming(
-            "删除委外订单",
+            t("mrp.subcontractOrders.logDelete"),
             "DELETE",
             async () => {
               const { error } = await supabase

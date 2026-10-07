@@ -217,7 +217,7 @@ export function PlanningParams() {
 
     try {
       setSaving(true);
-      await logWithTiming("更新物料计划参数", "UPDATE", async () => {
+      await logWithTiming(t("mrp.planningParams.logUpdate"), "UPDATE", async () => {
         const { error } = await supabase
           .from(productTable)
           .update(patch)
@@ -257,7 +257,7 @@ export function PlanningParams() {
 
     try {
       setSaving(true);
-      await logWithTiming("批量更新物料计划参数", "UPDATE", async () => {
+      await logWithTiming(t("mrp.planningParams.logBatchUpdate"), "UPDATE", async () => {
         const { error } = await supabase.from(productTable).update(patch).in("id", ids);
         if (error) throw error;
       });

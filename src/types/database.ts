@@ -718,6 +718,9 @@ export interface ErpProductionOrdersS539Dcf81BRow {
   remark: string | null;
   status: string | null;
   warehouse_id: number | null;  // FK -> erp_warehouses_s_539dcf81_b.id（领料仓库，deploy_57）
+  // deploy_115（P0-1 报工口径进度；与 completed_quantity 的「完工入库申报口径」分工不同）
+  reported_quantity: number | null;
+  operation_progress_percent: number | null;
 }
 export type ErpProductionOrdersS539Dcf81BInsert = Omit<ErpProductionOrdersS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpProductionOrdersS539Dcf81BUpdate = Partial<ErpProductionOrdersS539Dcf81BInsert>;
@@ -815,9 +818,42 @@ export interface ErpProductionReportsS539Dcf81BRow {
   operator_id: number | null;  // FK -> erp_employees_s_539dcf81_b.id
   remark: string | null;
   status: string | null;
+  order_operation_id: number | null;  // FK -> erp_production_order_operations_s_539dcf81_b.id（deploy_115）
 }
 export type ErpProductionReportsS539Dcf81BInsert = Omit<ErpProductionReportsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpProductionReportsS539Dcf81BUpdate = Partial<ErpProductionReportsS539Dcf81BInsert>;
+
+export interface ErpProductionOrderOperationsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  order_id: number;  // FK -> erp_production_orders_s_539dcf81_b.id
+  line_no: number;
+  sequence_no: number;
+  operation_id: number | null;  // FK -> erp_operations_s_539dcf81_b.id
+  work_center_id: number | null;  // FK -> erp_work_centers_s_539dcf81_b.id
+  planned_quantity: number | null;
+  completed_quantity: number | null;
+  scrapped_quantity: number | null;
+  standard_hours_per_unit: number | null;
+  setup_hours: number | null;
+  planned_hours: number | null;
+  plan_start_date: string | null;
+  plan_end_date: string | null;
+  actual_start_date: string | null;
+  actual_end_date: string | null;
+  status: string | null;
+  assignee_id: number | null;  // FK -> erp_employees_s_539dcf81_b.id（派工对象）
+  is_inspection_required: boolean | null;
+  source_routing_detail_id: number | null;
+  remark: string | null;
+  created_by: number | null;
+}
+export type ErpProductionOrderOperationsS539Dcf81BInsert = Omit<ErpProductionOrderOperationsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpProductionOrderOperationsS539Dcf81BUpdate = Partial<ErpProductionOrderOperationsS539Dcf81BInsert>;
 
 export interface ErpProductsS539Dcf81BRow {
   id: number;

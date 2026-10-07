@@ -608,7 +608,7 @@ function StandardCostTab() {
       const payload = buildPayload(values);
       if (editing) {
         await logWithTiming(
-          "更新标准成本",
+          t("mrp.standardCosts.logUpdate"),
           "UPDATE",
           async () => {
             const { error } = await supabase
@@ -622,7 +622,7 @@ function StandardCostTab() {
         message.success(t("common.updateSuccess"));
       } else {
         await logWithTiming(
-          "新增标准成本",
+          t("mrp.standardCosts.logCreate"),
           "INSERT",
           async () => {
             const { error } = await supabase.from(STANDARD_COST_TABLE).insert([payload]);
@@ -648,7 +648,7 @@ function StandardCostTab() {
   const changeStatus = async (record: StandardCostRow, status: StandardCostRow["status"]) => {
     try {
       await logWithTiming(
-        status === "active" ? "生效标准成本" : "停用标准成本",
+        status === "active" ? t("mrp.standardCosts.logActivate") : t("mrp.standardCosts.logDeactivate"),
         "UPDATE",
         async () => {
           const { error } = await supabase
@@ -682,7 +682,7 @@ function StandardCostTab() {
       onOk: async () => {
         try {
           await logWithTiming(
-            "删除标准成本",
+            t("mrp.standardCosts.logDelete"),
             "DELETE",
             async () => {
               const { error } = await supabase
@@ -751,7 +751,7 @@ function StandardCostTab() {
         p_overwrite: false,
       };
       const result = await logWithTiming(
-        "BOM 卷算标准成本",
+        t("mrp.standardCosts.logRollup"),
         "RPC",
         async () => {
           const { data, error } = await supabase.rpc("rollup_standard_cost", payload);

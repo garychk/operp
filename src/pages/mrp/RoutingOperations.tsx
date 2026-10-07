@@ -145,7 +145,7 @@ export function RoutingOperations() {
     try {
       if (editingRouting) {
         await logWithTiming(
-          "更新工艺路线",
+          t("mrp.routingOperations.logUpdate"),
           "UPDATE",
           async () => {
             const { error } = await supabase
@@ -162,7 +162,7 @@ export function RoutingOperations() {
           table: routingTable,
         };
         const data = await logWithTiming(
-          "新增工艺路线",
+          t("mrp.routingOperations.logCreate"),
           "INSERT",
           async () => {
             const { data, error } = await supabase
@@ -268,7 +268,7 @@ export function RoutingOperations() {
       onOk: async () => {
         try {
           await logWithTiming(
-            "删除工艺路线",
+            t("mrp.routingOperations.logDelete"),
             "DELETE",
             async () => {
               const { error } = await supabase

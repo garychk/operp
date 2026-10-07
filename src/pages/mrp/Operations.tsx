@@ -90,7 +90,7 @@ export function Operations() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingOperation) {
-        await logWithTiming("更新工序", "UPDATE", async () => {
+        await logWithTiming(t("mrp.operations.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(operationTable)
             .update(values)
@@ -99,7 +99,7 @@ export function Operations() {
         });
         message.success(t("common.updateSuccess"));
       } else {
-        await logWithTiming("新增工序", "INSERT", async () => {
+        await logWithTiming(t("mrp.operations.logCreate"), "INSERT", async () => {
           const { error } = await supabase
             .from(operationTable)
             .insert([values]);
@@ -129,7 +129,7 @@ export function Operations() {
       content: t("mrp.operations.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除工序", "DELETE", async () => {
+          await logWithTiming(t("mrp.operations.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(operationTable)
               .update({ is_deleted: "y" })

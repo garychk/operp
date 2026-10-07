@@ -206,7 +206,7 @@ export function SubcontractIssues() {
       };
       if (editingIssue) {
         await logWithTiming(
-          "更新委外发料单",
+          t("mrp.subcontractIssues.logUpdate"),
           "UPDATE",
           async () => {
             const { error } = await supabase
@@ -223,7 +223,7 @@ export function SubcontractIssues() {
           table: issueTable,
         };
         const data = await logWithTiming(
-          "新增委外发料单",
+          t("mrp.subcontractIssues.logCreate"),
           "INSERT",
           async () => {
             const { data, error } = await supabase
@@ -346,7 +346,7 @@ export function SubcontractIssues() {
       onOk: async () => {
         try {
           await logWithTiming(
-            "删除委外发料单",
+            t("mrp.subcontractIssues.logDelete"),
             "DELETE",
             async () => {
               const { error } = await supabase

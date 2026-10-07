@@ -230,13 +230,13 @@ export function MaterialReturns() {
     try {
       const payload = { ...values, total_amount: sumAmount(details) };
       if (editingReturn) {
-        await logWithTiming("更新生产退料单", "UPDATE", async () => {
+        await logWithTiming(t("mrp.materialReturns.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase.from(returnTable).update(payload).eq("id", editingReturn.id);
           if (error) throw error;
         }, { table: returnTable, recordId: editingReturn.id });
         message.success(t("common.updateSuccess"));
       } else {
-        await logWithTiming("新增生产退料单", "INSERT", async () => {
+        await logWithTiming(t("mrp.materialReturns.logCreate"), "INSERT", async () => {
           const { error } = await supabase.from(returnTable).insert([payload]);
           if (error) throw error;
         }, { table: returnTable });
@@ -309,7 +309,7 @@ export function MaterialReturns() {
       content: t("mrp.materialReturns.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除生产退料单", "DELETE", async () => {
+          await logWithTiming(t("mrp.materialReturns.logDelete"), "DELETE", async () => {
             const { error } = await supabase.from(returnTable).update({ is_deleted: "y" }).eq("id", id);
             if (error) throw error;
             const { error: detailError } = await supabase

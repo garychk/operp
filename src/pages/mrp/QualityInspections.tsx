@@ -291,7 +291,7 @@ export function QualityInspections() {
     };
     try {
       await logWithTiming(
-        "新增检验任务",
+        t("mrp.quality.logCreate"),
         "INSERT",
         async () => {
           const { error } = await supabase
@@ -387,7 +387,7 @@ export function QualityInspections() {
           : "unqualified";
     try {
       await logWithTiming(
-        complete ? "完成质量检验" : "保存质量检验",
+        complete ? t("mrp.quality.logComplete") : t("mrp.quality.logSave"),
         "UPDATE",
         async () => {
           const { error } = await supabase

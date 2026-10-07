@@ -151,7 +151,7 @@ export function SubcontractSettlements() {
       };
       if (editingSettlement) {
         await logWithTiming(
-          "更新委外结算单",
+          t("mrp.subcontractSettlements.logUpdate"),
           "UPDATE",
           async () => {
             const { error } = await supabase
@@ -168,7 +168,7 @@ export function SubcontractSettlements() {
           table: settlementTable,
         };
         const data = await logWithTiming(
-          "新增委外结算单",
+          t("mrp.subcontractSettlements.logCreate"),
           "INSERT",
           async () => {
             const { data, error } = await supabase
@@ -223,7 +223,7 @@ export function SubcontractSettlements() {
       onOk: async () => {
         try {
           await logWithTiming(
-            "删除委外结算单",
+            t("mrp.subcontractSettlements.logDelete"),
             "DELETE",
             async () => {
               const { error } = await supabase
