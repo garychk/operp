@@ -86,6 +86,7 @@ import type {
   ErpOpeningBalanceDetailsS539Dcf81BRow,
   // deploy_114（P0-4）工作日历
   ErpWorkCalendarsS539Dcf81BRow,
+  ErpShiftsS539Dcf81BRow,
   ErpWorkCalendarDaysS539Dcf81BRow,
 } from '../types/database';
 
@@ -252,6 +253,7 @@ export type Tables = {
   erp_batches_s_539dcf81_b: { Row: ErpBatchesS539Dcf81BRow };
   // deploy_114（P0-4）工作日历
   erp_work_calendars_s_539dcf81_b: { Row: ErpWorkCalendarsS539Dcf81BRow };
+  erp_shifts_s_539dcf81_b: { Row: ErpShiftsS539Dcf81BRow };
   erp_work_calendar_days_s_539dcf81_b: { Row: ErpWorkCalendarDaysS539Dcf81BRow };
 };
 

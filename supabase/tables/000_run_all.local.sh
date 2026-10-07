@@ -158,6 +158,7 @@ ORDER=(
   deploy_116_production_operation_rpcs.sql
   deploy_117_employee_menu.sql
   deploy_118_employee_jobs_dict.sql
+  deploy_119_shift_master_and_capacity.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

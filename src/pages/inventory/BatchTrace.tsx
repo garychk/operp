@@ -6,6 +6,7 @@ import {
   Col,
   Descriptions,
   Empty,
+  Input,
   InputNumber,
   Row,
   Select,
@@ -515,7 +516,7 @@ export function BatchTrace() {
               }))}
             />
           </Col>
-          <Col span={7}>
+          <Col span={5}>
             <Select
               showSearch
               optionFilterProp="label"
@@ -532,15 +533,16 @@ export function BatchTrace() {
               }))}
             />
           </Col>
-          <Col span={4}>
-            <InputNumber
-              style={{ width: '100%' }}
-              min={1}
-              max={10}
-              value={maxDepth}
-              onChange={(v) => setMaxDepth(Number(v) || 5)}
-              addonBefore={t('batchTrace.fields.depth')}
-            />
+          <Col span={5}>
+            <Space.Compact style={{ width: '100%' }}>
+              <Input style={{ width: '60px', pointerEvents: 'none' }} value={t('batchTrace.fields.depth')} disabled />
+              <InputNumber
+                min={1}
+                max={10}
+                value={maxDepth}
+                onChange={(v) => setMaxDepth(Number(v) || 5)}
+              />
+            </Space.Compact>
           </Col>
           <Col span={6}>
             <Space>

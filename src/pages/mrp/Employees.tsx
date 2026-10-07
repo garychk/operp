@@ -5,6 +5,7 @@ import type { Key } from "react";
 import {
   Alert,
   Button,
+  Card,
   Col,
   DatePicker,
   Form,
@@ -35,11 +36,19 @@ const JOB_DICT_TYPE = "Jobs";
 
 type Employee = Tables["erp_employees_s_539dcf81_b"]["Row"];
 type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
+type Shift = Tables["erp_shifts_s_539dcf81_b"]["Row"];
+type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 
 const employeeTable = "erp_employees_s_539dcf81_b";
 const departmentTable = "erp_departments_s_539dcf81_b";
+const shiftTable = "erp_shifts_s_539dcf81_b";
+const workCenterTable = "erp_work_centers_s_539dcf81_b";
+
+/** TIME 列经 PostgREST 回来是 "HH:MM:SS"，展示只留到分钟 */
+const timeText = (v: string | null | undefined): string =>
+  typeof v === "string" && v.length >= 5 ? v.slice(0, 5) : "";
 
 /**
  * 员工主数据（`erp_employees`）。
@@ -60,6 +69,9 @@ export function Employees() {
   const { t } = useTranslation();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  // 排班地基（deploy_119）：默认班次 / 默认工位两处下拉的数据源
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -72,6 +84,8 @@ export function Employees() {
   useEffect(() => {
     void fetchEmployees();
     void fetchDepartments();
+    void fetchShifts();
+    void fetchWorkCenters();
   }, []);
 
   const fetchEmployees = async () => {
@@ -106,6 +120,36 @@ export function Employees() {
     }
   };
 
+  // 班次/工位都是「可缺省的引用」：取全量（含停用项），停用项在下拉里置灰保留，
+  // 这样已配了停用班次的员工在编辑时不会看到空值、也不会被静默改掉。
+  const fetchShifts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from(shiftTable)
+        .select("*")
+        .eq("is_deleted", "n")
+        .order("shift_no");
+      if (error) throw error;
+      setShifts((data || []) as unknown as Shift[]);
+    } catch (error) {
+      console.error("Error fetching shifts:", error);
+    }
+  };
+
+  const fetchWorkCenters = async () => {
+    try {
+      const { data, error } = await supabase
+        .from(workCenterTable)
+        .select("*")
+        .eq("is_deleted", "n")
+        .order("code");
+      if (error) throw error;
+      setWorkCenters((data || []) as unknown as WorkCenter[]);
+    } catch (error) {
+      console.error("Error fetching work centers:", error);
+    }
+  };
+
   const handleSubmit = async (values: any) => {
     // DATE 列显式格式化：dayjs 对象直接交给 supabase 会按 UTC 序列化，
     // 在 UTC+8 下会整体差一天落库
@@ -121,6 +165,9 @@ export function Employees() {
         ? dayjs(values.entry_date).format("YYYY-MM-DD")
         : null,
       status: values.status || "active",
+      // 排班地基（deploy_119）：都是可空引用，留空＝不固定
+      shift_id: values.shift_id ?? null,
+      work_center_id: values.work_center_id ?? null,
     };
 
     try {
@@ -182,6 +229,8 @@ export function Employees() {
       email: "",
       entry_date: undefined,
       status: "active",
+      shift_id: undefined,
+      work_center_id: undefined,
     });
     setIsModalOpen(true);
   };
@@ -220,6 +269,20 @@ export function Employees() {
     return department?.name || "-";
   };
 
+  const getShiftName = (shiftId: number | null) => {
+    if (!shiftId) return "-";
+    return shifts.find((s) => s.id === shiftId)?.shift_name || "-";
+  };
+
+  const getWorkCenterName = (workCenterId: number | null) => {
+    if (!workCenterId) return "-";
+    return workCenters.find((w) => w.id === workCenterId)?.name || "-";
+  };
+
+  /** 下拉里带上时段，避免同名班次（如两个「早班」）靠猜 */
+  const shiftOptionLabel = (s: Shift) =>
+    `${s.shift_name}（${timeText(s.start_time)}-${timeText(s.end_time)}）`;
+
   const filteredEmployees = employees.filter((e) => {
     const kw = searchTerm.toLowerCase();
     return (
@@ -257,6 +320,20 @@ export function Employees() {
       width: 150,
       // 库里存 code，列表显示 labelOf(code)；字典项被删/停用则原样兜底显示旧 code
       render: (v: string | null) => jobsDict.labelOf(v) || "-",
+    },
+    {
+      title: t("mrp.employees.shift"),
+      dataIndex: "shift_id",
+      key: "shift_id",
+      width: 130,
+      render: (shiftId: number | null) => getShiftName(shiftId),
+    },
+    {
+      title: t("mrp.employees.workCenter"),
+      dataIndex: "work_center_id",
+      key: "work_center_id",
+      width: 150,
+      render: (workCenterId: number | null) => getWorkCenterName(workCenterId),
     },
     {
       title: t("mrp.employees.phone"),
@@ -311,7 +388,7 @@ export function Employees() {
   ];
 
   return (
-    <div>
+    <Card variant="borderless" size="small">
       {/* 这张表被三处下拉消费，管理员首次进来会问「填了有什么用」——把口径写在页面上；
           岗位又依赖数据字典，顺手给出维护入口，免得再来问「岗位下拉怎么是空的」 */}
       <Alert
@@ -464,8 +541,51 @@ export function Employees() {
               </Form.Item>
             </Col>
           </Row>
+          {/* 排班地基（deploy_119）：默认班次 / 默认工位。都是可空引用，留空＝不固定 */}
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={t("mrp.employees.shift")}
+                name="shift_id"
+                extra={t("mrp.employees.shiftHint")}
+              >
+                <Select
+                  placeholder={t("mrp.employees.shiftPrompt")}
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  notFoundContent={t("mrp.shifts.empty")}
+                  options={shifts.map((s) => ({
+                    value: s.id,
+                    label: shiftOptionLabel(s),
+                    // 停用班次置灰保留（与派工/报工的员工下拉同一口径）：
+                    // 已经引用了停用班次的员工，编辑时能看到原值而不是莫名空掉
+                    disabled: s.is_active === false,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={t("mrp.employees.workCenter")}
+                name="work_center_id"
+              >
+                <Select
+                  placeholder={t("mrp.employees.workCenterPrompt")}
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  options={workCenters.map((w) => ({
+                    value: w.id,
+                    label: `${w.code} ${w.name}`,
+                    disabled: w.status === "inactive",
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </SimpleModal>
-    </div>
+    </Card>
   );
 }

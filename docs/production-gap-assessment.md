@@ -1,10 +1,11 @@
 # 生产制造 vs 标准 ERP 差距评估（售卖视角）
 
-> 评估时间：2026-10-07  
-> 评估对象：`erp_boms*` / `erp_bom_details` / `erp_operations` / `erp_routing_operations*` / `erp_work_centers` / `erp_production_orders*` / `erp_material_issues*` / `erp_material_returns*` / `erp_production_reports` / `erp_production_receipts` / `erp_quality_inspections*` / `erp_mps_*` / `erp_mrp_*` / `erp_cost_calculations` / `erp_subcontract_*` / `ai-server/src/services/mrp*|costRollup*|mpsService*` / `src/pages/mrp/*`  
+> 评估时间：2026-10-07　**末次复核：2026-10-07（第二轮）**  
+> 复核范围：批次/追溯（P2-12）、员工与部门主数据、班次主档与产能口径（deploy_119）、排班地基  
+> 评估对象：`erp_boms*` / `erp_bom_details` / `erp_operations` / `erp_routing_operations*` / `erp_work_centers` / `erp_shifts` / `erp_production_orders*` / `erp_production_order_operations` / `erp_material_issues*` / `erp_material_returns*` / `erp_production_reports` / `erp_production_receipts` / `erp_quality_inspections*` / `erp_mps_*` / `erp_mrp_*` / `erp_cost_calculations` / `erp_subcontract_*` / `erp_batches*` / `erp_employees` / `erp_departments` / `erp_work_calendars*` / `ai-server/src/services/mrp*|costRollup*|mpsService*` / `src/pages/mrp/*`  
 > 参照系：金蝶 K3/Cloud 生产制造、用友 U8/NC 生产制造、SAP PP/PP-PI 的通用功能集  
-> 方法：静态通读 107 个 SQL 部署脚本 + 19 个 `/mrp` 前端页面 + ai-server 生产域服务，逐项与标准 ERP 功能点对照  
-> 姊妹文档：库存侧见 `docs/inventory-gap-assessment.md`；实现细节见 `docs/production-planning-implementation.md`
+> 方法：静态通读 **121 个 SQL 部署脚本 + 25 个 `/mrp` 前端页面** + ai-server 生产域服务，逐项与标准 ERP 功能点对照（复核轮逐项回查数据库实际列/函数/视图，不凭印象）  
+> 姊妹文档：库存侧见 `docs/inventory-gap-assessment.md`（已含 P2-12 批次/追溯落地）；实现细节见 `docs/production-planning-implementation.md`
 
 
 
@@ -12,7 +13,12 @@
 
 ## 一、结论摘要
 
-> **修订（2026-10-07）**：P0 六项（工单工序化 / 成品入库检验 / 标准成本+差异 / MRP 参数与工作日历 / 生产报表四件套 / `mrp/*` i18n）**已全部落地**。本文 §四 缺口状态与 §五 量化表已按实现回改——凡标 `✅ **P0-x 已补**` 者为本轮新增能力。
+> **修订（2026-10-07 · 第一轮）**：P0 六项（工单工序化 / 成品入库检验 / 标准成本+差异 / MRP 参数与工作日历 / 生产报表四件套 / `mrp/*` i18n）**已全部落地**。本文 §四 缺口状态与 §五 量化表已按实现回改——凡标 `✅ **P0-x 已补**` 者为本轮新增能力。
+
+> **修订（2026-10-07 · 第二轮复核）**：末次逐项回查数据库实际列/函数/视图后，补标**第一轮遗漏的三类已落地能力**：
+> ① **批次管理 + 正反向追溯（P2-12，deploy_106/107）已全链路进入生产域** —— 领料 / 退料 / 完工入库单均有 `batch_no` 列，且 `post_production_document` / `reverse_production_document` 完整消费（`A4` / `I4` 由 ❌ 升 ⚠️）；
+> ② **员工 / 部门主数据**（`erp_employees` / `erp_departments`，deploy_117；岗位走 Jobs 字典 deploy_118）已有维护入口，派工 / 报工 / 仓库负责人三处下拉共用同一数据源；
+> ③ **班次主档 + 产能口径修正**（`erp_shifts`，deploy_119）：工作日历与班次正式进入产能计算（月产能按**工作日**、日产能按**班次净工时 × 班次数**），并新增「排班」这一此前**完全未列入清单**的维度（§四 D7）。
 
 **账务与计划内核达到了国产中型 ERP 的水准；「车间执行」这一层的 P0 短板（工单工序化 / 报工进度回写 / 成品检验 / 标准成本与差异 / 生产报表）已于 2026-10-07 全部补齐，离散制造主流程可完整跑通。**
 
@@ -24,22 +30,22 @@
 | ------------------------ | ------ | ---------------------------------------- |
 | 贸易 / 纯购销                 | ✅ 能    | 生产模块非必需；库存+财务已够（见库存评估 93% 核心覆盖）          |
 | **按单简单组装**（一料到底、单工序或纯组装） | ✅ 能 | BOM 展开→领料→完工入库→成本卷算链路完整；成品检验（P0-2）与工单进度看板（P0-5）已补     |
-| **离散制造（多工序/车间流转）**       | ✅ 能   | 工单工序化 + 报工回写进度 + 车间看板已补（P0-1/P0-5）；**剩 P1/P2 增强项**（流转卡、拆合单、ECN、APS） |
-| 流程制造（配方/联副产品/批次）         | ❌ 不能   | 无联副产品、无批次主数据与效期、无流程行业配方管理                |
+| **离散制造（多工序/车间流转）**       | ✅ 能   | 工单工序化 + 报工回写进度 + 车间看板已补（P0-1/P0-5）；**批次追溯已落地（P2-12）**；**剩 P1/P2 增强项**（流转卡/工序交接、拆合单、ECN、序列号、APS） |
+| 流程制造（配方 / 联副产品）           | ❌ 不能   | **批次主数据 / 效期 / 正反向追溯已落地（P2-12）**；但仍无联副产品、无流程行业配方管理       |
 | 项目制造 / ETO               | ❌ 不能   | 无项目号贯穿、无设计变更（ECN）、无按项目归集成本               |
 
 | 维度                  | 现在    | 说明                                                                |
 | ------------------- | ----- | ----------------------------------------------------------------- |
-| 基础主数据（BOM/工艺/工作中心）  | ★★★★☆ | BOM 多版本+损耗+按工序+虚拟件；工艺路线有明细序列；**缺替代料、缺设备/模具台账**                    |
+| 基础主数据（BOM/工艺/工作中心）  | ★★★★☆ | BOM 多版本+损耗+按工序+虚拟件；工艺路线有明细序列；**缺替代料、缺设备/模具台账**；物料管理粒度开关**批次/保质期已落地（P2-12）**，序列号/计价方法仍缺 |
 | 计划（MPS/MRP）         | ★★★★★ | LLC 分层 / 净需求 / 批量规则（含 max_qty 真拆单）/ **工作日历提前期倒排** / 幻影穿透 / 转单追踪 / **订货点补货**（P0-4）；**缺 DRP、有限产能排程** |
-| 生产订单（工单）            | ★★★★☆ | 头 + 材料行 + **工序行（P0-1）** + BOM 展开 + 齐套 + **状态机动作（下达/开工）** + **报工进度回写**；**仍无拆合单、无变更(ECN)、无审批、无期初在制** |
-| 车间执行                | ★★★☆☆ | **报工驱动工序/工单进度（P0-1）** + **车间看板（P0-5）**；**仍无倒冲、无计件工资、无扫码、无流转卡交接**                      |
-| 领退料                 | ★★★☆☆ | 领料/退料/齐套生成领料已闭环；**无倒冲、补料弱、未按工序领料**                                |
+| 生产订单（工单）            | ★★★★☆ | 头 + 材料行 + **工序行（P0-1）** + BOM 展开 + 齐套 + **状态机动作（下达/开工）** + **报工进度回写** + **派工对象（员工主数据已有维护入口）**；**仍无拆合单、无变更(ECN)、无审批、无期初在制** |
+| 车间执行                | ★★★☆☆ | **报工驱动工序/工单进度（P0-1）** + **车间看板（P0-5）** + **班次主档与按班次产能（deploy_119）**；**仍无倒冲、无计件工资、无扫码、无流转卡交接、无排班单** |
+| 领退料                 | ★★★☆☆ | 领料/退料/齐套生成领料已闭环（**已支持批次**）；**无倒冲、补料弱、未按工序领料**                                |
 | 完工入库                | ★★★★★ | 过账/成本/库位/批次列/反过账齐；**成品入库检验已接通（P0-2）**                                      |
 | 委外                  | ★★★★★ | 订单/发料/入库/核销/结算/反过账全闭环，凭证口径正确                                      |
 | 成本核算                | ★★★★☆ | 材料/人工/制费卷算 + 在制跨期滚动 + **标准成本与四类差异（P0-3）**；**仍无约当产量、无成本还原、无 ABC**                   |
-| 质量                  | ★★★★☆ | 来料检/工序检/退货检 + **成品入库检（P0-2）** + 检验项目 + 与库存状态联动；**无抽检方案(AQL)、无返修流程单、无追溯**           |
-| 生产报表/看板             | ★★★★☆ | **生产进度 / 工单成本 / 在制 / 产能负荷四件套 + 车间看板（P0-5）**；**缺良率/报废率、计划执行率报表与投屏大屏**                         |
+| 质量                  | ★★★★☆ | 来料检/工序检/退货检 + **成品入库检（P0-2）** + 检验项目 + 与库存状态联动 + **批次正反向追溯（P2-12）**；**无抽检方案(AQL)、无返修流程单、无序列号追溯** |
+| 生产报表/看板             | ★★★★☆ | **生产进度 / 工单成本 / 在制 / 产能负荷四件套 + 车间看板（P0-5）**，产能负荷口径已按工作日 × 班次（deploy_119）；**报废率已有列，缺良率/合格率、计划执行率报表与投屏大屏** |
 | 平台/工程（多租户/权限/审计/幂等） | ★★★★★ | 远超多数国产 ERP，是差异化的加分项                                               |
 
 ---
@@ -62,7 +68,7 @@
 | 虚拟件（幻影件）穿透                   | `erp_boms.is_phantom`                                      | MRP 引擎 blow-through                                                                                                                          |
 | 工艺路线（头 + 工序序列）               | `erp_routing_operations` + `erp_routing_operation_details` | 明细含 `sequence_no` / `standard_hours` / `setup_hours` / `next_operation_id` / `is_inspection_required`                                        |
 | 工序主数据 / 工作中心 / 产能费率          | `erp_operations` / `erp_work_centers`                      | 含 `capacity_per_day` / `labor_rate` / `overhead_rate`                                                                                        |
-| 物料制造/采购属性                    | `erp_products`（deploy_60）                                  | `is_manufactured` / `is_purchased` / `is_phantom` / `is_mrp_relevant` / `lead_time_purchase` / `lead_time_production` / `order_point` / 安全库存 |
+| 物料制造/采购属性                    | `erp_products`（deploy_60 / 106 / 114）                        | `is_manufactured` / `is_purchased` / `is_phantom` / `is_mrp_relevant` / `lead_time_purchase` / `lead_time_production` / `order_point` / 安全库存 / **`is_batch_managed` + `shelf_life_days`（批次与保质期开关）** / **`max_order_qty`（拆单上限）** |
 | MRP 运算引擎                     | `ai-server/src/services/mrpEngine.ts`                      | 低层码分层 + 逐日净需求 + 批量规则（`lot_for_lot`/`fixed_qty`/`multiples`）+ 提前期倒排 + 幻影穿透；纯函数可复现                                                             |
 | MRP 计划转单                     | `mrpConvertService.ts`                                     | 计划订单 → 采购订单草稿 / 生产订单，带转单追踪防重复下单                                                                                                              |
 | MPS 主生产计划 + 确认锁定 + 下推 MO     | `erp_mps_plans*` + `mpsService.ts`                         | 确认整单锁定；一行一产品下推一张 MO；台账 `pushed_quantity` 回写                                                                                                  |
@@ -83,6 +89,9 @@
 | **MRP 工作日历 + 订货点**（P0-4）       | `erp_work_calendars(+_days)`（deploy_114）+ `mrpEngine.ts` | 提前期按工作日倒排、需求日对齐工作日；订货点补货至目标水位（`max_stock`）                                         |
 | **生产报表四件套 + 看板**（P0-5）         | `deploy_108/109` + `ProductionAnalytics.tsx`             | 进度 / 成本 / 在制 / 产能负荷四个 `security_invoker` 视图 + 车间看板页签                                |
 | **`mrp/*` 全量 i18n**（P0-6）       | `src/locales/*` + `scripts/verify/verify-117-mrp-i18n.cjs` | 24 个页面接入 i18n，zh/en 键集合严格一致                                                              |
+| **员工 / 部门主数据**                 | `erp_employees` / `erp_departments`（deploy_117）+ 岗位字典 `Jobs`（deploy_118） | 是「派工对象 / 报工操作工 / 仓库负责人」三处下拉的**唯一数据源**；停用员工在派工/报工下拉里置灰保留（历史单据仍能还原姓名）                              |
+| **班次主档 + 产能按工作日/班次**（排班地基）    | `erp_shifts`（deploy_119）+ `vw_erp_capacity_load` 口径修正     | 编号 `SHF{YYYY}{####}`；跨零点自动判定（不给用户填）、净工时前端重算回写；员工默认班次/工位、工作中心基准班次 + 每天班次数；**月产能改按工作日**（无日历则退化为自然日 ＝ 旧行为，存量零变化） |
+| **批次主数据 + 正反向追溯**（P2-12）      | `erp_batches`（deploy_106）+ `trace_batch_upstream/downstream` / `vw_erp_batch_movement`（deploy_107） | **生产域全链路已接通**：领料 / 退料 / 完工入库单均有 `batch_no` 列且过账函数完整消费；批次必填、冻结、效期校验收口在 `inventory_apply_move` 唯一漏斗，新单据自动继承 |
 
 ---
 
@@ -97,9 +106,9 @@
 | A1     | ❌  | **替代料 / 替代 BOM**   | 全库搜「替代料」仅 1 处注释（deploy_102）；`erp_bom_details` 无替代组/替代优先级/替代比例                      | 替代料组、替代优先级、替代 BOM、替代后重新展开 | 电子/装配类客户高频；缺此则改料必须改 BOM |
 | **A2** | ❌  | **设备 / 模具 / 工装台账** | 全库搜「设备/equipment/mold/模具」→ 0 张表（仅法务文案命中）                                           | 设备台账、设备产能、模具寿命/保养、设备状态    | 有自有设备与模具的客户会问；影响产能与成本归集 |
 | A3     | ✅  | 批量规则不全             | ✅ **P0-4 已补**：`erp_products.max_order_qty`（deploy_114）+ 引擎 `applyLotSizing` **真拆单**（单张 ≤ 上限、各批之和恒等于需求量）；原「`max_qty` 未实现」的 warning 已移除 | 逐批/固定量/倍数/最大批量/最小批量/周期批量  | 计划员日常参数，缺则计划量不贴合采购/生产约束 |
-| A4     | ❌  | 物料管理属性开关           | `erp_products` 无批次/序列号/保质期/计价方法开关（库存评估 E1）                                         | 按物料开关管理粒度                 | 与批次追溯强绑定                |
+| A4     | ⚠️ | 物料管理属性开关           | **批次 / 保质期开关已落地**：`erp_products.is_batch_managed` + `shelf_life_days`（deploy_106；库存评估 E1 已 ✅）；**仍缺**序列号开关与计价方法开关 —— 同表内物料只能用一种管理粒度，这条还剩一半                | 按物料开关管理粒度                 | 与批次追溯强绑定                |
 | A5     | ⚠️ | BOM 行无独立生效期/替换关系   | `erp_bom_details` 无行级生效期、无替换关系                                                     | 行级有效期、替换链                 | 工程变更场景需要                |
-| A6     | ⚠️ | 工艺路线无资源/工装/技能要求    | `erp_routing_operation_details` 无「所需设备/工装/技能等级」                                    | 工序资源需求                    | 排产与产能测算需要               |
+| A6     | ⚠️ | 工艺路线无资源/工装/技能要求    | `erp_routing_operation_details` 无「所需设备 / 工装 / 技能等级」；员工主数据（deploy_117）与岗位字典 `Jobs`（deploy_118）已就位，但仍无「工序 ↔ 技能」对应关系                                    | 工序资源需求                    | 排产与产能测算需要               |
 
 ### B. 计划（MPS / MRP）
 
@@ -117,13 +126,13 @@
 
 | #      | 状态 | 缺口                | 现状证据                                                                                                                                                                                   | 标准 ERP 应有                             | 影响                        |
 | ------ | -- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- | ------------------------- |
-| **C1** | ✅  | **工单无工序明细（工序任务）** | ✅ **P0-1 已补**：新表 `erp_production_order_operations`（deploy_115）+ `generate_production_order_operations`（deploy_116）下达时按工艺路线生成工序行（工序/工作中心/计划工时/状态/派工对象）；`ProductionOrders.tsx` 加工序页签 | 工单下达时按工艺路线生成工序行（工序/工作中心/计划工时/状态/派工对象） | 无法回答「工单跑到哪道工序」，无法按工序报工/派工 |
+| **C1** | ✅  | **工单无工序明细（工序任务）** | ✅ **P0-1 已补**：新表 `erp_production_order_operations`（deploy_115）+ `generate_production_order_operations`（deploy_116）下达时按工艺路线生成工序行（工序/工作中心/计划工时/状态/派工对象）；`ProductionOrders.tsx` 加工序页签（**空态可就地「下达 / 补生成工序」**，不必回列表页勾选） | 工单下达时按工艺路线生成工序行（工序/工作中心/计划工时/状态/派工对象） | 无法回答「工单跑到哪道工序」，无法按工序报工/派工 |
 | **C2** | ✅  | **报工不回写订单/工序进度**  | ✅ **P0-1 已补**：`erp_production_reports.order_operation_id` + 三个触发器（deploy_115/116）驱动「工序完工数 → 工单 `reported_quantity` / 工序加权进度」；`completed_quantity` 仍只属完工入库申报口径（**刻意不抢**）                | 报工即更新工序完工数与工单进度                       | 车间看不到进度，销售催货无处查           |
-| C3     | ⚠️ | 无派工 / 流转卡 / 工序交接  | **P0-1 部分完成**：工序行有 `assignee_id` 派工对象（字段 + 页面下拉）；**仍无**流转卡、工序交接确认（完整形态待 P1/P2）                                                                                                                                     | 派工单、工序流转、交接确认                         | 车间管理刚需                    |
+| C3     | ⚠️ | 无派工 / 流转卡 / 工序交接  | **P0-1 部分完成**：工序行有 `assignee_id` 派工对象（字段 + 页面下拉），派工对象数据源 `erp_employees` 已有维护入口 `Employees.tsx`（deploy_117）；**仍无**流转卡、工序交接确认（完整形态待 P1/P2）                                                                                                                            | 派工单、工序流转、交接确认                         | 车间管理刚需                    |
 | C4     | ✅  | 工单状态机无动作入口        | ✅ **P0-1 已补**：`status` 加 DB CHECK（七态，deploy_115）；`release_production_order` / `start_production_order` RPC + 页面「下达 / 开工」按钮（deploy_116 + `ProductionOrders.tsx`）                                        | 状态迁移按钮 + 状态守卫 + 审计                    | 状态可信度与操作体验                |
-| C5     | ❌  | 拆单 / 合单 / 分批      | 无                                                                                                                                                                                      | 按批量拆单、多单合并、分批投产                       | 大批量客户                     |
+| C5     | ❌  | 拆单 / 合单 / 分批      | MRP 侧已有按 `max_order_qty` 的**计划拆单**（P0-4，deploy_114）；**工单侧**仍无拆单 / 合单 / 分批                                                                                                                                                                   | 按批量拆单、多单合并、分批投产                       | 大批量客户                     |
 | C6     | ❌  | 工单变更 / ECN        | 无                                                                                                                                                                                      | 设计变更、数量变更留痕                           | ETO/工程变更客户                |
-| C7     | ❌  | 期初在制工单            | 库存有期初开账，**生产侧无期初在制工单**                                                                                                                                                                 | 上线切换时的在制余额承接                          | 存量客户切换必踩                  |
+| C7     | ❌  | 期初在制工单            | 库存有期初开账、**成本侧已有「期初在制余额」跨期滚动**（`vw_erp_wip_report.beginning_wip`，deploy_108/112），但**无期初在制工单**用于上线切换                                                                                                                          | 上线切换时的在制余额承接                          | 存量客户切换必踩                  |
 | C8     | ❌  | 工单审批流             | `doc_flow_rules` 内无生产类；`mrp/*` 刻意不做审批                                                                                                                                                  | 下达前审批（主管/计划）                          | 中大型客户合规要求                 |
 | C9     | ⚠️ | 报废数量有字段无流程        | `scrapped_quantity` 存在，无报废/返工流程单                                                                                                                                                       | 报废/返工/让步接收流程                          | 与 D 域质量联动                 |
 
@@ -137,13 +146,14 @@
 | D4     | ✅  | 车间看板 / 进度甘特         | ✅ **P0-5 已补**：`ProductionAnalytics.tsx` 首屏「车间看板」页签（进度 + 齐套 + 异常）；**进度甘特仍缺**       | 展示价值最高的一个页面，缺则「看不出效果」  |
 | D5     | ❌  | 扫码 / RF 作业          | `erp_products.barcode` 有字段，无扫码作业流（库存侧 H6 同） | 车间报工/领料扫码              |
 | D6     | ❌  | 不良品返修 / 返工流程        | 质检有 `rework` 处置枚举，无返工工单                     | 返修无法闭环                 |
+| **D7** | ⚠️ | **排班 / 班次管理**（本轮新增维度） | 班次主档 `erp_shifts`（deploy_119：编号 `SHF{YYYY}{####}`、跨零点自动判定、净工时回算）+ 员工「默认班次 / 默认工位」+ 工作中心「基准班次 / 每天班次数」**已落地**，产能已按班次口径计算；**仍无排班单本体**（人 × 日期 × 班次 × 工位的排班明细、冲突校验、排班页面） | 班组按天排班、按班次统计出勤与工时，是排产落地的前置 |
 
 ### E. 领退料
 
 | #  | 状态 | 缺口       | 现状证据                                         | 影响      |
 | -- | -- | -------- | -------------------------------------------- | ------- |
 | E1 | ⚠️ | 超领/补料控制弱 | 有「超发」warning，无超领比例控制与补料单                     | 成本失控风险  |
-| E2 | ❌  | 未按工序领料   | `erp_bom_details.operation_id` 已存，但领料单未按工序拆分 | 多工序领料管理 |
+| E2 | ❌  | 未按工序领料   | `erp_bom_details.operation_id` 已存 + 工单工序行（P0-1）已落地，但领料单**仍未按工序拆分**（两处均处「预留未消费」状态） | 多工序领料管理 |
 | E3 | ❌  | 倒冲（同 D2） | —                                            | —       |
 
 ### F. 完工入库
@@ -181,20 +191,22 @@
 | I1 | ✅  | 成品检（见 F1）           | ✅ **P0-2 已补**：`source_type` 放开 `production_receipt`（deploy_110）     | 出货质量把关缺口  |
 | I2 | ⚠️ | 检验方案 / 抽检标准（AQL）    | 有 `sample_quantity` 字段，无抽样标准/免检规则/检验模板 | 品质部门日常    |
 | I3 | ❌  | 不良品处理单（返修/报废/让步）    | 有 `disposition` 枚举无单据                  | 闭环缺口      |
-| I4 | ❌  | 质量追溯（批次/序列号）        | 库存评估 E5：无正/反向追溯                        | 客诉处理、行业强制 |
+| I4 | ⚠️ | 质量追溯（批次/序列号）        | **批次正反向追溯已落地**：`trace_batch_upstream`（生产/委外单据谱系）+ `trace_batch_downstream`（出库流水 + 谱系递归）+ `vw_erp_batch_movement`（deploy_107；库存评估 E5 已 ✅）；**序列号追溯仍缺** | 客诉处理、行业强制 |
 | I5 | ⚠️ | 质量统计（合格率/不良率/供应商质量） | 无报表                                    | SQE 工作    |
 
 ### J. 生产报表与看板
 
 **P0-5 已补齐「四件套 + 看板」。** `ProductionAnalytics.tsx`（菜单 `mrp_production-analytics`，deploy_109）五个页签全部读 deploy_108 建的 `security_invoker` 视图：车间看板 / 生产进度 / 工单成本 / 在制 / 产能负荷。此前该域只有 `CostCalculations.tsx`（成本查询）与 `ProductionReports.tsx`（报工登记，是录入页不是报表）。
 
+> **第二轮复核补充**：产能负荷视图（J4）的计算口径已由 `deploy_119` 修正为「工作日 ×（班次净工时 × 每天班次数）」，生产报表页相应新增「产能口径」列（工作日数 + 班次/人工标签）。
+
 | #  | 状态 | 缺失报表                  | 标准 ERP 对应 |
 | -- | -- | --------------------- | --------- |
 | J1 | ✅  | 生产进度表（订单 vs 完工 vs 在制） | 生产订单执行表（`vw_erp_production_progress`，deploy_108）   |
 | J2 | ✅  | 工单成本表（料工费归集 + 单位成本）   | 生产成本明细表（`vw_erp_production_cost`，deploy_108）   |
 | J3 | ✅  | 在制品报表（期初/本期投入/完工/期末）  | 在制品收发存（`vw_erp_wip_report`，deploy_108）    |
-| J4 | ✅  | 产能负荷表（工作中心负荷 vs 产能）   | 产能负荷分析（`vw_erp_capacity_load`，deploy_108）    |
-| J5 | ❌  | 良率/报废率报表              | 质量/产出统计   |
+| J4 | ✅  | 产能负荷表（工作中心负荷 vs 产能）   | 产能负荷分析（`vw_erp_capacity_load`，deploy_108；**口径已由 deploy_119 修正为「当月工作日数 ×（班次净工时 × 每天班次数）」**，并补 `work_day_count` / `capacity_source` / `shift_no` / `shift_name` / `shift_net_hours` 诊断列）    |
+| J5 | ⚠️ | 良率 / 报废率报表           | **报废率已落地**：`vw_erp_production_progress.scrap_rate` + 生产报表页「报废率」列（deploy_108）；**良率 / 合格率仍无独立口径与报表**    |
 | J6 | ❌  | 计划执行率 / 齐套率报表         | 计划达成分析    |
 | J7 | ✅  | 车间看板大屏                | 数字看板（`ProductionAnalytics.tsx` 看板页签；独立投屏大屏模式仍缺）      |
 
@@ -226,9 +238,10 @@
 | **合计**      | **119** | **93** | **≈ 78%** |
 
 
-> P0 六项落地后（2026-10-07），原「四块缺口」（工单工序化、成品检验、标准成本与差异、生产报表）**已全部补齐**。
+> P0 六项落地后（2026-10-07 第一轮），原「四块缺口」（工单工序化、成品检验、标准成本与差异、生产报表）**已全部补齐**。
+> **第二轮复核（2026-10-07）**：`A4` / `I4` 由 ❌ 升 ⚠️（批次/保质期开关与批次正反向追溯已落地，序列号与计价方法仍缺）、`J5` 由 ❌ 升 ⚠️（报废率已有列与页面），D 域新增 `D7` 排班维度（班次主档已落地、排班单未做）。因 ⚠️ 项不计入「已具备」，本表覆盖率数字维持不变。
 > 按「**核心可上线子集**」（离散制造客户日常必用、约 70 个功能点）口径，覆盖率已达 **≈ 95%** ——
-> 也就是说：**离散制造的主流程已能完整演示与上线**；剩余差距集中在**行业化增强**（流转卡/工序交接、替代料、倒冲、拆合单、ECN、APS、批次追溯等），属 P1 / P2 点单项，不再是「能不能卖」的门槛。
+> 也就是说：**离散制造的主流程已能完整演示与上线**；剩余差距集中在**行业化增强**（流转卡/工序交接、替代料、倒冲、拆合单、ECN、序列号、APS、排班单等），属 P1 / P2 点单项，不再是「能不能卖」的门槛。
 
 ---
 
@@ -238,7 +251,7 @@
 
 | # | 功能 | 为什么阻断 | 实际交付（2026-10-07 已完成） | 关联缺口 |
 |---|---|---|---|---|
-| **P0-1** ✅ | **工单工序化（工序任务 + 进度回写 + 派工）** | 客户第一句就是「我的活儿到哪一道了」 | `deploy_115` 新表 `erp_production_order_operations`；`deploy_116` 三 RPC/触发器（按路线生成工序行 / 下达 / 开工 / 进度刷新）；`ProductionOrders.tsx` 工序页签 + 下达/开工按钮；`verify-115`（96 PASS） | C1/C2/C3/C4 |
+| **P0-1** ✅ | **工单工序化（工序任务 + 进度回写 + 派工）** | 客户第一句就是「我的活儿到哪一道了」 | `deploy_115` 新表 `erp_production_order_operations`；`deploy_116` 三 RPC/触发器（按路线生成工序行 / 下达 / 开工 / 进度刷新）；`ProductionOrders.tsx` 工序页签 + 下达/开工按钮（**工序空态可就地「下达 / 补生成工序」**，不必再回列表页勾选）；`verify-115`（**103 PASS**） | C1/C2/C3/C4 |
 | **P0-2** ✅ | **成品入库检验（FQC）接通** | 质量是制造业刚需，成品检现在是断的 | `deploy_110`：`source_type` 放开 `production_receipt` + 质检搬桶加分支；入库待检沿用既有 `sys_config` 开关；`verify-110`（22 PASS） | F1/I1 |
 | **P0-3** ✅ | **标准成本 + 成本差异分析** | 报价与成本控制的基础；财务必问 | `deploy_111` `erp_standard_costs` + `deploy_112` `rollup_standard_cost` 与差异视图；`CostCalculations.tsx`「标准 vs 实际」对照；`verify-112`（72 PASS） | H1/H2 |
 | **P0-4** ✅ | **MRP 补 `max_qty` + 工作日历 + 订货点引擎** | 计划不贴合真实约束，计划员会当场否定 | `deploy_114` `erp_work_calendars(+_days)` 与 `erp_products.max_order_qty`；`mrpEngine.ts` 真拆单 / 工作日倒排 / 订货点补货；新页 `PlanningParams.tsx`、`WorkCalendars.tsx`；`verify-114`（43 PASS） | A3/B1/B5 |
@@ -249,7 +262,7 @@
 
 | # | 功能 | 面向客户 | 关联 |
 |---|---|---|---|
-| P1-1 | 批次/序列号管理 + 正反向追溯 | 3C / 医疗器械 / 汽配 / 食品 | A4/I4 |
+| P1-1 | **序列号**管理与追溯（批次管理已交付，见 P2-12） | 3C / 医疗器械 / 汽配 / 食品 | A4/I4 |
 | P1-2 | 替代料 + 替代 BOM | 电子 / 装配 | A1 |
 | P1-3 | 倒冲领料（backflush） | 流水线 / 装配线 | D2/E3 |
 | P1-4 | 拆单/合单/分批 + 工单变更(ECN) | 大批量 / ETO | C5/C6 |
@@ -313,8 +326,13 @@ node scripts/verify/verify-108-production-reports.cjs            # P0-5  43 PASS
 node scripts/verify/verify-110-production-receipt-quality.cjs    # P0-2  22 PASS
 node scripts/verify/verify-112-standard-cost.cjs                 # P0-3  72 PASS
 node scripts/verify/verify-114-mrp-planning-params.cjs           # P0-4  43 PASS
-node scripts/verify/verify-115-production-operations.cjs         # P0-1  96 PASS
+node scripts/verify/verify-115-production-operations.cjs         # P0-1 103 PASS
 node scripts/verify/verify-117-mrp-i18n.cjs                      # P0-6   8 PASS（纯静态，不需 DB）
+
+# —— 第二轮复核新增的验证入口 ——
+node scripts/verify/verify-106-batch-master.cjs                  # P2-12 批次管理 / 追溯   102 PASS
+node scripts/verify/verify-119-employee-master.cjs               # 员工 / 部门主数据         53 PASS
+node scripts/verify/verify-121-shift-master-and-capacity.cjs     # 班次主档 + 产能口径修正    99 PASS
 ```
 
 ### 验收要点（P0 已落地，除 P0-6 外均由上表对应 verify 脚本覆盖）
@@ -325,6 +343,8 @@ node scripts/verify/verify-117-mrp-i18n.cjs                      # P0-6   8 PASS
 - P0-4：同一物料配 `max_qty` → 净需求批量结果符合上限；跨周末的提前期倒排落在工作日。
 - P0-5：四张报表数字与 `deploy_93` 过账流水逐笔勾稽。
 - P0-6：mrp 页面无残留硬编码中文、zh/en 键集合严格一致、页面用到的 key（含动态拼接前缀）全部存在（`verify-117`，纯静态、不连库）。
+- **P2-12 批次 / 追溯（第二轮复核）**：开 `is_batch_managed` 的物料过账漏填批次号被拒（23514）；`trace_batch_upstream` 能从成品批倒查到原料批、`downstream` 正查这批货发给了谁；效期预警按 `expiry_state` 分桶（`verify-106`，102 PASS）。
+- **排班地基（第二轮复核）**：产能口径三段实测 —— 无日历 → 自然日（＝升级前旧行为，存量零变化）／有日历 + 班次 → 工作日数 ×（净工时 × 班次数）／班次停用 → 回退人工填写的 `capacity_per_day`（`verify-121`，99 PASS；事务内造数后回滚）。
 
 ---
 
@@ -332,4 +352,4 @@ node scripts/verify/verify-117-mrp-i18n.cjs                      # P0-6   8 PASS
 
 1. **账务内核、计划引擎与车间执行（P0 后）都已是「能打」的水平，不要推翻重做。**
 2. **要卖离散制造，硬门槛是「工单工序化 + 成品检验 + 标准成本差异 + 生产报表」—— 已于 2026-10-07 补齐，现在可以进该类市场。**
-3. **接下来的投入按行业点单走 P1/P2（替代料、倒冲、拆合单/ECN、批次追溯、APS）；把多租户 + 可审计 + AI 解读继续当差异化。**
+3. **接下来的投入按行业点单走 P1/P2（替代料、倒冲、拆合单/ECN、序列号、排班单、APS）；把多租户 + 可审计 + AI 解读继续当差异化。**

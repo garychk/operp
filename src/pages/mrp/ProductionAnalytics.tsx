@@ -31,7 +31,16 @@ import { useCurrencyRegistry } from '../../utils/money';
  *   · 工单成本表是**按生产订单**的全部期间累计（与 ai-server 按「月×产品」的成本卷算
  *     是不同粒度，后者看「在制报表」页签）；
  *   · 只计入 `status='posted'` 的领料/入库与 `status='confirmed'` 的报工；
- *   · 产能负荷 = 实际工时负荷 ÷（capacity_per_day × 该月自然日数），与 MPS 的 RCCP 同口径。
+ *   · 产能负荷 = 实际工时负荷 ÷ 月产能。月产能口径见下（deploy_119 改过）。
+ *
+ * ⚠️ 产能口径变更（deploy_119）：
+ *   `vw_erp_capacity_load` 原先按月**自然日**数算月产能，周末与节假日也被当成
+ *   可生产的日子，负荷率被系统性低估。deploy_119 起改为按**当月工作日数**
+ *   （读租户「默认+启用」的工作日历，例外日优先于周规律；没有日历则退化为
+ *   自然日＝旧行为），日产能则优先取「班次净工时 × 每天班次数」，
+ *   未配班次的工作中心仍回退 `capacity_per_day`。
+ *   视图新增 `work_day_count` 与 `capacity_source` 两列把口径摊开显示。
+ *   ⚠️ ai-server 的 MPS RCCP（mpsService）仍按自然日 —— 尚未对齐，见该文件注释。
  */
 
 type ProgressRow = {
@@ -109,6 +118,12 @@ type CapacityRow = {
   machine_hours: number;
   load_hours: number;
   load_rate: number;
+  // deploy_119 新增：产能口径诊断列
+  work_day_count: number | null;
+  capacity_source: 'shift' | 'manual' | null;
+  shift_no: string | null;
+  shift_name: string | null;
+  shift_net_hours: number | null;
 };
 
 const { Option } = Select;
@@ -357,6 +372,20 @@ export function ProductionAnalytics() {
       render: (_: unknown, r: CapacityRow) => [r.work_center_code, r.work_center_name].filter(Boolean).join(' / ') || '-',
     },
     { title: t('mrp.productionAnalytics.colCapacityHours'), dataIndex: 'capacity_hours', key: 'capacity_hours', width: 130, render: (v: number) => num(v).toFixed(2), align: 'right' as const },
+    {
+      // deploy_119：月产能改了口径（工作日 + 班次），把依据摊开，免得看着数字变化无从解释
+      title: t('mrp.productionAnalytics.colCapacityBasis'), key: 'capacity_basis', width: 210,
+      render: (_: unknown, r: CapacityRow) => (
+        <Space size={4} wrap>
+          <Tag color="default">{t('mrp.productionAnalytics.capacityWorkDays', { days: num(r.work_day_count) })}</Tag>
+          <Tag color={r.capacity_source === 'shift' ? 'blue' : 'default'}>
+            {r.capacity_source === 'shift'
+              ? t('mrp.productionAnalytics.capacityByShift', { name: r.shift_name || r.shift_no || '-', hours: num(r.shift_net_hours) })
+              : t('mrp.productionAnalytics.capacityManual')}
+          </Tag>
+        </Space>
+      ),
+    },
     { title: t('mrp.productionAnalytics.colLaborHours'), dataIndex: 'labor_hours', key: 'labor_hours', width: 110, render: (v: number) => num(v).toFixed(2), align: 'right' as const },
     { title: t('mrp.productionAnalytics.colMachineHours'), dataIndex: 'machine_hours', key: 'machine_hours', width: 110, render: (v: number) => num(v).toFixed(2), align: 'right' as const },
     { title: t('mrp.productionAnalytics.colLoadHours'), dataIndex: 'load_hours', key: 'load_hours', width: 110, render: (v: number) => num(v).toFixed(2), align: 'right' as const },

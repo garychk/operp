@@ -215,6 +215,10 @@ export interface ErpEmployeesS539Dcf81BRow {
   email: string | null;
   entry_date: string | null;
   status: string | null;
+  /** 默认班次（deploy_119）。排班时的预填值，空表示不固定班次 */
+  shift_id: number | null;
+  /** 默认工位（deploy_119）。常用工作中心 */
+  work_center_id: number | null;
 }
 export type ErpEmployeesS539Dcf81BInsert = Omit<ErpEmployeesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpEmployeesS539Dcf81BUpdate = Partial<ErpEmployeesS539Dcf81BInsert>;
@@ -1273,6 +1277,10 @@ export interface ErpWorkCentersS539Dcf81BRow {
   labor_rate: number | null;
   overhead_rate: number | null;
   status: string | null;
+  /** 基准班次（deploy_119）。与 shift_count 推导日产能；空则回退 capacity_per_day */
+  shift_id: number | null;
+  /** 每天班次数（deploy_119），[1, 4]，默认 1 */
+  shift_count: number;
 }
 export type ErpWorkCentersS539Dcf81BInsert = Omit<ErpWorkCentersS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpWorkCentersS539Dcf81BUpdate = Partial<ErpWorkCentersS539Dcf81BInsert>;
@@ -2105,6 +2113,32 @@ export type ErpBatchesS539Dcf81BInsert = Omit<ErpBatchesS539Dcf81BRow, 'id' | 'c
 export type ErpBatchesS539Dcf81BUpdate = Partial<ErpBatchesS539Dcf81BInsert>;
 
 // ---- deploy_114（P0-4）：工作日历 ----
+export interface ErpShiftsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  shift_no: string;
+  shift_name: string;
+  /** TIME 列，PostgREST 返回 "HH:MM:SS" */
+  start_time: string;
+  end_time: string;
+  /** 跨零点（夜班 20:00→04:00）。由起止时间推导，DB 有 CHECK 约束 */
+  cross_midnight: boolean;
+  /** 班内休息分钟，[0, 1440) */
+  break_minutes: number;
+  /** 每班净工时（小时），(0, 24] */
+  net_hours: number;
+  is_active: boolean;
+  remark: string | null;
+  created_by: number | null;
+  tenant_id: number | null;
+}
+export type ErpShiftsS539Dcf81BInsert = Omit<ErpShiftsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at' | 'tenant_id' | 'shift_no'>;
+export type ErpShiftsS539Dcf81BUpdate = Partial<ErpShiftsS539Dcf81BInsert>;
+
 export interface ErpWorkCalendarsS539Dcf81BRow {
   id: number;
   corp_id: string | null;

@@ -64,6 +64,8 @@ import { ProductionAnalytics } from './pages/mrp/ProductionAnalytics';
 // P0-4（deploy_114）MRP 计划参数与工作日历
 import { PlanningParams } from './pages/mrp/PlanningParams';
 import { WorkCalendars } from './pages/mrp/WorkCalendars';
+// 排班地基 Step 1（deploy_119）班次主档
+import { Shifts } from './pages/mrp/Shifts';
 import { Users } from './pages/system/Users';
 import { Tenants } from './pages/system/Tenants';
 import { Roles } from './pages/system/Roles';
@@ -191,6 +193,8 @@ function AppContent() {
           {/* P0-4 计划基础参数（deploy_114 菜单） */}
           <Route path="planning-params" element={<PlanningParams />} />
           <Route path="work-calendars" element={<WorkCalendars />} />
+          {/* 排班地基 Step 1（deploy_119 菜单） */}
+          <Route path="shifts" element={<Shifts />} />
         </Route>
         
         <Route path="system">
