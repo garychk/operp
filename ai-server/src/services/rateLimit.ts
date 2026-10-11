@@ -91,6 +91,17 @@ export const reindexRateLimit = rateLimit({
   name: "reindex",
 });
 
+/**
+ * 知识库文件解析：纯本地 CPU（mammoth / pdfjs），不打模型，成本远低于 reindex，
+ * 但一次上传可能连着点好几次「解析」，故给 30 次/分钟。
+ * ⚠️ 不能与 reindex 共用 5/min 档位 —— 那样上传 6 个文件分两批就会被拦死。
+ */
+export const knowledgeParseRateLimit = rateLimit({
+  windowMs: 60_000,
+  max: perMinute("RATE_LIMIT_KNOWLEDGE_PARSE_PER_MIN", 30),
+  name: "knowledge-parse",
+});
+
 /** 确认执行 / 重操作（MRP 运算、成本卷算、MPS 下推），默认 10 次/分钟/用户 */
 export const heavyActionRateLimit = rateLimit({
   windowMs: 60_000,

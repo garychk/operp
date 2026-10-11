@@ -1,9 +1,16 @@
 import { Router } from "express";
+import type { Request, RequestHandler } from "express";
+import multer from "multer";
 import { z } from "zod";
 import { runChatGraph, runChatGraphStream } from "../ai/graph.js";
 import { nextPendingActionId, runRemainingPlan } from "../ai/planRunner.js";
 import type { AiGraphState } from "../ai/state.js";
 import { reindexKnowledgeDocuments } from "../services/knowledgeBase.js";
+import {
+  decodeUploadFilename,
+  parseKnowledgeFiles,
+  SUPPORTED_UPLOAD_EXTS,
+} from "../services/knowledgeImport.js";
 import { executePendingAction, PendingActionError } from "../services/pendingActions.js";
 import {
   resolveEmbeddingProviderConfig,
@@ -11,7 +18,12 @@ import {
 } from "../services/aiProvider.js";
 import { TenantScopeError } from "../config/tenantContext.js";
 import { getIdentity, requireAuth } from "../services/authGuard.js";
-import { chatRateLimit, reindexRateLimit, heavyActionRateLimit } from "../services/rateLimit.js";
+import {
+  chatRateLimit,
+  knowledgeParseRateLimit,
+  reindexRateLimit,
+  heavyActionRateLimit,
+} from "../services/rateLimit.js";
 
 export const aiRouter = Router();
 
@@ -27,7 +39,10 @@ export const aiRouter = Router();
  * 反过来的话匿名请求会污染 per-IP 桶，把真实用户一起限死（真实踩过）。
  */
 aiRouter.use("/chat", requireAuth, chatRateLimit);
-aiRouter.use("/knowledge", requireAuth, reindexRateLimit);
+// ⚠️ /knowledge 下两个端点成本差一个数量级：reindex 是批量 embedding（贵，5/min），
+// parse 只是本地解析文件（便宜，30/min）。共用一个档位会让「上传 6 个文件」直接被拦。
+// 所以这里只统一挂 requireAuth，限流下沉到各自路由上。
+aiRouter.use("/knowledge", requireAuth);
 aiRouter.use("/confirm", requireAuth, heavyActionRateLimit);
 
 const chatSchema = z.object({
@@ -53,6 +68,8 @@ const chatSchema = z.object({
 
 const reindexSchema = z.object({
   doc_id: z.number().int().optional(),
+  /** 批量索引指定文档（导入文件后只索引新增的那几篇，避免整租户重算） */
+  doc_ids: z.array(z.number().int()).max(200).optional(),
   tenant_id: z.number().int().optional(),
   user_id: z.number().int().optional(),
 });
@@ -162,7 +179,80 @@ aiRouter.post("/chat", async (req, res) => {
   }
 });
 
-aiRouter.post("/knowledge/reindex", async (req, res) => {
+/** 一次最多 20 个文件、单个 20MB —— 与前端预校验、uploadfiles 桶配置保持一致 */
+const MAX_UPLOAD_FILES = 20;
+const MAX_UPLOAD_FILE_SIZE = 20 * 1024 * 1024;
+
+const uploadKnowledgeFiles = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_UPLOAD_FILE_SIZE, files: MAX_UPLOAD_FILES },
+}).array("files", MAX_UPLOAD_FILES);
+
+/**
+ * multer 的错误（超大小 / 超数量 / 字段名不对）默认会交给 Express 兜底，
+ * 返回 HTML 500，前端拿不到可读原因。这里收敛成 JSON 400。
+ */
+const handleKnowledgeUpload: RequestHandler = (req, res, next) => {
+  uploadKnowledgeFiles(req, res, (error: unknown) => {
+    if (!error) {
+      next();
+      return;
+    }
+    const code = (error as { code?: string }).code;
+    const message =
+      code === "LIMIT_FILE_SIZE"
+        ? `单个文件不得超过 ${MAX_UPLOAD_FILE_SIZE / 1024 / 1024}MB。`
+        : code === "LIMIT_FILE_COUNT" || code === "LIMIT_UNEXPECTED_FILE"
+          ? `一次最多上传 ${MAX_UPLOAD_FILES} 个文件。`
+          : error instanceof Error
+            ? error.message
+            : "文件上传失败。";
+    res.status(400).json({ ok: false, error: message });
+  });
+};
+
+/**
+ * 知识库文件解析：把上传的 docx / pdf / txt / md 抽成纯文本回传，**不写库**。
+ * 入库由前端带 JWT 直连 PostgREST（RLS 生效），见 pages/system/KnowledgeBase.tsx。
+ */
+aiRouter.post(
+  "/knowledge/parse",
+  knowledgeParseRateLimit,
+  handleKnowledgeUpload,
+  async (req, res) => {
+    try {
+      const files = (req as Request & { files?: Express.Multer.File[] }).files || [];
+      if (!files.length) {
+        return res.status(400).json({
+          ok: false,
+          error: "没有收到文件（multipart 字段名固定为 files）。",
+        });
+      }
+
+      const parsed = await parseKnowledgeFiles(
+        files.map((file) => ({
+          // multer 的 originalname 是 latin1 解码的，中文文件名必须先还原
+          name: decodeUploadFilename(file.originalname),
+          buffer: file.buffer,
+        })),
+      );
+
+      const succeeded = parsed.filter((item) => item.ok).length;
+      res.json({
+        ok: true,
+        total: parsed.length,
+        succeeded,
+        failed: parsed.length - succeeded,
+        supported_exts: SUPPORTED_UPLOAD_EXTS,
+        files: parsed,
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: errorToMessage(error) });
+    }
+  },
+);
+
+aiRouter.post("/knowledge/reindex", reindexRateLimit, async (req, res) => {
   const parsed = reindexSchema.safeParse(req.body || {});
   if (!parsed.success) {
     return res.status(400).json({
@@ -185,11 +275,9 @@ aiRouter.post("/knowledge/reindex", async (req, res) => {
       tenantId,
     ).catch(() => resolveEmbeddingProviderConfig(undefined, tenantId));
 
-    const result = await reindexKnowledgeDocuments(
-      resolvedProvider,
-      parsed.data.doc_id,
-      tenantId,
-    );
+    // doc_ids（批量）优先；两者都不传 = 全量重索引。
+    const target = parsed.data.doc_ids?.length ? parsed.data.doc_ids : parsed.data.doc_id;
+    const result = await reindexKnowledgeDocuments(resolvedProvider, target, tenantId);
     res.json({ ok: true, ...result });
   } catch (error) {
     if (error instanceof TenantScopeError) {

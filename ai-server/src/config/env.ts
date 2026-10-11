@@ -27,6 +27,8 @@ const schema = z.object({
   RATE_LIMIT_CHAT_PER_MIN: z.coerce.number().int().positive().default(20),
   RATE_LIMIT_REINDEX_PER_MIN: z.coerce.number().int().positive().default(5),
   RATE_LIMIT_HEAVY_PER_MIN: z.coerce.number().int().positive().default(10),
+  /** 知识库文件解析（本地 CPU，不打模型）：默认 30 次/分钟/用户 */
+  RATE_LIMIT_KNOWLEDGE_PARSE_PER_MIN: z.coerce.number().int().positive().default(30),
 
   /** 日志级别：debug < info < warn < error */
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),

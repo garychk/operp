@@ -235,7 +235,17 @@ export async function indexKnowledgeDocument(
   return { docId: doc.id, chunkCount: payload.length };
 }
 
-export async function fetchKnowledgeDocuments(docId?: number, tenantId?: number | null) {
+/**
+ * 取待索引的文档。
+ *
+ * @param docIds 限定文档：单个数或一批 id。**不传 = 全量重索引**（昂贵，
+ *   每个文档都要逐块打 embedding），所以「导入后自动索引」务必传具体 id，
+ *   别退化成把整个租户重算一遍。
+ */
+export async function fetchKnowledgeDocuments(
+  docIds?: number | number[],
+  tenantId?: number | null,
+) {
   let query = supabase
     .from("sys_ai_knowledge_docs")
     .select("id, title, content, tags, source_type, source_ref, category, tenant_id")
@@ -243,8 +253,14 @@ export async function fetchKnowledgeDocuments(docId?: number, tenantId?: number 
     .or(tenantScopeFilter(tenantId))
     .order("updated_at", { ascending: false });
 
-  if (Number.isFinite(docId)) {
-    query = query.eq("id", docId as number);
+  const ids = (Array.isArray(docIds) ? docIds : [docIds])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+
+  if (ids.length === 1) {
+    query = query.eq("id", ids[0]);
+  } else if (ids.length > 1) {
+    query = query.in("id", ids);
   }
 
   const { data, error } = await query;
@@ -254,10 +270,10 @@ export async function fetchKnowledgeDocuments(docId?: number, tenantId?: number 
 
 export async function reindexKnowledgeDocuments(
   provider: LlmProviderConfig,
-  docId?: number,
+  docIds?: number | number[],
   tenantId?: number | null,
 ) {
-  const docs = await fetchKnowledgeDocuments(docId, tenantId);
+  const docs = await fetchKnowledgeDocuments(docIds, tenantId);
   const result: KnowledgeReindexResult = {
     total: docs.length,
     success: 0,
