@@ -67,6 +67,8 @@ type KnowledgeDoc = {
   source_type: string | null;
   source_ref: string | null;
   is_active: boolean;
+  /** NULL = 平台基线（所有租户可读、只读），非空 = 该租户私有 */
+  tenant_id: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -79,6 +81,8 @@ type KnowledgeDocFormValues = {
   source_type?: string;
   source_ref?: string;
   is_active?: boolean;
+  /** 仅超管可见：true = 发布为平台基线（tenant_id = NULL） */
+  publishAsBaseline?: boolean;
 };
 
 type ImportItem = {
@@ -147,7 +151,25 @@ export function KnowledgeBase() {
   const [importText, setImportText] = useState(defaultImportText);
   const [importing, setImporting] = useState(false);
   const [reindexing, setReindexing] = useState(false);
+  /**
+   * 「发布为平台基线」—— 只对超管可见。开启后新建 / 批量导入 / 文件上传都落 tenant_id = NULL。
+   * RLS 的 WITH CHECK 是 tenant_scope_writable(tenant_id, false)：基线行的写权限只有超管有，
+   * 所以这个开关即便被普通用户伪造，库层面也会拒绝。
+   */
+  const [publishBaseline, setPublishBaseline] = useState(false);
+  /**
+   * 列表是否把「平台基线」文档（tenant_id IS NULL）一并列出 —— 默认否。
+   *
+   * 基线文档对所有租户**可检索**（靠检索 RPC 里的 tenant_id IS NULL 分支），但**不进列表**：
+   * 它们由平台统一维护、对普通租户只读，列出来会跟本租户自己的文档混在一起，且点编辑/删除
+   * 只会被 RLS 拒掉。只有超管临时打开这个开关时才会带上，便于维护。
+   */
+  const [showBaselineDocs, setShowBaselineDocs] = useState(false);
   const [form] = Form.useForm<KnowledgeDocFormValues>();
+
+  const isSuperAdmin = Boolean(user?.isSuperAdmin);
+  /** 归入平台基线的额外字段；只在超管开启开关时生效 */
+  const baselineScope = isSuperAdmin && publishBaseline ? { tenant_id: null } : {};
 
   // —— 文件上传页签 ——
   /** 已选待解析的文件（beforeUpload 返回 false，只暂存不自动上传） */
@@ -160,10 +182,16 @@ export function KnowledgeBase() {
   const fetchRows = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("sys_ai_knowledge_docs")
-        .select("id, category, title, content, tags, source_type, source_ref, is_active, created_at, updated_at")
-        .order("updated_at", { ascending: false });
+        .select("id, category, title, content, tags, source_type, source_ref, is_active, tenant_id, created_at, updated_at");
+      // 平台基线（tenant_id IS NULL）默认不进列表 —— RLS 的 tenant_scope_visible 是
+      // 「NULL 或本租户」，基线行本来就可见，必须显式收窄到本租户，否则租户会看到一堆
+      // 自己改不了的只读行。检索不受影响（走 RPC 的 NULL 分支）。
+      if (!(isSuperAdmin && showBaselineDocs) && user?.tenantId != null) {
+        query = query.eq("tenant_id", user.tenantId);
+      }
+      const { data, error } = await query.order("updated_at", { ascending: false });
       if (error) throw error;
       setRows((data || []) as KnowledgeDoc[]);
     } catch (error) {
@@ -176,12 +204,17 @@ export function KnowledgeBase() {
 
   useEffect(() => {
     void fetchRows();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.tenantId, isSuperAdmin, showBaselineDocs]);
 
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
-    form.setFieldsValue({ is_active: true });
+    // 抽屉里的归属开关默认跟随页面顶部那个开关，避免两处状态不一致
+    form.setFieldsValue({
+      is_active: true,
+      publishAsBaseline: isSuperAdmin && publishBaseline,
+    });
     setDrawerOpen(true);
   };
 
@@ -195,6 +228,7 @@ export function KnowledgeBase() {
       source_type: record.source_type || undefined,
       source_ref: record.source_ref || undefined,
       is_active: record.is_active,
+      publishAsBaseline: record.tenant_id == null,
     });
     setDrawerOpen(true);
   };
@@ -219,6 +253,15 @@ export function KnowledgeBase() {
   const handleSave = async () => {
     try {
       const values = await form.validateFields();
+      /**
+       * 归属：只对超管开放。开 = 平台基线（tenant_id = NULL，所有租户可读、只读），
+       * 关 = 本租户私有。普通用户不渲染这个开关，且 RLS 的 WITH CHECK
+       * （tenant_scope_writable(tenant_id, false)）在库层面也不允许他们写基线行 —— 双保险。
+       */
+      const wantBaseline = isSuperAdmin && values.publishAsBaseline === true;
+      const ownership = isSuperAdmin
+        ? { tenant_id: wantBaseline ? null : user?.tenantId ?? null }
+        : {};
       const payload = {
         category: values.category?.trim() || null,
         title: values.title?.trim() || "",
@@ -228,6 +271,7 @@ export function KnowledgeBase() {
         source_ref: values.source_ref?.trim() || null,
         is_active: values.is_active ?? true,
         updated_at: new Date().toISOString(),
+        ...ownership,
       };
 
       if (!payload.title || !payload.content) {
@@ -254,8 +298,25 @@ export function KnowledgeBase() {
       }
 
       setDrawerOpen(false);
-      message.success(editing ? t('common.updateSuccess') : t('knowledgeBase.createSuccess'));
+      message.success(
+        !editing && wantBaseline
+          ? t('knowledgeBase.createSuccessBaseline')
+          : editing
+            ? t('common.updateSuccess')
+            : t('knowledgeBase.createSuccess'),
+      );
       await fetchRows();
+
+      // 归属变了必须重索引：分片的 tenant_id 是索引时按文档归属写死的，
+      // 不重算的话「改成基线」在检索层面不生效（看起来改了、实际还是老的可见范围）。
+      const ownershipChanged =
+        isSuperAdmin &&
+        Boolean(editing) &&
+        (editing?.tenant_id ?? null) !== ((payload as { tenant_id?: number | null }).tenant_id ?? null);
+      if (ownershipChanged && editing) {
+        message.info(t('knowledgeBase.ownershipChangedReindexed'));
+        await handleReindex(editing.id);
+      }
     } catch (error) {
       console.error(error);
       message.error(t('common.saveFailed'));
@@ -281,6 +342,7 @@ export function KnowledgeBase() {
           source_type: item.source_type || "import",
           source_ref: item.source_ref || null,
           is_active: item.is_active ?? true,
+          ...baselineScope,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }));
@@ -480,6 +542,7 @@ export function KnowledgeBase() {
         // 原文文件本身不入库，这里只留文件名，便于日后回溯来源
         source_ref: item.name,
         is_active: true,
+        ...baselineScope,
         created_at: now,
         updated_at: now,
       }));
@@ -636,6 +699,26 @@ export function KnowledgeBase() {
 
   const columns: ColumnsType<KnowledgeDoc> = [
     { title: t('knowledgeBase.title'), dataIndex: "title", key: "title", ellipsis: true },
+    // 「归属」列只对超管有意义：普通租户的列表里已经被收窄成本租户自己的文档，
+    // 基线文档根本不会出现（见 fetchRows 的说明）。
+    ...(isSuperAdmin
+      ? ([
+          {
+            title: t('knowledgeBase.ownership'),
+            dataIndex: "tenant_id",
+            key: "tenant_id",
+            width: 130,
+            render: (value: number | null) =>
+              value == null ? (
+                <Tooltip title={t('knowledgeBase.publishBaselineHint')}>
+                  <Tag color="gold">{t('knowledgeBase.baselineTag')}</Tag>
+                </Tooltip>
+              ) : (
+                <Typography.Text type="secondary">#{value}</Typography.Text>
+              ),
+          },
+        ] as ColumnsType<KnowledgeDoc>)
+      : []),
     { title: t('knowledgeBase.category'), dataIndex: "category", key: "category", width: 120, render: (value) => value || "-" },
     {
       title: t('knowledgeBase.tags'),
@@ -700,6 +783,36 @@ export function KnowledgeBase() {
       title={t('knowledgeBase.pageTitle')}
       extra={
         <Space>
+          {isSuperAdmin ? (
+            <Space size={6}>
+              <Tooltip title={t('knowledgeBase.publishBaselineHint')}>
+                <Switch size="small" checked={publishBaseline} onChange={setPublishBaseline} />
+              </Tooltip>
+              <Tooltip title={t('knowledgeBase.publishBaselineHint')}>
+                <Typography.Text
+                  type={publishBaseline ? 'warning' : 'secondary'}
+                  style={{ cursor: 'help' }}
+                >
+                  {t('knowledgeBase.publishBaseline')}
+                </Typography.Text>
+              </Tooltip>
+            </Space>
+          ) : null}
+          {isSuperAdmin ? (
+            <Space size={6}>
+              <Tooltip title={t('knowledgeBase.showBaselineHint')}>
+                <Switch size="small" checked={showBaselineDocs} onChange={setShowBaselineDocs} />
+              </Tooltip>
+              <Tooltip title={t('knowledgeBase.showBaselineHint')}>
+                <Typography.Text
+                  type={showBaselineDocs ? 'warning' : 'secondary'}
+                  style={{ cursor: 'help' }}
+                >
+                  {t('knowledgeBase.showBaseline')}
+                </Typography.Text>
+              </Tooltip>
+            </Space>
+          ) : null}
           <Button icon={<SyncOutlined />} onClick={() => void fetchRows()}>
             {t('common.refresh')}
           </Button>
@@ -715,6 +828,12 @@ export function KnowledgeBase() {
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
         {handleReindexHint}
       </Typography.Paragraph>
+
+      {isSuperAdmin && publishBaseline ? (
+        <Typography.Paragraph type="warning" style={{ marginBottom: 16 }}>
+          {t('knowledgeBase.publishBaselineOn')}
+        </Typography.Paragraph>
+      ) : null}
 
       <Tabs
         items={[
@@ -862,6 +981,19 @@ export function KnowledgeBase() {
         }
       >
         <Form form={form} layout="vertical" initialValues={{ is_active: true }}>
+          {isSuperAdmin ? (
+            <Form.Item
+              name="publishAsBaseline"
+              label={t('knowledgeBase.ownership')}
+              valuePropName="checked"
+              extra={t('knowledgeBase.publishBaselineHint')}
+            >
+              <Switch
+                checkedChildren={t('knowledgeBase.baselineTag')}
+                unCheckedChildren={t('knowledgeBase.privateTag')}
+              />
+            </Form.Item>
+          ) : null}
           <Form.Item name="title" label={t('knowledgeBase.title')} rules={[{ required: true, message: t('knowledgeBase.titleRequired') }]}>
             <Input placeholder={t('knowledgeBase.titlePlaceholder')} />
           </Form.Item>
