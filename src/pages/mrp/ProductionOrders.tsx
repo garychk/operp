@@ -22,14 +22,18 @@ import {
   ApartmentOutlined,
   SafetyCertificateOutlined,
   ExportOutlined,
+  PlayCircleOutlined,
+  RocketOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import { SuperTable } from "../../components/SuperTable";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
+import { formatQuantity } from "../../utils/money";
 import dayjs from "dayjs";
 import { SupaModal } from "../../components/SupaModal";
+import { ProductionOrderOperations } from "./ProductionOrderOperations";
 import { useTranslation } from "react-i18next";
 
 type ProductionOrder = Tables["erp_production_orders_s_539dcf81_b"]["Row"];
@@ -64,6 +68,9 @@ const productionOrderTable = "erp_production_orders_s_539dcf81_b";
 const EXPLODE_RPC = "explode_production_order_bom";
 const KIT_CHECK_RPC = "production_kit_check";
 const GENERATE_ISSUE_RPC = "generate_material_issue_from_order";
+// deploy_116（P0-1 工单工序化）的状态机动作入口
+const RELEASE_RPC = "release_production_order";
+const START_RPC = "start_production_order";
 
 // 已完成的订单不允许再展开/领料；与 explore RPC 的守卫保持一致
 const CLOSED_STATUSES = ["completed", "closed", "cancelled"];
@@ -91,6 +98,8 @@ export function ProductionOrders() {
   const [kitLoading, setKitLoading] = useState(false);
   const [exploding, setExploding] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [releasing, setReleasing] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     fetchOrders();
@@ -284,6 +293,116 @@ export function ProductionOrders() {
     });
   };
 
+  // 工单下达（P0-1）：状态 → released，并按工艺路线生成工序行（RPC 幂等，可重复点）
+  const handleRelease = () => {
+    const targets = selectedOrders().filter(
+      (row) => !CLOSED_STATUSES.includes((row.status || "").toLowerCase()),
+    );
+    if (targets.length === 0) {
+      message.warning(t("mrp.productionOrders.releaseNoTarget"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.productionOrders.release"),
+      content: t("mrp.productionOrders.releaseConfirm", { count: targets.length }),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setReleasing(true);
+        try {
+          const { success, failures, notes } = await runSequential(
+            targets,
+            async (record) => {
+              const { data, error } = await supabase.rpc(RELEASE_RPC, {
+                p_order_id: record.id,
+              });
+              if (error) throw error;
+              const result = data as { operation_count?: number };
+              return t("mrp.productionOrders.releaseNote", {
+                count: result?.operation_count ?? 0,
+              });
+            },
+            t("mrp.productionOrders.releaseFailed"),
+          );
+          if (failures.length === 0) {
+            message.success(
+              t("mrp.productionOrders.releaseSuccess", { count: success }),
+            );
+            if (notes.length > 0) {
+              Modal.info({
+                title: t("mrp.productionOrders.release"),
+                content: (
+                  <div>
+                    {notes.map((note) => (
+                      <div key={note}>{note}</div>
+                    ))}
+                  </div>
+                ),
+              });
+            }
+          } else {
+            message.error(
+              t("mrp.productionOrders.releasePartialFailed", {
+                success,
+                failed: failures.length,
+                detail: failures.join("；"),
+              }),
+            );
+          }
+        } finally {
+          setReleasing(false);
+        }
+      },
+    });
+  };
+
+  // 工单开工（P0-1）：released/planned → in_progress
+  const handleStart = () => {
+    const targets = selectedOrders().filter((row) =>
+      ["planned", "released"].includes((row.status || "").toLowerCase()),
+    );
+    if (targets.length === 0) {
+      message.warning(t("mrp.productionOrders.startNoTarget"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.productionOrders.start"),
+      content: t("mrp.productionOrders.startConfirm", { count: targets.length }),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setStarting(true);
+        try {
+          const { success, failures } = await runSequential(
+            targets,
+            async (record) => {
+              const { error } = await supabase.rpc(START_RPC, {
+                p_order_id: record.id,
+              });
+              if (error) throw error;
+            },
+            t("mrp.productionOrders.startFailed"),
+          );
+          if (failures.length === 0) {
+            message.success(
+              t("mrp.productionOrders.startSuccess", { count: success }),
+            );
+          } else {
+            message.error(
+              t("mrp.productionOrders.startPartialFailed", {
+                success,
+                failed: failures.length,
+                detail: failures.join("；"),
+              }),
+            );
+          }
+        } finally {
+          setStarting(false);
+        }
+      },
+    });
+  };
+
   const handleKitCheck = async () => {
     const targets = selectedOrders();
     if (targets.length !== 1) {
@@ -462,10 +581,59 @@ export function ProductionOrders() {
     },
   ];
 
+  /**
+   * 生产订单下达 → 按用料明细预占库存（P1-5）。
+   * 与销售订单同一套语义：开关关闭 / 没配领料仓 / 用料已领完都属于「不需要做」，
+   * 返回 skipped + reason，提示即可，不当错误弹。
+   */
+  const reserveStock = async (orderId: number) => {
+    const { data, error } = await supabase.rpc("reserve_production_order_stock", {
+      p_order_id: orderId,
+    });
+    if (error) {
+      message.warning(`${t("mrp.productionOrders.reserveFailed")}：${error.message}`);
+      return;
+    }
+    const res = (data || {}) as {
+      skipped?: boolean;
+      reason?: string;
+      reservation?: { idempotent?: boolean; reserved_quantity?: number; shortage_quantity?: number };
+    };
+    if (res.skipped) {
+      message.info(
+        `${t("mrp.productionOrders.reserveSkipped")}：${
+          {
+            warehouse_not_set: t("mrp.productionOrders.reserveSkipNoWarehouse"),
+            config_disabled: t("mrp.productionOrders.reserveSkipConfigOff"),
+            no_open_lines: t("mrp.productionOrders.reserveSkipNoLines"),
+          }[res.reason || ""] || res.reason || ""
+        }`,
+      );
+      return;
+    }
+    if (res.reservation?.idempotent) {
+      message.info(t("mrp.productionOrders.reserveAlreadyDone"));
+      return;
+    }
+    const shortage = Number(res.reservation?.shortage_quantity || 0);
+    if (shortage > 0) {
+      message.warning(
+        t("mrp.productionOrders.reserveDoneWithShortage", {
+          qty: res.reservation?.reserved_quantity ?? 0,
+          shortage,
+        }),
+      );
+    } else {
+      message.success(
+        t("mrp.productionOrders.reserveDone", { qty: res.reservation?.reserved_quantity ?? 0 }),
+      );
+    }
+  };
+
   const handleSubmit = async (values: any) => {
     try {
       if (editingOrder) {
-        await logWithTiming("更新生产订单", "UPDATE", async () => {
+        await logWithTiming(t("mrp.productionOrders.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(productionOrderTable)
             .update(values)
@@ -473,11 +641,15 @@ export function ProductionOrders() {
           if (error) throw error;
         }, { table: productionOrderTable, recordId: editingOrder.id });
         message.success(t('common.updateSuccess'));
+        // 本次把状态推到「已下达」→ 按用料明细预占库存（P1-5，后端幂等）
+        if (values.status === "released" && editingOrder.status !== "released") {
+          await reserveStock(editingOrder.id);
+        }
       } else {
         const logParams: { table: string; recordId?: number } = {
           table: productionOrderTable,
         };
-        const data = await logWithTiming("新增生产订单", "INSERT", async () => {
+        const data = await logWithTiming(t("mrp.productionOrders.logCreate"), "INSERT", async () => {
           const { data, error } = await supabase
             .from(productionOrderTable)
             .insert([values])
@@ -489,6 +661,7 @@ export function ProductionOrders() {
         }, logParams);
         setEditingOrder(data);
         message.success(t('common.createSuccess'));
+        if (data.status === "released") await reserveStock(data.id);
       }
       setIsModalOpen(false);
       form.resetFields();
@@ -518,7 +691,7 @@ export function ProductionOrders() {
       content: t('mrp.productionOrders.deleteConfirm'),
       onOk: async () => {
         try {
-          await logWithTiming("删除生产订单", "DELETE", async () => {
+          await logWithTiming(t("mrp.productionOrders.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(productionOrderTable)
               .update({ is_deleted: "y" })
@@ -550,7 +723,8 @@ export function ProductionOrders() {
       product_id: undefined,
       bom_id: undefined,
       routing_id: undefined,
-      warehouse_id: undefined,
+      // 领料仓：下达时按该仓预占用料，默认给第一个仓库，下拉可改
+      warehouse_id: warehouses[0]?.id,
       planned_quantity: 1,
       completed_quantity: 0,
       scrapped_quantity: 0,
@@ -661,6 +835,26 @@ export function ProductionOrders() {
       },
     },
     {
+      // P0-1：报工口径的工序进度（与「完工入库申报」的完成数量分开显示）
+      title: t('mrp.productionOrders.progress'),
+      key: "operation_progress",
+      render: (_: any, record: ProductionOrder) => {
+        const percent = Number(record.operation_progress_percent || 0);
+        const reported = Number(record.reported_quantity || 0);
+        if (percent <= 0 && reported <= 0) {
+          return <span style={{ color: "#999" }}>-</span>;
+        }
+        return (
+          <span>
+            {t('mrp.productionOrders.progressCell', {
+              percent: formatQuantity(percent, 2),
+              qty: formatQuantity(reported),
+            })}
+          </span>
+        );
+      },
+    },
+    {
       title: t('common.actions'),
       key: "action",
       render: (_: any, record: ProductionOrder) => (
@@ -672,6 +866,11 @@ export function ProductionOrders() {
           >
             {t('common.edit')}
           </Button>
+          {record.status === "released" && (
+            <Button type="text" onClick={() => void reserveStock(record.id)}>
+              {t("mrp.productionOrders.reserveStock")}
+            </Button>
+          )}
           <Button
             type="text"
             danger
@@ -730,6 +929,24 @@ export function ProductionOrders() {
               {t('mrp.productionOrders.generateIssue')}
               {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
             </Button>
+            <Button
+              icon={<RocketOutlined />}
+              loading={releasing}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleRelease}
+            >
+              {t('mrp.productionOrders.release')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
+            <Button
+              icon={<PlayCircleOutlined />}
+              loading={starting}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleStart}
+            >
+              {t('mrp.productionOrders.start')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
             <Input.Search
               allowClear
               placeholder={t('mrp.productionOrders.searchPlaceholder')}
@@ -781,7 +998,6 @@ export function ProductionOrders() {
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
               <Col span={8}>
@@ -933,6 +1149,24 @@ export function ProductionOrders() {
           </Form>
         }
         headerPanelTitle={t('mrp.productionOrders.title')}
+        // P0-1：工序页签（仅已保存的工单才有工序行可看）
+        detailItems={
+          editingOrder?.id
+            ? [
+                {
+                  key: "operations",
+                  label: t("mrp.productionOrders.tabOperations"),
+                  children: (
+                    <ProductionOrderOperations
+                      orderId={editingOrder.id}
+                      orderStatus={editingOrder.status}
+                      onDataChanged={fetchOrders}
+                    />
+                  ),
+                },
+              ]
+            : undefined
+        }
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>

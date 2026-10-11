@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import { useTranslation } from "react-i18next";
 import { supabase } from "../utils/supabase";
 import type { Tables } from "../utils/supabase";
-import DictSelect from "./DictSelect";
+import { useUoms, buildUomOptions, productUnitText, normalizeUnitText } from "../hooks/useUoms";
 
 type BomRow = Tables["erp_boms_s_539dcf81_b"]["Row"];
 type BomDetailRow = Tables["erp_bom_details_s_539dcf81_b"]["Row"];
@@ -254,6 +254,15 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
   const graphRef = useRef<Graph | null>(null);
   const positionCacheRef = useRef<Record<string, { x: number; y: number }>>({});
 
+  // 单位下拉数据源 = 单位主数据表（erp_uoms），与物料管理页一致。
+  // 原先用的 <DictSelect dictType="uom" /> 取的是 sys_dict_items，
+  // 而该字典并不存在 → 下拉恒为空。
+  const { uoms, uomMap, groupNameMap } = useUoms();
+  const uomOptions = useMemo(
+    () => buildUomOptions(uoms, groupNameMap, "symbol"),
+    [uoms, groupNameMap],
+  );
+
   const title = useMemo(() => (materialCode ? t("bomTree.titleWithCode", { code: materialCode }) : t("bomTree.title")), [materialCode, t]);
 
   const reloadTree = async (keepSelectedId?: string | null) => {
@@ -291,7 +300,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         product_id: bom?.product_id ?? selectedNode.productId,
         version: bom?.version ?? undefined,
         quantity: bom?.quantity ?? undefined,
-        unit: bom?.unit ?? product?.unit,
+        unit: normalizeUnitText(bom?.unit, uomMap) || productUnitText(product, uomMap),
         is_default: bom?.is_default ?? false,
         is_active: bom?.is_active ?? false,
         effective_date: bom?.effective_date ? dayjs(bom.effective_date) : null,
@@ -305,14 +314,14 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         line_no: detail?.line_no ?? undefined,
         material_id: detail?.material_id ?? selectedNode.productId,
         quantity: detail?.quantity ?? undefined,
-        unit: detail?.unit ?? undefined,
+        unit: normalizeUnitText(detail?.unit, uomMap) || undefined,
         loss_rate: detail?.loss_rate ?? undefined,
         operation_id: detail?.operation_id ?? undefined,
         remark: detail?.remark ?? undefined,
       });
       leftForm.resetFields();
     }
-  }, [selectedNode, products, leftForm, rightForm]);
+  }, [selectedNode, products, uomMap, leftForm, rightForm]);
 
   useEffect(() => {
     void (async () => {
@@ -408,7 +417,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
       createForm.setFieldsValue({
         product_id: product?.id,
         quantity: 1,
-        unit: product?.unit,
+        unit: productUnitText(product, uomMap),
         version: "1.0",
         is_default: false,
         is_active: true,
@@ -461,7 +470,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
           product_id: values.product_id || product.id,
           version: values.version || "1.0",
           quantity: values.quantity ?? 1,
-          unit: values.unit || product.unit || null,
+          unit: values.unit || productUnitText(product, uomMap) || null,
           is_default: values.is_default ?? false,
           is_active: values.is_active ?? true,
           effective_date: values.effective_date ? dayjs(values.effective_date).format("YYYY-MM-DD") : null,
@@ -492,7 +501,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
             <Form.Item label={t("bomTree.field.product")} name="product_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
             <Form.Item label={t("bomTree.field.version")} name="version"><Input /></Form.Item>
             <Form.Item label={t("bomTree.field.quantity")} name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
-            <Form.Item label={t("bomTree.field.unit")} name="unit"><DictSelect dictType="uom" placeholder={t("bomTree.field.unitPrompt")} allowClear /></Form.Item>
+            <Form.Item label={t("bomTree.field.unit")} name="unit"><Select showSearch optionFilterProp="label" options={uomOptions} placeholder={t("bomTree.field.unitPrompt")} allowClear /></Form.Item>
             <Form.Item label={t("bomTree.field.remark")} name="remark"><Input.TextArea rows={4} /></Form.Item>
             <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "bom"}>{t("bomTree.action.saveHeader")}</Button>
           </Form>
@@ -518,7 +527,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
             <Form.Item label={t("bomTree.field.lineNo")} name="line_no"><InputNumber style={{ width: "100%" }} /></Form.Item>
             <Form.Item label={t("bomTree.field.material")} name="material_id"><Select options={products.map((p) => ({ label: `${p.code} ${p.name}`, value: p.id }))} /></Form.Item>
             <Form.Item label={t("bomTree.field.quantity")} name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
-            <Form.Item label={t("bomTree.field.unit")} name="unit"><DictSelect dictType="uom" placeholder={t("bomTree.field.unitPrompt")} allowClear /></Form.Item>
+            <Form.Item label={t("bomTree.field.unit")} name="unit"><Select showSearch optionFilterProp="label" options={uomOptions} placeholder={t("bomTree.field.unitPrompt")} allowClear /></Form.Item>
             <Form.Item label={t("bomTree.field.lossRate")} name="loss_rate"><InputNumber style={{ width: "100%" }} min={0} max={1} step={0.0001} /></Form.Item>
             <Form.Item label={t("bomTree.field.operation")} name="operation_id"><Select allowClear options={operations.map((o) => ({ label: o.name, value: o.id }))} /></Form.Item>
             <Form.Item label={t("bomTree.field.remark")} name="remark"><Input.TextArea rows={4} /></Form.Item>
@@ -563,7 +572,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
                 </Col>
                 <Col span={12}>
                   <Form.Item label={t("bomTree.field.unit")} name="unit">
-                    <DictSelect dictType="uom" placeholder={t("bomTree.field.unitPrompt")} allowClear />
+                    <Select showSearch optionFilterProp="label" options={uomOptions} placeholder={t("bomTree.field.unitPrompt")} allowClear />
                   </Form.Item>
                 </Col>
               </Row>
@@ -624,7 +633,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
               <Row gutter={16}>
                 <Col span={12}>
                   <Form.Item label={t("bomTree.field.unit")} name="unit">
-                    <DictSelect dictType="uom" placeholder={t("bomTree.field.unitPrompt")} allowClear />
+                    <Select showSearch optionFilterProp="label" options={uomOptions} placeholder={t("bomTree.field.unitPrompt")} allowClear />
                   </Form.Item>
                 </Col>
                 <Col span={6}>

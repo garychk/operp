@@ -1,70 +1,23 @@
-import { useEffect, useState } from 'react';
-import { Select, message } from 'antd';
+import { Select } from 'antd';
 import type { SelectProps } from 'antd';
-import { supabase } from '../utils/supabase';
+import { useDict } from '../hooks/useDict';
 
 export interface DictSelectProps extends SelectProps {
   /** 字典类型编码，对应 sys_dict_types.code */
   dictType: string;
 }
 
-interface DictItemRow {
-  code: string;
-  label: string;
-  sort_order: number | null;
-}
-
 /**
  * 从系统数据字典加载选项的 Select。
- * 传入的 Select 属性会原样透传，options 由数据字典自动生成。
+ *
+ * 取数逻辑统一收口在 `useDict`（见 src/hooks/useDict.ts）；本组件只负责把
+ * items 映射成 options 并透传其余 Select 属性。
+ *
+ * 注意：**value 存的是字典项的 `code`，不是 `label`**。需要把已有值显示成
+ * 显示名时（列表列、详情页），用同一个 hook 的 `labelOf()` 做映射，不要另起一套取数。
  */
 export function DictSelect({ dictType, loading, ...selectProps }: DictSelectProps) {
-  const [options, setOptions] = useState<NonNullable<SelectProps['options']>>([]);
-  const [fetching, setFetching] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchOptions = async () => {
-      if (!dictType) {
-        setOptions([]);
-        return;
-      }
-
-      setFetching(true);
-      try {
-        const { data, error } = await supabase
-          .from('sys_dict_types')
-          .select('id, sys_dict_items(code, label, sort_order)')
-          .eq('code', dictType)
-          .eq('status', '1')
-          .eq('is_deleted', 'n')
-          .eq('sys_dict_items.status', '1')
-          .eq('sys_dict_items.is_deleted', 'n')
-          .maybeSingle();
-
-        if (error) throw error;
-        if (cancelled) return;
-
-        const items = ((data?.sys_dict_items ?? []) as DictItemRow[])
-          .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-          .map((item) => ({ value: item.code, label: item.label }));
-        setOptions(items);
-      } catch (error) {
-        if (!cancelled) {
-          setOptions([]);
-          message.error('获取数据字典失败');
-        }
-      } finally {
-        if (!cancelled) setFetching(false);
-      }
-    };
-
-    fetchOptions();
-    return () => {
-      cancelled = true;
-    };
-  }, [dictType]);
+  const { options, loading: fetching } = useDict(dictType);
 
   return <Select {...selectProps} loading={loading || fetching} options={options} />;
 }

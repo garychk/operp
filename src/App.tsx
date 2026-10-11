@@ -27,24 +27,45 @@ import { Inventory } from './pages/inventory/Inventory';
 import { PurchaseOrders } from './pages/inventory/PurchaseOrders';
 import { SalesOrders } from './pages/inventory/SalesOrders';
 import { PurchaseReceipts } from './pages/inventory/PurchaseReceipts';
+import { PurchaseReturns } from './pages/inventory/PurchaseReturns';
 import { SalesDeliveries } from './pages/inventory/SalesDeliveries';
+import { SalesReturns } from './pages/inventory/SalesReturns';
 import { InventoryTransfers } from './pages/inventory/InventoryTransfers';
 import { StockCounts } from './pages/inventory/StockCounts';
 import { StockAdjustments } from './pages/inventory/StockAdjustments';
+import { OtherStockDocuments } from './pages/inventory/OtherStockDocuments';
+import { OpeningBalances } from './pages/inventory/OpeningBalances';
+import { Batches } from './pages/inventory/Batches';
+import { BatchTrace } from './pages/inventory/BatchTrace';
 import { InventoryTransactions } from './pages/inventory/InventoryTransactions';
+import { InventoryReports } from './pages/inventory/InventoryReports';
+import { InventoryReconciliation } from './pages/inventory/InventoryReconciliation';
+import { InventorySubjectMap } from './pages/inventory/InventorySubjectMap';
 import { Boms } from './pages/mrp/Boms';
 import { Departments } from './pages/mrp/Departments';
+import { Employees } from './pages/mrp/Employees';
 import { RoutingOperations } from './pages/mrp/RoutingOperations';
 import { WorkCenters } from './pages/mrp/WorkCenters';
 import { Operations } from './pages/mrp/Operations';
 import { ProductionOrders } from './pages/mrp/ProductionOrders';
 import { MaterialIssues } from './pages/mrp/MaterialIssues';
+import { MaterialReturns } from './pages/mrp/MaterialReturns';
 import { ProductionReceipts } from './pages/mrp/ProductionReceipts';
 import { ProductionReports } from './pages/mrp/ProductionReports';
 import { CostCalculations } from './pages/mrp/CostCalculations';
 import { MrpPlans } from './pages/mrp/MrpPlans';
 import { MpsPlans } from './pages/mrp/MpsPlans';
 import { QualityInspections } from './pages/mrp/QualityInspections';
+import { SubcontractOrders } from './pages/mrp/SubcontractOrders';
+import { SubcontractIssues } from './pages/mrp/SubcontractIssues';
+import { SubcontractReceipts } from './pages/mrp/SubcontractReceipts';
+import { SubcontractSettlements } from './pages/mrp/SubcontractSettlements';
+import { ProductionAnalytics } from './pages/mrp/ProductionAnalytics';
+// P0-4（deploy_114）MRP 计划参数与工作日历
+import { PlanningParams } from './pages/mrp/PlanningParams';
+import { WorkCalendars } from './pages/mrp/WorkCalendars';
+// 排班地基 Step 1（deploy_119）班次主档
+import { Shifts } from './pages/mrp/Shifts';
 import { Users } from './pages/system/Users';
 import { Tenants } from './pages/system/Tenants';
 import { Roles } from './pages/system/Roles';
@@ -125,29 +146,55 @@ function AppContent() {
           <Route path="stock" element={<Inventory />} />
           <Route path="purchase" element={<PurchaseOrders />} />
           <Route path="purchase-receipts" element={<PurchaseReceipts />} />
+          <Route path="purchase-returns" element={<PurchaseReturns />} />
           <Route path="sales" element={<SalesOrders />} />
           <Route path="sales-deliveries" element={<SalesDeliveries />} />
+          <Route path="sales-returns" element={<SalesReturns />} />
           <Route path="transactions" element={<InventoryTransactions />} />
           <Route path="transfers" element={<InventoryTransfers />} />
           <Route path="stock-counts" element={<StockCounts />} />
           <Route path="stock-adjustments" element={<StockAdjustments />} />
+          <Route path="other-stock" element={<OtherStockDocuments />} />
+          <Route path="opening-balances" element={<OpeningBalances />} />
+          <Route path="batches" element={<Batches />} />
+          <Route path="batch-trace" element={<BatchTrace />} />
+          <Route path="reports" element={<InventoryReports />} />
+          <Route path="reconciliation" element={<InventoryReconciliation />} />
+          <Route path="subject-map" element={<InventorySubjectMap />} />
         </Route>
         
         <Route path="mrp">
           <Route index element={<Navigate to="departments" replace />} />
           <Route path="departments" element={<Departments />} />
+          <Route path="employees" element={<Employees />} />
           <Route path="boms" element={<Boms />} />
           <Route path="routings" element={<RoutingOperations />} />
           <Route path="workcenters" element={<WorkCenters />} />
           <Route path="operations" element={<Operations />} />
           <Route path="production" element={<ProductionOrders />} />
           <Route path="material-issues" element={<MaterialIssues />} />
+          <Route path="material-returns" element={<MaterialReturns />} />
           <Route path="production-receipts" element={<ProductionReceipts />} />
           <Route path="production-reports" element={<ProductionReports />} />
           <Route path="cost-calculations" element={<CostCalculations />} />
           <Route path="plans" element={<MrpPlans />} />
           <Route path="mps" element={<MpsPlans />} />
           <Route path="quality" element={<QualityInspections />} />
+          {/* P2-10 委外/外协闭环（deploy_102 / deploy_103） */}
+          <Route path="subcontract-orders" element={<SubcontractOrders />} />
+          <Route path="subcontract-issues" element={<SubcontractIssues />} />
+          <Route path="subcontract-receipts" element={<SubcontractReceipts />} />
+          <Route
+            path="subcontract-settlements"
+            element={<SubcontractSettlements />}
+          />
+          {/* P0-5 生产报表（deploy_108 视图 + deploy_109 菜单） */}
+          <Route path="production-analytics" element={<ProductionAnalytics />} />
+          {/* P0-4 计划基础参数（deploy_114 菜单） */}
+          <Route path="planning-params" element={<PlanningParams />} />
+          <Route path="work-calendars" element={<WorkCalendars />} />
+          {/* 排班地基 Step 1（deploy_119 菜单） */}
+          <Route path="shifts" element={<Shifts />} />
         </Route>
         
         <Route path="system">

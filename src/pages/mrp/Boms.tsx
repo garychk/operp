@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -30,7 +30,7 @@ import { SuperTable } from "../../components/SuperTable";
 import dayjs from 'dayjs';
 import { SupaModal } from "../../components/SupaModal";
 import { BizAttachments } from "../../components/BizAttachments";
-import DictSelect from "../../components/DictSelect";
+import { useUoms, buildUomOptions, productUnitText, normalizeUnitText } from "../../hooks/useUoms";
 import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
 import SimpleModal from "../../components/SimpleModal";
 
@@ -62,6 +62,16 @@ export function Boms() {
   const [treeMaterialCode, setTreeMaterialCode] = useState<string | null>(null);
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
+
+  // 单位下拉的数据源 = 单位主数据表（erp_uoms），与物料管理页完全一致。
+  // 历史问题：这里曾用 <DictSelect dictType="uom" />，而 sys_dict_items 里
+  // 根本没有 `uom` 字典 → 下拉恒为空，只能靠手填，于是出现 "PCS" 这类
+  // 与 erp_products.unit（"pcs"）对不上的值。
+  const { uoms, uomMap, groupNameMap } = useUoms();
+  const uomOptions = useMemo(
+    () => buildUomOptions(uoms, groupNameMap, "symbol"),
+    [uoms, groupNameMap],
+  );
 
   useEffect(() => {
     fetchBoms();
@@ -148,7 +158,7 @@ export function Boms() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingBom) {
-        await logWithTiming("更新BOM", "UPDATE", async () => {
+        await logWithTiming(t("mrp.boms.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(bomTable)
             .update(values)
@@ -160,7 +170,7 @@ export function Boms() {
         const logParams: { table: string; recordId?: number } = {
           table: bomTable,
         };
-        const data = await logWithTiming("新增BOM", "INSERT", async () => {
+        const data = await logWithTiming(t("mrp.boms.logCreate"), "INSERT", async () => {
           const { data, error } = await supabase
             .from(bomTable)
             .insert([values])
@@ -229,6 +239,9 @@ export function Boms() {
     setSelectedBom(record);
     form.setFieldsValue({
       ...record,
+      // 单位口径归一：历史脏值（如 "PCS"）→ 单位主数据的规范写法；
+      // 完全没有单位时按母件的基本单位补默认值
+      unit: normalizeUnitText(record.unit, uomMap) || getProductUnit(record.product_id),
       effective_date: dayjs(record.effective_date),
       expiry_date: dayjs(record.expiry_date),
       is_default: record.is_default ?? true,
@@ -255,7 +268,7 @@ export function Boms() {
       content: t("mrp.boms.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除BOM", "DELETE", async () => {
+          await logWithTiming(t("mrp.boms.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(bomTable)
               .update({ is_deleted: "y" })
@@ -286,7 +299,7 @@ export function Boms() {
       product_id: undefined,
       version: "1.0",
       quantity: 1,
-      unit: "PCS",
+      unit: "",
       is_default: true,
       is_active: true,
       effective_date: dayjs(new Date()),
@@ -326,7 +339,11 @@ export function Boms() {
 
   const handleEditDetail = (record: BomDetail) => {
     setEditingDetail(record);
-    detailForm.setFieldsValue(record);
+    detailForm.setFieldsValue({
+      ...record,
+      // 历史脏值（如 "PCS"）归一到单位主数据的规范写法
+      unit: normalizeUnitText(record.unit, uomMap),
+    });
     setIsDetailModalOpen(true);
   };
 
@@ -364,7 +381,12 @@ export function Boms() {
 
   const getMaterialUnit = (materialId: number | null) => {
     const product = allProducts.find((p) => p.id === materialId);
-    return product?.unit || "";
+    return productUnitText(product, uomMap);
+  };
+
+  const getProductUnit = (productId: number | null) => {
+    const product = products.find((p) => p.id === productId);
+    return productUnitText(product, uomMap);
   };
 
   const getOperationName = (operationId: number | null) => {
@@ -406,6 +428,7 @@ export function Boms() {
       title: t("mrp.boms.unit"),
       dataIndex: "unit",
       key: "unit",
+      render: (unit: string) => normalizeUnitText(unit, uomMap) || "-",
     },
     {
       title: t("mrp.boms.defaultLabel"),
@@ -475,6 +498,7 @@ export function Boms() {
       title: t("mrp.boms.unit"),
       dataIndex: "unit",
       key: "unit",
+      render: (unit: string) => normalizeUnitText(unit, uomMap) || "-",
     },
     {
       title: t("mrp.boms.lossRate"),
@@ -573,7 +597,6 @@ export function Boms() {
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
               <Col span={12}>
@@ -599,6 +622,8 @@ export function Boms() {
                           "bom_no",
                           product.code || `BOM-${value}`,
                         );
+                        // 主档单位 = 母件的基本单位，跟随物料带出（与明细同一口径）
+                        form.setFieldValue("unit", productUnitText(product, uomMap));
                       }
                     }}
                   >
@@ -618,9 +643,11 @@ export function Boms() {
                     placeholder={t("mrp.boms.quantityPrompt")}
                   />
                 </Form.Item>
-                <Form.Item label={t("mrp.boms.unit")} name="unit" initialValue="PCS">
-                  <DictSelect
-                    dictType="uom"
+                <Form.Item label={t("mrp.boms.unit")} name="unit">
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    options={uomOptions}
                     placeholder={t("mrp.boms.unitEnterPrompt")}
                     allowClear
                   />
@@ -748,8 +775,10 @@ export function Boms() {
                 />
               </Form.Item>
               <Form.Item label={t("mrp.boms.unit")} name="unit">
-                <DictSelect
-                  dictType="uom"
+                <Select
+                  showSearch
+                  optionFilterProp="label"
+                  options={uomOptions}
                   placeholder={t("mrp.boms.unitSelectPrompt")}
                   allowClear
                 />

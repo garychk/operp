@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Form, Input, InputNumber, Modal, Select, Space, message, DatePicker, Table } from 'antd';
-import { PlusOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, ThunderboltOutlined, UndoOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
+import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventoryVoucher';
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
 import SimpleModal from '../../components/SimpleModal';
@@ -62,12 +63,14 @@ export function StockCounts() {
       .eq('id', id);
     if (approveError) throw approveError;
 
-    const { error } = await supabase.rpc('post_inventory_document', {
+    const { data, error } = await supabase.rpc('post_inventory_document', {
       p_document_type: 'stock_count',
       p_document_id: id,
       p_idempotency_key: crypto.randomUUID(),
     });
     if (error) throw error;
+    // deploy_87：库存过账会顺带生成会计凭证；会计侧问题不阻断过账，但要提示。
+    return data as { voucher?: InventoryVoucherResult } | null;
   };
 
   // 审核并过账走工具栏按钮，作用于当前勾选的盘点单（支持多选批量）。
@@ -87,11 +90,14 @@ export function StockCounts() {
         setPosting(true);
         let success = 0;
         const failures: string[] = [];
+        const voucherGaps: string[] = [];
         try {
           for (const record of targets) {
             try {
-              await postStockCount(record.id);
+              const result = await postStockCount(record.id);
               success += 1;
+              const notice = voucherNotice(result, t);
+              if (notice) voucherGaps.push(`${record.count_no}：${notice}`);
             } catch (error: any) {
               console.error('Error posting stock count:', error);
               failures.push(`${record.count_no}：${error?.message || t('stockCounts.messages.postFailed')}`);
@@ -108,6 +114,9 @@ export function StockCounts() {
               }),
             );
           }
+          if (voucherGaps.length > 0) {
+            message.warning(voucherGaps.join('；'), 10);
+          }
           setSelectedRowKeys([]);
           await fetchAll();
         } finally {
@@ -116,6 +125,74 @@ export function StockCounts() {
       },
     });
   };
+  // 反过账：冲回已生成的盘点差异流水，把库存恢复成盘点前的账面数量。
+  // 冲销由 reverse_inventory_document 负责（deploy_86），失败原因逐单回报，不静默。
+  const runReverseStockCounts = async (targets: Header[]) => {
+    setPosting(true);
+    let success = 0;
+    const failures: string[] = [];
+    const voucherGaps: string[] = [];
+    try {
+      for (const record of targets) {
+        try {
+          const { data, error } = await supabase.rpc('reverse_inventory_document', {
+            p_document_type: 'stock_count',
+            p_document_id: record.id,
+            p_idempotency_key: crypto.randomUUID(),
+          });
+          if (error) throw error;
+          success += 1;
+          // deploy_87：反过账会顺带作废对应凭证；作废失败要在界面上看得见。
+          const notice = voucherNotice(data as { voucher?: InventoryVoucherResult } | null, t);
+          if (notice) voucherGaps.push(`${record.count_no}：${notice}`);
+        } catch (error: any) {
+          console.error('Error reversing stock count:', error);
+          failures.push(`${record.count_no}：${error?.message || t('stockCounts.messages.reverseFailed')}`);
+        }
+      }
+      if (failures.length === 0) {
+        message.success(t('stockCounts.messages.reverseSuccessMany', { count: success }));
+      } else {
+        message.error(
+          t('stockCounts.messages.reversePartialFailed', {
+            success,
+            failed: failures.length,
+            detail: failures.join('；'),
+          }),
+        );
+      }
+      if (voucherGaps.length > 0) {
+        message.warning(voucherGaps.join('；'), 10);
+      }
+      setSelectedRowKeys([]);
+      await fetchAll();
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const confirmReverseStockCounts = (targets: Header[]) => {
+    Modal.confirm({
+      title: t('stockCounts.reverse'),
+      content: t('stockCounts.reverseConfirmContentMany', { count: targets.length }),
+      okText: t('common.continue'),
+      cancelText: t('common.cancel'),
+      onOk: () => runReverseStockCounts(targets),
+    });
+  };
+
+  const handleBatchReverse = () => {
+    const selectedIds = new Set(selectedRowKeys.map((key) => Number(key)));
+    const targets = rows.filter((row) => selectedIds.has(row.id) && row.status === 'posted');
+    if (targets.length === 0) {
+      message.warning(t('stockCounts.messages.reverseNoTarget'));
+      return;
+    }
+    confirmReverseStockCounts(targets);
+  };
+
+  const handleReverseOne = (record: Header) => confirmReverseStockCounts([record]);
+
   const columns = [
     { title: t('stockCounts.countNo'), key: 'count_no', dataIndex: 'count_no' },
     { title: t('stockCounts.countDate'), key: 'count_date', dataIndex: 'count_date' },
@@ -128,6 +205,11 @@ export function StockCounts() {
         <Button onClick={() => { setEditing(record); form.setFieldsValue({ ...record, count_date: dayjs(record.count_date) }); setOpen(true); }}>{t('common.edit')}</Button>
       ) : (
         <Button disabled>{t('stockCounts.posted')}</Button>
+      )}
+      {record.status === 'posted' && (
+        <Button danger icon={<UndoOutlined />} onClick={() => handleReverseOne(record)}>
+          {t('stockCounts.reverse')}
+        </Button>
       )}
       <Button danger icon={<DeleteOutlined />} onClick={async () => { await supabase.from(tableName).update({ is_deleted: 'y' }).eq('id', record.id); await fetchAll(); }}>{t('common.delete')}</Button>
     </Space>},
@@ -175,6 +257,16 @@ export function StockCounts() {
               onClick={handleBatchPost}
             >
               {t('stockCounts.approveAndPost')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
+            </Button>
+            <Button
+              danger
+              icon={<UndoOutlined />}
+              loading={posting}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchReverse}
+            >
+              {t('stockCounts.reverse')}
               {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
             </Button>
           </Space>

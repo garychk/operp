@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Key } from "react";
 import {
   Button,
@@ -24,6 +24,7 @@ import {
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import { Categories } from "./Categories";
 import { ProductUoms } from "./ProductUoms";
 import { ProductImages, IMAGE_BUCKET, imagePublicUrl } from "./ProductImages";
@@ -33,24 +34,21 @@ import { formatMoney } from "../../utils/money";
 import type { SuperTableColumn } from "../../components/SuperTable";
 import SimpleModal from "../../components/SimpleModal";
 import { useTranslation } from "react-i18next";
+import { useUoms, buildUomOptions } from "../../hooks/useUoms";
 
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type ProductCategory = Tables["erp_product_categories_s_539dcf81_b"]["Row"];
-type Uom = Tables["erp_uoms_s_539dcf81_b"]["Row"];
-type UomGroup = Tables["erp_uom_groups_s_539dcf81_b"]["Row"];
 
 const productImageTable = "erp_product_images_s_539dcf81_b";
 
 const { Option } = Select;
 const productTable = "erp_products_s_539dcf81_b";
-const uomTable = "erp_uoms_s_539dcf81_b";
+const docType = "products";
 
 export function Products() {
   const { t } = useTranslation();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
-  const [uoms, setUoms] = useState<Uom[]>([]);
-  const [groups, setGroups] = useState<UomGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -62,25 +60,19 @@ export function Products() {
   /** 产品 id -> 首图公开 URL（sort_order 最小者），列表缩略列使用 */
   const [firstImageUrls, setFirstImageUrls] = useState<Map<number, string>>(new Map());
 
+  // 单位主数据（erp_uoms + erp_uom_groups）唯一入口 —— BOM 等页面共用同一实现，
+  // 见 src/hooks/useUoms.ts。切勿再各自写一份查询。
+  const { uoms, groups, uomMap, groupNameMap } = useUoms();
+  const uomOptions = useMemo(
+    () => buildUomOptions(uoms, groupNameMap, "id"),
+    [uoms, groupNameMap],
+  );
+
   useEffect(() => {
     fetchProducts();
     fetchCategories();
-    fetchUoms();
     fetchFirstImages();
   }, []);
-
-  const fetchUoms = async () => {
-    try {
-      const [{ data: g }, { data: u }] = await Promise.all([
-        supabase.from("erp_uom_groups_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("status", "active"),
-        supabase.from(uomTable).select("*").eq("is_deleted", "n").eq("is_active", true),
-      ]);
-      setGroups(g || []);
-      setUoms(u || []);
-    } catch (error) {
-      console.error("Error fetching uoms:", error);
-    }
-  };
 
   const fetchProducts = async () => {
     try {
@@ -134,14 +126,6 @@ export function Products() {
       console.error("Error fetching categories:", error);
     }
   };
-
-  const groupNameMap = new Map<number, string>(groups.map((g) => [g.id, g.name]));
-  const uomMap = new Map<number, Uom>(uoms.map((u) => [u.id, u]));
-
-  const uomOptions = uoms.map((u) => ({
-    value: u.id,
-    label: `${u.name}${u.symbol ? ` (${u.symbol})` : ""} · ${groupNameMap.get(u.group_id) || ""}`,
-  }));
 
   const handleSubmit = async (values: any) => {
     try {
@@ -218,10 +202,17 @@ export function Products() {
     setIsModalOpen(true);
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
+    let code: string;
+    try {
+      code = await nextDocumentNo(docType);
+    } catch (error) {
+      message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
+      return;
+    }
     setEditingProduct(null);
     form.setFieldsValue({
-      code: "",
+      code,
       name: "",
       short_name: "",
       category_id: undefined,
@@ -238,6 +229,8 @@ export function Products() {
       is_sold: true,
       is_manufactured: false,
       status: "active",
+      is_batch_managed: false,
+      shelf_life_days: undefined,
     });
     setActiveTab("basic");
     setIsModalOpen(true);
@@ -329,6 +322,25 @@ export function Products() {
       render: (_: any, record: Product) => renderUnitCell(record),
     },
     {
+      // 批次管理开关（deploy_106）：开了之后该物料过账必须带批次号，
+      // 由 inventory_apply_move 在唯一漏斗处强制，不只是页面提示。
+      title: t("products.batchManaged"),
+      dataIndex: "is_batch_managed",
+      key: "is_batch_managed",
+      width: 150,
+      render: (v: boolean, record: Product) => {
+        if (!v) return <Tag>{t("products.batchManagedOff")}</Tag>;
+        const days = (record as { shelf_life_days?: number | null }).shelf_life_days;
+        return (
+          <Tag color="blue">
+            {days
+              ? t("products.batchShelfLifeTag", { days })
+              : t("products.batchManagedOn")}
+          </Tag>
+        );
+      },
+    },
+    {
       title: t("products.purchasePrice"),
       dataIndex: "purchase_price",
       key: "purchase_price",
@@ -388,7 +400,7 @@ export function Products() {
         rowKey="id"
         loading={loading}
         pagination={{ pageSize: 10 }}
-        storageKey="products"
+        storageKey={docType}
         tableName={productTable}
         headerTitle={t("products.title")}
         rowSelection={{
@@ -438,7 +450,6 @@ export function Products() {
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
                       <Col span={8}>
@@ -473,19 +484,6 @@ export function Products() {
                         </Form.Item>
                         <Form.Item label={t("products.spec")} name="specification">
                           <Input placeholder={t("products.specPlaceholder")} />
-                        </Form.Item>
-                        <Form.Item
-                          label={t("products.baseUnit")}
-                          name="base_uom_id"
-                          rules={[{ required: true, message: t("products.baseUnitRequired") }]}
-                          tooltip={t("products.unitConvHint")}
-                        >
-                          <Select
-                            showSearch
-                            placeholder={t("products.baseUnitPlaceholder")}
-                            optionFilterProp="label"
-                            options={uomOptions}
-                          />
                         </Form.Item>
                       </Col>
                       <Col span={8}>
@@ -538,6 +536,40 @@ export function Products() {
                             placeholder={t("products.minStockPlaceholder")}
                           />
                         </Form.Item>
+                        <Form.Item label={t("common.status")} name="status" initialValue="active">
+                          <Select>
+                            <Option value="active">{t("common.enabled")}</Option>
+                            <Option value="inactive">{t("products.disabled")}</Option>
+                          </Select>
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.shelfLifeDays")}
+                          name="shelf_life_days"
+                          tooltip={t("products.shelfLifeDaysHint")}
+                        >
+                          <InputNumber
+                            style={{ width: "100%" }}
+                            min={1}
+                            placeholder={t("products.shelfLifeDaysPlaceholder")}
+                          />
+                        </Form.Item>
+                        <Form.Item
+                          label={t("products.baseUnit")}
+                          name="base_uom_id"
+                          rules={[{ required: true, message: t("products.baseUnitRequired") }]}
+                          tooltip={t("products.unitConvHint")}
+                        >
+                          <Select
+                            showSearch
+                            placeholder={t("products.baseUnitPlaceholder")}
+                            optionFilterProp="label"
+                            options={uomOptions}
+                          />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                    <Row gutter={16}>
+                      <Col span={6}>
                         <Form.Item
                           label={t("products.purchasable")}
                           name="is_purchased"
@@ -546,6 +578,8 @@ export function Products() {
                         >
                           <Checkbox />
                         </Form.Item>
+                      </Col>
+                      <Col span={6}>
                         <Form.Item
                           label={t("products.sellable")}
                           name="is_sold"
@@ -554,6 +588,8 @@ export function Products() {
                         >
                           <Checkbox />
                         </Form.Item>
+                      </Col>
+                      <Col span={6}>
                         <Form.Item
                           label={t("products.manufacturable")}
                           name="is_manufactured"
@@ -562,11 +598,16 @@ export function Products() {
                         >
                           <Checkbox />
                         </Form.Item>
-                        <Form.Item label={t("common.status")} name="status" initialValue="active">
-                          <Select>
-                            <Option value="active">{t("common.enabled")}</Option>
-                            <Option value="inactive">{t("products.disabled")}</Option>
-                          </Select>
+                      </Col>
+                      <Col span={6}>
+                        <Form.Item
+                          label={t("products.batchManaged")}
+                          name="is_batch_managed"
+                          valuePropName="checked"
+                          initialValue={false}
+                          tooltip={t("products.batchManagedHint")}
+                        >
+                          <Checkbox />
                         </Form.Item>
                       </Col>
                     </Row>
@@ -607,7 +648,8 @@ export function Products() {
           </Space>
         }
         width={"80%"}
-        height={500}
+        height={'80%'}
+        workflowDocumentType={docType}
       />
 
       <SimpleModal

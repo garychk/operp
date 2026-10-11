@@ -39,6 +39,7 @@ type ProductionOrder = Tables["erp_production_orders_s_539dcf81_b"]["Row"];
 type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
 type Employee = Tables["erp_employees_s_539dcf81_b"]["Row"];
+type OrderOperation = Tables["erp_production_order_operations_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 const reportTable = "erp_production_reports_s_539dcf81_b";
@@ -72,6 +73,8 @@ export function ProductionReports() {
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [orderOperations, setOrderOperations] = useState<OrderOperation[]>([]);
+  const [orderOpsLoading, setOrderOpsLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -189,6 +192,8 @@ export function ProductionReports() {
         operation_id: values.operation_id ?? null,
         work_center_id: values.work_center_id ?? null,
         operator_id: values.operator_id ?? null,
+        // P0-1：报工挂到工单工序行，工序完工数与工单进度由触发器按它回写
+        order_operation_id: values.order_operation_id ?? null,
       };
 
       if (editingReport) {
@@ -240,6 +245,8 @@ export function ProductionReports() {
       ...record,
       report_date: record.report_date ? dayjs(record.report_date) : undefined,
     });
+    // P0-1：把该工单的工序行拉出来，编辑时仍能挂/换工序
+    void fetchOrderOperations(record.production_order_id ?? undefined);
     setIsModalOpen(true);
   };
 
@@ -426,10 +433,12 @@ export function ProductionReports() {
       return;
     }
     setEditingReport(null);
+    setOrderOperations([]);
     form.setFieldsValue({
       report_no: reportNo,
       report_date: dayjs(new Date()),
       production_order_id: undefined,
+      order_operation_id: undefined,
       operation_id: undefined,
       completed_quantity: 0,
       scrapped_quantity: 0,
@@ -443,13 +452,53 @@ export function ProductionReports() {
     setIsModalOpen(true);
   };
 
+  /** P0-1：拉取该工单的工序行 —— 报工挂工序后，完工数与进度才会被回写 */
+  const fetchOrderOperations = async (orderId: number | undefined) => {
+    if (!orderId) {
+      setOrderOperations([]);
+      return;
+    }
+    try {
+      setOrderOpsLoading(true);
+      const { data, error } = await supabase
+        .from("erp_production_order_operations_s_539dcf81_b")
+        .select("*")
+        .eq("is_deleted", "n")
+        .eq("order_id", orderId)
+        .neq("status", "cancelled")
+        .order("sequence_no")
+        .order("line_no");
+      if (error) throw error;
+      setOrderOperations(data || []);
+    } catch (error) {
+      console.error("Error fetching order operations:", error);
+      setOrderOperations([]);
+    } finally {
+      setOrderOpsLoading(false);
+    }
+  };
+
   // 选生产订单后带出默认工作中心（订单上没有就留空，不猜）
   const handleOrderChange = (orderId: number | undefined) => {
+    // 换工单 → 原来挂的工序行必然不再适用，先清掉，避免存出跨工单的脏关联
+    form.setFieldsValue({ order_operation_id: undefined });
+    void fetchOrderOperations(orderId);
     if (!orderId) return;
     const order = orders.find((o) => o.id === orderId);
     if (order?.work_center_id && !form.getFieldValue("work_center_id")) {
       form.setFieldsValue({ work_center_id: order.work_center_id });
     }
+  };
+
+  /** 选工单工序行 → 同步带出工序与工作中心（避免与工序行自相矛盾） */
+  const handleOrderOperationChange = (opRowId: number | undefined) => {
+    if (!opRowId) return;
+    const row = orderOperations.find((r) => r.id === opRowId);
+    if (!row) return;
+    form.setFieldsValue({
+      operation_id: row.operation_id ?? undefined,
+      work_center_id: row.work_center_id ?? form.getFieldValue("work_center_id"),
+    });
   };
 
   const getOrderLabel = (orderId: number | null) => {
@@ -776,23 +825,50 @@ export function ProductionReports() {
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                label={t("mrp.productionReports.operation")}
-                name="operation_id"
-              >
-                <Select
-                  allowClear
-                  placeholder={t("mrp.productionReports.operationPrompt")}
-                  showSearch
-                  optionFilterProp="children"
+              {/* P0-1：优先挂「工单工序」—— 挂上之后工序完工数/工单进度才会被回写。
+                  工单还没下达（没有工序行）时保留旧的手填工序，不阻断历史用法。 */}
+              {orderOperations.length > 0 ? (
+                <Form.Item
+                  label={t("mrp.productionReports.orderOperation")}
+                  name="order_operation_id"
+                  extra={t("mrp.productionReports.orderOperationHint")}
                 >
-                  {operations.map((o) => (
-                    <Option key={o.id} value={o.id}>
-                      {o.code} - {o.name}
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
+                  <Select
+                    allowClear
+                    loading={orderOpsLoading}
+                    placeholder={t("mrp.productionReports.orderOperationPrompt")}
+                    onChange={handleOrderOperationChange}
+                    options={orderOperations.map((r) => ({
+                      value: r.id,
+                      label: `${r.sequence_no} · ${
+                        operations.find((o) => o.id === r.operation_id)?.name ?? "-"
+                      }（${t("mrp.productionReports.orderOperationDone", {
+                        done: Number(r.completed_quantity || 0),
+                        planned: Number(r.planned_quantity || 0),
+                      })}）`,
+                    }))}
+                  />
+                </Form.Item>
+              ) : (
+                <Form.Item
+                  label={t("mrp.productionReports.operation")}
+                  name="operation_id"
+                  extra={t("mrp.productionReports.noOperationRows")}
+                >
+                  <Select
+                    allowClear
+                    placeholder={t("mrp.productionReports.operationPrompt")}
+                    showSearch
+                    optionFilterProp="children"
+                  >
+                    {operations.map((o) => (
+                      <Option key={o.id} value={o.id}>
+                        {o.code} - {o.name}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              )}
             </Col>
           </Row>
 
@@ -892,9 +968,18 @@ export function ProductionReports() {
                   showSearch
                   optionFilterProp="children"
                 >
+                  {/* 停用员工用 disabled 选项保留姓名：既不能再被选中报工，
+                      历史报工的操作工也不会退化成显示数字 id */}
                   {employees.map((e) => (
-                    <Option key={e.id} value={e.id}>
+                    <Option
+                      key={e.id}
+                      value={e.id}
+                      disabled={(e.status || "active") !== "active"}
+                    >
                       {e.name}
+                      {(e.status || "active") !== "active"
+                        ? `（${t("mrp.productionReports.operatorInactive")}）`
+                        : ""}
                     </Option>
                   ))}
                 </Select>

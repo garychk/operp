@@ -98,6 +98,7 @@ ORDER=(
   deploy_55_mcp_api_keys.sql
   deploy_56_production_posting.sql
   deploy_57_bom_explosion_kit_check.sql
+  deploy_58_platform_menu_baseline.sql
   deploy_58_production_receipt_and_locations.sql
   deploy_59_production_receipt_menu.sql
   deploy_60_mrp_planning_parameters.sql
@@ -124,6 +125,41 @@ ORDER=(
   deploy_82_ai_pending_actions.sql
   deploy_83_ai_document_tools.sql
   deploy_84_tenant_subscription.sql
+  deploy_85_inventory_unique_key_fix.sql
+  deploy_86_reverse_inventory_document.sql
+  deploy_87_inventory_gl_linkage.sql
+  deploy_88_inventory_stock_status_and_reservations.sql
+  deploy_89_purchase_return.sql
+  deploy_90_sales_return.sql
+  deploy_91_material_return.sql
+  deploy_92_inventory_voucher_exceptions.sql
+  deploy_93_inventory_posting_rpcs.sql
+  deploy_94_sales_return_status_check.sql
+  deploy_95_reservation_unique_key_fix.sql
+  deploy_96_inventory_report_views.sql
+  deploy_97_inventory_gl_reconciliation_views.sql
+  deploy_98_p1_menus_and_workflows.sql
+  deploy_99_inventory_query_views.sql
+  deploy_100_inventory_business_rpcs.sql
+  deploy_101_reserve_stock_spread.sql
+  deploy_102_subcontract_tables.sql
+  deploy_103_subcontract_rpcs.sql
+  deploy_104_other_stock_and_opening_tables.sql
+  deploy_105_other_stock_and_opening_rpcs.sql
+  deploy_106_batch_master_tables.sql
+  deploy_107_batch_master_rpcs.sql
+  deploy_108_production_report_views.sql
+  deploy_109_production_report_menu.sql
+  deploy_110_production_receipt_quality.sql
+  deploy_111_standard_cost_tables.sql
+  deploy_112_standard_cost_rollup_and_variance.sql
+  deploy_113_accounting_period_tenant_unique.sql
+  deploy_114_mrp_planning_params_and_work_calendar.sql
+  deploy_115_production_order_operations.sql
+  deploy_116_production_operation_rpcs.sql
+  deploy_117_employee_menu.sql
+  deploy_118_employee_jobs_dict.sql
+  deploy_119_shift_master_and_capacity.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

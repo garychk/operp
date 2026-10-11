@@ -67,7 +67,7 @@ export function Departments() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingDepartment) {
-        await logWithTiming("更新部门", "UPDATE", async () => {
+        await logWithTiming(t("mrp.departments.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(departmentTable)
             .update(values)
@@ -76,7 +76,7 @@ export function Departments() {
         });
         message.success(t("common.updateSuccess"));
       } else {
-        await logWithTiming("新增部门", "INSERT", async () => {
+        await logWithTiming(t("mrp.departments.logCreate"), "INSERT", async () => {
           const { error } = await supabase
             .from(departmentTable)
             .insert([values]);
@@ -106,7 +106,7 @@ export function Departments() {
       content: t("mrp.departments.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除部门", "DELETE", async () => {
+          await logWithTiming(t("mrp.departments.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(departmentTable)
               .update({ is_deleted: "y" })

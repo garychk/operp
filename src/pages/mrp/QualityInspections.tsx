@@ -27,7 +27,11 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import SimpleModal from "../../components/SimpleModal";
 
-type SourceType = "purchase_receipt" | "sales_return" | "production_operation";
+type SourceType =
+  | "purchase_receipt"
+  | "sales_return"
+  | "production_operation"
+  | "production_receipt";
 type Inspection = {
   id: number;
   inspection_no: string;
@@ -70,6 +74,7 @@ export function QualityInspections() {
     purchase_receipt: t("mrp.quality.sourcePurchaseReceipt"),
     sales_return: t("mrp.quality.sourceSalesReturn"),
     production_operation: t("mrp.quality.sourceProductionOperation"),
+    production_receipt: t("mrp.quality.sourceProductionReceipt"),
   };
   const results: Record<string, [string, string]> = {
     pending: [t("mrp.quality.resultPending"), "default"],
@@ -180,6 +185,28 @@ export function QualityInspections() {
             };
           }),
         );
+      } else if (type === "production_receipt") {
+        // 成品入库检验（FQC）：完工入库单是「主表即唯一明细行」，没有明细表（deploy_58）
+        const { data, error } = await supabase
+          .from("erp_production_receipts_s_539dcf81_b")
+          .select("id,receipt_no,product_id,quantity,batch_no")
+          .eq("is_deleted", "n");
+        if (error) throw error;
+        setSources(
+          (data || []).map((h: any) => {
+            const p = productMap.get(h.product_id);
+            return {
+              key: String(h.id),
+              sourceId: h.id,
+              detailId: null,
+              sourceNo: h.receipt_no,
+              productId: h.product_id,
+              quantity: Number(h.quantity),
+              batchNo: h.batch_no,
+              label: `${h.receipt_no} / ${p?.name || h.product_id} / ${h.quantity}${p?.unit || ""}`,
+            };
+          }),
+        );
       } else {
         const { data, error } = await supabase
           .from("erp_production_reports_s_539dcf81_b")
@@ -264,7 +291,7 @@ export function QualityInspections() {
     };
     try {
       await logWithTiming(
-        "新增检验任务",
+        t("mrp.quality.logCreate"),
         "INSERT",
         async () => {
           const { error } = await supabase
@@ -298,6 +325,49 @@ export function QualityInspections() {
     });
     setInspectOpen(true);
   };
+  // 质检完成 → 把「待检」库存按结果搬进 available / hold / rejected（deploy_100 的业务级 RPC）。
+  // 跳过是**正常分支**：例如入库时 receiptStockStatus='available'，压根没有待检桶，
+  // 这时不该弹错误，只提示原因即可。RPC 自身幂等，重复点不会重复搬。
+  const skipReasonLabels: Record<string, string> = {
+    no_inspection_stock: t("mrp.quality.skipNoInspectionStock"),
+    warehouse_not_resolved: t("mrp.quality.skipWarehouseNotResolved"),
+    nothing_to_move: t("mrp.quality.skipNothingToMove"),
+  };
+  const moveStock = async (r: Inspection) => {
+    const { data, error } = await supabase.rpc(
+      "apply_quality_inspection_stock_move",
+      { p_inspection_id: r.id },
+    );
+    if (error) {
+      message.warning(`${t("mrp.quality.stockMoveFailed")}：${error.message}`);
+      return;
+    }
+    const res = (data || {}) as {
+      skipped?: boolean;
+      idempotent?: boolean;
+      reason?: string;
+      available_quantity?: number;
+      bad_quantity?: number;
+      bad_status?: string;
+    };
+    if (res.skipped) {
+      message.info(
+        `${t("mrp.quality.stockMoveSkipped")}：${
+          skipReasonLabels[res.reason || ""] || res.reason || ""
+        }`,
+      );
+      return;
+    }
+    message.success(
+      res.idempotent
+        ? t("mrp.quality.stockMoveAlreadyDone")
+        : t("mrp.quality.stockMoveDone", {
+            available: res.available_quantity ?? 0,
+            bad: res.bad_quantity ?? 0,
+            status: res.bad_status || "-",
+          }),
+    );
+  };
   const save = async (v: any, complete: boolean) => {
     if (!current) return;
     const sample = Number(v.sample_quantity),
@@ -317,7 +387,7 @@ export function QualityInspections() {
           : "unqualified";
     try {
       await logWithTiming(
-        complete ? "完成质量检验" : "保存质量检验",
+        complete ? t("mrp.quality.logComplete") : t("mrp.quality.logSave"),
         "UPDATE",
         async () => {
           const { error } = await supabase
@@ -339,6 +409,7 @@ export function QualityInspections() {
           : t("mrp.quality.savedTemp"),
       );
       setInspectOpen(false);
+      if (complete) await moveStock(current);
       void load();
     } catch {
       message.error(t("common.saveFailed"));
@@ -398,13 +469,20 @@ export function QualityInspections() {
     {
       title: t("common.actions"),
       fixed: "right",
-      width: 90,
+      width: 170,
       render: (_: unknown, r: Inspection) => (
-        <Button type="link" onClick={() => inspect(r)}>
-          {r.status === "completed"
-            ? t("mrp.quality.reInspect")
-            : t("mrp.quality.inspect")}
-        </Button>
+        <Space size={4}>
+          <Button type="link" onClick={() => inspect(r)}>
+            {r.status === "completed"
+              ? t("mrp.quality.reInspect")
+              : t("mrp.quality.inspect")}
+          </Button>
+          {r.status === "completed" && (
+            <Button type="link" onClick={() => void moveStock(r)}>
+              {t("mrp.quality.moveStock")}
+            </Button>
+          )}
+        </Space>
       ),
     },
   ];

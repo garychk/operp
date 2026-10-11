@@ -9,10 +9,12 @@ import { runBusinessAction } from '../../utils/businessEngine';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
+import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventoryVoucher';
 import dayjs from 'dayjs';
 import { SupaModal } from '../../components/SupaModal';
 import { BizAttachments } from '../../components/BizAttachments';
-import { SuperTable, SuperTableColumn } from '../../components/SuperTable';
+import { SuperTable } from '../../components/SuperTable';
+import type { SuperTableColumn } from '../../components/SuperTable';
 import { formatMoney, useCurrencyRegistry, currencyLabel } from '../../utils/money';
 import { ProductUnit } from '../../components/ProductUnit';
 import { InventoryInfo, invalidateInventoryCache } from '../../components/InventoryInfo';
@@ -359,9 +361,12 @@ export function SalesDeliveries() {
 
   const runDeliveryAction = async (action: 'submit' | 'approve' | 'post' | 'reverse_post', record: SalesDelivery) => {
     try {
-      await runBusinessAction({ action, documentType: 'sales_delivery', documentId: record.id, user: businessUser });
+      const result = await runBusinessAction({ action, documentType: 'sales_delivery', documentId: record.id, user: businessUser });
       const successText = action === 'submit' ? t('salesDeliveries.submitSuccess') : action === 'approve' ? t('salesDeliveries.approveSuccess') : action === 'post' ? t('salesDeliveries.postSuccess') : t('salesDeliveries.reversePostSuccess');
       message.success(successText);
+      // deploy_87：过账/反过账会同步会计凭证，会计侧问题不阻断过账但必须提示。
+      const notice = voucherNotice(result as { voucher?: InventoryVoucherResult } | null, t);
+      if (notice) message.warning(notice, 10);
       // 过账/冲销会改变库存，清缓存以便明细的可用库存重新拉取。
       invalidateInventoryCache();
       fetchDeliveries();
@@ -842,7 +847,7 @@ export function SalesDeliveries() {
           </Button>
         }
         formEle={
-          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: "0 16px 0 0" }}>
+          <Form form={form} layout="vertical" onFinish={handleSubmit}>
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item

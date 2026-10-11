@@ -14,6 +14,7 @@ import {
   type MrpEngineResult,
   type MrpProductInput,
   type MrpSupplyInput,
+  type MrpWorkCalendarInput,
 } from "./mrpEngine.js";
 
 const T = {
@@ -32,6 +33,9 @@ const T = {
   productionOrderDetails: "erp_production_order_details_s_539dcf81_b",
   mpsPlans: "erp_mps_plans_s_539dcf81_b",
   mpsDetails: "erp_mps_plan_details_s_539dcf81_b",
+  // deploy_114（P0-4）
+  workCalendars: "erp_work_calendars_s_539dcf81_b",
+  workCalendarDays: "erp_work_calendar_days_s_539dcf81_b",
 } as const;
 
 /** 终态单据不参与供需（覆盖当前已知的状态词表，遇到新值宁可多算也不漏算） */
@@ -47,6 +51,24 @@ const asRows = (value: unknown): Record<string, unknown>[] =>
   (Array.isArray(value) ? value : []) as Record<string, unknown>[];
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
+
+/**
+ * DATE 列 → 'YYYY-MM-DD' 键。
+ *
+ * ⚠️ 不能直接 `String(v).slice(0, 10)`：PostgREST 对 date 列返回纯字符串
+ * （'2026-10-01'，切片没问题），但 node-pg 会把 DATE 解成本地零点的 Date 对象
+ * （UTC+8 下显示成 2026-09-30T16:00:00Z），对它 toISOString().slice(0,10)
+ * 会得到**前一天** —— 节假日会挂到昨天，静默错一整年。所以 Date 走本地分量。
+ */
+const toDateKey = (v: unknown): string => {
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    const d = String(v.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return String(v ?? "").slice(0, 10);
+};
 
 // ---------------------------------------------------------------------------
 // 计划单
@@ -124,7 +146,8 @@ export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promi
     .from(T.products)
     .select(
       "id, code, name, is_purchased, is_manufactured, is_mrp_relevant, safety_stock, " +
-        "lead_time_purchase, lead_time_production, lot_policy, min_order_qty, order_multiple",
+        "max_stock, order_point, " +
+        "lead_time_purchase, lead_time_production, lot_policy, min_order_qty, order_multiple, max_order_qty",
     )
     .eq("tenant_id", tenantId)
     .eq("is_deleted", "n");
@@ -141,6 +164,8 @@ export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promi
         ? null
         : Boolean(r.is_mrp_relevant),
     safetyStock: num(r.safety_stock),
+    maxStock: num(r.max_stock),
+    orderPoint: num(r.order_point),
     leadTimePurchase: num(r.lead_time_purchase),
     leadTimeProduction: num(r.lead_time_production),
     // 数据库 CHECK 保证取值；脏数据回退 lot_for_lot
@@ -151,8 +176,50 @@ export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promi
       : "lot_for_lot",
     minOrderQty: num(r.min_order_qty),
     orderMultiple: num(r.order_multiple),
+    maxOrderQty: num(r.max_order_qty),
   }));
   const productById = new Map(products.map((p) => [p.id, p]));
+
+  // ---- 工作日历（P0-4） ----
+  // 只认「默认 + 启用」的日历；没有就传 null，引擎退化为自然日
+  //（这是契约：老租户不维护日历，升级后下达日必须与 deploy_114 之前逐位一致）。
+  // 例外日一次性全捞：工厂日历的例外日一年也就几十条，没必要按区间再切一次。
+  let workCalendar: MrpWorkCalendarInput | null = null;
+  {
+    const { data: calendarRows, error } = await supabase
+      .from(T.workCalendars)
+      .select("id, calendar_name, work_days, is_default")
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n")
+      .eq("is_active", true);
+    if (error) throw error;
+
+    const calendars = asRows(calendarRows);
+    const chosen = calendars.find((c) => c.is_default === true);
+    if (chosen) {
+      const calendarId = num(chosen.id);
+      const { data: dayRows, error: dayErr } = await supabase
+        .from(T.workCalendarDays)
+        .select("calendar_date, is_workday")
+        .eq("tenant_id", tenantId)
+        .eq("calendar_id", calendarId)
+        .eq("is_deleted", "n");
+      if (dayErr) throw dayErr;
+
+      const exceptions: Record<string, boolean> = {};
+      for (const d of asRows(dayRows)) {
+        const key = toDateKey(d.calendar_date);
+        if (key) exceptions[key] = Boolean(d.is_workday);
+      }
+
+      workCalendar = {
+        calendarId,
+        calendarName: String(chosen.calendar_name ?? ""),
+        workDays: (Array.isArray(chosen.work_days) ? chosen.work_days : []).map((v) => num(v)),
+        exceptions,
+      };
+    }
+  }
 
   // ---- BOM（每产品一个：默认优先，其次第一个 active）----
   const { data: bomRows, error: bomErr } = await supabase
@@ -445,6 +512,7 @@ export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promi
     boms,
     demands,
     supplies,
+    workCalendar,
   };
 }
 

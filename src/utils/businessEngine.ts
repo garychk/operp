@@ -2,7 +2,14 @@ import { supabase } from './supabase';
 import { logWithTiming } from './logger';
 import { generateIdempotencyKey } from './uuid';
 
-type StockDocumentType = 'purchase_receipt' | 'sales_delivery';
+/**
+ * 走 post_stock_document / reverse_stock_document 的库存单据。
+ * deploy_93 起这两个 RPC 同时覆盖退货方向：
+ *   purchase_receipt (in) / purchase_return (out) / sales_delivery (out) / sales_return (in)
+ * 生产类单据（material_issue / production_receipt / material_return）走
+ * post_production_document，由 mrp 页面直接调用，不经过这里。
+ */
+type StockDocumentType = 'purchase_receipt' | 'sales_delivery' | 'purchase_return' | 'sales_return';
 type WorkflowAction = 'submit' | 'approve' | 'reject' | 'withdraw';
 type BusinessAction =
   | WorkflowAction
@@ -15,6 +22,17 @@ type BusinessDocumentType =
   | 'purchase_order'
   | 'sales_order'
   | 'voucher';
+
+/** 走库存过账 RPC 的全部单据类型（含非 StockDocumentType 的生产单据类型不值得，故单列） */
+const STOCK_POSTABLE_TYPES: readonly StockDocumentType[] = [
+  'purchase_receipt',
+  'sales_delivery',
+  'purchase_return',
+  'sales_return',
+];
+
+const isStockPostable = (documentType: BusinessDocumentType): documentType is StockDocumentType =>
+  (STOCK_POSTABLE_TYPES as readonly string[]).includes(documentType);
 
 interface BusinessUser {
   id?: number | null;
@@ -37,6 +55,9 @@ const documentMeta = {
   sales_order: { table: 'erp_sales_orders_s_539dcf81_b' },
   purchase_receipt: { table: 'erp_purchase_receipts_s_539dcf81_b' },
   sales_delivery: { table: 'erp_sales_deliveries_s_539dcf81_b' },
+  // deploy_88/89/91：退货方向复用同一套过账骨架（post_stock_document）
+  purchase_return: { table: 'erp_purchase_returns_s_539dcf81_b' },
+  sales_return: { table: 'erp_sales_returns_s_539dcf81_b' },
   voucher: { table: 'erp_vouchers_s_539dcf81_b' },
 } as const;
 
@@ -90,11 +111,16 @@ async function runStockPostingRpc(
   user?: BusinessUser,
 ) {
   const rpcName = action === 'post' ? 'post_stock_document' : 'reverse_stock_document';
-  const documentLabel = documentType === 'purchase_receipt' ? '采购入库单' : '销售出货单';
+  const documentLabel: Record<StockDocumentType, string> = {
+    purchase_receipt: '采购入库单',
+    sales_delivery: '销售出货单',
+    purchase_return: '采购退货单',
+    sales_return: '销售退货单',
+  };
   const operationLabel = action === 'post' ? '过账' : '反过账';
 
   return logWithTiming(
-    `${documentLabel}${operationLabel}`,
+    `${documentLabel[documentType]}${operationLabel}`,
     action === 'post' ? 'POST' : 'UNPOST',
     async () => {
       const { data, error } = await supabase.rpc(rpcName, {
@@ -237,10 +263,17 @@ export async function runBusinessAction(params: RunBusinessActionParams) {
     };
   }
 
-  if (documentType === 'purchase_receipt' || documentType === 'sales_delivery') {
+  if (isStockPostable(documentType)) {
     if (action === 'post' || action === 'reverse_post') {
-      await runStockPostingRpc(action, documentType, documentId, user);
-      return { ok: true, message: action === 'post' ? '库存单据已过账' : '库存单据已反过账' };
+      const result = await runStockPostingRpc(action, documentType, documentId, user);
+      const rpcResult = result as { voucher?: unknown } | null | undefined;
+      // deploy_87：库存过账/反过账会顺带同步会计凭证。把会计侧的结果一并带出去，
+      // 由调用方决定怎么提示（会计问题不阻断库存过账，但绝不能静默）。
+      return {
+        ok: true,
+        voucher: rpcResult?.voucher,
+        message: action === 'post' ? '库存单据已过账' : '库存单据已反过账',
+      };
     }
   }
 

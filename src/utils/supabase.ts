@@ -22,6 +22,16 @@ import type {
   ErpSalesOrderDetailsS539Dcf81BRow,
   ErpSalesDeliveriesS539Dcf81BRow,
   ErpSalesDeliveryDetailsS539Dcf81BRow,
+  // deploy_88 ~ deploy_91（P1 业务闭环）新增表
+  ErpPurchaseReturnsS539Dcf81BRow,
+  ErpPurchaseReturnDetailsS539Dcf81BRow,
+  ErpSalesReturnsS539Dcf81BRow,
+  ErpSalesReturnDetailsS539Dcf81BRow,
+  ErpMaterialReturnsS539Dcf81BRow,
+  ErpMaterialReturnDetailsS539Dcf81BRow,
+  ErpInventoryReservationsS539Dcf81BRow,
+  ErpInventoryVoucherExceptionsS539Dcf81BRow,
+  ErpInventorySubjectMapS539Dcf81BRow,
   ErpAccountSubjectsS539Dcf81BRow,
   ErpAccountingPeriodsS539Dcf81BRow,
   ErpVouchersS539Dcf81BRow,
@@ -53,6 +63,7 @@ import type {
   ErpMaterialIssuesS539Dcf81BRow,
   ErpMaterialIssueDetailsS539Dcf81BRow,
   ErpProductionReportsS539Dcf81BRow,
+  ErpProductionOrderOperationsS539Dcf81BRow,
   ErpProductionReceiptsS539Dcf81BRow,
   ErpProductImagesS539Dcf81BRow,
   ErpAttachmentsS539Dcf81BRow,
@@ -61,6 +72,22 @@ import type {
   SysMcpApiKeysRow,
   SysInventoryTransactionTypesRow,
   SysDocumentTransactionTypesRow,
+  // deploy_102 / deploy_103（P2-10 委外/外协闭环）
+  ErpSubcontractOrdersS539Dcf81BRow,
+  ErpSubcontractOrderDetailsS539Dcf81BRow,
+  ErpSubcontractIssuesS539Dcf81BRow,
+  ErpSubcontractIssueDetailsS539Dcf81BRow,
+  ErpSubcontractReceiptsS539Dcf81BRow,
+  ErpSubcontractSettlementsS539Dcf81BRow,
+  ErpOtherStockDocumentsS539Dcf81BRow,
+  ErpOtherStockDocumentDetailsS539Dcf81BRow,
+  ErpOpeningBalancesS539Dcf81BRow,
+  ErpBatchesS539Dcf81BRow,
+  ErpOpeningBalanceDetailsS539Dcf81BRow,
+  // deploy_114（P0-4）工作日历
+  ErpWorkCalendarsS539Dcf81BRow,
+  ErpShiftsS539Dcf81BRow,
+  ErpWorkCalendarDaysS539Dcf81BRow,
 } from '../types/database';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
@@ -191,6 +218,7 @@ export type Tables = {
   erp_material_issues_s_539dcf81_b: { Row: ErpMaterialIssuesS539Dcf81BRow };
   erp_material_issue_details_s_539dcf81_b: { Row: ErpMaterialIssueDetailsS539Dcf81BRow };
   erp_production_reports_s_539dcf81_b: { Row: ErpProductionReportsS539Dcf81BRow };
+  erp_production_order_operations_s_539dcf81_b: { Row: ErpProductionOrderOperationsS539Dcf81BRow };
   erp_production_receipts_s_539dcf81_b: { Row: ErpProductionReceiptsS539Dcf81BRow };
   erp_product_images_s_539dcf81_b: { Row: ErpProductImagesS539Dcf81BRow };
   erp_attachments_s_539dcf81_b: { Row: ErpAttachmentsS539Dcf81BRow };
@@ -203,5 +231,29 @@ export type Tables = {
   sys_mcp_api_keys: { Row: SysMcpApiKeysRow };
   sys_inventory_transaction_types: { Row: SysInventoryTransactionTypesRow };
   sys_document_transaction_types: { Row: SysDocumentTransactionTypesRow };
+  erp_purchase_returns_s_539dcf81_b: { Row: ErpPurchaseReturnsS539Dcf81BRow };
+  erp_purchase_return_details_s_539dcf81_b: { Row: ErpPurchaseReturnDetailsS539Dcf81BRow };
+  erp_sales_returns_s_539dcf81_b: { Row: ErpSalesReturnsS539Dcf81BRow };
+  erp_sales_return_details_s_539dcf81_b: { Row: ErpSalesReturnDetailsS539Dcf81BRow };
+  erp_material_returns_s_539dcf81_b: { Row: ErpMaterialReturnsS539Dcf81BRow };
+  erp_material_return_details_s_539dcf81_b: { Row: ErpMaterialReturnDetailsS539Dcf81BRow };
+  erp_inventory_reservations_s_539dcf81_b: { Row: ErpInventoryReservationsS539Dcf81BRow };
+  erp_inventory_voucher_exceptions_s_539dcf81_b: { Row: ErpInventoryVoucherExceptionsS539Dcf81BRow };
+  erp_inventory_subject_map_s_539dcf81_b: { Row: ErpInventorySubjectMapS539Dcf81BRow };
+  erp_subcontract_orders_s_539dcf81_b: { Row: ErpSubcontractOrdersS539Dcf81BRow };
+  erp_subcontract_order_details_s_539dcf81_b: { Row: ErpSubcontractOrderDetailsS539Dcf81BRow };
+  erp_subcontract_issues_s_539dcf81_b: { Row: ErpSubcontractIssuesS539Dcf81BRow };
+  erp_subcontract_issue_details_s_539dcf81_b: { Row: ErpSubcontractIssueDetailsS539Dcf81BRow };
+  erp_subcontract_receipts_s_539dcf81_b: { Row: ErpSubcontractReceiptsS539Dcf81BRow };
+  erp_subcontract_settlements_s_539dcf81_b: { Row: ErpSubcontractSettlementsS539Dcf81BRow };
+  erp_other_stock_documents_s_539dcf81_b: { Row: ErpOtherStockDocumentsS539Dcf81BRow };
+  erp_other_stock_document_details_s_539dcf81_b: { Row: ErpOtherStockDocumentDetailsS539Dcf81BRow };
+  erp_opening_balances_s_539dcf81_b: { Row: ErpOpeningBalancesS539Dcf81BRow };
+  erp_opening_balance_details_s_539dcf81_b: { Row: ErpOpeningBalanceDetailsS539Dcf81BRow };
+  erp_batches_s_539dcf81_b: { Row: ErpBatchesS539Dcf81BRow };
+  // deploy_114（P0-4）工作日历
+  erp_work_calendars_s_539dcf81_b: { Row: ErpWorkCalendarsS539Dcf81BRow };
+  erp_shifts_s_539dcf81_b: { Row: ErpShiftsS539Dcf81BRow };
+  erp_work_calendar_days_s_539dcf81_b: { Row: ErpWorkCalendarDaysS539Dcf81BRow };
 };
 

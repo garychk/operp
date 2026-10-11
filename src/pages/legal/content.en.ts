@@ -58,7 +58,7 @@ const terms: LegalDoc = {
         { kind: 'p', text: 'You must register an account with accurate and complete information. You are responsible for all activity occurring under your account and must keep your credentials safe.' },
         { kind: 'list', items: [
           'Do not share, lend or transfer your account to any third party;',
-          'Notify us immediately at [security@yourdomain.com] if you suspect unauthorised access or abnormal sign-in activity;',
+          'Notify us immediately at[security@oplug.cn]if you suspect unauthorised access or abnormal sign-in activity;',
           'Keep your billing and notification email address valid so you receive security and service notices.',
         ] },
         { kind: 'p', text: 'Member accounts within an enterprise tenant are administered by that tenant\'s administrator, who is responsible for data configuration, member permissions and operational activity inside the tenant.' },
@@ -72,7 +72,7 @@ const terms: LegalDoc = {
         { kind: 'list', items: [
           'Fees are non-refundable once paid, except where required by law or agreed otherwise in writing;',
           'If we fail to deliver the Service, we will refund the unused portion on a pro-rata basis;',
-          'For billing disputes, email [billing@yourdomain.com] first. We reply within 2 business days and resolve confirmed errors within 5 business days.',
+          'For billing disputes, email [billing@oplug.cn] first. We reply within 2 business days and resolve confirmed errors within 5 business days.',
         ] },
       ],
     },

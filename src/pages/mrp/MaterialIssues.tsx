@@ -28,6 +28,7 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
+import { voucherNotice, type InventoryVoucherResult } from "../../utils/inventoryVoucher";
 import { SuperTable } from "../../components/SuperTable";
 import { formatMoney } from "../../utils/money";
 import { SupaModal } from "../../components/SupaModal";
@@ -184,7 +185,7 @@ export function MaterialIssues() {
   const handleSubmit = async (values: any) => {
     try {
       if (editingIssue) {
-        await logWithTiming("更新生产领料单", "UPDATE", async () => {
+        await logWithTiming(t("mrp.materialIssues.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(materialIssueTable)
             .update(values)
@@ -196,7 +197,7 @@ export function MaterialIssues() {
         const logParams: { table: string; recordId?: number } = {
           table: materialIssueTable,
         };
-        const data = await logWithTiming("新增生产领料单", "INSERT", async () => {
+        const data = await logWithTiming(t("mrp.materialIssues.logCreate"), "INSERT", async () => {
           const { data, error } = await supabase
             .from(materialIssueTable)
             .insert([values])
@@ -312,7 +313,7 @@ export function MaterialIssues() {
       content: t("mrp.materialIssues.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除生产领料单", "DELETE", async () => {
+          await logWithTiming(t("mrp.materialIssues.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(materialIssueTable)
               .update({ is_deleted: "y" })
@@ -378,15 +379,19 @@ export function MaterialIssues() {
       onOk: async () => {
         setPosting(true);
         try {
+          const voucherGaps: string[] = [];
           const { success, failures } = await runSequential(
             targets,
             async (record) => {
-              const { error } = await supabase.rpc(POST_DOCUMENT_RPC, {
+              const { data, error } = await supabase.rpc(POST_DOCUMENT_RPC, {
                 p_document_type: DOCUMENT_TYPE,
                 p_document_id: record.id,
                 p_idempotency_key: crypto.randomUUID(),
               });
               if (error) throw error;
+              // deploy_87：库存过账会顺带生成会计凭证；会计侧问题不阻断过账，但要提示。
+              const notice = voucherNotice(data as { voucher?: InventoryVoucherResult } | null, t);
+              if (notice) voucherGaps.push(`${record.issue_no}：${notice}`);
             },
             t("mrp.materialIssues.postFailed"),
           );
@@ -403,6 +408,7 @@ export function MaterialIssues() {
               }),
             );
           }
+          if (voucherGaps.length > 0) message.warning(voucherGaps.join("；"), 10);
         } finally {
           setPosting(false);
         }
@@ -430,15 +436,19 @@ export function MaterialIssues() {
       onOk: async () => {
         setReversing(true);
         try {
+          const voucherGaps: string[] = [];
           const { success, failures } = await runSequential(
             targets,
             async (record) => {
-              const { error } = await supabase.rpc(REVERSE_DOCUMENT_RPC, {
+              const { data, error } = await supabase.rpc(REVERSE_DOCUMENT_RPC, {
                 p_document_type: DOCUMENT_TYPE,
                 p_document_id: record.id,
                 p_idempotency_key: crypto.randomUUID(),
               });
               if (error) throw error;
+              // deploy_87：反过账会顺带作废对应凭证；作废失败要在界面上看得见。
+              const notice = voucherNotice(data as { voucher?: InventoryVoucherResult } | null, t);
+              if (notice) voucherGaps.push(`${record.issue_no}：${notice}`);
             },
             t("mrp.materialIssues.reverseFailed"),
           );
@@ -455,6 +465,7 @@ export function MaterialIssues() {
               }),
             );
           }
+          if (voucherGaps.length > 0) message.warning(voucherGaps.join("；"), 10);
         } finally {
           setReversing(false);
         }
@@ -892,7 +903,6 @@ export function MaterialIssues() {
             form={form}
             layout="vertical"
             onFinish={handleSubmit}
-            style={{ padding: "0 16px 0 0" }}
           >
             <Row gutter={16}>
               <Col span={12}>

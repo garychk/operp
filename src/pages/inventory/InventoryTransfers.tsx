@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { Button, Form, Input, InputNumber, Modal, Select, Space, message, DatePicker, Table } from 'antd';
-import { PlusOutlined, DeleteOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, ThunderboltOutlined, UndoOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { nextDocumentNo } from '../../utils/documentNaming';
+import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventoryVoucher';
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
 import SimpleModal from '../../components/SimpleModal';
@@ -55,6 +56,7 @@ export function InventoryTransfers() {
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
+  const [posting, setPosting] = useState(false);
 
   useEffect(() => { void fetchAll(); }, []);
 
@@ -108,13 +110,17 @@ export function InventoryTransfers() {
             .eq('id', id);
           if (approveError) throw approveError;
 
-          const { error } = await supabase.rpc('post_inventory_document', {
+          const { data, error } = await supabase.rpc('post_inventory_document', {
             p_document_type: 'inventory_transfer',
             p_document_id: id,
             p_idempotency_key: crypto.randomUUID(),
           });
           if (error) throw error;
           message.success(t('inventoryTransfers.messages.postSuccess'));
+          // 内部调拨按设计不进总账（deploy_87），这里正常不会弹出任何东西；
+          // 但若会计侧真出了问题（如配置被改成要生成凭证而科目缺失），仍要能看见。
+          const notice = voucherNotice(data as { voucher?: InventoryVoucherResult } | null, t);
+          if (notice) message.warning(notice, 10);
           await fetchAll();
         } catch (error: any) {
           console.error('Error posting transfer:', error);
@@ -123,6 +129,79 @@ export function InventoryTransfers() {
       },
     });
   };
+
+  // 反过账：冲回该调拨单已生成的两条腿流水（调出/调入），库存恢复到调拨前的仓库与库位。
+  // 冲销由 reverse_inventory_document 负责（deploy_86），失败原因逐单回报，不静默。
+  const runReverseTransfers = async (targets: Header[]) => {
+    setPosting(true);
+    let success = 0;
+    const failures: string[] = [];
+    const voucherGaps: string[] = [];
+    try {
+      for (const record of targets) {
+        try {
+          const { data, error } = await supabase.rpc('reverse_inventory_document', {
+            p_document_type: 'inventory_transfer',
+            p_document_id: record.id,
+            p_idempotency_key: crypto.randomUUID(),
+          });
+          if (error) throw error;
+          success += 1;
+          // deploy_87：反过账会顺带作废对应凭证；作废失败要在界面上看得见。
+          const notice = voucherNotice(data as { voucher?: InventoryVoucherResult } | null, t);
+          if (notice) voucherGaps.push(`${record.transfer_no}：${notice}`);
+        } catch (error: any) {
+          console.error('Error reversing transfer:', error);
+          failures.push(`${record.transfer_no}：${error?.message || t('inventoryTransfers.reverseFailed')}`);
+        }
+      }
+      if (failures.length === 0) {
+        message.success(t('inventoryTransfers.messages.reverseSuccessMany', { count: success }));
+      } else {
+        message.error(
+          t('inventoryTransfers.messages.reversePartialFailed', {
+            success,
+            failed: failures.length,
+            detail: failures.join('；'),
+          }),
+        );
+      }
+      if (voucherGaps.length > 0) {
+        message.warning(voucherGaps.join('；'), 10);
+      }
+      setSelectedRowKeys([]);
+      await fetchAll();
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const confirmReverseTransfers = (targets: Header[]) => {
+    Modal.confirm({
+      title: t('inventoryTransfers.reversePost'),
+      content:
+        targets.length === 1
+          ? t('inventoryTransfers.reverseConfirmContent')
+          : t('inventoryTransfers.reverseConfirmContentMany', { count: targets.length }),
+      okText: t('common.continue'),
+      cancelText: t('common.cancel'),
+      onOk: () => runReverseTransfers(targets),
+    });
+  };
+
+  // 批量反过账：勾选里只挑「已过账」的单，其余（草稿/已审核）静默跳过——
+  // 它们本来就没有流水可冲，报错只会干扰操作。一个都没挑中才提示。
+  const handleBatchReverse = () => {
+    const selectedIds = new Set(selectedRowKeys.map((key) => Number(key)));
+    const targets = rows.filter((row) => selectedIds.has(row.id) && row.status === 'posted');
+    if (targets.length === 0) {
+      message.warning(t('inventoryTransfers.messages.reverseNoTarget'));
+      return;
+    }
+    confirmReverseTransfers(targets);
+  };
+
+  const handleReverseOne = (record: Header) => confirmReverseTransfers([record]);
 
   const handleDelete = async (id: number) => {
     Modal.confirm({
@@ -145,6 +224,7 @@ export function InventoryTransfers() {
       <Space>
         <Button onClick={async () => { setSelected(record); await fetchDetails(record.id); setDetailOpen(true); }}>{t('inventoryTransfers.detail')}</Button>
         {record.status !== 'posted' && <Button type="primary" icon={<ThunderboltOutlined />} onClick={() => void handlePost(record.id)}>{record.status === 'draft' ? t('inventoryTransfers.approveAndPost') : t('inventoryTransfers.post')}</Button>}
+        {record.status === 'posted' && <Button danger icon={<UndoOutlined />} onClick={() => handleReverseOne(record)}>{t('inventoryTransfers.reversePost')}</Button>}
         <Button onClick={() => { setEditing(record); form.setFieldsValue({ ...record, transfer_date: dayjs(record.transfer_date) }); setOpen(true); }}>{t('common.edit')}</Button>
         <Button danger icon={<DeleteOutlined />} onClick={() => void handleDelete(record.id)}>{t('common.delete')}</Button>
       </Space>
@@ -162,7 +242,7 @@ export function InventoryTransfers() {
         headerTitle={t('inventoryTransfers.title')}
         rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
         queryBar={
-          <Space>
+          <Space wrap>
             <Button
               type="primary"
               icon={<PlusOutlined />}
@@ -184,6 +264,16 @@ export function InventoryTransfers() {
               }}
             >
               {t('inventoryTransfers.add')}
+            </Button>
+            <Button
+              danger
+              icon={<UndoOutlined />}
+              loading={posting}
+              disabled={selectedRowKeys.length === 0}
+              onClick={handleBatchReverse}
+            >
+              {t('inventoryTransfers.reversePost')}
+              {selectedRowKeys.length > 0 ? ` (${selectedRowKeys.length})` : ""}
             </Button>
           </Space>
         }

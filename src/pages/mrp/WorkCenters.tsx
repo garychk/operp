@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  Card,
   Button,
   Input,
   Tag,
@@ -12,6 +11,8 @@ import {
   Space,
   message,
   InputNumber,
+  Row,
+  Col,
 } from "antd";
 import {
   PlusOutlined,
@@ -28,10 +29,16 @@ import SimpleModal from "../../components/SimpleModal";
 
 type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
+type Shift = Tables["erp_shifts_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
 
 const workCenterTable = "erp_work_centers_s_539dcf81_b";
+const shiftTable = "erp_shifts_s_539dcf81_b";
+
+/** TIME 列经 PostgREST 回来是 "HH:MM:SS"，展示只留到分钟 */
+const timeText = (v: string | null | undefined): string =>
+  typeof v === "string" && v.length >= 5 ? v.slice(0, 5) : "";
 
 export function WorkCenters() {
   const { t } = useTranslation();
@@ -40,6 +47,8 @@ export function WorkCenters() {
   const baseCurrencySymbol = getMeta().symbol;
   const [workCenters, setWorkCenters] = useState<WorkCenter[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
+  // 排班地基（deploy_119）：基准班次下拉的数据源
+  const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
@@ -52,6 +61,7 @@ export function WorkCenters() {
   useEffect(() => {
     fetchWorkCenters();
     fetchDepartments();
+    fetchShifts();
   }, []);
 
   const fetchWorkCenters = async () => {
@@ -86,22 +96,68 @@ export function WorkCenters() {
     }
   };
 
+  /** 取全量（含停用班次），停用项在下拉里置灰保留，避免已配值的行编辑时变空 */
+  const fetchShifts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from(shiftTable)
+        .select("*")
+        .eq("is_deleted", "n")
+        .order("shift_no");
+      if (error) throw error;
+      setShifts((data || []) as unknown as Shift[]);
+    } catch (error) {
+      console.error("Error fetching shifts:", error);
+    }
+  };
+
+  const getShift = (shiftId: number | null | undefined) =>
+    shifts.find((s) => s.id === shiftId);
+
+  /**
+   * 配了「基准班次 + 每天班次数」时的推导日产能。
+   * 与 `vw_erp_capacity_load` 的口径必须一致：净工时 × 班次数，
+   * 且只认**启用中**的班次（停用班次在视图里不贡献产能）。
+   */
+  const derivedDailyCapacity = (record: WorkCenter): number | null => {
+    const shift = getShift(record.shift_id);
+    if (!shift || shift.is_active === false) return null;
+    const hours = Number(shift.net_hours) * Number(record.shift_count || 1);
+    return hours > 0 ? hours : null;
+  };
+
   const handleSubmit = async (values: any) => {
+    // 显式构造 payload：Select/InputNumber 被清空时 form 给的是 undefined，
+    // 直接透传会让 supabase 从 UPDATE 里省略该列 → 「清空基准班次」保存后不生效。
+    const payload = {
+      code: String(values.code || "").trim(),
+      name: String(values.name || "").trim(),
+      type: values.type || "machine",
+      department_id: values.department_id ?? null,
+      capacity_per_day: values.capacity_per_day ?? 0,
+      labor_rate: values.labor_rate ?? 0,
+      overhead_rate: values.overhead_rate ?? 0,
+      status: values.status || "active",
+      // 排班地基（deploy_119）
+      shift_id: values.shift_id ?? null,
+      shift_count: values.shift_count ?? 1,
+    };
+
     try {
       if (editingWorkCenter) {
-        await logWithTiming("更新工作中心", "UPDATE", async () => {
+        await logWithTiming(t("mrp.workCenters.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(workCenterTable)
-            .update(values)
+            .update(payload)
             .eq("id", editingWorkCenter.id);
           if (error) throw error;
         });
         message.success(t("common.updateSuccess"));
       } else {
-        await logWithTiming("新增工作中心", "INSERT", async () => {
+        await logWithTiming(t("mrp.workCenters.logCreate"), "INSERT", async () => {
           const { error } = await supabase
             .from(workCenterTable)
-            .insert([values]);
+            .insert([payload]);
           if (error) throw error;
         });
         message.success(t("common.createSuccess"));
@@ -128,7 +184,7 @@ export function WorkCenters() {
       content: t("mrp.workCenters.deleteConfirm"),
       onOk: async () => {
         try {
-          await logWithTiming("删除工作中心", "DELETE", async () => {
+          await logWithTiming(t("mrp.workCenters.logDelete"), "DELETE", async () => {
             const { error } = await supabase
               .from(workCenterTable)
               .update({ is_deleted: "y" })
@@ -156,6 +212,8 @@ export function WorkCenters() {
       labor_rate: 0,
       overhead_rate: 0,
       status: "active",
+      shift_id: undefined,
+      shift_count: 1,
     });
     setIsModalOpen(true);
   };
@@ -208,8 +266,29 @@ export function WorkCenters() {
       title: t("mrp.workCenters.capacity"),
       dataIndex: "capacity_per_day",
       key: "capacity_per_day",
-      width: 120,
+      width: 170,
       align: "center",
+      // 配了基准班次 → 日产能由班次推导，capacity_per_day 不参与计算，必须让人一眼看出
+      render: (v: number, record: WorkCenter) => {
+        const derived = derivedDailyCapacity(record);
+        if (derived == null) return v;
+        return (
+          <Tag color="blue">
+            {t("mrp.workCenters.capacityByShift", { hours: derived })}
+          </Tag>
+        );
+      },
+    },
+    {
+      title: t("mrp.workCenters.shift"),
+      dataIndex: "shift_id",
+      key: "shift_id",
+      width: 170,
+      render: (shiftId: number | null, record: WorkCenter) => {
+        const shift = getShift(shiftId);
+        if (!shift) return "-";
+        return `${shift.shift_name} × ${record.shift_count ?? 1}`;
+      },
     },
     {
       title: t("mrp.workCenters.laborRate"),
@@ -306,7 +385,9 @@ export function WorkCenters() {
 
       <SimpleModal
         title={
-          editingWorkCenter ? t("mrp.workCenters.edit") : t("mrp.workCenters.add")
+          editingWorkCenter
+            ? t("mrp.workCenters.edit")
+            : t("mrp.workCenters.add")
         }
         open={isModalOpen}
         onCancel={() => {
@@ -314,7 +395,7 @@ export function WorkCenters() {
           form.resetFields();
           setEditingWorkCenter(null);
         }}
-        width={400}
+        width={860}
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>
@@ -326,89 +407,138 @@ export function WorkCenters() {
           </Space>
         }
       >
-        <Card size="small">
-        <Form
-          form={form}
-          layout="horizontal"
-          labelCol={{ span: 8 }}
-          wrapperCol={{ span: 16 }}
-          onFinish={handleSubmit}
-        >
-          <Form.Item
-            label={t("common.code")}
-            name="code"
-            rules={[{ required: true, message: t("mrp.workCenters.codePrompt") }]}
-          >
-            <Input
-              placeholder={t("mrp.workCenters.codePrompt")}
-              disabled={!!editingWorkCenter}
-            />
-          </Form.Item>
-          <Form.Item
-            label={t("common.name")}
-            name="name"
-            rules={[{ required: true, message: t("mrp.workCenters.namePrompt") }]}
-          >
-            <Input placeholder={t("mrp.workCenters.namePrompt")} />
-          </Form.Item>
-          <Form.Item label={t("common.type")} name="type" initialValue="machine">
-            <Select>
-              <Option value="machine">{t("mrp.workCenters.typeMachine")}</Option>
-              <Option value="labor">{t("mrp.workCenters.typeLabor")}</Option>
-              <Option value="mixed">{t("mrp.workCenters.typeMixed")}</Option>
-              <Option value="other">{t("mrp.workCenters.typeOther")}</Option>
-            </Select>
-          </Form.Item>
-          <Form.Item
-            label={t("mrp.workCenters.department")}
-            name="department_id"
-          >
-            <Select placeholder={t("mrp.workCenters.departmentPrompt")}>
-              {departments.map((d) => (
-                <Option key={d.id} value={d.id}>
-                  {d.name}
-                </Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Form.Item
-            label={t("mrp.workCenters.capacity")}
-            name="capacity_per_day"
-            initialValue={8}
-          >
-            <InputNumber
-              style={{ width: "100%" }}
-              placeholder={t("mrp.workCenters.capacityPrompt")}
-            />
-          </Form.Item>
-          <Form.Item
-            label={t("mrp.workCenters.laborRate")}
-            name="labor_rate"
-            initialValue={0}
-          >
-            <InputNumber
-              style={{ width: "100%" }}
-              placeholder={t("mrp.workCenters.laborRatePrompt")}
-            />
-          </Form.Item>
-          <Form.Item
-            label={t("mrp.workCenters.overheadRate")}
-            name="overhead_rate"
-            initialValue={0}
-          >
-            <InputNumber
-              style={{ width: "100%" }}
-              placeholder={t("mrp.workCenters.overheadRatePrompt")}
-            />
-          </Form.Item>
-          <Form.Item label={t("common.status")} name="status" initialValue="active">
-            <Select>
-              <Option value="active">{t("common.enabled")}</Option>
-              <Option value="inactive">{t("mrp.inactive")}</Option>
-            </Select>
-          </Form.Item>
+        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+          <Row>
+            <Col span={12}>
+              <Form.Item
+                label={t("common.code")}
+                name="code"
+                rules={[
+                  { required: true, message: t("mrp.workCenters.codePrompt") },
+                ]}
+              >
+                <Input
+                  placeholder={t("mrp.workCenters.codePrompt")}
+                  disabled={!!editingWorkCenter}
+                />
+              </Form.Item>              
+              <Form.Item
+                label={t("common.type")}
+                name="type"
+                initialValue="machine"
+              >
+                <Select>
+                  <Option value="machine">
+                    {t("mrp.workCenters.typeMachine")}
+                  </Option>
+                  <Option value="labor">
+                    {t("mrp.workCenters.typeLabor")}
+                  </Option>
+                  <Option value="mixed">
+                    {t("mrp.workCenters.typeMixed")}
+                  </Option>
+                  <Option value="other">
+                    {t("mrp.workCenters.typeOther")}
+                  </Option>
+                </Select>
+              </Form.Item>
+              <Form.Item
+                label={t("mrp.workCenters.department")}
+                name="department_id"
+              >
+                <Select placeholder={t("mrp.workCenters.departmentPrompt")}>
+                  {departments.map((d) => (
+                    <Option key={d.id} value={d.id}>
+                      {d.name}
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+              <Form.Item
+                label={t("mrp.workCenters.capacity")}
+                name="capacity_per_day"
+                initialValue={8}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder={t("mrp.workCenters.capacityPrompt")}
+                />
+              </Form.Item>
+              {/* 排班地基（deploy_119）：配了班次后日产能改由「净工时 × 班次数」推导 */}
+              <Form.Item
+                label={t("mrp.workCenters.shift")}
+                name="shift_id"
+                extra={t("mrp.workCenters.shiftHint")}
+              >
+                <Select
+                  placeholder={t("mrp.workCenters.shiftPrompt")}
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  notFoundContent={t("mrp.shifts.empty")}
+                  options={shifts.map((s) => ({
+                    value: s.id,
+                    label: `${s.shift_name}（${timeText(s.start_time)}-${timeText(s.end_time)}）`,
+                    disabled: s.is_active === false,
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+            <Form.Item
+                label={t("common.name")}
+                name="name"
+                rules={[
+                  { required: true, message: t("mrp.workCenters.namePrompt") },
+                ]}
+              >
+                <Input placeholder={t("mrp.workCenters.namePrompt")} />
+              </Form.Item>
+              <Form.Item
+                label={t("mrp.workCenters.shiftCount")}
+                name="shift_count"
+                initialValue={1}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  min={1}
+                  max={4}
+                  placeholder={t("mrp.workCenters.shiftCountPrompt")}
+                />
+              </Form.Item>
+              <Form.Item
+                label={t("mrp.workCenters.laborRate")}
+                name="labor_rate"
+                initialValue={0}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder={t("mrp.workCenters.laborRatePrompt")}
+                />
+              </Form.Item>
+              <Form.Item
+                label={t("mrp.workCenters.overheadRate")}
+                name="overhead_rate"
+                initialValue={0}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder={t("mrp.workCenters.overheadRatePrompt")}
+                />
+              </Form.Item>
+              <Form.Item
+                label={t("common.status")}
+                name="status"
+                initialValue="active"
+              >
+                <Select>
+                  <Option value="active">{t("common.enabled")}</Option>
+                  <Option value="inactive">{t("mrp.inactive")}</Option>
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
         </Form>
-        </Card>
       </SimpleModal>
     </div>
   );

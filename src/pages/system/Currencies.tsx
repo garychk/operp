@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Button,
+  Card,
   DatePicker,
   Form,
   Input,
@@ -13,8 +14,10 @@ import {
   Switch,
   Tabs,
   Tag,
+  Tooltip,
 } from "antd";
 import {
+  CloudDownloadOutlined,
   DeleteOutlined,
   DollarOutlined,
   EditOutlined,
@@ -32,6 +35,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import SimpleModal from "../../components/SimpleModal";
 import { SuperTable } from "../../components/SuperTable";
 import { EXCHANGE_RATE_TABLE, formatRate, refreshCurrencyRegistry } from "../../utils/money";
+import { fetchCfetsQuote } from "../../utils/fxSource";
 
 const { Option } = Select;
 
@@ -83,6 +87,7 @@ export function Currencies() {
 
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<ExchangeRate | null>(null);
+  const [fetchingRate, setFetchingRate] = useState(false);
   const [rateForm] = Form.useForm<RateFormValues>();
 
   const fetchCurrencies = useCallback(async () => {
@@ -291,6 +296,54 @@ export function Currencies() {
   };
 
   // ---------------------------------------------------------------- 汇率
+
+  /**
+   * 抓取中国货币网（CFETS）人民币汇率中间价并回填。
+   *
+   * 设计要点：
+   *   · 只回填、不落库 —— 用户看过再保存。汇率是凭证折算依据，写错则总账金额已经错了；
+   *   · 生效日期不自动改 —— CFETS 遇节假日顺延发布，抓到的可能是前一个工作日的价，
+   *     成功提示里如实告知发布日期，由用户判断要不要调整 effective_date；
+   *   · source 记 "CFETS"，与手工录入区分开，便于日后追溯每条汇率的来路。
+   */
+  const handleFetchCfetsRate = async () => {
+    const code = rateForm.getFieldValue("currency_code") as string | undefined;
+    if (!code) {
+      message.warning(t("currency.fetchCfetsPickCurrency"));
+      return;
+    }
+    try {
+      setFetchingRate(true);
+      const result = await fetchCfetsQuote({
+        currency: code,
+        base: baseCurrency?.code ?? "CNY",
+        refresh: true,
+      });
+      const row = result.rows[0];
+      if (!row) {
+        message.warning(t("currency.fetchCfetsNotFound", { code }));
+        return;
+      }
+      rateForm.setFieldValue("rate", row.rate);
+      rateForm.setFieldValue("source", "CFETS");
+      message.success(
+        t("currency.fetchCfetsSuccess", {
+          rate: formatRate(row.rate),
+          date: result.publishedDate,
+        })
+      );
+    } catch (error) {
+      // 数据源故障（502）与参数错误（400）处置方式不同，把服务端原文一并带出来
+      console.error("Error fetching CFETS quote:", error);
+      const detail = String((error as { message?: string }).message ?? "");
+      message.error(
+        detail ? `${t("currency.fetchCfetsFailed")}：${detail}` : t("currency.fetchCfetsFailed")
+      );
+    } finally {
+      setFetchingRate(false);
+    }
+  };
+
   const handleAddRate = () => {
     setEditingRate(null);
     rateForm.setFieldsValue({
@@ -561,7 +614,7 @@ export function Currencies() {
   ];
 
   return (
-    <div style={{ minHeight: 320 }}>
+    <Card variant="borderless" title={t('currency.title')}>
       <Alert
         type="info"
         closable
@@ -580,7 +633,6 @@ export function Currencies() {
             label: t("currency.tabs.currencies"),
             children: (
               <SuperTable
-                headerTitle={t("currency.title")}
                 columns={currencyColumns}
                 dataSource={filteredCurrencies}
                 rowKey="id"
@@ -808,7 +860,23 @@ export function Currencies() {
             <DatePicker style={{ width: "100%" }} />
           </Form.Item>
           <Form.Item
-            label={t("currency.rate")}
+            label={
+              <Space size={8}>
+                <span>{t("currency.rate")}</span>
+                <Tooltip title={t("currency.fetchCfetsTooltip")}>
+                  <Button
+                    size="small"
+                    type="link"
+                    style={{ padding: 0, height: "auto" }}
+                    icon={<CloudDownloadOutlined />}
+                    loading={fetchingRate}
+                    onClick={handleFetchCfetsRate}
+                  >
+                    {t("currency.fetchCfets")}
+                  </Button>
+                </Tooltip>
+              </Space>
+            }
             name="rate"
             tooltip={t("currency.rateTooltip")}
             rules={[
@@ -837,7 +905,7 @@ export function Currencies() {
           </Form.Item>
         </Form>
       </SimpleModal>
-    </div>
+    </Card>
   );
 }
 
