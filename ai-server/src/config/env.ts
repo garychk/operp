@@ -30,6 +30,12 @@ const schema = z.object({
   /** 知识库文件解析（本地 CPU，不打模型）：默认 30 次/分钟/用户 */
   RATE_LIMIT_KNOWLEDGE_PARSE_PER_MIN: z.coerce.number().int().positive().default(30),
 
+  /**
+   * 知识库向量维度，必须与 sys_ai_knowledge_chunks.embedding 的 vector(N) 一致（deploy_30 起为 768）。
+   * 改了列维度才需要动这里，否则保持默认即可。
+   */
+  KNOWLEDGE_EMBEDDING_DIM: z.coerce.number().int().positive().default(768),
+
   /** 日志级别：debug < info < warn < error */
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 

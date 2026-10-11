@@ -18,6 +18,23 @@ import { TenantScopeError } from "../../config/tenantContext.js";
 import { emitDelta } from "../streamContext.js";
 import type { PlanStep } from "./planner.js";
 
+/** 知识召回是分片级的，同一篇文档常命中多个分片；来源列表按文档去重（保留相似度最高的一条） */
+const dedupeSourcesByDoc = <
+  T extends { docId?: number; title?: string; similarity?: number },
+>(
+  sources: T[],
+): T[] => {
+  const best = new Map<string, T>();
+  for (const source of sources) {
+    const key = source.docId != null ? `doc:${source.docId}` : `title:${source.title || ""}`;
+    const prev = best.get(key);
+    if (!prev || (source.similarity ?? 0) > (prev.similarity ?? 0)) {
+      best.set(key, source);
+    }
+  }
+  return [...best.values()].sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0));
+};
+
 const requireConfirmIdentity = (state: AiGraphState) => {
   if (typeof state.userId !== "number" || typeof state.tenantId !== "number") {
     throw new TenantScopeError("缺少用户或租户上下文，已拒绝执行确认操作。");
@@ -261,15 +278,17 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
           docs
             .map((doc) => `${doc.title}: ${String(doc.content).slice(0, 120)}`)
             .join("\n"),
-        sources: docs.map((doc) => ({
-          title: doc.title,
-          category: doc.category,
-          sourceType: doc.sourceType,
-          sourceRef: doc.sourceRef,
-          docId: doc.docId,
-          chunkId: doc.chunkId,
-          similarity: doc.similarity,
-        })),
+        sources: dedupeSourcesByDoc(
+          docs.map((doc) => ({
+            title: doc.title,
+            category: doc.category,
+            sourceType: doc.sourceType,
+            sourceRef: doc.sourceRef,
+            docId: doc.docId,
+            chunkId: doc.chunkId,
+            similarity: doc.similarity,
+          })),
+        ),
       },
     };
   }

@@ -1,6 +1,10 @@
 import { supabase } from "../config/supabase.js";
 import { tenantScopeFilter } from "../config/tenantContext.js";
 import { callEmbeddingModel, type LlmProviderConfig } from "../config/llm.js";
+import {
+  isEmbeddingCapableProvider,
+  resolveEmbeddingProviderConfig,
+} from "./aiProvider.js";
 
 export interface KnowledgeDoc {
   id: number;
@@ -60,43 +64,51 @@ const formatErrorMessage = (error: unknown) => {
 };
 
 
-const EMBEDDING_MODEL_PATTERN =
-  /(embed|embedding|nomic-embed|bge-|mxbai-embed|text-embedding|gte-|e5-)/i;
+/**
+ * 知识库向量列的维度。
+ *
+ * `sys_ai_knowledge_chunks.embedding` 是 `vector(768)`（deploy_28 建表为 1536、
+ * deploy_30 为适配 nomic-embed-text 改成 768）。维度不匹配时 pgvector 会直接拒绝
+ * 写入，报「expected 768 dimensions, not 1024」这类 SQL 错误 —— 用户看不懂，
+ * 所以这里提前比对，给出可操作的提示。改了列维度就用环境变量同步覆盖。
+ */
+const EMBEDDING_DIM = (() => {
+  const parsed = Number(process.env.KNOWLEDGE_EMBEDDING_DIM || 768);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 768;
+})();
 
-const isEmbeddingCapableProvider = (provider?: LlmProviderConfig | null) => {
-  if (!provider?.endpoint) return false;
-  const endpoint = provider.endpoint.toLowerCase();
-  const model = String(provider.model || "");
-  return (
-    endpoint.includes("/embeddings") ||
-    EMBEDDING_MODEL_PATTERN.test(model) ||
-    /embed/i.test(endpoint)
+/** 维度不符时的统一人话报错 */
+const dimensionMismatchError = (actual: number) =>
+  new Error(
+    `向量模型输出的维度是 ${actual}，而知识库向量列是 vector(${EMBEDDING_DIM})，无法写入。` +
+      `请改用 ${EMBEDDING_DIM} 维的 embedding 模型（如 Ollama 的 nomic-embed-text、bge-base-zh、gte-base、e5-base；` +
+      `注意 bge-m3 是 1024 维、text-embedding-3-small 是 1536 维，均不可用），` +
+      `或同步调整数据库列维度（ALTER TABLE sys_ai_knowledge_chunks ... 并重建向量索引）。`,
   );
+
+/** 把 pgvector 的维度报错也翻译成人话（兜底：本地常量与真实列不一致时） */
+const translateEmbeddingDbError = (message: string) => {
+  const matched = /expected (\d+) dimensions?, not (\d+)/i.exec(message);
+  if (!matched) return message;
+  return dimensionMismatchError(Number(matched[2])).message;
 };
 
+/**
+ * 解析可用于向量化的 provider。
+ *
+ * **不再自己写一套判定规则**：命中特征就直接复用调用方传进来的 provider（省一次
+ * 配置查询），否则整体回落到 `resolveEmbeddingProviderConfig` —— 也就是 AI 设置里
+ * 「向量模型」下拉所驱动的那份逻辑（显式配置优先 → 特征自动挑）。两处规则必须同源，
+ * 否则会出现「选中的 provider 过不了校验」的自相矛盾。
+ */
 export async function resolveEmbeddingProvider(
   preferred?: LlmProviderConfig | null,
   tenantId?: number | null,
 ) {
-  if (isEmbeddingCapableProvider(preferred)) {
+  if (isEmbeddingCapableProvider(preferred as never)) {
     return preferred as LlmProviderConfig;
   }
-
-  // 走 RPC 而不是直接查表：sys_config 里同一 category_code 可能同时有平台基线行
-  // 和租户私有行，直接查会拿到多行。RPC 内部私有优先、回退基线，且接受显式
-  // tenant_id（service_role 没有 JWT，视图里的 current_tenant_id() 解析不出来）。
-  const { data, error } = await supabase.rpc("get_tenant_config", {
-    p_category_code: "ai",
-    p_tenant_id: tenantId ?? null,
-  });
-  if (error) throw error;
-
-  const config = (data || {}) as {
-    providers?: LlmProviderConfig[];
-  };
-  const providers = Array.isArray(config.providers) ? config.providers : [];
-  const found = providers.find((item) => isEmbeddingCapableProvider(item));
-  return found || null;
+  return (await resolveEmbeddingProviderConfig(undefined, tenantId)) as LlmProviderConfig;
 }
 
 export async function searchKnowledgeDocs(query: string, limit = 8, tenantId?: number | null) {
@@ -136,6 +148,11 @@ export async function searchKnowledgeRag(
     }
 
     const embedding = await callEmbeddingModel(query, embeddingProvider);
+    // 提问侧同样要挡：维度不符时余弦相似度会报 SQL 错，被外层 catch 后静默降级为
+    // 关键字搜索，用户只会觉得「怎么搜不准」，查不到真正原因。这里明确抛出来记日志。
+    if (embedding.length && embedding.length !== EMBEDDING_DIM) {
+      throw dimensionMismatchError(embedding.length);
+    }
     if (embedding.length) {
       // 带租户的向量检索：原 match_ai_knowledge_chunks 是 SECURITY DEFINER，
       // 会把所有租户的知识一起召回。deploy_48 还没执行时回退到原函数并告警。
@@ -197,21 +214,29 @@ export async function indexKnowledgeDocument(
   doc: KnowledgeDoc,
   provider: LlmProviderConfig,
 ) {
+  // 解析不出来会抛出可直接展示给用户的中文错误（见 resolveEmbeddingProviderConfig）
   const embeddingProvider = await resolveEmbeddingProvider(provider);
-  if (!embeddingProvider) {
-    throw new Error(
-      "未找到可用于向量化的 embedding provider。请在 AI 设置里增加一个 Ollama / OpenAI 兼容的 embeddings provider。",
-    );
-  }
 
   const chunks = doc.content
     .split(/\n{2,}|(?<=[。！？.!?])\s+/)
     .map((item) => item.trim())
     .filter(Boolean);
+
+  if (!chunks.length) {
+    throw new Error("文档正文为空，没有可向量化的内容。");
+  }
+
   const payload = [];
 
   for (let index = 0; index < chunks.length; index += 1) {
     const embedding = await callEmbeddingModel(chunks[index], embeddingProvider);
+
+    // 提前比对维度：交给 pgvector 报错会得到「expected 768 dimensions, not 1024」
+    // 这种 SQL 级信息，用户无从下手。
+    if (embedding.length !== EMBEDDING_DIM) {
+      throw dimensionMismatchError(embedding.length);
+    }
+
     payload.push({
       doc_id: doc.id,
       chunk_index: index,
@@ -231,7 +256,7 @@ export async function indexKnowledgeDocument(
 
   await supabase.from("sys_ai_knowledge_chunks").delete().eq("doc_id", doc.id);
   const { error } = await supabase.from("sys_ai_knowledge_chunks").insert(payload);
-  if (error) throw error;
+  if (error) throw new Error(translateEmbeddingDbError(error.message || String(error)));
   return { docId: doc.id, chunkCount: payload.length };
 }
 

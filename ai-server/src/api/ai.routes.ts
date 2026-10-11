@@ -268,12 +268,11 @@ aiRouter.post("/knowledge/reindex", reindexRateLimit, async (req, res) => {
     const tenantId =
       parsed.data.tenant_id && identity.isSuperAdmin ? parsed.data.tenant_id : identity.tenantId;
 
-    // 优先用 id=ollama 的 provider；没有则按 embedding 特征自动挑。
-    // 规则收在 services/aiProvider.ts，与 MCP 链路共用同一份。
-    const resolvedProvider = await resolveEmbeddingProviderConfig(
-      { id: "ollama" },
-      tenantId,
-    ).catch(() => resolveEmbeddingProviderConfig(undefined, tenantId));
+    // 向量模型的选择规则全部收在 services/aiProvider.ts：AI 设置里「向量模型」显式
+    // 指定的优先，未指定时按模型名 / 接口地址特征自动挑。
+    // **不再**硬编码 `{ id: 'ollama' }` 优先 —— 默认配置里恰好有一条 id 为 ollama 的
+    // 纯对话模型（qwen2.5），强选它会让导入后的自动索引必然失败。
+    const resolvedProvider = await resolveEmbeddingProviderConfig(undefined, tenantId);
 
     // doc_ids（批量）优先；两者都不传 = 全量重索引。
     const target = parsed.data.doc_ids?.length ? parsed.data.doc_ids : parsed.data.doc_id;

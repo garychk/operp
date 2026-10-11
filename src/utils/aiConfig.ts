@@ -15,6 +15,14 @@ export interface AISettingsConfig {
   enabled: boolean;
   providers: AIProviderConfig[];
   activeProviderId: string;
+  /**
+   * 知识库向量化专用模型的 provider id。空字符串 = 自动识别。
+   *
+   * 存在的意义：providers 是一张不分角色的扁平列表，后端只能按「模型名含 embed /
+   * 接口地址含 embeddings」猜哪个是向量模型，遇到名字不规范的模型就会挑错。这里让
+   * 用户在界面上把角色说清楚，后端优先采信。
+   */
+  embeddingProviderId: string;
   temperature: number;
   redactSensitiveData: boolean;
   maxContextMessages: number;
@@ -46,6 +54,8 @@ export const defaultAISettings: AISettingsConfig = {
   enabled: true,
   providers: defaultProviders,
   activeProviderId: defaultProviders[0].id,
+  // 空 = 自动识别（后端按模型名 / 接口地址特征挑 embedding 模型）
+  embeddingProviderId: '',
   temperature: 0.3,
   redactSensitiveData: true,
   maxContextMessages: 12,
@@ -80,11 +90,18 @@ export function normalizeAISettings(value: unknown): AISettingsConfig {
     ? String(record.activeProviderId)
     : safeProviders[0].id;
 
+  // 悬空 id（比如选完之后又把那条模型删了）一律归零成「自动识别」，
+  // 否则后端会报「选定的向量模型不存在」，而用户在界面上看不出问题出在哪。
+  const embeddingProviderId = safeProviders.some((provider) => provider.id === record.embeddingProviderId)
+    ? String(record.embeddingProviderId)
+    : '';
+
   return {
     ...defaultAISettings,
     ...record,
     providers: safeProviders,
     activeProviderId,
+    embeddingProviderId,
     temperature: typeof record.temperature === 'number' ? record.temperature : defaultAISettings.temperature,
     maxContextMessages:
       typeof record.maxContextMessages === 'number'

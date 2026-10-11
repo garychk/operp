@@ -360,6 +360,17 @@ export function Settings() {
         <Form.Item name="activeProviderId" label={t('settings.providers.defaultModel')} rules={[{ required: true, message: t('settings.providers.selectDefault') }]}>
           <Select options={providerOptions} placeholder={t('settings.providers.selectPlaceholder')} />
         </Form.Item>
+        <Form.Item
+          name="embeddingProviderId"
+          label={t('settings.providers.embeddingModel')}
+          extra={t('settings.providers.embeddingHint')}
+        >
+          <Select
+            allowClear
+            options={providerOptions}
+            placeholder={t('settings.providers.embeddingPlaceholder')}
+          />
+        </Form.Item>
         <Form.List name="providers">
           {(fields, { add, remove }) => (
             <Space direction="vertical" style={{ width: '100%' }} size={12}>              

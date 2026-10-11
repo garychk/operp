@@ -100,6 +100,28 @@ interface ConversationListItem {
   lastMessage: string;
   updatedAt: string;
 }
+
+/** 知识召回是分片级的，同一篇文档常命中多个分片；来源按文档去重（历史消息里存的可能仍是重复的，渲染时兜底） */
+const dedupeSources = <
+  T extends { docId?: number; title?: string; similarity?: number },
+>(
+  sources: T[],
+): T[] => {
+  const best = new Map<string, T>();
+  for (const source of sources) {
+    const key =
+      source.docId != null
+        ? `doc:${source.docId}`
+        : `title:${source.title || ""}`;
+    const prev = best.get(key);
+    if (!prev || (source.similarity ?? 0) > (prev.similarity ?? 0)) {
+      best.set(key, source);
+    }
+  }
+  return [...best.values()].sort(
+    (a, b) => (b.similarity ?? 0) - (a.similarity ?? 0),
+  );
+};
 type AiSkill = "auto" | "analysis" | "create" | "action" | "baq" | "chat";
 type AiChatStreamEvent =
   | { type: "step"; step: string; message: string; data?: unknown }
@@ -1389,7 +1411,8 @@ export function AIChatPanel({
                                     >
                                       {t("aiChat.sources.title")}
                                     </Typography.Text>
-                                    {item.sources.map((source, index) => {
+                                    {dedupeSources(item.sources || []).map(
+                                      (source, index) => {
                                       const label =
                                         source.title ||
                                         source.sourceType ||
