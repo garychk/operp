@@ -1,4 +1,5 @@
 import { supabase } from "../config/supabase.js";
+import { env } from "../config/env.js";
 import { tenantScopeFilter } from "../config/tenantContext.js";
 import { callEmbeddingModel, type LlmProviderConfig } from "../config/llm.js";
 import {
@@ -70,20 +71,23 @@ const formatErrorMessage = (error: unknown) => {
  * `sys_ai_knowledge_chunks.embedding` 是 `vector(768)`（deploy_28 建表为 1536、
  * deploy_30 为适配 nomic-embed-text 改成 768）。维度不匹配时 pgvector 会直接拒绝
  * 写入，报「expected 768 dimensions, not 1024」这类 SQL 错误 —— 用户看不懂，
- * 所以这里提前比对，给出可操作的提示。改了列维度就用环境变量同步覆盖。
+ * 所以这里提前比对，给出可操作的提示。
+ *
+ * **唯一来源是 `config/env.ts` 的 `KNOWLEDGE_EMBEDDING_DIM`**，`config/llm.ts` 发
+ * 请求时用同一个值声明 `dimensions`（MRL 模型的默认维度通常不是 768），
+ * 改列维度只需改这一处环境变量。
  */
-const EMBEDDING_DIM = (() => {
-  const parsed = Number(process.env.KNOWLEDGE_EMBEDDING_DIM || 768);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 768;
-})();
+const EMBEDDING_DIM = env.KNOWLEDGE_EMBEDDING_DIM;
 
 /** 维度不符时的统一人话报错 */
 const dimensionMismatchError = (actual: number) =>
   new Error(
     `向量模型输出的维度是 ${actual}，而知识库向量列是 vector(${EMBEDDING_DIM})，无法写入。` +
-      `请改用 ${EMBEDDING_DIM} 维的 embedding 模型（如 Ollama 的 nomic-embed-text、bge-base-zh、gte-base、e5-base；` +
-      `注意 bge-m3 是 1024 维、text-embedding-3-small 是 1536 维，均不可用），` +
-      `或同步调整数据库列维度（ALTER TABLE sys_ai_knowledge_chunks ... 并重建向量索引）。`,
+      `请改用能输出 ${EMBEDDING_DIM} 维的 embedding 模型：` +
+      `Ollama 的 nomic-embed-text / bge-base-zh / gte-base / e5-base 本身就是 ${EMBEDDING_DIM} 维；` +
+      `支持 dimensions 参数的模型（阿里云百炼 text-embedding-v3 / v4、OpenAI text-embedding-3-*）` +
+      `请求侧已按 KNOWLEDGE_EMBEDDING_DIM=${EMBEDDING_DIM} 声明维度，若仍报错说明该接口忽略了 dimensions；` +
+      `bge-m3（1024 维）这类尺寸固定的模型不可直接用。`,
   );
 
 /** 把 pgvector 的维度报错也翻译成人话（兜底：本地常量与真实列不一致时） */

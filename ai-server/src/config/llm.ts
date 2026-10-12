@@ -1,3 +1,5 @@
+// 先加载 env：本文件模块级读取的 process.env.*（超时 / 重试 / 向量维度）依赖 .env 已就位。
+import { env } from "./env.js";
 import { logger } from "../services/logger.js";
 
 export interface LlmProviderConfig {
@@ -33,6 +35,17 @@ const FALLBACK_API_KEY = process.env.LLM_FALLBACK_API_KEY;
 const FALLBACK_MODEL = process.env.LLM_FALLBACK_MODEL;
 
 const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+/**
+ * 请求侧声明的向量维度，与 `sys_ai_knowledge_chunks.embedding` 的 `vector(N)` 同源
+ * （都来自 `KNOWLEDGE_EMBEDDING_DIM`，默认 768）。
+ *
+ * 为什么必须显式发：支持 MRL 的接口（Qwen 百炼 text-embedding-v3/v4、OpenAI
+ * text-embedding-3-*、Gemini）**默认维度通常不是 768** —— 百炼 text-embedding-v4
+ * 默认 1024。不发这个参数就会写进 768 的列时被 pgvector / 维度校验拦下。
+ * 填 0 表示「不发 dimensions 参数」（少数老接口不认这个字段）。
+ */
+const EMBEDDING_REQUEST_DIM = env.KNOWLEDGE_EMBEDDING_DIM;
 
 const toResponseUrl = (baseUrl: string) =>
   baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/$/, "")}/chat/completions`;
@@ -148,7 +161,7 @@ async function withRetryAndFallback<T>(
 export class LlmHttpError extends Error {
   constructor(
     readonly status: number,
-    body: string,
+    readonly body: string,
   ) {
     super(`LLM request failed: ${status}${body ? ` ${body.slice(0, 400)}` : ""}`);
     this.name = "LlmHttpError";
@@ -379,25 +392,65 @@ export async function callEmbeddingModel(
               ? normalized.replace(/\/chat$/, "/embeddings")
               : `${normalized}/embeddings`;
 
-      const response = await fetch(target, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(activeProvider?.apiKey
-            ? { Authorization: `Bearer ${activeProvider.apiKey}` }
-            : {}),
-        },
-        body: JSON.stringify({
+      /**
+       * 组装请求体。
+       *
+       * `withDimensions=false` 只在「端点明确不认 dimensions」时用（见下面的兜底重试）。
+       */
+      const buildBody = (withDimensions: boolean) => {
+        const body: Record<string, unknown> = {
           model: activeProvider?.model,
           input,
-          ...(isOllama ? { truncate: true } : {}),
-        }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
+        };
+        // Ollama 的 /api/embed 没有 dimensions 概念（维度由模型自身决定），
+        // 只认 truncate（超长输入截断）。
+        if (isOllama) body.truncate = true;
+        else if (withDimensions) body.dimensions = EMBEDDING_REQUEST_DIM;
+        return JSON.stringify(body);
+      };
 
-      if (!response.ok) {
+      const request = async (withDimensions: boolean) => {
+        const response = await fetch(target, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(activeProvider?.apiKey
+              ? { Authorization: `Bearer ${activeProvider.apiKey}` }
+              : {}),
+          },
+          body: buildBody(withDimensions),
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+
+        if (response.ok) return response;
         const errorText = await response.text().catch(() => "");
         throw new LlmHttpError(response.status, errorText);
+      };
+
+      const wantsDimensions = !isOllama && EMBEDDING_REQUEST_DIM > 0;
+      let response: Response;
+      try {
+        response = await request(wantsDimensions);
+      } catch (error) {
+        // 少数 OpenAI 兼容服务不认 dimensions（老模型 / 自建网关），直接 400。
+        // 这类接口维度是固定的，去掉参数重试一次即可 —— 万一带回别的维度，
+        // knowledgeBase 的维度校验会给出「实际 X 维、期望 768 维」的人话报错，
+        // 不会静默写坏数据。
+        const errorBody = error instanceof LlmHttpError ? error.body : "";
+        const unsupported =
+          wantsDimensions &&
+          error instanceof LlmHttpError &&
+          error.status === 400 &&
+          /dimension/i.test(errorBody);
+
+        if (!unsupported) throw error;
+
+        logger.warn("llm", "embedding 端点不认 dimensions 参数，已去掉后重试", {
+          endpoint: target,
+          model: activeProvider?.model,
+          response: errorBody.slice(0, 200),
+        });
+        response = await request(false);
       }
 
       const data = (await response.json()) as Record<string, unknown>;
