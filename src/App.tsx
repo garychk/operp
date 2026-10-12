@@ -5,6 +5,7 @@ import { ProLayout } from './components/ProLayout';
 import { Login } from './pages/Login';
 import Terms from './pages/legal/Terms';
 import Privacy from './pages/legal/Privacy';
+import { DocsSite } from './pages/docs/DocsSite';
 import { Dashboard } from './pages/Dashboard';
 import { Workbench } from './pages/Workbench';
 import { AccountSubjects } from './pages/finance/AccountSubjects';
@@ -109,6 +110,8 @@ function AppContent() {
       {/* 法务静态页：与登录页同级，不套 ProtectedRoute，未登录可直接访问 */}
       <Route path="/terms" element={<Terms />} />
       <Route path="/privacy" element={<Privacy />} />
+      {/* 产品使用手册（公开静态文档页，无需登录；支持 /docs#锚点 直达章节） */}
+      <Route path="/docs" element={<DocsSite />} />
       
       <Route 
         path="/" 

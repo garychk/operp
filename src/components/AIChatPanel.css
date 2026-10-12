@@ -467,6 +467,20 @@
   text-decoration: underline;
 }
 
+/* 站内菜单跳转：做成小胶囊，一眼能看出「点一下会跳过去」 */
+.ai-markdown-link-internal {
+  cursor: pointer;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  text-decoration: none;
+}
+
+.ai-markdown-link-internal:hover {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  text-decoration: none;
+}
+
 .ai-markdown-image {
   max-width: 100%;
   border-radius: 10px;

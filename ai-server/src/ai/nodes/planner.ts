@@ -127,7 +127,9 @@ export async function plannerNode(state: AiGraphState): Promise<AiGraphState> {
                 : [{ step: "business_analysis", tool: "business.analysis", input: { text: state.text, target: state.target, queryMode: state.queryMode, responseMode: state.responseMode } }]
               : state.intent === "knowledge"
                 ? [{ step: "knowledge_lookup", tool: "knowledge.search", input: { text: state.text } }]
-                : [{ step: "draft_reply", tool: "chat.respond", input: { text: state.text } }];
+                : state.intent === "navigation"
+                  ? [{ step: "locate_menu", tool: "menu.locate", input: { text: state.text } }]
+                  : [{ step: "draft_reply", tool: "chat.respond", input: { text: state.text } }];
 
   return { ...state, plan, planCursor: 0, planOutputs: [] };
 }

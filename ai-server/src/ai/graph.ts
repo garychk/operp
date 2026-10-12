@@ -37,8 +37,12 @@ const State = Annotation.Root({
   planCursor: Annotation<number | undefined>,
   planOutputs: Annotation<Array<Record<string, unknown>> | undefined>,
   toolResults: Annotation<unknown[]>({
-    // 多步计划：各步结果累积（responseComposer 取最后一条作为主回复）
-    reducer: (prev, next) => [...((prev as unknown[]) || []), ...((next as unknown[]) || [])],
+    // 注意：**替换而不是追加**。toolExecutorNode 自己就做了累积
+    // （流式路径不走 channel reducer，节点直接返回完整数组），如果这里再 append
+    // 一遍，非流式路径（compiled.invoke）会把每步结果记两遍 ——
+    // responseComposer 一看到 results.length > 1 就会拼出
+    // 「执行过程 1. xx ✓ 2. xx ✓」这种重复的过程块。
+    reducer: (_prev, next) => next ?? [],
     default: () => [],
   }),
   reply: Annotation<string | undefined>,

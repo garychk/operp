@@ -98,6 +98,7 @@ body {
      横向仍按历史行为隐藏溢出，避免全站冒出横向滚动条。 */
   overflow-y: auto;
   overflow-x: hidden;
+  margin-top: -10px;
 }
 
 /* 页面根元素至少铺满视口，短页面不会出现"卡片只到一半"；

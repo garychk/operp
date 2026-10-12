@@ -547,7 +547,7 @@ export function InventoryReports() {
   );
 
   return (
-    <Card variant="borderless" title={t('inventoryReports.title')}>
+    <div>
       <Tabs
         items={[
           { key: 'summary', label: t('inventoryReports.tabSummary'), children: summaryTab },
@@ -555,7 +555,7 @@ export function InventoryReports() {
           { key: 'aging', label: t('inventoryReports.tabAging'), children: agingTab },
         ]}
       />
-    </Card>
+    </div>
   );
 }
 

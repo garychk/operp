@@ -500,7 +500,8 @@ const columns: ColumnsType<User> = [
     {
       title: t('users.email'),
       dataIndex: 'email',
-      width: 200,
+      width: 120,
+      ellipsis: true,
     },
     {
       title: t('users.phone'),
@@ -510,6 +511,8 @@ const columns: ColumnsType<User> = [
     {
       title: t('users.role'),
       dataIndex: 'roles',
+      width: 140,
+      ellipsis: true,
       render: (userRoles: Role[] = []) => (
         <Space size={[0, 4]} wrap>
           {userRoles.length > 0 ? userRoles.map((role) => (
@@ -554,7 +557,7 @@ const columns: ColumnsType<User> = [
       title: t('common.actions'),
       key: 'action',
       fixed: 'right',
-      width: 320,
+      width: 220,
       render: (_, record) => (
         <Space>
           <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} />          

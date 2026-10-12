@@ -1,0 +1,423 @@
+/* OPERP 使用手册（/docs）— 独立静态文档页样式，浅色主题，不随系统深色模式切换 */
+
+/* 注意：第三方库 operp-print-designer 的全局重置含
+   `html, body, #root { height: 100%; overflow: hidden }`（由 SupaModal 全局引入），
+   导致 body / #root 都滚不动。这里不动 root，改为让 .docs-page 自己当滚动容器。 */
+.docs-page {
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  background: #f5f7fa;
+  color: #333;
+  font-size: 14px;
+}
+
+/* ---------- 头部 ---------- */
+
+.docs-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  height: 60px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e8ecef;
+  box-shadow: 0 1px 4px rgba(15, 35, 60, 0.04);
+}
+
+.docs-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* 与主控台左上角使用同一个品牌 logo（src/assets/opelix.svg） */
+.docs-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+
+.docs-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.docs-brand-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2733;
+}
+
+.docs-version {
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-size: 12px;
+}
+
+.docs-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 520px;
+}
+
+.docs-search-icon {
+  position: absolute;
+  left: 12px;
+  color: #9aa4b2;
+  pointer-events: none;
+}
+
+.docs-search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 36px 0 36px;
+  border: 1px solid #d9dee5;
+  border-radius: 18px;
+  background: #f7f9fb;
+  font-size: 14px;
+  color: #1f2733;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+}
+
+.docs-search input:focus {
+  border-color: #1677ff;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(22, 119, 255, 0.12);
+}
+
+.docs-search input::placeholder {
+  color: #9aa4b2;
+}
+
+.docs-search-clear {
+  position: absolute;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #9aa4b2;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.docs-search-clear:hover {
+  background: #eef1f5;
+  color: #555;
+}
+
+.docs-header-meta {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #8593a5;
+}
+
+/* ---------- 主体布局 ---------- */
+
+.docs-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.docs-sidebar {
+  width: 248px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 84px;
+  max-height: calc(100vh - 108px);
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #eceff3;
+  border-radius: 10px;
+  padding: 14px 10px;
+}
+
+.docs-nav-group + .docs-nav-group {
+  margin-top: 14px;
+}
+
+.docs-nav-title {
+  padding: 4px 10px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #98a2b0;
+}
+
+.docs-nav-link {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #3d4753;
+  font-size: 13px;
+  line-height: 1.5;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.docs-nav-link:hover {
+  background: #f2f6fb;
+  color: #1677ff;
+}
+
+.docs-nav-link.is-active {
+  background: #e6f4ff;
+  color: #1677ff;
+  font-weight: 600;
+}
+
+.docs-nav-empty {
+  padding: 16px 10px;
+  font-size: 13px;
+  color: #98a2b0;
+  text-align: center;
+}
+
+/* ---------- 内容区 ---------- */
+
+.docs-content {
+  flex: 1;
+  min-width: 0;
+  background: #ffffff;
+  border: 1px solid #eceff3;
+  border-radius: 10px;
+  padding: 32px 40px 40px;
+}
+
+.docs-hero {
+  padding-bottom: 24px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.docs-hero h1 {
+  margin: 0 0 12px;
+  font-size: 26px;
+  font-weight: 700;
+  color: #1f2733;
+}
+
+.docs-hero p {
+  margin: 0 0 16px;
+  max-width: 760px;
+  font-size: 14px;
+  line-height: 1.9;
+  color: #5a6674;
+}
+
+.docs-hero-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.docs-hero-chips span {
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: #f2f6fb;
+  color: #52708e;
+  font-size: 12px;
+}
+
+.docs-category + .docs-category {
+  margin-top: 40px;
+}
+
+.docs-category-title {
+  margin: 32px 0 4px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #eef1f5;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2733;
+}
+
+.docs-section {
+  scroll-margin-top: 76px;
+}
+
+.docs-section h2 {
+  display: flex;
+  align-items: center;
+  margin: 28px 0 14px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #1f2733;
+}
+
+.docs-section h2::before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 16px;
+  margin-right: 10px;
+  border-radius: 2px;
+  background: #1677ff;
+}
+
+.docs-section h3 {
+  margin: 20px 0 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #344050;
+}
+
+.docs-section-body p {
+  margin: 0 0 12px;
+  line-height: 1.9;
+  color: #47515e;
+}
+
+.docs-section-body ul,
+.docs-section-body ol {
+  margin: 0 0 12px;
+  padding-left: 22px;
+  line-height: 1.9;
+  color: #47515e;
+}
+
+.docs-section-body strong {
+  color: #1f2733;
+}
+
+/* 表格 */
+
+.docs-section-body table {
+  width: 100%;
+  margin: 8px 0 16px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.docs-section-body th,
+.docs-section-body td {
+  padding: 8px 12px;
+  border: 1px solid #e8ecef;
+  text-align: left;
+  vertical-align: top;
+  line-height: 1.7;
+  color: #47515e;
+}
+
+.docs-section-body th {
+  background: #f7f9fb;
+  font-weight: 600;
+  color: #344050;
+  white-space: nowrap;
+}
+
+.docs-section-body tr:nth-child(even) td {
+  background: #fcfdfe;
+}
+
+/* 提示与警告 */
+
+.docs-tip,
+.docs-warn {
+  margin: 12px 0 16px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.docs-tip {
+  background: #eaf3ff;
+  border: 1px solid #c9e1ff;
+  color: #2b5c9e;
+}
+
+.docs-warn {
+  background: #fff7e8;
+  border: 1px solid #ffe1a8;
+  color: #9a6b1f;
+}
+
+/* 流程图 / 代码块 */
+
+.docs-flow {
+  margin: 10px 0 16px;
+  padding: 14px 16px;
+  border: 1px solid #e8ecef;
+  border-radius: 8px;
+  background: #f7f9fb;
+  color: #3d4753;
+  font-family: "JetBrains Mono", Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+/* 搜索命中高亮 */
+
+.docs-content mark.docs-hit {
+  background: #ffe58f;
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
+/* 页脚 */
+
+.docs-footer {
+  margin-top: 48px;
+  padding-top: 16px;
+  border-top: 1px solid #eef1f5;
+  font-size: 12px;
+  color: #98a2b0;
+  text-align: center;
+}
+
+/* ---------- 响应式 ---------- */
+
+@media (max-width: 900px) {
+  .docs-body {
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .docs-sidebar {
+    position: static;
+    width: 100%;
+    max-height: none;
+  }
+
+  .docs-content {
+    padding: 20px 18px 28px;
+  }
+
+  .docs-header {
+    padding: 0 16px;
+    gap: 12px;
+  }
+
+  .docs-header-meta {
+    display: none;
+  }
+}

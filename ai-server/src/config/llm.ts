@@ -37,8 +37,49 @@ const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 const toResponseUrl = (baseUrl: string) =>
   baseUrl.endsWith("/chat/completions") ? baseUrl : `${baseUrl.replace(/\/$/, "")}/chat/completions`;
 
+/**
+ * Ollama 端点归一化。
+ *
+ * 用户在 AI 设置里填的地址五花八门：`http://host:11434`、`.../api`、`.../api/chat`、
+ * `.../v1`。旧实现只做「把结尾 /chat 换成 /embed」，填根地址就会拼出
+ * `http://host:11434/embed`（404）—— 实测租户 3 的配置正是这种填法。
+ * 这里按已知后缀归一（保留 /api、/v1 前缀），无法识别时补全官方路径。
+ */
+const OLLAMA_ENDPOINT_REWRITES: Record<"chat" | "embed", Array<[RegExp, string]>> = {
+  chat: [
+    [/\/v1\/embeddings$/, "/v1/chat/completions"],
+    [/\/chat\/completions$/, "/chat/completions"],
+    [/\/api\/embed$/, "/api/chat"],
+    [/\/api\/embeddings$/, "/api/chat"],
+    [/\/api\/chat$/, "/api/chat"],
+    [/\/embed$/, "/chat"],
+    [/\/embeddings$/, "/chat"],
+    [/\/chat$/, "/chat"],
+    [/\/api$/, "/api/chat"],
+  ],
+  embed: [
+    [/\/v1\/chat\/completions$/, "/v1/embeddings"],
+    [/\/chat\/completions$/, "/embeddings"],
+    [/\/api\/chat$/, "/api/embed"],
+    [/\/api\/embeddings$/, "/api/embed"],
+    [/\/api\/embed$/, "/api/embed"],
+    [/\/embeddings$/, "/embeddings"],
+    [/\/chat$/, "/embed"],
+    [/\/embed$/, "/embed"],
+    [/\/api$/, "/api/embed"],
+  ],
+};
+
+const normalizeOllamaUrl = (raw: string, kind: "chat" | "embed") => {
+  const base = raw.replace(/\/+$/, "");
+  for (const [pattern, replacement] of OLLAMA_ENDPOINT_REWRITES[kind]) {
+    if (pattern.test(base)) return base.replace(pattern, replacement);
+  }
+  return `${base}/api/${kind}`;
+};
+
 const toChatUrl = (endpoint: string, apiType?: LlmProviderConfig["apiType"]) =>
-  apiType === "ollama" ? endpoint : toResponseUrl(endpoint);
+  apiType === "ollama" ? normalizeOllamaUrl(endpoint, "chat") : toResponseUrl(endpoint);
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -323,22 +364,20 @@ export async function callEmbeddingModel(
     "embedding",
     async (activeProvider) => {
       const activeEndpoint = activeProvider?.endpoint || endpoint;
-      const normalized = activeEndpoint.replace(/\/$/, "");
-      const target = provider?.apiType === "ollama"
-        ? normalized.endsWith("/embed")
-          ? normalized
-          : normalized.endsWith("/embeddings")
-            ? normalized.replace(/\/embeddings$/, "/embed")
-            : normalized.endsWith("/chat")
-              ? normalized.replace(/\/chat$/, "/embed")
-              : `${normalized}/embed`
+      const normalized = activeEndpoint.replace(/\/+$/, "");
+      const isOllama = activeProvider?.apiType === "ollama";
+
+      // 注意用 activeProvider 而不是外层 provider：走 LLM_FALLBACK_* 降级时
+      // 备模型的 apiType 可能不同，用错会拼出对方不认的路径。
+      const target = isOllama
+        ? normalizeOllamaUrl(normalized, "embed")
         : normalized.endsWith("/embeddings")
           ? normalized
-        : normalized.endsWith("/chat/completions")
-          ? normalized.replace(/\/chat\/completions$/, "/embeddings")
-          : normalized.endsWith("/chat")
-            ? normalized.replace(/\/chat$/, "/embeddings")
-            : `${normalized}/embeddings`;
+          : normalized.endsWith("/chat/completions")
+            ? normalized.replace(/\/chat\/completions$/, "/embeddings")
+            : normalized.endsWith("/chat")
+              ? normalized.replace(/\/chat$/, "/embeddings")
+              : `${normalized}/embeddings`;
 
       const response = await fetch(target, {
         method: "POST",
@@ -351,7 +390,7 @@ export async function callEmbeddingModel(
         body: JSON.stringify({
           model: activeProvider?.model,
           input,
-          ...(provider?.apiType === "ollama" ? { truncate: true } : {}),
+          ...(isOllama ? { truncate: true } : {}),
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });

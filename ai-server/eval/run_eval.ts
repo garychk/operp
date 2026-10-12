@@ -16,10 +16,16 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { ruleFallback } from "../src/ai/nodes/intentRouter.js";
+import { ruleFallback, isMenuLocateQuestion } from "../src/ai/nodes/intentRouter.js";
 import { buildMultiStepPlan } from "../src/ai/nodes/planner.js";
 import { detectDocumentAction, detectDocumentType } from "../src/services/documentService.js";
 import { evaluateWritePolicy, evaluateDeletePolicy } from "../src/tools/entityRegistry.js";
+import {
+  buildMenuJumpSection,
+  extractMenuKeyword,
+  matchMenus,
+  type MenuCatalogEntry,
+} from "../src/services/menuCatalog.js";
 
 interface IntentCase {
   text: string;
@@ -40,6 +46,26 @@ interface PlanCase {
   /** 可选：断言每一步的 input.action（多步计划里第二步的动作语义） */
   actions?: string[] | null;
 }
+interface NavIntentCase {
+  text: string;
+  /** 是否应判成「找菜单」 */
+  locate: boolean;
+  /** ruleFallback 应给出的意图 */
+  intent: string;
+}
+interface MenuCase {
+  question: string;
+  keyword: string;
+  /** 期望的 top-1 菜单路径；null = 泛问（不期望命中） */
+  expect_top: string | null;
+}
+interface MenuFixtureEntry {
+  name: string;
+  code: string;
+  path: string;
+  parentPath: string;
+  aliases: string[];
+}
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cases = JSON.parse(readFileSync(join(here, "cases.json"), "utf-8")) as {
@@ -47,6 +73,9 @@ const cases = JSON.parse(readFileSync(join(here, "cases.json"), "utf-8")) as {
   policy_cases: PolicyCase[];
   document_cases: DocumentCase[];
   plan_cases: PlanCase[];
+  nav_intent_cases?: NavIntentCase[];
+  menu_cases?: MenuCase[];
+  menu_catalog_fixture?: MenuFixtureEntry[];
 };
 
 let pass = 0;
@@ -155,6 +184,68 @@ if (!deletePolicy.writable) {
   fail += 1;
   failures.push("[delete] 删除能力被放开了！");
   console.log("  FAIL  删除能力被放开了！");
+}
+
+console.log("\n== 菜单导航（找菜单问法 + 关键词抽取 + 菜单匹配）==");
+
+for (const item of cases.nav_intent_cases ?? []) {
+  const locate = isMenuLocateQuestion(item.text);
+  const routed = ruleFallback({
+    sessionId: "eval",
+    text: item.text,
+    skill: "auto",
+  } as Parameters<typeof ruleFallback>[0]);
+
+  const bad: string[] = [];
+  if (locate !== item.locate) bad.push(`locate: got=${locate} want=${item.locate}`);
+  if (routed.intent !== item.intent)
+    bad.push(`intent: got=${routed.intent} want=${item.intent}`);
+
+  if (!bad.length) {
+    pass += 1;
+    console.log(`  PASS  ${item.text} → ${routed.intent}`);
+  } else {
+    fail += 1;
+    failures.push(`[navigation] "${item.text}" → ${bad.join("; ")}`);
+    console.log(`  FAIL  ${item.text} → ${bad.join("; ")}`);
+  }
+}
+
+// 固定夹具（不连库）：只验关键词抽取与打分排序，真菜单数据由 scripts/verify 覆盖
+const menuFixture: MenuCatalogEntry[] = (cases.menu_catalog_fixture ?? []).map(
+  (item, index) => ({
+    id: index + 1,
+    name: item.name,
+    code: item.code,
+    path: item.path,
+    breadcrumb: item.parentPath ? `${item.parentPath} → ${item.name}` : item.name,
+    parentPath: item.parentPath || "",
+    tenantId: null,
+    aliases: item.aliases,
+  }),
+);
+
+for (const item of cases.menu_cases ?? []) {
+  const keyword = extractMenuKeyword(item.question);
+  const matches = matchMenus(keyword, menuFixture, 5);
+  const top = matches.length ? matches[0].entry.path : null;
+
+  const bad: string[] = [];
+  if (keyword !== item.keyword)
+    bad.push(`keyword: got="${keyword}" want="${item.keyword}"`);
+  if ((top ?? null) !== (item.expect_top ?? null))
+    bad.push(`top: got=${top} want=${item.expect_top}`);
+  if (matches.length && !buildMenuJumpSection(matches).includes(`](${top})`))
+    bad.push("跳转区块缺少 top 链接");
+
+  if (!bad.length) {
+    pass += 1;
+    console.log(`  PASS  ${item.question} → ${top ?? "（泛问：不命中）"}`);
+  } else {
+    fail += 1;
+    failures.push(`[menu] "${item.question}" → ${bad.join("; ")}`);
+    console.log(`  FAIL  ${item.question} → ${bad.join("; ")}`);
+  }
 }
 
 const total = pass + fail;

@@ -142,6 +142,27 @@ const TARGET_TO_TABLE: Record<string, string> = {
 export { baseTableName, shortKeyOf, stripTenantSuffixInText };
 
 /**
+ * 菜单导航同义词表：把「实体 key / 中文标签 / 口语别名」攒成一组，
+ * 供 `services/menuCatalog.ts` 做菜单同义扩展。
+ *
+ * 目的：用户说「purchaseOrder 菜单在哪」「采购单在哪个菜单」时，
+ * 也能命中数据库里那条中文菜单（菜单名只存中文，没有英文列）。
+ */
+export function entityRouteAliasGroups(): Array<{ aliases: string[]; hints: string[] }> {
+  const groups: Array<{ aliases: string[]; hints: string[] }> = [];
+  for (const [target, table] of Object.entries(TARGET_TO_TABLE)) {
+    const curated = CURATED[shortKeyOf(table)];
+    const hints = curated?.routeHints || [];
+    if (!hints.length) continue;
+    const aliases = [target, curated?.label || "", ...hints].filter(
+      (alias): alias is string => Boolean(alias && alias.trim()),
+    );
+    groups.push({ aliases: [...new Set(aliases)], hints });
+  }
+  return groups;
+}
+
+/**
  * 人工语义层：只给需要特殊默认值 / 关键词 / 字段说明的表写配置，
  * 其余表完全由 sys_tables 的中文标签 + information_schema 自动推导。
  */

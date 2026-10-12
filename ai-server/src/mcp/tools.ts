@@ -335,7 +335,7 @@ export function registerReadOnlyTools(server: McpServer, identity: TenantContext
         + "用于回答「这个流程怎么走」「某功能怎么用」这类靠文档而非业务数据回答的问题。",
       inputSchema: {
         query: z.string().min(1).describe("检索问题或关键词"),
-        limit: z.number().int().min(1).max(20).optional().describe("返回条数，默认 5"),
+        limit: z.number().int().min(1).max(20).optional().describe("返回条数，默认 8"),
       },
       annotations: READ_ONLY_ANNOTATIONS,
     },
@@ -344,7 +344,7 @@ export function registerReadOnlyTools(server: McpServer, identity: TenantContext
         const docs = await searchKnowledgeRag(
           query,
           undefined,
-          limit ?? 5,
+          limit ?? 8,
           identity.tenantId,
         ).catch(() => []);
 

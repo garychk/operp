@@ -15,6 +15,7 @@ import {
   theme,
   Modal,
   Typography,
+  Card,
 } from "antd";
 import {
   DashboardOutlined,
@@ -1384,7 +1385,9 @@ export function ProLayout() {
               {/* 页面统一的内容视口：高度与滚动都在这里兜住（见 index.css 的 .page-viewport），
                   页面组件不必再各自挂 .mainContent，也不会因为忘记挂而被裁掉内容。 */}
               <div className="page-viewport">
-                <Outlet />
+                <Card variant="borderless" size="small">
+                  <Outlet />
+                </Card>
               </div>
             </MenuPermissionGuard>
           </ProCard>
