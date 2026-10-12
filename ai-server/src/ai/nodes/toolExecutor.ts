@@ -243,7 +243,8 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
   }
 
   if (tool === "knowledge.search") {
-    const docs = await searchKnowledgeRag(state.text, state.provider, 5, state.tenantId).catch(
+    // top-5 太容易让低质分片挤占名额；手册类文档建议 8 片
+    const docs = await searchKnowledgeRag(state.text, state.provider, 8, state.tenantId).catch(
       () => [],
     );
     if (!docs.length) {
@@ -257,10 +258,12 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
     }
 
     const knowledgePrompt = [
-      "你是 ERP 知识库问答助手，只能基于给定知识回答，不要编造。",
-      "如果知识不足，明确说知识库里没有找到足够信息，并给出下一步建议。",
+      "你是 ERP 知识库问答助手。只能基于给定知识片段回答，不要编造。",
+      "注意：片段是文档的局部切片（头部带有 [文档标题] 章节路径 前缀），同一主题的内容可能分散在多个片段里，请先通读全部片段、综合拼出完整答案。",
+      "判定标准：只要存在与问题相关的片段（哪怕是操作步骤、表格行、参数说明），就必须据此作答，并在结尾注明出自哪篇文档；",
+      "只有当所有片段都与问题明显无关时，才说明知识库里没有找到足够信息，并给出下一步建议。",
       `用户问题：${state.text}`,
-      `知识库内容：${JSON.stringify(docs, null, 2)}`,
+      `知识库片段：${JSON.stringify(docs, null, 2)}`,
       "请输出适合用户阅读的简洁答案，必要时给出条目式总结。",
     ].join("\n");
 

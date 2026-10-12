@@ -135,6 +135,85 @@ export async function searchKnowledgeDocs(query: string, limit = 8, tenantId?: n
   return (data || []) as KnowledgeDoc[];
 }
 
+/**
+ * 中文查询没有分词器：normalizeTerms 按标点/空格切完后，整句
+ * 「采购订单操作流程怎么样的」会作为一个词，ILIKE 全文匹配必失败。
+ * 这里对超过 4 字的中文词做 4 字滑窗（步长 2）展开 —— 「采购订单」「操作流程」
+ * 这类真实词组自然出现在窗口里，ILIKE 就能命中带同词组的分片。
+ */
+const expandTermsForKeywordSearch = (terms: string[]): string[] => {
+  const out = new Set(terms);
+  for (const term of terms) {
+    if (term.length > 4 && /[^\x00-\xff]/.test(term)) {
+      for (let i = 0; i + 4 <= term.length; i += 2) {
+        out.add(term.slice(i, i + 4));
+      }
+    }
+  }
+  return [...out].slice(0, 16);
+};
+
+/**
+ * 关键字兜底召回（分片级）。
+ *
+ * 向量检索对「用语完全一致但语义漂移」的查询会失手，对 chunk.content 直接 ILIKE
+ * 查询关键词，能保证含明确术语（如「采购订单」「审批」）的分片一定有机会进 prompt。
+ * 关键词命中不带相似度，按「命中词组数 → 内容更短优先」打分排序，排在向量命中之后。
+ */
+const searchChunksByKeyword = async (
+  query: string,
+  limit: number,
+  tenantId?: number | null,
+): Promise<KnowledgeChunkHit[]> => {
+  const terms = expandTermsForKeywordSearch(
+    normalizeTerms(query).filter((term) => term.length >= 2),
+  );
+  if (!terms.length) return [];
+
+  const orExpr = terms.map((term) => `content.ilike.%${escapeLike(term)}%`).join(",");
+  const { data, error } = await supabase
+    .from("sys_ai_knowledge_chunks")
+    .select("id, doc_id, content, tenant_id")
+    .or(orExpr)
+    .or(tenantScopeFilter(tenantId))
+    .limit(40);
+
+  if (error) throw error;
+  const rows = (data || []) as Array<{ id: number | string; doc_id: number | string; content: string }>;
+  if (!rows.length) return [];
+
+  // 客户端打分：命中越多不同词组越相关；平手时更短的片信息密度更高
+  const ranked = rows
+    .map((row) => ({
+      row,
+      score: terms.filter((term) => row.content.includes(term)).length,
+    }))
+    .sort((a, b) => b.score - a.score || a.row.content.length - b.row.content.length)
+    .slice(0, limit);
+  if (!ranked.length) return [];
+
+  // 分片表不带标题（不依赖 PostgREST 嵌入，避免外键/关系探测的坑），按 doc_id 批量补
+  const docIds = [...new Set(ranked.map(({ row }) => Number(row.doc_id)))];
+  const { data: docsData } = await supabase
+    .from("sys_ai_knowledge_docs")
+    .select("id, title, category, source_type, source_ref")
+    .in("id", docIds);
+  const docById = new Map((docsData || []).map((doc) => [Number(doc.id), doc]));
+
+  return ranked.map(({ row }) => {
+    const doc = docById.get(Number(row.doc_id));
+    return {
+      docId: Number(row.doc_id),
+      chunkId: Number(row.id),
+      title: String(doc?.title || ""),
+      content: String(row.content || ""),
+      category: (doc?.category as string | null) || null,
+      sourceType: (doc?.source_type as string | null) || null,
+      sourceRef: (doc?.source_ref as string | null) || null,
+    } as KnowledgeChunkHit;
+  });
+};
+
 export async function searchKnowledgeRag(
   query: string,
   provider: LlmProviderConfig | undefined,
@@ -183,7 +262,7 @@ export async function searchKnowledgeRag(
 
       if (error) throw error;
       if (data?.length) {
-        return (data as Record<string, unknown>[]).map((row) => ({
+        const vectorHits = (data as Record<string, unknown>[]).map((row) => ({
           docId: Number(row.doc_id),
           chunkId: Number(row.chunk_id),
           title: String(row.title || ""),
@@ -193,6 +272,22 @@ export async function searchKnowledgeRag(
           sourceRef: (row.source_ref as string | null) || null,
           similarity: Number(row.similarity || 0),
         })) as KnowledgeChunkHit[];
+
+        // 混合召回：向量命中为主，关键字命中补位（去重后追加，总量 ≤ 2×limit）。
+        // 关键字一路失败不致命 —— 打日志继续用向量结果。
+        let keywordHits: KnowledgeChunkHit[] = [];
+        try {
+          keywordHits = await searchChunksByKeyword(query, limit, tenantId);
+        } catch (keywordError) {
+          console.warn("[ai-server] knowledge keyword search failed:", keywordError);
+        }
+
+        const seen = new Set(vectorHits.map((hit) => hit.chunkId));
+        const merged = [
+          ...vectorHits,
+          ...keywordHits.filter((hit) => !seen.has(hit.chunkId)),
+        ];
+        return merged;
       }
     }
   } catch (error) {
@@ -210,6 +305,161 @@ export async function searchKnowledgeRag(
   })) as KnowledgeChunkHit[];
 }
 
+/* ------------------------------------------------------------------ *
+ * 分片（chunking）
+ *
+ * 旧实现 `content.split(/\n{2,}|(?<=[。！？.!?])\s+/)` 有三个致命伤：
+ *  1. 英文句点后也断（`## 1.` 与 `系统概览` 被拆成两片）→ 章节标题变成空壳分片，
+ *     短文本余弦相似度虚高，反而把真正的内容挤出 top-K；
+ *  2. 每个句子独立成片 → 320 片全是碎句，逐片打 embedding 又慢又贵；
+ *  3. 分片不带标题/章节上下文 → 「1. 点新增→选供应商」这种步骤片匹配不上
+ *     「采购订单操作流程」这类提问。
+ *
+ * 现在按「标题分节 → 节内聚合到目标长度 → 拼标题路径前缀」三步走。
+ * ------------------------------------------------------------------ */
+
+/** 单片正文目标长度（字符）。embedding 模型对 200~800 字的中文块效果最好 */
+const CHUNK_TARGET_CHARS = 500;
+/** 超过这个长度的单段才做句子级硬切 */
+const CHUNK_MAX_CHARS = 900;
+/** 标题路径最多保留的层级（防超长前缀稀释正文） */
+const CHUNK_PATH_DEPTH = 4;
+
+const isNoiseLine = (line: string) =>
+  /^(-{3,}|\*{3,}|_{3,}|\|\s*-{3,})/.test(line.trim()) || // --- / *** / 表格分隔行
+  /^```/.test(line.trim()) ||
+  /^<br\s*\/?>$/i.test(line.trim()) ||
+  /^[-*]\s*\[[^\]]*\]\([^)]*\)\s*$/.test(line.trim()); // 目录里的纯链接列表项
+
+/** 把超长段落按句子（退化为按行、再退化为硬切）切成 ≤ max 的片 */
+const hardSplitLong = (text: string): string[] => {
+  if (text.length <= CHUNK_MAX_CHARS) return [text];
+  const sentences = text
+    .split(/(?<=[。！？!?；;])\s*/)
+    .flatMap((s) => (s.length > CHUNK_MAX_CHARS ? s.split(/(?<=，,、)\s*/) : [s]));
+  const pieces: string[] = [];
+  let buf = "";
+  for (const sentence of sentences) {
+    // 单句仍然超长（无标点的长表格行等）：直接硬切
+    if (sentence.length > CHUNK_MAX_CHARS) {
+      if (buf) {
+        pieces.push(buf);
+        buf = "";
+      }
+      for (let i = 0; i < sentence.length; i += CHUNK_TARGET_CHARS) {
+        pieces.push(sentence.slice(i, i + CHUNK_TARGET_CHARS));
+      }
+      continue;
+    }
+    if (buf && buf.length + sentence.length > CHUNK_TARGET_CHARS) {
+      pieces.push(buf);
+      buf = sentence;
+    } else {
+      buf = buf ? buf + sentence : sentence;
+    }
+  }
+  if (buf) pieces.push(buf);
+  return pieces;
+};
+
+/** 节内分片：按空行分段 → 聚合到目标长度 → 超长段句子级硬切 */
+const splitSectionBody = (body: string): string[] => {
+  const paragraphs = body
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter((p) => p && !isNoiseLine(p))
+    // 目录段（一整行塞了 3 个以上页内锚点链接）对检索毫无价值，整段丢弃
+    .filter((p) => (p.match(/\]\(#[^)]*\)/g) || []).length < 3);
+  const pieces: string[] = [];
+  let buf = "";
+  for (const paragraph of paragraphs) {
+    if (paragraph.length > CHUNK_MAX_CHARS) {
+      if (buf) {
+        pieces.push(buf);
+        buf = "";
+      }
+      pieces.push(...hardSplitLong(paragraph));
+      continue;
+    }
+    if (buf && buf.length + paragraph.length + 2 > CHUNK_TARGET_CHARS) {
+      pieces.push(buf);
+      buf = paragraph;
+    } else {
+      buf = buf ? `${buf}\n\n${paragraph}` : paragraph;
+    }
+  }
+  if (buf) pieces.push(buf);
+  return pieces;
+};
+
+/**
+ * markdown 感知分片。
+ *
+ * - `#`~`######` 标题行开新节，并维护「1. 进销存 > 6.2 采购业务」这样的章节路径；
+ * - 独立成行的 `**加粗标题**`（手册里大量用于小节名，如「**采购订单操作流程**」）
+ *   也当作子标题并入路径；
+ * - 目录链接、分隔线等噪音行直接丢弃；
+ * - 每片头部拼 `[文档标题] 章节 > 子节` 前缀 —— **前缀参与 embedding**，这样
+ *   「采购订单操作流程是怎么走的」能直接命中带该路径的步骤片。
+ */
+export function buildKnowledgeChunks(content: string, title: string): string[] {
+  const lines = content.replace(/\r\n?/g, "\n").split("\n");
+
+  const headingPath: (string | undefined)[] = [];
+  let sectionPath: string[] = [];
+  let sectionBody: string[] = [];
+  const sections: Array<{ path: string[]; body: string }> = [];
+
+  const flushSection = () => {
+    const body = sectionBody.join("\n").trim();
+    if (body) sections.push({ path: sectionPath, body });
+    sectionBody = [];
+  };
+
+  for (const raw of lines) {
+    const line = raw.trimEnd();
+    const heading = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+    const boldLabel = /^\*\*([^*\n]{1,60})\*\*\s*:?\s*$/.exec(line);
+
+    if (heading) {
+      flushSection();
+      const level = heading[1].length;
+      headingPath.length = level - 1;
+      headingPath[level - 1] = heading[2].trim();
+      sectionPath = headingPath.filter(Boolean).slice(0, CHUNK_PATH_DEPTH) as string[];
+      continue;
+    }
+
+    if (boldLabel) {
+      flushSection();
+      // 加粗小节挂在当前章节路径下，不改动 headingPath 本身
+      sectionPath = [
+        ...headingPath.filter(Boolean).slice(0, CHUNK_PATH_DEPTH - 1),
+        boldLabel[1].trim(),
+      ] as string[];
+      continue;
+    }
+
+    sectionBody.push(line);
+  }
+  flushSection();
+
+  const chunks: string[] = [];
+  for (const section of sections) {
+    const prefix = `[${title}]${section.path.length ? ` ${section.path.join(" > ")}` : ""}`;
+    for (const piece of splitSectionBody(section.body)) {
+      const text = piece.trim();
+      // 过滤目录链接、纯符号等无信息量的碎片
+      const informative = text
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+        .replace(/[|\s`#>*-]/g, "");
+      if (informative.length < 6) continue;
+      chunks.push(`${prefix}\n\n${text}`);
+    }
+  }
+  return chunks;
+}
+
 export async function indexKnowledgeDocument(
   doc: KnowledgeDoc,
   provider: LlmProviderConfig,
@@ -217,10 +467,7 @@ export async function indexKnowledgeDocument(
   // 解析不出来会抛出可直接展示给用户的中文错误（见 resolveEmbeddingProviderConfig）
   const embeddingProvider = await resolveEmbeddingProvider(provider);
 
-  const chunks = doc.content
-    .split(/\n{2,}|(?<=[。！？.!?])\s+/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const chunks = buildKnowledgeChunks(doc.content, doc.title);
 
   if (!chunks.length) {
     throw new Error("文档正文为空，没有可向量化的内容。");
