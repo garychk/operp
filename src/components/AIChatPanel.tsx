@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from 'react-i18next';
 import type { CSSProperties, ReactNode } from "react";
 import {
@@ -179,7 +179,23 @@ const readSessionId = () => {
   }
 };
 
-const renderInlineMarkdown = (text: string) => {
+/**
+ * 站内跳转回调。
+ *
+ * 回复里的 markdown 链接若是站内路径（`/inventory/purchase`），应走 SPA 路由
+ * 而不是开新标签页 —— ai-server 的菜单定位 / 知识库答案会用
+ * `[采购订单](/inventory/purchase)` 这种形式给出「点一下就能跳过去」的菜单入口。
+ * 渲染层是模块级函数，所以把回调一路透传下去（不引 context，依赖更直白）。
+ */
+type InternalNavHandler = (path: string) => void;
+
+const isInternalPath = (href: string) =>
+  href.startsWith("/") && !href.startsWith("//");
+
+const renderInlineMarkdown = (
+  text: string,
+  onInternalNav?: InternalNavHandler,
+) => {
   const parts: ReactNode[] = [];
   let index = 0;
   const pattern =
@@ -220,18 +236,39 @@ const renderInlineMarkdown = (text: string) => {
     } else if (token.startsWith("[")) {
       const parsed = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       if (parsed) {
-        parts.push(
-          <a
-            key={`${match.index}-link`}
-            href={parsed[2]}
-            target="_blank"
-            rel="noreferrer"
-            className="ai-markdown-link"
-          >
-            <LinkOutlined />
-            <span>{parsed[1]}</span>
-          </a>,
-        );
+        const href = parsed[2].trim();
+        if (isInternalPath(href)) {
+          // 站内路径 → 面板内跳转（不新开标签页）
+          parts.push(
+            <a
+              key={`${match.index}-nav-link`}
+              href={href}
+              title={href}
+              className="ai-markdown-link ai-markdown-link-internal"
+              onClick={(event) => {
+                if (!onInternalNav) return;
+                event.preventDefault();
+                onInternalNav(href);
+              }}
+            >
+              <LinkOutlined />
+              <span>{parsed[1]}</span>
+            </a>,
+          );
+        } else {
+          parts.push(
+            <a
+              key={`${match.index}-link`}
+              href={href}
+              target="_blank"
+              rel="noreferrer"
+              className="ai-markdown-link"
+            >
+              <LinkOutlined />
+              <span>{parsed[1]}</span>
+            </a>,
+          );
+        }
       } else {
         parts.push(token);
       }
@@ -290,7 +327,13 @@ const formatNumericCell = (text: string) => {
   return Number.isFinite(value) ? tableNumberFormatter.format(value) : text;
 };
 
-const MarkdownTable = ({ lines }: { lines: string[] }) => {
+const MarkdownTable = ({
+  lines,
+  onInternalNav,
+}: {
+  lines: string[];
+  onInternalNav?: InternalNavHandler;
+}) => {
   const columns = splitTableRow(lines[0]).length;
   const hasDivider = lines.length > 1 && isTableDivider(lines[1]);
   const bodyLines = hasDivider ? lines.slice(2) : lines.slice(1);
@@ -320,14 +363,15 @@ const MarkdownTable = ({ lines }: { lines: string[] }) => {
     return numericColumns[columnIndex] ? "right" : "left";
   };
 
-  const renderHeader = (header: string) => renderInlineMarkdown(header);
+  const renderHeader = (header: string) =>
+    renderInlineMarkdown(header, onInternalNav);
 
   const renderCell = (cell: string, columnIndex: number) => {
     if (!cell) {
       return <span className="ai-markdown-table-empty">—</span>;
     }
     if (!numericColumns[columnIndex] || !isNumericCell(cell)) {
-      return renderInlineMarkdown(cell);
+      return renderInlineMarkdown(cell, onInternalNav);
     }
     return (
       <span
@@ -376,7 +420,7 @@ const MarkdownTable = ({ lines }: { lines: string[] }) => {
   );
 };
 
-const renderMarkdown = (value: string) => {
+const renderMarkdown = (value: string, onInternalNav?: InternalNavHandler) => {
   const normalized = value.replace(/\r\n/g, "\n");
   const blocks = normalized.split(/\n{2,}/);
   const nodes: ReactNode[] = [];
@@ -402,14 +446,20 @@ const renderMarkdown = (value: string) => {
     if (isTableRow(lines[0]) && splitTableRow(lines[0]).length > 1) {
       const firstNonTable = lines.findIndex((line, index) => index > 0 && !isTableRow(line));
       const tableLines = firstNonTable === -1 ? lines : lines.slice(0, firstNonTable);
-      nodes.push(<MarkdownTable key={`block-${blockIndex}`} lines={tableLines} />);
+      nodes.push(
+        <MarkdownTable
+          key={`block-${blockIndex}`}
+          lines={tableLines}
+          onInternalNav={onInternalNav}
+        />,
+      );
 
       const restLines = firstNonTable === -1 ? [] : lines.slice(firstNonTable);
       const rest = restLines.join("\n").trim();
       if (rest) {
         nodes.push(
           <p key={`block-${blockIndex}-rest`} className="ai-markdown-paragraph">
-            {renderInlineMarkdown(rest)}
+            {renderInlineMarkdown(rest, onInternalNav)}
           </p>,
         );
       }
@@ -421,7 +471,10 @@ const renderMarkdown = (value: string) => {
         <ul key={`block-${blockIndex}`} className="ai-markdown-list">
           {lines.map((line, lineIndex) => (
             <li key={`${blockIndex}-${lineIndex}`}>
-              {renderInlineMarkdown(line.replace(/^[-*+]\s+/, ""))}
+              {renderInlineMarkdown(
+                line.replace(/^[-*+]\s+/, ""),
+                onInternalNav,
+              )}
             </li>
           ))}
         </ul>,
@@ -434,7 +487,10 @@ const renderMarkdown = (value: string) => {
         <ol key={`block-${blockIndex}`} className="ai-markdown-list">
           {lines.map((line, lineIndex) => (
             <li key={`${blockIndex}-${lineIndex}`}>
-              {renderInlineMarkdown(line.replace(/^\d+\.\s+/, ""))}
+              {renderInlineMarkdown(
+                line.replace(/^\d+\.\s+/, ""),
+                onInternalNav,
+              )}
             </li>
           ))}
         </ol>,
@@ -447,6 +503,7 @@ const renderMarkdown = (value: string) => {
         <blockquote key={`block-${blockIndex}`} className="ai-markdown-quote">
           {renderInlineMarkdown(
             lines.map((line) => line.replace(/^>\s?/, "")).join("\n"),
+            onInternalNav,
           )}
         </blockquote>,
       );
@@ -459,7 +516,7 @@ const renderMarkdown = (value: string) => {
       const Tag = `h${level}` as keyof JSX.IntrinsicElements;
       nodes.push(
         <Tag key={`block-${blockIndex}`} className={`ai-markdown-h${level}`}>
-          {renderInlineMarkdown(heading[2])}
+          {renderInlineMarkdown(heading[2], onInternalNav)}
         </Tag>,
       );
       return;
@@ -467,7 +524,7 @@ const renderMarkdown = (value: string) => {
 
     nodes.push(
       <p key={`block-${blockIndex}`} className="ai-markdown-paragraph">
-        {renderInlineMarkdown(trimmed)}
+        {renderInlineMarkdown(trimmed, onInternalNav)}
       </p>,
     );
   });
@@ -475,8 +532,16 @@ const renderMarkdown = (value: string) => {
   return nodes.length ? nodes : value;
 };
 
-const MarkdownMessage = ({ content }: { content: string }) => (
-  <div className="ai-markdown-body">{renderMarkdown(content)}</div>
+const MarkdownMessage = ({
+  content,
+  onInternalNav,
+}: {
+  content: string;
+  onInternalNav?: InternalNavHandler;
+}) => (
+  <div className="ai-markdown-body">
+    {renderMarkdown(content, onInternalNav)}
+  </div>
 );
 
 const renderThoughtTitle = (
@@ -728,6 +793,16 @@ export function AIChatPanel({
   const saveTimerRef = useRef<number | null>(null);
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  /** 回复内容里的站内链接（菜单跳转）→ SPA 路由跳转，抽屉场景顺带关闭自己 */
+  const handleInternalNavigate = useCallback<InternalNavHandler>(
+    (path) => {
+      navigate(path);
+      onNavigate?.();
+    },
+    [navigate, onNavigate],
+  );
+
   const providers = aiSettings.providers;
   const activeProviderId = aiSettings.activeProviderId;
 
@@ -1402,7 +1477,10 @@ export function AIChatPanel({
                             typing={false}
                             content={
                               <div className="ai-assistant-content">
-                                <MarkdownMessage content={item.content} />
+                                <MarkdownMessage
+                                  content={item.content}
+                                  onInternalNav={handleInternalNavigate}
+                                />
                                 {item.sources?.length ? (
                                   <div className="ai-source-list">
                                     <Typography.Text

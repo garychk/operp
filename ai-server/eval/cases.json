@@ -370,5 +370,171 @@
       "text": "把销售订单 SO20260005 过账",
       "tools": null
     }
+  ],
+  "nav_intent_cases": [
+    {
+      "text": "采购订单菜单在哪里？",
+      "locate": true,
+      "intent": "navigation"
+    },
+    {
+      "text": "菜单地址是什么？",
+      "locate": true,
+      "intent": "navigation"
+    },
+    {
+      "text": "销售订单在哪个菜单下",
+      "locate": true,
+      "intent": "navigation"
+    },
+    {
+      "text": "员工管理页面怎么打开",
+      "locate": true,
+      "intent": "navigation"
+    },
+    {
+      "text": "库存查询菜单在哪",
+      "locate": true,
+      "intent": "navigation"
+    },
+    {
+      "text": "采购订单菜单",
+      "locate": true,
+      "intent": "navigation"
+    },
+    {
+      "text": "新增一个菜单",
+      "locate": false,
+      "intent": "create"
+    },
+    {
+      "text": "采购订单流程是什么",
+      "locate": false,
+      "intent": "knowledge"
+    },
+    {
+      "text": "这个页面怎么用",
+      "locate": false,
+      "intent": "chat"
+    },
+    {
+      "text": "菜单里有多少个页面",
+      "locate": false,
+      "intent": "analysis"
+    }
+  ],
+  "menu_cases": [
+    {
+      "question": "采购订单菜单在哪里？",
+      "keyword": "采购订单",
+      "expect_top": "/inventory/purchase"
+    },
+    {
+      "question": "销售订单在哪个菜单下",
+      "keyword": "销售订单",
+      "expect_top": "/inventory/sales"
+    },
+    {
+      "question": "采购单在哪个菜单下",
+      "keyword": "采购单",
+      "expect_top": "/inventory/purchase"
+    },
+    {
+      "question": "purchaseOrder 菜单在哪里",
+      "keyword": "purchaseOrder",
+      "expect_top": "/inventory/purchase"
+    },
+    {
+      "question": "员工管理页面怎么打开",
+      "keyword": "员工管理",
+      "expect_top": "/mrp/employees"
+    },
+    {
+      "question": "库存查询菜单在哪",
+      "keyword": "库存查询",
+      "expect_top": "/inventory/stock"
+    },
+    {
+      "question": "菜单管理在哪里",
+      "keyword": "菜单管理",
+      "expect_top": "/system/menus"
+    },
+    {
+      "question": "菜单地址是什么？",
+      "keyword": "",
+      "expect_top": null
+    },
+    {
+      "question": "采购订单怎么操作",
+      "keyword": "采购订单怎么操作",
+      "expect_top": "/inventory/purchase"
+    }
+  ],
+  "menu_catalog_fixture": [
+    {
+      "name": "采购订单",
+      "code": "inventory_purchase",
+      "path": "/inventory/purchase",
+      "parentPath": "进销存管理",
+      "aliases": [
+        "purchaseOrder",
+        "采购订单",
+        "采购单"
+      ]
+    },
+    {
+      "name": "采购入库",
+      "code": "inventory_purchase-receipts",
+      "path": "/inventory/purchase-receipts",
+      "parentPath": "进销存管理",
+      "aliases": [
+        "purchaseReceipt",
+        "采购入库",
+        "采购入库单"
+      ]
+    },
+    {
+      "name": "销售订单",
+      "code": "inventory_sales",
+      "path": "/inventory/sales",
+      "parentPath": "进销存管理",
+      "aliases": [
+        "salesOrder",
+        "销售订单",
+        "销售单"
+      ]
+    },
+    {
+      "name": "库存查询",
+      "code": "inventory_stock",
+      "path": "/inventory/stock",
+      "parentPath": "进销存管理",
+      "aliases": []
+    },
+    {
+      "name": "员工管理",
+      "code": "mrp_employees",
+      "path": "/mrp/employees",
+      "parentPath": "生产制造",
+      "aliases": [
+        "employee",
+        "员工管理",
+        "员工"
+      ]
+    },
+    {
+      "name": "菜单管理",
+      "code": "menu",
+      "path": "/system/menus",
+      "parentPath": "系统管理",
+      "aliases": []
+    },
+    {
+      "name": "系统设置",
+      "code": "setting",
+      "path": "/system/settings",
+      "parentPath": "系统管理",
+      "aliases": []
+    }
   ]
 }

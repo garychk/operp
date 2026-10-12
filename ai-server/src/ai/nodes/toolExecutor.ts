@@ -10,6 +10,12 @@ import {
 } from "../../tools/documentTools.js";
 import { searchKnowledgeRag } from "../../services/knowledgeBase.js";
 import {
+  appendMenuJumps,
+  buildMenuJumpSection,
+  suggestMenusForQuestion,
+} from "../../services/menuCatalog.js";
+import { menuLocateTool } from "../../tools/menuTools.js";
+import {
   cancelPendingAction,
   executePendingAction,
   PendingActionError,
@@ -41,6 +47,13 @@ const requireConfirmIdentity = (state: AiGraphState) => {
   }
   return { userId: state.userId, tenantId: state.tenantId };
 };
+
+/**
+ * 给回复补「相关菜单（可点击跳转）」区块。
+ * 命中的是 `sys_menus` 里真实的菜单名与 path（不让模型自己编路径），失败时原样返回。
+ */
+const withMenuJumps = (text: string, tenantId?: number) =>
+  appendMenuJumps(text, tenantId).catch(() => text);
 
 const pendingErrorReply = (error: unknown) => {
   if (error instanceof PendingActionError) return error.message;
@@ -242,16 +255,38 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
     return fromToolResult("master_data_count", await countMasterDataTool(state));
   }
 
+  // 菜单定位：回复里带 markdown 站内链接（前端渲染成可点击跳转）
+  if (tool === "menu.locate") {
+    return fromToolResult("locate_menu", await menuLocateTool(state));
+  }
+
   if (tool === "knowledge.search") {
     // top-5 太容易让低质分片挤占名额；手册类文档建议 8 片
     const docs = await searchKnowledgeRag(state.text, state.provider, 8, state.tenantId).catch(
       () => [],
     );
     if (!docs.length) {
+      // 知识库没内容 ≠ 帮不上忙：先看用户问的是不是某个菜单/页面（「采购订单怎么操作」也能命中）
+      const suggestions = await suggestMenusForQuestion(
+        state.text,
+        state.tenantId,
+        3,
+      ).catch(() => []);
+      const asked = state.text.trim().slice(0, 40);
+      const reply = suggestions.length
+        ? [
+            `知识库里没有检索到与「${asked}」相关的说明。`,
+            "你要找的可能是下面这些菜单（点击可直接跳转）：",
+            "",
+            buildMenuJumpSection(suggestions),
+            "",
+            "也可以换个更具体的说法（比如带上单据名或操作名）再问一次。",
+          ].join("\n")
+        : "暂未检索到相关知识库内容。我可以继续按当前业务上下文给你建议，或者你补充更具体的关键词。";
       return {
         state: {
           toolResults: [{ step: "knowledge_search", ok: true, output: [] }],
-          reply: "暂未检索到相关知识库内容。我可以继续按当前业务上下文给你建议，或者你补充更具体的关键词。",
+          reply,
           sources: [],
         },
       };
@@ -262,6 +297,7 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
       "注意：片段是文档的局部切片（头部带有 [文档标题] 章节路径 前缀），同一主题的内容可能分散在多个片段里，请先通读全部片段、综合拼出完整答案。",
       "判定标准：只要存在与问题相关的片段（哪怕是操作步骤、表格行、参数说明），就必须据此作答，并在结尾注明出自哪篇文档；",
       "只有当所有片段都与问题明显无关时，才说明知识库里没有找到足够信息，并给出下一步建议。",
+      "不要编造菜单路径或链接（不要写 [xx](/xx) 这种），页面入口由系统在答案末尾自动补充。",
       `用户问题：${state.text}`,
       `知识库片段：${JSON.stringify(docs, null, 2)}`,
       "请输出适合用户阅读的简洁答案，必要时给出条目式总结。",
@@ -273,14 +309,16 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
       state.provider,
       emitDelta,
     );
+    const knowledgeReply =
+      content ||
+      docs
+        .map((doc) => `${doc.title}: ${String(doc.content).slice(0, 120)}`)
+        .join("\n");
     return {
       state: {
         toolResults: [{ step: "knowledge_search", ok: true, output: docs }],
-        reply:
-          content ||
-          docs
-            .map((doc) => `${doc.title}: ${String(doc.content).slice(0, 120)}`)
-            .join("\n"),
+        // 答案里提到菜单名时，补一段「相关菜单（点击可直接跳转）」
+        reply: await withMenuJumps(knowledgeReply, state.tenantId),
         sources: dedupeSourcesByDoc(
           docs.map((doc) => ({
             title: doc.title,
@@ -328,7 +366,8 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
   return {
     state: {
       toolResults: [{ step: "draft_reply", ok: true, output: content ? "model_response" : "empty_response" }],
-      reply: content || "模型未返回内容。",
+      // 闲聊里也可能提到菜单（「在系统设置里改」）→ 顺带给出跳转入口
+      reply: await withMenuJumps(content || "模型未返回内容。", state.tenantId),
     },
   };
 }

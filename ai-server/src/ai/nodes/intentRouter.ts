@@ -27,6 +27,44 @@ const KNOWLEDGE_WORDS = /(知识库|制度|流程|手册|说明|怎么做|怎么
 const ANALYSIS_WORDS = /(分析|统计|汇总|报表|经营|财务|采购|销售|生产|应收|应付|凭证|利润|库存)/i;
 const MRP_WORDS = /(mrp|物料需求计划|产能|净需求)/i;
 
+/**
+ * 菜单导航：「XX 菜单在哪里 / 菜单地址是什么 / XX 在哪个页面」。
+ *
+ * 必须在 KNOWLEDGE_WORDS / ANALYSIS_WORDS 之前判 —— 否则「采购订单菜单在哪里」
+ * 会因为带「采购」被吃进 analysis，用户想找的只是菜单入口。
+ */
+const MENU_LOCATE_PATTERN =
+  /((菜单|导航|页面|功能入口)[^，。；！？?\n]{0,10}(在哪|在哪里|在哪儿|在哪个|在哪块|位置|地址|路径|入口|怎么进|怎么进入|如何进入|怎么打开|如何打开|怎么去|跳转|打开|找))|((在哪|在哪里|在哪个|地址|路径|位置|怎么进|怎么打开|跳转)[^，。；！？?\n]{0,8}(菜单|页面))/;
+/** 「采购订单菜单」这种以菜单/页面结尾、前面直接跟名字的问法 */
+const MENU_TAIL_PATTERN = /^([^，。；！？?\n]{2,14})(菜单|页面)$/;
+/** 增删改菜单不是「找菜单」，别抢 create / update 的意图 */
+const MENU_WRITE_WORDS = /(新增|创建|新建|添加|删除|修改|编辑|重命名|排序|配置)/;
+const MENU_TAIL_NOISE = /^(这个|那个|该|此|哪个|什么|这些|那些|一个|一个菜单)$/;
+/** 「菜单里有多少个页面」是数量问题，不是找菜单 */
+const MENU_TAIL_COUNT = /(多少|几个|总数|数量|数目|几条)/;
+
+/** 判断是否为「找菜单 / 找页面」的问法（eval 集与规则兜底共用） */
+export const isMenuLocateQuestion = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (
+    MENU_WRITE_WORDS.test(trimmed) &&
+    !/(在哪|地址|路径|位置|入口|怎么打开|怎么进)/.test(trimmed)
+  ) {
+    return false;
+  }
+  if (MENU_LOCATE_PATTERN.test(trimmed)) return true;
+
+  const tail = trimmed.match(MENU_TAIL_PATTERN);
+  if (
+    tail &&
+    !MENU_TAIL_NOISE.test(tail[1].trim()) &&
+    !MENU_TAIL_COUNT.test(tail[1])
+  ) {
+    return true;
+  }
+  return false;
+};
+
 const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }> = [
   // 排序原则：越具体的单据 / 强信号越靠前，属性词（客户是xx、给供应商xx）在后。
   // eval 教训：「建一张采购订单给供应商上海钢铁」若 customer/supplier 在前，
@@ -127,6 +165,8 @@ const detectResponseMode = (
   if (intent === "create" || intent === "update") return "card";
   if (intent === "document") return "card";
   if (intent === "baq") return "card";
+  /** 菜单导航：回复里给可点击的站内跳转链接 */
+  if (intent === "navigation") return "link";
   if (queryMode === "count") return "text";
   if (queryMode === "list" || queryMode === "compare") return "table";
   if (queryMode === "trend" || queryMode === "summary" || queryMode === "exception") return "card";
@@ -170,6 +210,10 @@ export const ruleFallback = (state: AiGraphState): RoutedIntent => {
   } else if (state.skill === "analysis") {
     intent = "analysis";
     domain = targetInfo.domain === "general" ? "finance" : targetInfo.domain;
+  } else if (isMenuLocateQuestion(state.text)) {
+    // 找菜单：先于 knowledge / analysis（「采购订单菜单在哪里」含「采购」也会被判成 analysis）
+    intent = "navigation";
+    domain = "navigation";
   } else if (KNOWLEDGE_WORDS.test(text)) {
     intent = "knowledge";
     domain = targetInfo.domain === "general" ? "knowledge" : targetInfo.domain;
@@ -222,8 +266,9 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
   const prompt = [
     "你是 ERP 智能路由器，只能输出 JSON。",
     "你要判断：intent、target、queryMode、responseMode、action、domain、confidence。",
-    "intent 只能是：chat, knowledge, create, update, baq, analysis, document。",
+    "intent 只能是：chat, knowledge, create, update, baq, analysis, document, navigation。",
     "document 指单据类操作：建单据（销售订单/采购订单/入库单/出货单/领料单/生产订单）、对单据过账/反过账/审批/转单，或查询某张单据的明细与状态。",
+    "navigation 指用户在**找某个菜单/页面在哪里**（例如「采购订单菜单在哪里」「菜单地址是什么」「XX 在哪个页面下」），此时 target 填 general 即可。只含名词不带导航问法（如「采购订单列表」）时不要用 navigation。",
     "target 优先从下面的业务对象清单中选择，也可以用历史值：dictItem, customer, supplier, product, warehouse, department, workCenter, operation, bom, routing, purchaseOrder, purchaseReceipt, salesOrder, salesDelivery, productionOrder, uom, bin, company, employee, finance, inventory, mrp, baq, general。",
     "重要：dictItem 指系统字典项（sys_dict_items，挂在 sys_dict_types 类型下的枚举值）。用户说“在字典 XX 里加 / 加个字典项 / 字典值”时用 dictItem；说“加个计量单位、加个客户”这种业务数据时用对应业务 target。两者是不同的数据，不要混淆。",
     "queryMode 只能是：count, list, summary, detail, trend, compare, exception, definition, answer。",
@@ -294,13 +339,23 @@ export async function intentRouterNode(state: AiGraphState): Promise<AiGraphStat
   const fallback = ruleFallback(state);
   const routed = (await routeByModel(state)) || {};
 
-  const intent = routed.intent || fallback.intent;
-  const target = routed.target || fallback.target;
-  const queryMode = routed.queryMode || fallback.queryMode;
+  // 导航锁定：小模型常把「采购订单菜单在哪里」判成 knowledge / analysis（因为带「采购」），
+  // 只要不是写操作 / 单据动作，就以确定性的菜单问法为准（写操作风险高，不抢）。
+  const NAV_LOCKABLE_INTENTS = new Set(["knowledge", "analysis", "chat"]);
+  const navLocked =
+    state.skill === "auto" &&
+    isMenuLocateQuestion(state.text) &&
+    (!routed.intent || NAV_LOCKABLE_INTENTS.has(routed.intent)) &&
+    (routed.action ?? fallback.action) === "chat";
+
+  const intent = navLocked ? "navigation" : routed.intent || fallback.intent;
+  const target = navLocked ? "general" : routed.target || fallback.target;
+  const queryMode = navLocked ? "answer" : routed.queryMode || fallback.queryMode;
   const action = routed.action || fallback.action;
-  const domain = routed.domain || fallback.domain;
-  const responseMode =
-    routed.responseMode || detectResponseMode(intent!, target || "general", queryMode!);
+  const domain = navLocked ? "navigation" : routed.domain || fallback.domain;
+  const responseMode = navLocked
+    ? "link"
+    : routed.responseMode || detectResponseMode(intent!, target || "general", queryMode!);
   const confidence =
     typeof routed.confidence === "number" ? routed.confidence : fallback.confidence;
 
