@@ -788,7 +788,7 @@ export function MpsPlans() {
   ];
 
   return (
-    <div>
+    <>
       <SuperTable<MpsPlan>
         columns={planColumns}
         dataSource={filteredPlans}
@@ -1304,6 +1304,6 @@ export function MpsPlans() {
           </>
         )}
       </SimpleModal>
-    </div>
+    </>
   );
 }

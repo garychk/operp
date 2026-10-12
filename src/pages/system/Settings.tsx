@@ -483,13 +483,7 @@ export function Settings() {
       />
 
       <Tabs activeKey={activeKey} items={items} onChange={setActiveKey} />
-      <div
-        style={{
-          maxHeight: "calc(100vh - 320px)",
-          overflowY: "auto",
-          overflowX: "hidden",
-        }}
-      >
+      <div>
         <Spin spinning={loading}>
           <Row gutter={24}>
             <Col xs={24} lg={14}>

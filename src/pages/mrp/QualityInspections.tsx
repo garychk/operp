@@ -487,7 +487,7 @@ export function QualityInspections() {
     },
   ];
   return (
-    <Card variant="borderless" size="small">
+    <>
       <Row gutter={12} style={{ marginBottom: 16 }}>
         <Col span={8}>
           <Card size="small">
@@ -710,6 +710,6 @@ export function QualityInspections() {
           </Form.Item>
         </Form>
       </SimpleModal>
-    </Card>
+    </>
   );
 }

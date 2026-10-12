@@ -367,7 +367,7 @@ export function Warehouses() {
 
   return (
     <div>
-      <Card bordered={false} title={t('inventory.warehouseTitle')} style={{ marginBottom: 16 }}>
+      <div style={{ marginBottom: 16 }}>
         <SuperTable
           columns={warehouseColumns}
           dataSource={filteredWarehouses}
@@ -396,7 +396,7 @@ export function Warehouses() {
             </Space>
           }
         />
-      </Card>
+      </div>
 
       <Card>
         <div style={{ marginBottom: 12 }}>

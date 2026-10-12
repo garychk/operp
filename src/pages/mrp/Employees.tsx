@@ -5,7 +5,6 @@ import type { Key } from "react";
 import {
   Alert,
   Button,
-  Card,
   Col,
   DatePicker,
   Form,
@@ -388,7 +387,7 @@ export function Employees() {
   ];
 
   return (
-    <Card variant="borderless" size="small">
+    <div>
       {/* 这张表被三处下拉消费，管理员首次进来会问「填了有什么用」——把口径写在页面上；
           岗位又依赖数据字典，顺手给出维护入口，免得再来问「岗位下拉怎么是空的」 */}
       <Alert
@@ -586,6 +585,6 @@ export function Employees() {
           </Row>
         </Form>
       </SimpleModal>
-    </Card>
+    </div>
   );
 }
