@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Link } from "react-router-dom";
 import opelixLogo from "../../assets/opelix.svg";
+import { APP_BUILD_TIME, APP_VERSION_TAG } from "../../utils/appVersion";
 import { docCategories } from "./docsData";
 import "./docs.css";
 
@@ -194,7 +195,7 @@ export function DocsSite() {
             </span>
           </Link>
           <span className="docs-brand-name">OPERP 使用手册</span>
-          <span className="docs-version">V1.0.6</span>
+          <span className="docs-version">{APP_VERSION_TAG}</span>
         </div>
         <div className="docs-search">
           <svg
@@ -269,8 +270,8 @@ export function DocsSite() {
               典型业务场景与常见问题。所有界面支持中英文切换，本手册以中文界面为准。
             </p>
             <div className="docs-hero-chips">
-              <span>适用版本 V1.0.6</span>
-              <span>更新日期 2026-10-12</span>
+              <span>适用版本 {APP_VERSION_TAG}</span>
+              <span>构建日期 {APP_BUILD_TIME.slice(0, 10)}</span>
             </div>
           </div>
 

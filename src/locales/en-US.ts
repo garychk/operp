@@ -2407,7 +2407,7 @@ const enUS = {
     "layout.borderRadius": "Corner radius",
     "layout.aboutTitle": "About",
     "layout.aboutDescription": "A modern ERP frontend for manufacturing businesses. It covers finance, inventory, purchasing, sales, and manufacturing, and includes an AI assistant that can analyze real opelix data and create common business records using natural language.",
-    "layout.version": "Version: 1.0.0",
+    "layout.version": "Version: ",
     "layout.author": "Developer: chenkuan",
     "layout.email": "Email: garychk@163.com",
     "modal.headerPanelTitle": "Document Header",

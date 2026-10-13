@@ -1,13 +1,16 @@
 {
   "name": "operp-system",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "predev": "node scripts/bump-version.cjs --sync",
+    "build": "node scripts/bump-version.cjs && tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "version:sync": "node scripts/bump-version.cjs --sync",
+    "version:set": "node scripts/bump-version.cjs --set"
   },
   "dependencies": {
     "@ant-design/charts": "^2.6.7",
