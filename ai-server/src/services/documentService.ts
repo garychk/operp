@@ -14,20 +14,48 @@
 import { supabase } from "../config/supabase.js";
 import { callChatModel } from "../config/llm.js";
 import type { AiChatRequest, AiGraphState } from "../ai/state.js";
+import { isEnglishLocale, normalizeUiLocale } from "./locale.js";
+import {
+  actionLabel as actionLabelOf,
+  statusLabel as statusLabelOf,
+  termLabel,
+  toolText,
+} from "./toolText.js";
 
 /**
  * 单据流转规则（deploy_35/36/57 注册的 rule_code）。
  * 计划器与工具都用它：订单类单据不能直接过账，下游动作其实是「转成入库/出货/领料单」。
  */
-export const FLOW_RULES: Record<string, { ruleCode: string; targetType: string; label: string }> = {
-  purchase_order: { ruleCode: "purchase_order_to_receipt", targetType: "purchase_receipt", label: "采购入库单" },
-  sales_order: { ruleCode: "sales_order_to_delivery", targetType: "sales_delivery", label: "销售出货单" },
-  production_order: { ruleCode: "production_order_to_material_issue", targetType: "material_issue", label: "生产领料单" },
+export const FLOW_RULES: Record<
+  string,
+  { ruleCode: string; targetType: string; label: string; labelEn: string }
+> = {
+  purchase_order: {
+    ruleCode: "purchase_order_to_receipt",
+    targetType: "purchase_receipt",
+    label: "采购入库单",
+    labelEn: "Purchase receipt",
+  },
+  sales_order: {
+    ruleCode: "sales_order_to_delivery",
+    targetType: "sales_delivery",
+    label: "销售出货单",
+    labelEn: "Sales delivery",
+  },
+  production_order: {
+    ruleCode: "production_order_to_material_issue",
+    targetType: "material_issue",
+    label: "生产领料单",
+    labelEn: "Material issue",
+  },
 };
 
 export interface DocumentTypeMeta {
   type: string;
+  /** 中文名（解析 + 中文界面展示用） */
   label: string;
+  /** 英文名（英文界面展示用） */
+  labelEn: string;
   /** 前端页面路由（用于 focus 跳转） */
   route: string;
   routeLabel: string;
@@ -52,64 +80,78 @@ const TABLE_SUFFIX = "_s_539dcf81_b";
 
 export const DOCUMENT_TYPES: Record<string, DocumentTypeMeta> = {
   sales_order: {
-    type: "sales_order", label: "销售订单", route: "/inventory/sales", routeLabel: "销售订单",
+    type: "sales_order", label: "销售订单", labelEn: "Sales order", route: "/inventory/sales", routeLabel: "销售订单",
     headerTable: `erp_sales_orders${TABLE_SUFFIX}`, detailTable: `erp_sales_order_details${TABLE_SUFFIX}`,
     noField: "order_no", fkField: "order_id", dateField: "order_date",
     partyField: "customer_id", partyTable: `erp_customers${TABLE_SUFFIX}`, partyLabel: "客户",
     creatable: true, postable: false, lineProductField: "product_id",
   },
   purchase_order: {
-    type: "purchase_order", label: "采购订单", route: "/inventory/purchase", routeLabel: "采购订单",
+    type: "purchase_order", label: "采购订单", labelEn: "Purchase order", route: "/inventory/purchase", routeLabel: "采购订单",
     headerTable: `erp_purchase_orders${TABLE_SUFFIX}`, detailTable: `erp_purchase_order_details${TABLE_SUFFIX}`,
     noField: "order_no", fkField: "order_id", dateField: "order_date",
     partyField: "supplier_id", partyTable: `erp_suppliers${TABLE_SUFFIX}`, partyLabel: "供应商",
     creatable: true, postable: false, lineProductField: "product_id",
   },
   purchase_receipt: {
-    type: "purchase_receipt", label: "采购入库单", route: "/inventory/purchase-receipts", routeLabel: "采购入库单",
+    type: "purchase_receipt", label: "采购入库单", labelEn: "Purchase receipt", route: "/inventory/purchase-receipts", routeLabel: "采购入库单",
     headerTable: `erp_purchase_receipts${TABLE_SUFFIX}`, detailTable: `erp_purchase_receipt_details${TABLE_SUFFIX}`,
     noField: "receipt_no", fkField: "receipt_id", dateField: "receipt_date",
     partyField: "supplier_id", partyTable: `erp_suppliers${TABLE_SUFFIX}`, partyLabel: "供应商",
     creatable: true, postable: true, lineProductField: "product_id",
   },
   sales_delivery: {
-    type: "sales_delivery", label: "销售出货单", route: "/inventory/sales-deliveries", routeLabel: "销售出货单",
+    type: "sales_delivery", label: "销售出货单", labelEn: "Sales delivery", route: "/inventory/sales-deliveries", routeLabel: "销售出货单",
     headerTable: `erp_sales_deliveries${TABLE_SUFFIX}`, detailTable: `erp_sales_delivery_details${TABLE_SUFFIX}`,
     noField: "delivery_no", fkField: "delivery_id", dateField: "delivery_date",
     partyField: "customer_id", partyTable: `erp_customers${TABLE_SUFFIX}`, partyLabel: "客户",
     creatable: true, postable: true, lineProductField: "product_id",
   },
   material_issue: {
-    type: "material_issue", label: "生产领料单", route: "/mrp/material-issues", routeLabel: "生产领料单",
+    type: "material_issue", label: "生产领料单", labelEn: "Material issue", route: "/mrp/material-issues", routeLabel: "生产领料单",
     headerTable: `erp_material_issues${TABLE_SUFFIX}`, detailTable: `erp_material_issue_details${TABLE_SUFFIX}`,
     noField: "issue_no", fkField: "issue_id", dateField: "issue_date",
     creatable: true, postable: true, lineProductField: "material_id",
   },
   production_order: {
-    type: "production_order", label: "生产订单", route: "/mrp/production", routeLabel: "生产订单",
+    type: "production_order", label: "生产订单", labelEn: "Production order", route: "/mrp/production", routeLabel: "生产订单",
     headerTable: `erp_production_orders${TABLE_SUFFIX}`, detailTable: `erp_production_order_details${TABLE_SUFFIX}`,
     noField: "order_no", fkField: "order_id", dateField: "order_date",
     creatable: true, postable: false, lineProductField: "material_id",
   },
   production_receipt: {
-    type: "production_receipt", label: "生产入库单", route: "/mrp/production-receipts", routeLabel: "生产入库单",
+    type: "production_receipt", label: "生产入库单", labelEn: "Production receipt", route: "/mrp/production-receipts", routeLabel: "生产入库单",
     headerTable: `erp_production_receipts${TABLE_SUFFIX}`, detailTable: `erp_production_receipt_details${TABLE_SUFFIX}`,
     noField: "receipt_no", fkField: "receipt_id", dateField: "receipt_date",
     creatable: false, postable: true, lineProductField: "product_id",
   },
   inventory_transfer: {
-    type: "inventory_transfer", label: "库存调拨单", route: "/inventory/transfers", routeLabel: "库存调拨单",
+    type: "inventory_transfer", label: "库存调拨单", labelEn: "Inventory transfer", route: "/inventory/transfers", routeLabel: "库存调拨单",
     headerTable: `erp_inventory_transfers${TABLE_SUFFIX}`, detailTable: `erp_inventory_transfer_details${TABLE_SUFFIX}`,
     noField: "transfer_no", fkField: "transfer_id", dateField: "transfer_date",
     creatable: false, postable: true, lineProductField: "product_id",
   },
   stock_adjustment: {
-    type: "stock_adjustment", label: "库存调整单", route: "/inventory/stock-adjustments", routeLabel: "库存调整单",
+    type: "stock_adjustment", label: "库存调整单", labelEn: "Stock adjustment", route: "/inventory/stock-adjustments", routeLabel: "库存调整单",
     headerTable: `erp_stock_adjustments${TABLE_SUFFIX}`, detailTable: `erp_stock_adjustment_details${TABLE_SUFFIX}`,
     noField: "adjust_no", fkField: "adjustment_id", dateField: "adjust_date",
     creatable: false, postable: true, lineProductField: "product_id",
   },
 };
+
+/** 单据类型的展示名（按界面语言） */
+export const documentLabel = (meta: DocumentTypeMeta, locale?: string): string =>
+  isEnglishLocale(locale) ? meta.labelEn : meta.label;
+
+/** 流转规则目标单据的展示名（按界面语言） */
+export const flowRuleLabel = (
+  rule: { label: string; labelEn: string },
+  locale?: string,
+): string => (isEnglishLocale(locale) ? rule.labelEn : rule.label);
+
+/** 往来单位名词本地化（客户 / 供应商 / 往来单位） */
+export const partyLabelOf = (meta: DocumentTypeMeta, locale?: string): string =>
+  termLabel(meta.partyLabel || "往来单位", locale);
 
 /** 文档类型的中文别名（解析用；顺序敏感：更具体的关键词放前面，
  *  例如「生产入库单」必须排在「入库单」之前，否则会被采购入库抢走） */
@@ -237,7 +279,7 @@ export const POSTABLE_STATUSES: Record<string, string[]> = {
 };
 
 /**
- * 动作前置校验：返回可读的中文错误，null 表示放行。
+ * 动作前置校验：返回可读的错误（按界面语言），null 表示放行。
  *
  * 真正的约束仍在库内函数里，这里只是把「为什么不行」提前讲清楚，
  * 避免调用方拿到一个语焉不详的数据库报错。
@@ -245,31 +287,44 @@ export const POSTABLE_STATUSES: Record<string, string[]> = {
 export function validateDocumentAction(
   doc: LocatedDocument,
   action: DocumentActionName,
+  locale?: string,
 ): string | null {
   const meta = doc.meta;
+  const tt = toolText(locale);
+  const label = documentLabel(meta, locale);
 
   if (action === "post") {
     if (!meta.postable) {
-      return `${meta.label}没有过账入口，请通过单据流转（转单）生成下游单据后再过账。`;
+      return tt("doc.validate.notPostable", { label });
     }
     const allowed = POSTABLE_STATUSES[meta.type] || ["approved"];
     if (!allowed.includes(doc.status)) {
-      return `${meta.label} ${doc.no} 当前状态是「${statusLabel(doc.status)}」，不能过账（需要 ${allowed
-        .map(statusLabel)
-        .join(" 或 ")}）。可以先「提交审批」或「审批通过」。`;
+      return tt("doc.validate.badStatusForPost", {
+        label,
+        no: doc.no,
+        status: statusLabelOf(doc.status, locale),
+        allowed: allowed.map((item) => statusLabelOf(item, locale)).join(" / "),
+      });
     }
   }
 
   if (action === "reverse" && doc.status !== "posted") {
-    return `${meta.label} ${doc.no} 当前状态是「${statusLabel(doc.status)}」，只有已过账的单据能反过账。`;
+    return tt("doc.validate.badStatusForReverse", {
+      label,
+      no: doc.no,
+      status: statusLabelOf(doc.status, locale),
+    });
   }
 
   if (action === "convert") {
     const rule = FLOW_RULES[meta.type];
     if (!rule) {
-      return `${meta.label}没有配置下游流转规则，不能转单。可流转的源单据：${Object.keys(FLOW_RULES)
-        .map((type) => DOCUMENT_TYPES[type]?.label || type)
-        .join("、")}。`;
+      return tt("doc.validate.noFlowRule", {
+        label,
+        sources: Object.keys(FLOW_RULES)
+          .map((type) => (DOCUMENT_TYPES[type] ? documentLabel(DOCUMENT_TYPES[type], locale) : type))
+          .join(" / "),
+      });
     }
   }
 
@@ -284,6 +339,7 @@ export async function locateDocumentById(
   meta: DocumentTypeMeta,
   id: number,
   tenantId: number,
+  locale?: string,
 ): Promise<{ document?: LocatedDocument; error?: string }> {
   const { data } = await supabase
     .from(meta.headerTable)
@@ -293,7 +349,9 @@ export async function locateDocumentById(
     .eq("is_deleted", "n")
     .maybeSingle();
   if (!data) {
-    return { error: `没有找到${meta.label} #${id}（可能不属于当前租户或已删除）。` };
+    return {
+      error: toolText(locale)("doc.err.notFoundById", { label: documentLabel(meta, locale), id }),
+    };
   }
   const row = data as unknown as Record<string, unknown>;
   return {
@@ -323,14 +381,15 @@ export function resolveDocumentTypeRef(ref: string | undefined): DocumentTypeMet
 }
 
 /**
- * 单据类型的中文名清单（供工具生成可读提示）。
+ * 单据类型名清单（供工具生成可读提示）。
  * @param onlyCreatable 为 true 时只列出允许 AI 直接建单的类型
+ * @param locale 界面语言（默认中文，与 MCP 工具的历史行为保持一致）
  */
-export const documentTypeLabels = (onlyCreatable = false): string =>
+export const documentTypeLabels = (onlyCreatable = false, locale?: string): string =>
   Object.values(DOCUMENT_TYPES)
     .filter((meta) => !onlyCreatable || meta.creatable)
-    .map((meta) => meta.label)
-    .join("、");
+    .map((meta) => documentLabel(meta, locale))
+    .join(normalizeUiLocale(locale) === "en" ? ", " : "、");
 
 /**
  * 定位「要操作的单据」：优先用文本里的单号，其次是当前焦点（页面上的单据）。
@@ -340,8 +399,10 @@ export async function resolveDocumentTarget(
   state: AiGraphState,
   preferredType?: string,
 ): Promise<{ document?: LocatedDocument; error?: string }> {
+  const locale = state.locale;
+  const tt = toolText(locale);
   if (typeof state.tenantId !== "number") {
-    return { error: "缺少租户上下文，无法定位单据。" };
+    return { error: tt("doc.err.missingTenantLocate") };
   }
   const tenantId = state.tenantId;
 
@@ -376,8 +437,8 @@ export async function resolveDocumentTarget(
 
   return {
     error: tokens.length
-      ? `没有找到单号 ${tokens.join("、")} 对应的单据（可能不属于当前租户或已删除）。`
-      : "请告诉我要操作哪张单据，例如「把销售订单 SO20260005 过账」，或先在单据页面上打开它。",
+      ? tt("doc.err.noNoMatch", { nos: tokens.join(normalizeUiLocale(locale) === "en" ? ", " : "、") })
+      : tt("doc.err.askWhich"),
   };
 }
 
@@ -388,9 +449,12 @@ async function resolveByName(
   name: string,
   tenantId: number,
   label: string,
+  locale?: string,
 ): Promise<{ id?: number; error?: string; note?: string }> {
+  const tt = toolText(locale);
+  const termName = termLabel(label, locale);
   const clean = name.trim();
-  if (!clean) return { error: `${label}名称不能为空。` };
+  if (!clean) return { error: tt("doc.err.nameEmpty", { label: termName }) };
   const { data, error } = await supabase
     .from(table)
     .select(`id, ${nameField}`)
@@ -398,14 +462,18 @@ async function resolveByName(
     .eq("is_deleted", "n")
     .ilike(nameField, `%${clean}%`)
     .limit(5);
-  if (error) return { error: `查询${label}失败：${error.message}` };
+  if (error) return { error: tt("doc.err.nameQueryFailed", { label: termName, message: error.message }) };
   const rows = (data || []) as unknown as Array<Record<string, unknown>>;
-  if (!rows.length) return { error: `没有找到${label}「${clean}」，请确认名称是否正确。` };
+  if (!rows.length) {
+    return { error: tt("doc.err.nameNotFound", { label: termName, name: clean }) };
+  }
   const exact = rows.filter((row) => String(row[nameField]).toLowerCase() === clean.toLowerCase());
   if (exact.length === 1) return { id: Number(exact[0].id) };
   if (rows.length === 1) return { id: Number(rows[0].id) };
-  const names = (exact.length ? exact : rows).map((row) => String(row[nameField])).join("、");
-  return { error: `${label}「${clean}」有多个匹配：${names}。请说明具体是哪一个。` };
+  const names = (exact.length ? exact : rows)
+    .map((row) => String(row[nameField]))
+    .join(normalizeUiLocale(locale) === "en" ? ", " : "、");
+  return { error: tt("doc.err.nameAmbiguous", { label: termName, name: clean, names }) };
 }
 
 /**
@@ -486,7 +554,10 @@ export async function prepareDocumentInput(
   meta: DocumentTypeMeta,
   raw: RawDocumentDraft,
 ): Promise<{ prepared?: PreparedDocument; error?: string }> {
-  if (typeof state.tenantId !== "number") return { error: "缺少租户上下文。" };
+  const locale = state.locale;
+  const tt = toolText(locale);
+  const label = documentLabel(meta, locale);
+  if (typeof state.tenantId !== "number") return { error: tt("doc.err.missingTenant") };
   const tenantId = state.tenantId;
   const notes: string[] = [];
   const header: Record<string, unknown> = {};
@@ -496,15 +567,16 @@ export async function prepareDocumentInput(
   if (meta.partyField && meta.partyTable) {
     const partyName =
       String(raw.party_name || raw.header?.[meta.partyField] || "").trim();
+    const partyLabel = partyLabelOf(meta, locale);
     if (!partyName) {
-      return { error: `请告诉我这张${meta.label}的${meta.partyLabel || "往来单位"}是谁。` };
+      return { error: tt("doc.err.needParty", { label, party: partyLabel }) };
     }
     const resolved = await resolveByName(
-      meta.partyTable, "name", partyName, tenantId, meta.partyLabel || "往来单位",
+      meta.partyTable, "name", partyName, tenantId, meta.partyLabel || "往来单位", locale,
     );
     if (resolved.error) return { error: resolved.error };
     header[meta.partyField] = resolved.id;
-    notes.push(`${meta.partyLabel}：${partyName}（id=${resolved.id}）`);
+    notes.push(tt("doc.preview.noteParty", { party: partyLabel, name: partyName, id: resolved.id ?? "-" }));
   }
 
   // ② 单头其他字段（去掉 id 类原始值，避免把名称写进 id 列）
@@ -517,34 +589,38 @@ export async function prepareDocumentInput(
   }
   if (rawHeader.status && String(rawHeader.status) !== "draft") {
     return {
-      error: `AI 建单只能生成草稿（draft），不能直接设为 ${String(rawHeader.status)}；需要审批请在建单后跟我说「提交审批」或「审批通过」。`,
+      error: tt("doc.err.draftOnly", {
+        status: statusLabelOf(String(rawHeader.status), locale),
+      }),
     };
   }
 
   // ③ 仓库（名称 → id）
   if (raw.warehouse_name) {
     const resolved = await resolveByName(
-      `erp_warehouses${TABLE_SUFFIX}`, "name", String(raw.warehouse_name), tenantId, "仓库",
+      `erp_warehouses${TABLE_SUFFIX}`, "name", String(raw.warehouse_name), tenantId, "仓库", locale,
     );
     if (resolved.error) return { error: resolved.error };
     header.warehouse_id = resolved.id;
-    notes.push(`仓库：${raw.warehouse_name}（id=${resolved.id}）`);
+    notes.push(tt("doc.preview.noteWarehouse", { name: String(raw.warehouse_name), id: resolved.id ?? "-" }));
   }
 
   // ④ 明细
   const rawLines = Array.isArray(raw.lines) ? raw.lines : [];
-  if (!rawLines.length) return { error: `这张${meta.label}至少要有一行明细（物料 + 数量）。` };
+  if (!rawLines.length) return { error: tt("doc.err.needLines", { label }) };
   for (const [index, rawLine] of rawLines.entries()) {
     const productName = String(
       rawLine[meta.lineProductField] || rawLine.product_name || rawLine.material_name || "",
     ).trim();
     if (!productName) {
-      return { error: `第 ${index + 1} 行明细缺少物料名称。` };
+      return { error: tt("doc.err.lineMissingProduct", { index: index + 1 }) };
     }
     const product = await resolveByName(
-      `erp_products${TABLE_SUFFIX}`, "name", productName, tenantId, "物料",
+      `erp_products${TABLE_SUFFIX}`, "name", productName, tenantId, "物料", locale,
     );
-    if (product.error) return { error: `第 ${index + 1} 行：${product.error}` };
+    if (product.error) {
+      return { error: tt("doc.err.linePrefix", { index: index + 1, error: product.error }) };
+    }
 
     const line: Record<string, unknown> = { [meta.lineProductField]: product.id };
     for (const [key, value] of Object.entries(rawLine)) {
@@ -553,7 +629,13 @@ export async function prepareDocumentInput(
       line[key] = value;
     }
     lines.push(line);
-    notes.push(`第 ${index + 1} 行：${productName} × ${String(line.quantity ?? "-")}`);
+    notes.push(
+      tt("doc.preview.noteLine", {
+        index: index + 1,
+        name: productName,
+        qty: String(line.quantity ?? "-"),
+      }),
+    );
   }
 
   return {
@@ -587,18 +669,13 @@ export async function describeDocument(
   };
 }
 
-/** 单据状态的中文说明（展示用） */
-export const statusLabel = (status: string): string =>
-  ({
-    draft: "草稿", pending: "待审批", approved: "已审批", rejected: "已驳回",
-    partially_delivered: "部分出货", delivered: "已出货",
-    partially_received: "部分入库", received: "已入库",
-    issued: "已发料", posted: "已过账", closed: "已关闭", cancelled: "已取消",
-  })[status] || status;
+/**
+ * 单据状态的中文/英文说明（展示用）。
+ * 词典集中在 services/toolText.ts；这里转发，保持既有导出名不变（MCP 工具也在用）。
+ */
+export const statusLabel = (status: string, locale?: string): string =>
+  statusLabelOf(status, locale);
 
-/** 过账 / 审批 / 流转动作的中文名 */
-export const actionLabel = (action: string): string =>
-  ({
-    post: "过账", reverse: "反过账", submit: "提交审批", approve: "审批通过",
-    reject: "驳回", withdraw: "撤回审批", convert: "转单",
-  })[action] || action;
+/** 过账 / 审批 / 流转动作的展示名（同上是转发，默认中文） */
+export const actionLabel = (action: string, locale?: string): string =>
+  actionLabelOf(action, locale);

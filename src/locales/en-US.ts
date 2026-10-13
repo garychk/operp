@@ -2326,6 +2326,8 @@ const enUS = {
     "aiChat.result.noTools": "No business tool was invoked this time.",
     "aiChat.result.memorySaved": "Conversation context was kept so you can continue or revise the result.",
     "aiChat.result.replyReady": "The execution result is ready for you.",
+    "aiChat.mask.table": "Table {{index}}",
+    "aiChat.mask.field": "Field {{index}}",
     "aiChat.reply.handled": "The selected skill has been handled.",
     "aiChat.error.unavailable": "The AI service is temporarily unavailable.",
     "aiChat.error.serverError": "The server returned an error.",

@@ -2326,6 +2326,8 @@ const zhCN = {
     "aiChat.result.noTools": "本次没有调用业务工具。",
     "aiChat.result.memorySaved": "已保留本次对话上下文，方便继续追问或修改刚才的结果。",
     "aiChat.result.replyReady": "已整理执行结果，准备展示给你。",
+    "aiChat.mask.table": "数据表{{index}}",
+    "aiChat.mask.field": "字段{{index}}",
     "aiChat.reply.handled": "已处理所选技能。",
     "aiChat.error.unavailable": "AI 服务暂时不可用。",
     "aiChat.error.serverError": "服务端返回错误。",

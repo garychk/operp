@@ -604,6 +604,43 @@ const formatStepContent = (data: unknown): string => {
 
 const isPendingStep = (message: string) => message.startsWith("正在");
 
+/** 物理表名（erp_* / sys_* / wf_* / doc_flow_*） */
+const TECHNICAL_TABLE_PATTERN = /\b(?:erp|sys|wf|doc_flow)_[a-z0-9_]+\b/gi;
+/** 蛇形命名 = 大概率是数据库字段名 */
+const TECHNICAL_FIELD_PATTERN = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/gi;
+
+/**
+ * 思考过程兜底脱敏。
+ *
+ * 列名的正常路径是**服务端本地化**（ai-server 的 services/columnLabels.ts 让模型
+ * 按界面语言翻译成业务列名），这里只兜住仍然漏出来的内部标识符：
+ * 物理表名 → 「数据表1/2…」，残留的英文字段名 → 「字段1/2…」。
+ * 只影响思考过程展示，最终回复不受影响。
+ */
+const maskTechnicalNames = (
+  text: string,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string => {
+  if (!text || !/[a-z_]/i.test(text)) return text;
+  const tableMap = new Map<string, string>();
+  const fieldMap = new Map<string, string>();
+  return text
+    .replace(TECHNICAL_TABLE_PATTERN, (raw) => {
+      const key = raw.toLowerCase();
+      if (!tableMap.has(key)) {
+        tableMap.set(key, t("aiChat.mask.table", { index: tableMap.size + 1 }));
+      }
+      return tableMap.get(key) as string;
+    })
+    .replace(TECHNICAL_FIELD_PATTERN, (raw) => {
+      const key = raw.toLowerCase();
+      if (!fieldMap.has(key)) {
+        fieldMap.set(key, t("aiChat.mask.field", { index: fieldMap.size + 1 }));
+      }
+      return fieldMap.get(key) as string;
+    });
+};
+
 const formatStepResult = (
   data: unknown,
   message: string,
@@ -677,7 +714,7 @@ const formatStepResult = (
   if (message.includes("工具执行完成")) {
     const results = Array.isArray(value.toolResults) ? value.toolResults : [];
     const result = results[0] as Record<string, unknown> | undefined;
-    if (result?.reply) return String(result.reply);
+    if (result?.reply) return maskTechnicalNames(String(result.reply), t);
     if (result?.status === "needs_more") return t("aiChat.result.needMore");
     if (result?.status === "error") return t("aiChat.result.toolError");
     return results.length ? t("aiChat.result.toolsDone") : t("aiChat.result.noTools");
@@ -691,7 +728,7 @@ const formatStepResult = (
     return t("aiChat.result.replyReady");
   }
 
-  return formatStepContent(data) || message;
+  return maskTechnicalNames(formatStepContent(data) || message, t);
 };
 
 const streamAIReply = async (
@@ -775,7 +812,7 @@ export function AIChatPanel({
   className,
   style,
 }: AIChatPanelProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [inputValue, setInputValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1193,6 +1230,8 @@ export function AIChatPanel({
         tenant_id: user?.tenantId ?? null,
         text: prompt,
         skill: selectedSkill,
+        // 界面语言：ai-server 按它把查询结果的列名翻译成本地业务列名
+        locale: i18n.language,
         context: {
           page: window.location.pathname,
           current_focus:

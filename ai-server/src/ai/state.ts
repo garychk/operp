@@ -51,6 +51,11 @@ export interface AiChatRequest {
   tenant_id?: number;
   text: string;
   skill?: AiSkill;
+  /**
+   * 界面语言（如 "zh-CN" / "en-US"）。
+   * 用于把查询结果的列名按界面语言本地化（中文界面出中文列名，英文界面出英文列名）。
+   */
+  locale?: string;
   provider?: {
     id?: string;
     name?: string;
@@ -86,6 +91,8 @@ export interface AiGraphState {
   tenantId?: number;
   text: string;
   skill: AiSkill;
+  /** 界面语言，决定查询结果列名的本地化方向（见 services/columnLabels.ts） */
+  locale?: string;
   provider?: AiChatRequest["provider"];
   page?: string;
   currentFocus?: unknown;

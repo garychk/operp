@@ -82,6 +82,7 @@ const buildState = (input: AiChatRequest): AiGraphState => ({
   tenantId: input.tenant_id,
   text: input.text,
   skill: input.skill ?? "auto",
+  locale: input.locale,
   provider: input.provider,
   page: input.context?.page,
   currentFocus: input.context?.current_focus,
