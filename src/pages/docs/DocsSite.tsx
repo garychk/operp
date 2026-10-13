@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import { Link } from "react-router-dom";
 import opelixLogo from "../../assets/opelix.svg";
 import { docCategories } from "./docsData";
 import "./docs.css";
@@ -187,9 +188,11 @@ export function DocsSite() {
     <div className="docs-page" ref={scrollRef}>
       <header className="docs-header">
         <div className="docs-brand">
-          <span className="docs-logo">
-            <img src={opelixLogo} alt="OPERP Logo" />
-          </span>
+          <Link to="/" className="docs-logo-link" title="返回 ERP 主页" aria-label="返回 ERP 主页">
+            <span className="docs-logo">
+              <img src={opelixLogo} alt="OPERP Logo" />
+            </span>
+          </Link>
           <span className="docs-brand-name">OPERP 使用手册</span>
           <span className="docs-version">V1.0.6</span>
         </div>
