@@ -49,7 +49,7 @@ export const docCategories: DocCategory[] = [
     <tr><td>DocType 单据类型</td><td>一张单据是什么的元数据（表名、单号规则、是否可提交、绑定审批流）</td><td>系统管理 → DocType 构建</td></tr>
     <tr><td>Workflow 审批流</td><td>谁审批、按什么顺序审批，支持条件分支、多级审批、驳回撤回</td><td>系统管理 → 流程配置；单据顶部审批按钮</td></tr>
     <tr><td>DocFlow 单据转换</td><td>这张单能生成什么单，声明式字段映射 + 数量台账防超下推</td><td>单据顶部的「下推」按钮</td></tr>
-    <tr><td>BAQ 业务活动查询</td><td>不写 SQL 的可视化查询设计器，可作页面数据源</td><td>系统管理 → BAQ 管理</td></tr>
+    <tr><td>BAQ 业务活动查询</td><td>不写 SQL 的可视化查询设计器：ER 图式拖表勾字段，支持多级 / 多字段 / 非主外键关联，可作页面数据源</td><td>系统管理 → BAQ 管理</td></tr>
     <tr><td>页面设计器</td><td>拖拽组件拼页面，发布即成为菜单</td><td>系统管理 → 页面设计器</td></tr>
     <tr><td>AI 智能体</td><td>用自然语言查数据、建单、过账、转单、生成 BAQ</td><td>顶栏 AI 图标</td></tr>
   </tbody>
@@ -593,10 +593,44 @@ export const docCategories: DocCategory[] = [
   <thead><tr><th>页面</th><th>路径</th><th>说明</th></tr></thead>
   <tbody>
     <tr><td>页面设计器</td><td>/system/page-designer</td><td>拖拽组件（文本、指标、按钮、表格、图表）→ 绑定数据源（静态 JSON / 数据表 / BAQ）→ 发布后自动成为菜单项</td></tr>
-    <tr><td>BAQ 管理</td><td>/system/baq</td><td>可视化拼装查询：主表、关联表、字段、分组、聚合、筛选、排序；草稿 → 发布；发布后可作页面数据源，也可被 AI 调用</td></tr>
+    <tr><td>BAQ 管理</td><td>/system/baq</td><td>可视化拼装查询：<strong>图形化 ER 设计器</strong>（拖表、勾字段、拉连线）+ 经典表格模式；支持多级关联、多字段关联、非主外键关联；草稿 → 发布；发布后可作页面数据源，也可被 AI 调用（详见「BAQ 查询设计器」）</td></tr>
     <tr><td>知识库管理</td><td>/system/knowledge-base</td><td>维护企业制度/流程/手册，供 AI 问答检索</td></tr>
   </tbody>
 </table>`,
+      },
+      {
+        id: "sys-baq",
+        title: "BAQ 查询设计器（图形化）",
+        html: `
+<p><strong>BAQ（业务活动查询）</strong> 是一个<strong>不写 SQL</strong> 的可视化查询设计器：像搭积木一样选主表、关联表、字段，配置筛选与排序，发布后可作为<strong>页面设计器</strong>的数据源，也能被 <strong>AI</strong> 调用。</p>
+<p><strong>入口</strong>：系统管理 → BAQ 管理（<code>/system/baq</code>）。设计器共 6 个页签：</p>
+<table>
+  <thead><tr><th>页签</th><th>作用</th></tr></thead>
+  <tbody>
+    <tr><td>图形设计（默认）</td><td>ER 图式可视化：每张表一个卡片，勾选卡片上的字段即加入输出，拖卡片右侧圆点连线关联主子表</td></tr>
+    <tr><td>数据源与关联</td><td>经典表格模式：配置主表与关联，关联行可展开编辑多字段条件</td></tr>
+    <tr><td>输出字段</td><td>字段、输出别名、聚合（求和 / 计数 / 平均…）、是否分组</td></tr>
+    <tr><td>筛选</td><td>过滤条件（多个条件之间为 AND）</td></tr>
+    <tr><td>排序</td><td>按输出字段升序 / 降序</td></tr>
+    <tr><td>结果预览</td><td>点「预览」执行当前查询并展示结果（最多 100 行）</td></tr>
+  </tbody>
+</table>
+<h3>图形设计页签操作要点</h3>
+<ul>
+  <li><strong>选主表</strong>：顶部下拉选主表。下拉与卡片标题都显示<strong>业务名</strong>（如「物料表」），悬停可见完整物理表名。</li>
+  <li><strong>勾选字段 = 输出</strong>：点卡片里的字段勾选框即把该字段加入输出字段；卡片标题会标注「主表」或「N 级」。</li>
+  <li><strong>拖线关联</strong>：从卡片右侧圆点拖到空白处 → 弹出选表窗口新增关联表；拖到画布上已有的表 → 改变它的父表。</li>
+  <li><strong>多级关联</strong>：关联表还能继续关联子表，<strong>支持任意层级</strong>（主表 → 子表 → 孙表 → …）。系统会自动按依赖关系排好 JOIN 顺序，并拦住会成环的连线。</li>
+  <li><strong>多字段关联</strong>：一条关联可包含<strong>多个字段条件</strong>（AND 连接），在右侧「关联」面板或经典页签展开行里编辑；点「⚡ 匹配同名字段」可一键补齐两端同名的业务字段。</li>
+  <li><strong>非主外键关联</strong>：条件两端可<strong>任选任意字段</strong>，不限于主外键。例如用物料的 <code>code</code> 关联销售订单明细上的物料 <code>code</code>——<strong>外键关联只是系统给出的默认值，可以改</strong>。外键列会标注「外键」。</li>
+  <li><strong>添加数据表</strong>：把一个尚未入画布的表加进来，系统按外键自动挂到合适的父表下。</li>
+  <li><strong>自动发现关联</strong>：用外键元数据补全空着的关联字段，并提示还有哪些存在外键关系但尚未加入画布的表。</li>
+  <li><strong>从画布移除表</strong>：会把挂在它下面的<strong>整棵子树</strong>一起移除（避免留下非法关联）。</li>
+  <li><strong>适应画布</strong>：一键缩放，让所有卡片可见。</li>
+</ul>
+<div class="docs-tip">💡 表名默认<strong>去掉多租户物理后缀</strong>（如 _s_xxxxxx_b）显示，便于阅读；实际查询仍使用完整物理表名，不影响结果。自关联（同一张表父子结构，如 parent_id）不支持直接拖线，请用「添加数据表」加入同表的<strong>第二个别名</strong>再连。</div>
+<div class="docs-warn">⚠️ <strong>发布即生效</strong>：BAQ 由「草稿」变为「已发布」后，引用它的页面与 AI 立即使用新定义；改动关联条件前请确认没有页面正在依赖。</div>
+<p><strong>结果预览</strong>已并入设计器页签：点「预览」会保存当前定义并执行查询，结果在末页显示（最多 100 行）；预览成功会自动切到结果页签。让 AI「创建 BAQ」时，也能生成多级关联、多字段关联与非主外键关联的配置草稿。</p>`,
       },
     ],
   },
@@ -628,7 +662,7 @@ export const docCategories: DocCategory[] = [
     <tr><td>单据动作</td><td>把这张采购订单过账 / 驳回这张单 / 转成入库单</td><td>调用单据状态闸门执行；订单类会自动改为先转单</td></tr>
     <tr><td>多步计划</td><td>新建客户，然后给它开一张销售订单</td><td>拆成多步计划依次执行，前一步结果自动传给下一步（最多 5 步）</td></tr>
     <tr><td>知识问答</td><td>入库流程应该怎么走 / XX 制度怎么规定</td><td>从知识库做向量检索，回答附来源</td></tr>
-    <tr><td>BAQ 生成</td><td>我要查各客户的销售额汇总</td><td>生成 BAQ 配置草稿，确认后保存</td></tr>
+    <tr><td>BAQ 生成</td><td>我要查各客户的销售额汇总 / 用物料编码关联销售订单里的物料编码</td><td>生成 BAQ 配置草稿（支持多级 / 多字段 / 非主外键关联），确认后保存</td></tr>
     <tr><td>上下文指代</td><td>把它也改成已审批 / 刚才那单呢</td><td>记忆中的焦点对象支持它/这个/刚才那单</td></tr>
   </tbody>
 </table>`,
@@ -830,7 +864,7 @@ export const docCategories: DocCategory[] = [
     <tr><td>台账（Ledger）</td><td>记录已转多少的追加式账本，只增不删，冲销用负数行表示</td></tr>
     <tr><td>DocType</td><td>单据类型元数据，定义单据的形态与行为</td></tr>
     <tr><td>工作流（Workflow）</td><td>审批流转定义，与单据能转成什么（DocFlow）是两件事</td></tr>
-    <tr><td>BAQ</td><td>业务活动查询，可视化拼装的查询配置</td></tr>
+    <tr><td>BAQ</td><td>业务活动查询，可视化拼装的查询配置（图形化 ER 设计器）</td></tr>
     <tr><td>UoM</td><td>计量单位</td></tr>
     <tr><td>本位币</td><td>全站核算基准币种，全局唯一</td></tr>
     <tr><td>冻结汇率</td><td>汇率保存在单据上，后续汇率变动不影响该单据</td></tr>
