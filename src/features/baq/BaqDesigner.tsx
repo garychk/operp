@@ -30,13 +30,16 @@ import {
   Typography,
   Tooltip,
 } from "antd";
-import { executeBaq, listBaqs, listTableLabels, loadCatalog, refreshSysTables, removeBaq, saveBaq, updateTableLabels } from "./api";
+import { executeBaq, listBaqs, listTableLabels, loadCatalog, loadRelations, refreshSysTables, removeBaq, saveBaq, updateTableLabels } from "./api";
 import type { TableLabelRow } from "./api";
+import { BaqGraphDesigner } from "./BaqGraphDesigner";
+import { shortTableName } from "./tableLabel";
 import { emptyBaq } from "./types";
 import type {
   Aggregate,
   BaqDefinition,
   BaqQuery,
+  BaqRelation,
   BaqResult,
   BaqTable,
   FilterOperator,
@@ -67,8 +70,10 @@ export function BaqDesigner() {
   ];
   const [items, setItems] = useState<BaqQuery[]>([]);
   const [catalog, setCatalog] = useState<BaqTable[]>([]);
+  const [relations, setRelations] = useState<BaqRelation[]>([]);
   const [baq, setBaq] = useState<BaqQuery>(emptyBaq);
   const [result, setResult] = useState<BaqResult>();
+  const [activeTab, setActiveTab] = useState("graph");
   const [busy, setBusy] = useState(false);
   const [tableLabelOpen, setTableLabelOpen] = useState(false);
   const [tableLabels, setTableLabels] = useState<TableLabelRow[]>([]);
@@ -87,6 +92,11 @@ export function BaqDesigner() {
           t('baqDesigner.catalogLoadFailed', { message: e.message }),
         ),
       );
+    loadRelations()
+      .then(setRelations)
+      .catch(() =>
+        message.warning(t('baqDesigner.relationsLoadFailed')),
+      );
   }, []);
   const aliases = useMemo(
     () => [
@@ -98,10 +108,16 @@ export function BaqDesigner() {
     ],
     [baq.definition],
   );
-  const tableOptions = catalog.map((x) => ({
-    value: x.table,
-    label: `${x.label}`,
-  }));
+  const tableOptions = catalog.map((x) => {
+    const short = shortTableName(x.table);
+    const label = shortTableName(x.label);
+    return {
+      // value 必须是完整物理表名（落库、执行查询都用它），别去掉后缀
+      value: x.table,
+      title: x.table,
+      label: label && label !== short ? `${label} · ${short}` : short,
+    };
+  });
   const columns = (alias: string) =>
     catalog.find(
       (x) => x.table === aliases.find((a) => a.alias === alias)?.table,
@@ -135,6 +151,8 @@ export function BaqDesigner() {
     setBusy(true);
     try {
       setResult(await executeBaq(saved.code));
+      // 预览结果在末页签，执行完直接切过去，否则用户看不到结果
+      setActiveTab("result");
     } catch (e) {
       message.error(e instanceof Error ? e.message : t('baqDesigner.executeFailed'));
     } finally {
@@ -275,7 +293,7 @@ export function BaqDesigner() {
           </Space>
         }
       >
-        <Form layout="vertical">
+        <Form layout="horizontal">
           <div className="baq-meta">
             <Form.Item label={t('common.name')} required>
               <Input
@@ -301,7 +319,21 @@ export function BaqDesigner() {
           </div>
         </Form>
         <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
           items={[
+            {
+              key: "graph",
+              label: t('baqDesigner.graphTab'),
+              children: (
+                <BaqGraphDesigner
+                  definition={baq.definition}
+                  catalog={catalog}
+                  relations={relations}
+                  patchDef={patchDef}
+                />
+              ),
+            },
             {
               key: "source",
               label: t('baqDesigner.sourceTab'),
@@ -828,41 +860,45 @@ export function BaqDesigner() {
                 </>
               ),
             },
+            {
+              key: "result",
+              label: t('baqDesigner.resultPreview'),
+              children: (
+                <div className="baq-result-tab">
+                  {result && (
+                    <div className="baq-result-summary">
+                      <Typography.Text type="secondary">
+                        {t('baqDesigner.resultSummary', { total: result.total })}
+                      </Typography.Text>
+                    </div>
+                  )}
+                  {result ? (
+                    <Table
+                      className="baq-result-table"
+                      size="small"
+                      rowKey={(_, i) => String(i)}
+                      scroll={{
+                        x: Math.max(baq.definition.fields.length * 180, 900),
+                        y: 420,
+                      }}
+                      dataSource={result.rows}
+                      columns={baq.definition.fields.map((field) => ({
+                        title: field.alias || field.field,
+                        dataIndex: field.alias || field.field,
+                        key: field.id,
+                        width: 180,
+                        ellipsis: true,
+                      }))}
+                      pagination={false}
+                    />
+                  ) : (
+                    <Empty description={t('baqDesigner.emptyPreviewHint')} />
+                  )}
+                </div>
+              ),
+            },
           ]}
         />
-      </Card>
-      <Card
-        title={t('baqDesigner.resultPreview')}
-        extra={
-          result && (
-            <Typography.Text type="secondary">
-              {t('baqDesigner.resultSummary', { total: result.total })}
-            </Typography.Text>
-          )
-        }
-      >
-        {result ? (
-          <Table
-            className="baq-result-table"
-            size="small"
-            rowKey={(_, i) => String(i)}
-            scroll={{
-              x: Math.max(baq.definition.fields.length * 180, 900),
-              y: 420,
-            }}
-            dataSource={result.rows}
-            columns={baq.definition.fields.map((field) => ({
-              title: field.alias || field.field,
-              dataIndex: field.alias || field.field,
-              key: field.id,
-              width: 180,
-              ellipsis: true,
-            }))}
-            pagination={false}
-          />
-        ) : (
-          <Empty description={t('baqDesigner.emptyPreviewHint')} />
-        )}
       </Card>
       <Modal
         title={t('baqDesigner.tableLabelsMaintenance')}

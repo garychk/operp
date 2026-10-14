@@ -160,6 +160,7 @@ ORDER=(
   deploy_117_employee_menu.sql
   deploy_118_employee_jobs_dict.sql
   deploy_119_shift_master_and_capacity.sql
+  deploy_120_baq_relations.sql
 )
 
 # ---------------------------------------------------------------- 文件自检
