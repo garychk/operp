@@ -847,6 +847,12 @@ export function SubcontractReceipts() {
                     ))}
                   </Select>
                 </Form.Item>
+                <Form.Item
+                  label={t("mrp.subcontractReceipts.remark")}
+                  name="remark"
+                >
+                  <Input.TextArea rows={2} />
+                </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item
@@ -995,13 +1001,7 @@ export function SubcontractReceipts() {
                       </Select>
                     </Form.Item>
                   </Col>
-                </Row>
-                <Form.Item
-                  label={t("mrp.subcontractReceipts.remark")}
-                  name="remark"
-                >
-                  <Input.TextArea rows={2} />
-                </Form.Item>
+                </Row>                
               </Col>
             </Row>
           </Form>

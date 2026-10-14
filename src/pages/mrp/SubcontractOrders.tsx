@@ -32,6 +32,7 @@ import { SuperTable } from "../../components/SuperTable";
 import { useCurrencyRegistry } from "../../utils/money";
 import { SupaModal } from "../../components/SupaModal";
 import SimpleModal from "../../components/SimpleModal";
+import { WarehouseBinSelect } from "../../components/WarehouseBinSelect";
 import dayjs from "dayjs";
 
 type SubcontractOrder = Tables["erp_subcontract_orders_s_539dcf81_b"]["Row"];
@@ -40,7 +41,6 @@ type SubcontractOrderDetail =
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type Supplier = Tables["erp_suppliers_s_539dcf81_b"]["Row"];
 type Warehouse = Tables["erp_warehouses_s_539dcf81_b"]["Row"];
-type Bin = Tables["erp_bins_s_539dcf81_b"]["Row"];
 type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
 
 const { Option } = Select;
@@ -64,7 +64,6 @@ export function SubcontractOrders() {
   const [products, setProducts] = useState<Product[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [bins, setBins] = useState<Bin[]>([]);
   const [boms, setBoms] = useState<Bom[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -78,6 +77,7 @@ export function SubcontractOrders() {
     useState<SubcontractOrderDetail | null>(null);
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
+  const watchedWarehouseId = Form.useWatch("warehouse_id", form);
   const [building, setBuilding] = useState(false);
   const [headerProductId, setHeaderProductId] = useState<number | undefined>();
 
@@ -86,7 +86,6 @@ export function SubcontractOrders() {
     fetchProducts();
     fetchSuppliers();
     fetchWarehouses();
-    fetchBins();
     fetchBoms();
   }, []);
 
@@ -131,14 +130,6 @@ export function SubcontractOrders() {
       .select("*")
       .eq("is_deleted", "n");
     setWarehouses(data || []);
-  };
-
-  const fetchBins = async () => {
-    const { data } = await supabase
-      .from("erp_bins_s_539dcf81_b")
-      .select("*")
-      .eq("is_deleted", "n");
-    setBins(data || []);
   };
 
   const fetchBoms = async () => {
@@ -838,6 +829,9 @@ export function SubcontractOrders() {
                       ))}
                   </Select>
                 </Form.Item>
+                <Form.Item label={t("mrp.subcontractOrders.remark")} name="remark">
+                  <Input.TextArea rows={2} />
+                </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item
@@ -934,19 +928,7 @@ export function SubcontractOrders() {
                       label={t("mrp.subcontractOrders.location")}
                       name="location_id"
                     >
-                      <Select allowClear showSearch optionFilterProp="children">
-                        {bins
-                          .filter(
-                            (b) =>
-                              form.getFieldValue("warehouse_id") == null ||
-                              b.warehouse_id === form.getFieldValue("warehouse_id"),
-                          )
-                          .map((b) => (
-                            <Option key={b.id} value={b.id}>
-                              {b.code} - {b.name}
-                            </Option>
-                          ))}
-                      </Select>
+                      <WarehouseBinSelect warehouseId={watchedWarehouseId} />
                     </Form.Item>
                   </Col>
                   <Col span={12}>
@@ -977,10 +959,7 @@ export function SubcontractOrders() {
                       {t("mrp.subcontractOrders.statusClosed")}
                     </Option>
                   </Select>
-                </Form.Item>
-                <Form.Item label={t("mrp.subcontractOrders.remark")} name="remark">
-                  <Input.TextArea rows={2} />
-                </Form.Item>
+                </Form.Item>                
               </Col>
             </Row>
           </Form>

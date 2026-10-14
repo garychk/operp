@@ -17,11 +17,14 @@ import {
   Row,
   Col,
   DatePicker,
+  Alert,
+  Tooltip,
 } from "antd";
 import {
   PlusOutlined,
   DeleteOutlined,
   EditOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
@@ -34,14 +37,32 @@ import { useUoms, buildUomOptions, productUnitText, normalizeUnitText } from "..
 import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
 import SimpleModal from "../../components/SimpleModal";
 
-type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"];
+// is_phantom 已在线上表中（mrpEngine/mrpService 也在消费），但生成的
+// src/types/database.ts 里没同步这一列，先用交叉类型补上，避免改动生成文件。
+type Bom = Tables["erp_boms_s_539dcf81_b"]["Row"] & {
+  is_phantom?: boolean | null;
+};
 type Product = Tables["erp_products_s_539dcf81_b"]["Row"];
 type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
 type BomDetail = Tables["erp_bom_details_s_539dcf81_b"]["Row"];
 
+/** 有效期判定结果，用于列表标记与筛选。 */
+type Validity = "valid" | "expired" | "pending" | "none";
+/** 明细完整性筛选。 */
+type DetailFilter = "all" | "empty" | "has";
+
 const { Option } = Select;
 const bomTable = "erp_boms_s_539dcf81_b";
 const bomDetailTable = "erp_bom_details_s_539dcf81_b";
+
+/** 按「日」比较两个日期（忽略时分秒）；任一为空返回 null。 */
+const cmpDay = (a: any, b: any): number | null => {
+  if (!a || !b) return null;
+  const da = dayjs(a);
+  const db = dayjs(b);
+  if (!da.isValid() || !db.isValid()) return null;
+  return da.startOf("day").diff(db.startOf("day"));
+};
 
 export function Boms() {
   const { t } = useTranslation();
@@ -63,6 +84,14 @@ export function Boms() {
   const [form] = Form.useForm();
   const [detailForm] = Form.useForm();
 
+  // 列表筛选条件（原页面只有一个前端模糊搜索，缺状态/有效期/虚拟件/明细完整性维度）
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [validityFilter, setValidityFilter] = useState<"all" | Validity>("all");
+  const [phantomFilter, setPhantomFilter] = useState<"all" | "phantom" | "physical">("all");
+  const [detailFilter, setDetailFilter] = useState<DetailFilter>("all");
+  // bom_id -> 有效子项行数：「明细行数」列 + 空 BOM 启用拦截都依赖它
+  const [detailCountMap, setDetailCountMap] = useState<Record<number, number>>({});
+
   // 单位下拉的数据源 = 单位主数据表（erp_uoms），与物料管理页完全一致。
   // 历史问题：这里曾用 <DictSelect dictType="uom" />，而 sys_dict_items 里
   // 根本没有 `uom` 字典 → 下拉恒为空，只能靠手填，于是出现 "PCS" 这类
@@ -78,6 +107,7 @@ export function Boms() {
     fetchProducts();
     fetchAllProducts();
     fetchOperations();
+    fetchDetailCounts();
   }, []);
 
   const fetchBoms = async () => {
@@ -97,6 +127,28 @@ export function Boms() {
     } finally {
       setLoading(false);
     }
+  };
+
+  /** 统计每条 BOM 的有效子项行数（一次全量拉 bom_id 后在前端汇总，避免 N 次 count）。 */
+  const fetchDetailCounts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from(bomDetailTable)
+        .select("bom_id")
+        .eq("is_deleted", "n");
+      if (error) throw error;
+      const map: Record<number, number> = {};
+      (data || []).forEach((row: { bom_id: number | null }) => {
+        if (row.bom_id != null) map[row.bom_id] = (map[row.bom_id] || 0) + 1;
+      });
+      setDetailCountMap(map);
+    } catch (error) {
+      console.error("Error fetching bom detail counts:", error);
+    }
+  };
+
+  const refreshAll = async () => {
+    await Promise.all([fetchBoms(), fetchDetailCounts()]);
   };
 
   const fetchProducts = async () => {
@@ -156,12 +208,45 @@ export function Boms() {
   };
 
   const handleSubmit = async (values: any) => {
+    // 保存前校验（问题 2「空 BOM 可启用」+ 问题 4「有效期无校验」）
+    // ① 失效日期不得早于生效日期
+    const spanDiff = cmpDay(values.expiry_date, values.effective_date);
+    if (spanDiff != null && spanDiff < 0) {
+      message.error(t("mrp.boms.expiryBeforeEffective"));
+      return;
+    }
+    if (values.is_active) {
+      // ② 空 BOM 不允许启用
+      const cnt = activeDetailCount(editingBom?.id ?? null);
+      if (cnt === 0) {
+        message.error(t("mrp.boms.emptyCannotEnable"));
+        return;
+      }
+      // ③ 已过期（失效日期早于今天）的 BOM 不允许启用
+      const expiredDiff = cmpDay(values.expiry_date, dayjs());
+      if (expiredDiff != null && expiredDiff < 0) {
+        message.error(t("mrp.boms.expiredCannotEnable"));
+        return;
+      }
+    }
+
     try {
+      // 日期必须以 "YYYY-MM-DD" 字符串入库：直接把 dayjs 对象交给 supabase 会
+      // 序列化成 UTC 时间戳（本地零点 → 前一天 16:00Z），PostgreSQL 按 UTC 取
+      // date 部分，结果每保存一次日期就提前一天（UTC+8 环境实测踩坑）。
+      const payload = { ...values };
+      if (payload.effective_date) {
+        payload.effective_date = dayjs(payload.effective_date).format("YYYY-MM-DD");
+      }
+      if (payload.expiry_date) {
+        payload.expiry_date = dayjs(payload.expiry_date).format("YYYY-MM-DD");
+      }
+
       if (editingBom) {
         await logWithTiming(t("mrp.boms.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(bomTable)
-            .update(values)
+            .update(payload)
             .eq("id", editingBom.id);
           if (error) throw error;
         }, { table: bomTable, recordId: editingBom.id });
@@ -173,7 +258,7 @@ export function Boms() {
         const data = await logWithTiming(t("mrp.boms.logCreate"), "INSERT", async () => {
           const { data, error } = await supabase
             .from(bomTable)
-            .insert([values])
+            .insert([payload])
             .select()
             .single();
           if (error) throw error;
@@ -186,7 +271,7 @@ export function Boms() {
       setIsModalOpen(false);
       form.resetFields();
       setEditingBom(null);
-      fetchBoms();
+      void refreshAll();
     } catch (error) {
       console.error("Error saving bom:", error);
       message.error(t("common.saveFailed"));
@@ -206,6 +291,16 @@ export function Boms() {
         return;
       }
 
+      // 同一个 BOM 内行号必须唯一（问题 1）。编辑时要排除自己这一行。
+      const lineNo = Number(values.line_no);
+      const duplicated = details.some(
+        (d) => Number(d.line_no) === lineNo && d.id !== editingDetail?.id,
+      );
+      if (duplicated) {
+        message.error(t("mrp.boms.lineNoDuplicate"));
+        return;
+      }
+
       if (editingDetail) {
         await supabase
           .from("erp_bom_details_s_539dcf81_b")
@@ -213,9 +308,11 @@ export function Boms() {
           .eq("id", editingDetail.id);
         message.success(t("common.updateSuccess"));
       } else {
-        const maxLineNo = details.length > 0 ? Math.max(...details.map(d => d.line_no || 0)) : 0;
         values.bom_id = selectedBom.id;
-        values.line_no = maxLineNo + 1;
+        // 行号以表单值为准（上面已校验唯一），不再用本地 state 的 max+1 —— 那个
+        // 算法在「中间行被删掉」时会把新行号顶到最大号之后，且完全不知道库里
+        // 是否已经有别处写入的同号行。
+        values.line_no = lineNo;
         values.is_deleted = "n";
 
         const { error } = await supabase
@@ -227,7 +324,8 @@ export function Boms() {
       setIsDetailModalOpen(false);
       detailForm.resetFields();
       setEditingDetail(null);
-      fetchDetails(selectedBom.id);
+      await fetchDetails(selectedBom.id);
+      void fetchDetailCounts();
     } catch (error) {
       console.error("Error saving detail:", error);
       message.error(t("common.saveFailed"));
@@ -242,10 +340,12 @@ export function Boms() {
       // 单位口径归一：历史脏值（如 "PCS"）→ 单位主数据的规范写法；
       // 完全没有单位时按母件的基本单位补默认值
       unit: normalizeUnitText(record.unit, uomMap) || getProductUnit(record.product_id),
-      effective_date: dayjs(record.effective_date),
-      expiry_date: dayjs(record.expiry_date),
+      // 空值不能直接喂给 dayjs/DatePicker（dayjs(null) 是 Invalid Date，会渲染成报错）
+      effective_date: record.effective_date ? dayjs(record.effective_date) : null,
+      expiry_date: record.expiry_date ? dayjs(record.expiry_date) : null,
       is_default: record.is_default ?? true,
       is_active: record.is_active ?? true,
+      is_phantom: record.is_phantom ?? false,
     });
     await fetchDetails(record.id);
     setIsModalOpen(true);
@@ -281,7 +381,7 @@ export function Boms() {
             if (detailError) throw detailError;
           }, { table: bomTable, recordId: id });
           message.success(t("common.deleteSuccess"));
-          fetchBoms();
+          void refreshAll();
         } catch (error) {
           console.error("Error deleting bom:", error);
           message.error(t("common.deleteFailed"));
@@ -301,9 +401,12 @@ export function Boms() {
       quantity: 1,
       unit: "",
       is_default: true,
-      is_active: true,
+      // 新建 BOM 默认「停用」= 草稿态：空 BOM 不允许启用（handleSubmit 会拦截），
+      // 先建主档 → 加子项 → 再回来勾「启用」，这是 BOM 的标准发布流程。
+      is_active: false,
+      is_phantom: false,
       effective_date: dayjs(new Date()),
-      expiry_date: "",
+      expiry_date: null,
       remark: "",
     });
     setIsModalOpen(true);
@@ -314,7 +417,8 @@ export function Boms() {
     e.preventDefault();
     setEditingDetail(null);
     detailForm.setFieldsValue({
-      line_no: details.length + 1,
+      // 取「当前最小的未占用行号」，而不是 length+1：删掉中间行后 length+1 不会复用空号
+      line_no: nextLineNo(),
       material_id: undefined,
       quantity: 0,
       unit: "",
@@ -359,8 +463,9 @@ export function Boms() {
             .eq("id", id);
           message.success(t("common.deleteSuccess"));
           if (selectedBom) {
-            fetchDetails(selectedBom.id);
+            await fetchDetails(selectedBom.id);
           }
+          void fetchDetailCounts();
         } catch (error) {
           console.error("Error deleting detail:", error);
           message.error(t("common.deleteFailed"));
@@ -394,13 +499,64 @@ export function Boms() {
     return operation?.name || "-";
   };
 
-  const filteredBoms = boms.filter(
-    (b) =>
-      b.bom_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getProductName(b.product_id)
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()),
-  );
+  /** 当前 BOM 内最小的未占用行号（行号在同一 BOM 内必须唯一）。 */
+  const nextLineNo = () => {
+    const used = new Set(
+      details.map((d) => Number(d.line_no)).filter((n) => Number.isFinite(n)),
+    );
+    let n = 1;
+    while (used.has(n)) n += 1;
+    return n;
+  };
+
+  /** 某条 BOM 的有效子项行数：正在编辑/选中的那条以已加载的 details 为准。 */
+  const activeDetailCount = (bomId: number | null | undefined): number => {
+    if (bomId == null) return 0;
+    if (selectedBom?.id === bomId || editingBom?.id === bomId) return details.length;
+    return detailCountMap[bomId] ?? 0;
+  };
+
+  /** 列表用：一律取全量汇总，避免受弹窗内临时状态影响。 */
+  const listDetailCount = (bomId: number): number => detailCountMap[bomId] ?? 0;
+
+  /** 按生效/失效日期判定有效期状态（expired = 失效日早于今天）。 */
+  const validityOf = (record: Bom): Validity => {
+    const today = dayjs().startOf("day");
+    const eff = record.effective_date ? dayjs(record.effective_date).startOf("day") : null;
+    const exp = record.expiry_date ? dayjs(record.expiry_date).startOf("day") : null;
+    if (!eff && !exp) return "none";
+    if (eff && eff.isAfter(today)) return "pending";
+    if (exp && exp.isBefore(today)) return "expired";
+    return "valid";
+  };
+
+  const validityMeta: Record<Validity, { text: string; color: string }> = {
+    valid: { text: t("mrp.boms.validityValid"), color: "success" },
+    expired: { text: t("mrp.boms.validityExpired"), color: "error" },
+    pending: { text: t("mrp.boms.validityPending"), color: "warning" },
+    none: { text: t("mrp.boms.validityNone"), color: "default" },
+  };
+
+  const filteredBoms = useMemo(() => {
+    const kw = searchTerm.trim().toLowerCase();
+    return boms.filter((b) => {
+      if (kw) {
+        const p = products.find((x) => x.id === b.product_id);
+        const hay = `${b.bom_no ?? ""} ${p?.code ?? ""} ${p?.name ?? ""}`.toLowerCase();
+        if (!hay.includes(kw)) return false;
+      }
+      if (statusFilter === "active" && !b.is_active) return false;
+      if (statusFilter === "inactive" && b.is_active) return false;
+      if (phantomFilter === "phantom" && !b.is_phantom) return false;
+      if (phantomFilter === "physical" && b.is_phantom) return false;
+      if (validityFilter !== "all" && validityOf(b) !== validityFilter) return false;
+      const cnt = detailCountMap[b.id] ?? 0;
+      if (detailFilter === "empty" && cnt > 0) return false;
+      if (detailFilter === "has" && cnt === 0) return false;
+      return true;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boms, searchTerm, products, statusFilter, phantomFilter, validityFilter, detailFilter, detailCountMap]);
 
   const columns = [
     {
@@ -445,6 +601,50 @@ export function Boms() {
           {isActive ? t("common.enabled") : t("mrp.inactive")}
         </Tag>
       ),
+    },
+    {
+      title: t("mrp.boms.detailCount"),
+      key: "detail_count",
+      width: 110,
+      sorter: (a: Bom, b: Bom) => listDetailCount(a.id) - listDetailCount(b.id),
+      render: (_: any, record: Bom) => {
+        const cnt = listDetailCount(record.id);
+        return cnt > 0 ? (
+          <span>{cnt}</span>
+        ) : (
+          <Tag color="red">{t("mrp.boms.emptyTag")}</Tag>
+        );
+      },
+    },
+    {
+      title: t("mrp.boms.type"),
+      key: "is_phantom",
+      width: 100,
+      render: (_: any, record: Bom) =>
+        record.is_phantom ? (
+          <Tooltip title={t("mrp.boms.phantomHint")}>
+            <Tag color="purple">{t("mrp.boms.phantomItem")}</Tag>
+          </Tooltip>
+        ) : (
+          <Tag>{t("mrp.boms.physicalItem")}</Tag>
+        ),
+    },
+    {
+      title: t("mrp.boms.validity"),
+      key: "validity",
+      width: 230,
+      render: (_: any, record: Bom) => {
+        const meta = validityMeta[validityOf(record)];
+        const range = [record.effective_date, record.expiry_date]
+          .filter(Boolean)
+          .join(" ~ ");
+        return (
+          <Space size={6}>
+            <Tag color={meta.color}>{meta.text}</Tag>
+            <span style={{ color: "#999", fontSize: 12 }}>{range || "-"}</span>
+          </Space>
+        );
+      },
     },
     {
       title: t("common.actions"),
@@ -553,13 +753,57 @@ export function Boms() {
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
               {t("mrp.boms.add")}
             </Button>
+            <Button icon={<ReloadOutlined />} onClick={() => void refreshAll()}>
+              {t("common.refresh")}
+            </Button>
+            <Select
+              value={statusFilter}
+              style={{ width: 130 }}
+              onChange={setStatusFilter}
+              options={[
+                { value: "all", label: t("mrp.boms.filterAllStatus") },
+                { value: "active", label: t("common.enabled") },
+                { value: "inactive", label: t("mrp.inactive") },
+              ]}
+            />
+            <Select
+              value={validityFilter}
+              style={{ width: 150 }}
+              onChange={setValidityFilter}
+              options={[
+                { value: "all", label: t("mrp.boms.filterAllValidity") },
+                { value: "valid", label: t("mrp.boms.validityValid") },
+                { value: "expired", label: t("mrp.boms.validityExpired") },
+                { value: "pending", label: t("mrp.boms.validityPending") },
+                { value: "none", label: t("mrp.boms.validityNone") },
+              ]}
+            />
+            <Select
+              value={phantomFilter}
+              style={{ width: 130 }}
+              onChange={setPhantomFilter}
+              options={[
+                { value: "all", label: t("mrp.boms.filterAllType") },
+                { value: "phantom", label: t("mrp.boms.phantomItem") },
+                { value: "physical", label: t("mrp.boms.physicalItem") },
+              ]}
+            />
+            <Select
+              value={detailFilter}
+              style={{ width: 150 }}
+              onChange={setDetailFilter}
+              options={[
+                { value: "all", label: t("mrp.boms.filterAllDetail") },
+                { value: "empty", label: t("mrp.boms.filterEmptyDetail") },
+                { value: "has", label: t("mrp.boms.filterHasDetail") },
+              ]}
+            />
             <Input.Search
               allowClear
               placeholder={t("mrp.boms.searchPlaceholder")}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              onSearch={fetchBoms}
-              style={{ width: 240 }}
+              style={{ width: 180 }}
             />
           </Space>
         }
@@ -654,10 +898,51 @@ export function Boms() {
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("mrp.boms.effectiveDate")} name="effective_date">
+                <Form.Item
+                  label={t("mrp.boms.effectiveDate")}
+                  name="effective_date"
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        const exp = getFieldValue("expiry_date");
+                        if (
+                          value &&
+                          exp &&
+                          dayjs(exp).startOf("day").isBefore(dayjs(value).startOf("day"))
+                        ) {
+                          return Promise.reject(
+                            new Error(t("mrp.boms.expiryBeforeEffective")),
+                          );
+                        }
+                        return Promise.resolve();
+                      },
+                    }),
+                  ]}
+                >
                   <DatePicker style={{ width: "100%" }} />
                 </Form.Item>
-                <Form.Item label={t("mrp.boms.expiryDate")} name="expiry_date">
+                <Form.Item
+                  label={t("mrp.boms.expiryDate")}
+                  name="expiry_date"
+                  dependencies={["effective_date"]}
+                  rules={[
+                    ({ getFieldValue }) => ({
+                      validator(_, value) {
+                        const eff = getFieldValue("effective_date");
+                        if (
+                          value &&
+                          eff &&
+                          dayjs(value).startOf("day").isBefore(dayjs(eff).startOf("day"))
+                        ) {
+                          return Promise.reject(
+                            new Error(t("mrp.boms.expiryBeforeEffective")),
+                          );
+                        }
+                        return Promise.resolve();
+                      },
+                    }),
+                  ]}
+                >
                   <DatePicker style={{ width: "100%" }} />
                 </Form.Item>
                 <Form.Item label={t("mrp.boms.remark")} name="remark">
@@ -667,7 +952,17 @@ export function Boms() {
                   label={t("common.enabled")}
                   name="is_active"
                   valuePropName="checked"
-                  initialValue={true}
+                  initialValue={false}
+                  tooltip={t("mrp.boms.draftHint")}
+                >
+                  <Checkbox />
+                </Form.Item>
+                <Form.Item
+                  label={t("mrp.boms.phantom")}
+                  name="is_phantom"
+                  valuePropName="checked"
+                  initialValue={false}
+                  tooltip={t("mrp.boms.phantomHint")}
                 >
                   <Checkbox />
                 </Form.Item>
@@ -688,18 +983,36 @@ export function Boms() {
             type="link"
             size="small"
             onClick={handleAddDetail}
+            disabled={!editingBom && !selectedBom}
             icon={<PlusOutlined />}
           >
             {t("mrp.boms.addItem")}
           </Button>
         }
         tableEle={
-          <Table
-            columns={detailColumns}
-            dataSource={details}
-            rowKey="id"
-            pagination={false}
-          />
+          <>
+            {!editingBom && !selectedBom ? (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginBottom: 8 }}
+                message={t("mrp.boms.saveHeaderFirst")}
+              />
+            ) : details.length === 0 ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 8 }}
+                message={t("mrp.boms.emptyDetailAlert")}
+              />
+            ) : null}
+            <Table
+              columns={detailColumns}
+              dataSource={details}
+              rowKey="id"
+              pagination={false}
+            />
+          </>
         }
         footer={
           <Space>

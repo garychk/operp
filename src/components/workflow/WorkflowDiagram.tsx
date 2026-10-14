@@ -159,13 +159,18 @@ const ensureShapeRegistered = (theme: WorkflowCanvasTheme, colors: (typeof WORKF
 
 export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onSelectNode, onSelectEdge, onNodeMove, onEdgeChange, height }: WorkflowDiagramProps) {
   const { t } = useTranslation();
+  const isDark = useIsDarkTheme();
+  const canvasColors = useMemo(
+    () => (isDark ? WORKFLOW_CANVAS_COLORS.dark : WORKFLOW_CANVAS_COLORS.light),
+    [isDark],
+  );
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const model = useMemo(() => buildGraphModel(nodes, edges), [nodes, edges]);
 
   useEffect(() => {
     if (!containerRef.current) return;
-    ensureShapeRegistered();
+    ensureShapeRegistered(isDark ? 'dark' : 'light', canvasColors);
     graphRef.current?.dispose();
     graphRef.current = null;
     if (!model.nodes.length) return;
@@ -175,10 +180,14 @@ export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onS
       container: containerRef.current,
       width: containerRef.current.clientWidth || 900,
       height: typeof height === 'number' ? Math.max(containerRef.current.clientHeight || 0, height) : containerRef.current.clientHeight || Math.max(320, model.height),
-      grid: { size: 10, visible: true, type: 'mesh', args: { color: '#eef2f6', thickness: 1 } },
-      background: { color: '#fafafa' },
+      grid: { size: 10, visible: true, type: 'mesh', args: { color: canvasColors.grid, thickness: 1 } },
+      background: { color: canvasColors.background },
       interacting: { nodeMovable: true, edgeMovable: true, vertexMovable: true, arrowheadMovable: false },
-      panning: { enabled: true, eventTypes: ['rightMouseDown', 'mouseWheel'] },
+      // 平移画布：左键拖空白区、右键拖、滚轮（不按 ctrl 时滚轮＝平移，ctrl+滚轮＝缩放）。
+      // 原来只开了 rightMouseDown + mouseWheel，左键在空白处拖拽完全没反应。
+      // x6 的平移只在 blank:mousedown / node:unhandled:mousedown 上启动，所以节点
+      // 拖动与端口拉线不受影响（与 BOM 结构画布同款改法，已实测）。
+      panning: { enabled: true, eventTypes: ['leftMouseDown', 'rightMouseDown', 'mouseWheel'] },
       mousewheel: { enabled: true, modifiers: 'ctrl', factor: 1.1, minScale: 0.5, maxScale: 1.5 },
       connecting: {
         allowMulti: false,
@@ -208,12 +217,12 @@ export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onS
         ],
         attrs: {
           body: {
-            stroke: node.key === selectedKey ? '#1677ff' : node.kind === 'condition' ? '#fa8c16' : node.kind === 'start' ? '#52c41a' : node.kind === 'end' ? '#722ed1' : '#d9d9d9',
-            fill: node.kind === 'condition' ? '#fff7e6' : '#fff',
+            stroke: node.key === selectedKey ? canvasColors.nodeStrokeSelected : node.kind === 'condition' ? canvasColors.nodeStrokeCondition : node.kind === 'start' ? canvasColors.nodeStrokeStart : node.kind === 'end' ? canvasColors.nodeStrokeEnd : canvasColors.nodeStroke,
+            fill: node.kind === 'condition' ? canvasColors.nodeFillCondition : canvasColors.nodeFill,
           },
-          title: { text: node.title },
-          subtitle: { text: node.subtitle },
-          tag: { text: node.tag },
+          title: { text: node.title, fill: canvasColors.title },
+          subtitle: { text: node.subtitle, fill: canvasColors.subtitle },
+          tag: { text: node.tag, fill: canvasColors.tag },
         },
       });
     });
@@ -225,8 +234,8 @@ export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onS
         source: { cell: edge.source, port: edge.sourcePort || `${edge.source}-bottom` },
         target: { cell: edge.target, port: edge.targetPort || `${edge.target}-top` },
         data: edge,
-        attrs: { line: { stroke: edge.color || (edge.kind === 'default' ? '#91a4b7' : edge.kind === 'false' ? '#f59e0b' : '#1677ff'), strokeWidth: selectedEdgeId === edge.id ? 3 : 2, strokeDasharray: edge.lineStyle === 'dashed' || (!edge.lineStyle && edge.kind !== 'default') ? '6 4' : '0' } },
-        labels: edge.label ? [{ attrs: { text: { text: edge.label, fill: '#475467', fontSize: 11, fontWeight: 500 }, rect: { fill: '#fff', stroke: 'none' } } }] : [],
+        attrs: { line: { stroke: edge.color || (edge.kind === 'default' ? canvasColors.edgeStroke : edge.kind === 'false' ? '#f59e0b' : '#1677ff'), strokeWidth: selectedEdgeId === edge.id ? 3 : 2, strokeDasharray: edge.lineStyle === 'dashed' || (!edge.lineStyle && edge.kind !== 'default') ? '6 4' : '0' } },
+        labels: edge.label ? [{ attrs: { text: { text: edge.label, fill: canvasColors.labelText, fontSize: 11, fontWeight: 500 }, rect: { fill: canvasColors.labelBg, stroke: 'none' } } }] : [],
       });
     });
 
@@ -242,7 +251,7 @@ export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onS
       graph.dispose();
       graphRef.current = null;
     };
-  }, [model, onSelectEdge, onSelectNode, onNodeMove, onEdgeChange, selectedEdgeId, selectedKey, height]);
+  }, [model, onSelectEdge, onSelectNode, onNodeMove, onEdgeChange, selectedEdgeId, selectedKey, height, canvasColors]);
 
   return nodes.length ? <div ref={containerRef} style={{ width: '100%', height: '100%' }} /> : <Empty description={t('workflow.flow.empty')} />;
 }

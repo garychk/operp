@@ -846,6 +846,9 @@ export function MaterialReturns() {
                     ))}
                   </Select>
                 </Form.Item>
+                <Form.Item label={t("mrp.materialReturns.reason")} name="reason">
+                  <Input.TextArea rows={1} placeholder={t("mrp.materialReturns.reasonPrompt")} />
+                </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item
@@ -891,10 +894,7 @@ export function MaterialReturns() {
                   </Select>
                 </Form.Item>
               </Col>
-            </Row>
-            <Form.Item label={t("mrp.materialReturns.reason")} name="reason">
-              <Input.TextArea rows={2} placeholder={t("mrp.materialReturns.reasonPrompt")} />
-            </Form.Item>
+            </Row>            
             <Form.Item label={t("mrp.materialReturns.remark")} name="remark">
               <Input.TextArea rows={2} placeholder={t("mrp.materialReturns.remarkPrompt")} />
             </Form.Item>

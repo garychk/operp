@@ -7,7 +7,9 @@ import { supabase } from "../utils/supabase";
 import type { Tables } from "../utils/supabase";
 import { useUoms, buildUomOptions, productUnitText, normalizeUnitText } from "../hooks/useUoms";
 
-type BomRow = Tables["erp_boms_s_539dcf81_b"]["Row"];
+// is_phantom 已在线上表中（mrpService / mrpEngine 在消费），但生成的
+// src/types/database.ts 没有这一列 —— 这里用交叉类型补上，不改生成文件。
+type BomRow = Tables["erp_boms_s_539dcf81_b"]["Row"] & { is_phantom?: boolean | null };
 type BomDetailRow = Tables["erp_bom_details_s_539dcf81_b"]["Row"];
 type ProductRow = Tables["erp_products_s_539dcf81_b"]["Row"];
 type OperationRow = Tables["erp_operations_s_539dcf81_b"]["Row"];
@@ -27,6 +29,8 @@ type BomTreeNode = {
   detailId?: number | null;
   bom?: BomRow | null;
   detail?: BomDetailRow | null;
+  /** 母件虚拟件标记，仅 bom 节点有；用于节点右上角 tag 与左侧表单回显 */
+  isPhantom?: boolean;
   children?: BomTreeNode[];
 };
 
@@ -45,6 +49,7 @@ type DiagramNode = {
   bom?: BomRow | null;
   detail?: BomDetailRow | null;
   productId?: number | null;
+  isPhantom?: boolean;
 };
 
 type DiagramEdge = {
@@ -225,6 +230,7 @@ async function buildBomTree(materialCode: string, t: (key: string, options?: Rec
       bomId: bom?.id || null,
       bom,
       productId: product.id,
+      isPhantom: bom?.is_phantom ?? false,
       title: bom?.bom_no || product.code,
       subtitle: `${product.code} ${product.name}`,
       tag: `BOM L${level + 1}`,
@@ -280,7 +286,7 @@ function flattenTree(root: BomTreeNode | null, t: (key: string, options?: Record
     const column = node.type === "bom" ? 0 : 1;
     const x = 40 + column * COLUMN_GAP;
     const y = 24 + row * ROW_GAP;
-    nodes.push({ key: node.id, type: node.type, x, y, title: node.title, subtitle: node.subtitle, tag: node.tag, bomId: node.bomId, detailId: node.detailId, productId: node.productId });
+    nodes.push({ key: node.id, type: node.type, x, y, title: node.title, subtitle: node.subtitle, tag: node.tag, bomId: node.bomId, detailId: node.detailId, productId: node.productId, isPhantom: node.isPhantom });
     maxRow = Math.max(maxRow, row);
     (node.children || []).forEach((child, index) => {
       edges.push({
@@ -376,6 +382,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         unit: normalizeUnitText(bom?.unit, uomMap) || productUnitText(product, uomMap),
         is_default: bom?.is_default ?? false,
         is_active: bom?.is_active ?? false,
+        is_phantom: bom?.is_phantom ?? false,
         effective_date: bom?.effective_date ? dayjs(bom.effective_date) : null,
         expiry_date: bom?.expiry_date ? dayjs(bom.expiry_date) : null,
         remark: bom?.remark ?? selectedNode.subtitle,
@@ -451,7 +458,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         },
         title: { text: node.title, fill: selectedNode?.id === node.key ? canvasColors.titleActive : canvasColors.title },
         subtitle: { text: node.subtitle, fill: canvasColors.subtitle },
-        tag: { text: node.type === "bom" ? "BOM" : "DETAIL", fill: selectedNode?.id === node.key ? canvasColors.tagActive : canvasColors.tag },
+        tag: { text: node.type === "bom" ? (node.isPhantom ? `BOM · ${t("bomTree.field.phantom")}` : "BOM") : "DETAIL", fill: selectedNode?.id === node.key ? canvasColors.tagActive : canvasColors.tag },
       },
     }));
     model.edges.forEach((edge) => graph.addEdge({
@@ -505,6 +512,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
         version: "1.0",
         is_default: false,
         is_active: true,
+        is_phantom: false,
       });
     }
     setCreateModalOpen(true);
@@ -557,6 +565,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
           unit: values.unit || productUnitText(product, uomMap) || null,
           is_default: values.is_default ?? false,
           is_active: values.is_active ?? true,
+          is_phantom: values.is_phantom ?? false,
           effective_date: values.effective_date ? dayjs(values.effective_date).format("YYYY-MM-DD") : null,
           expiry_date: values.expiry_date ? dayjs(values.expiry_date).format("YYYY-MM-DD") : null,
           remark: values.remark || `Auto created from BOM tree`,
@@ -586,6 +595,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
             <Form.Item label={t("bomTree.field.version")} name="version"><Input /></Form.Item>
             <Form.Item label={t("bomTree.field.quantity")} name="quantity"><InputNumber style={{ width: "100%" }} /></Form.Item>
             <Form.Item label={t("bomTree.field.unit")} name="unit"><Select showSearch optionFilterProp="label" options={uomOptions} placeholder={t("bomTree.field.unitPrompt")} allowClear /></Form.Item>
+            <Form.Item label={t("bomTree.field.phantom")} name="is_phantom" valuePropName="checked" tooltip={t("mrp.boms.phantomHint")}><Checkbox /></Form.Item>
             <Form.Item label={t("bomTree.field.remark")} name="remark"><Input.TextArea rows={4} /></Form.Item>
             <Button type="primary" block onClick={handleSaveSelected} disabled={!selectedNode || selectedNode.type !== "bom"}>{t("bomTree.action.saveHeader")}</Button>
           </Form>
@@ -745,7 +755,11 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
                 </Col>
               </Row>
               <Row gutter={16}>
-                
+                <Col span={12}>
+                  <Form.Item label={t("bomTree.field.phantom")} name="is_phantom" valuePropName="checked" tooltip={t("mrp.boms.phantomHint")}>
+                    <Checkbox />
+                  </Form.Item>
+                </Col>
               </Row>
               <Row gutter={16}>
                 <Col span={24}>
