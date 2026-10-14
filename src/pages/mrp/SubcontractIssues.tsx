@@ -36,6 +36,7 @@ import { SuperTable } from "../../components/SuperTable";
 import { useCurrencyRegistry } from "../../utils/money";
 import { SupaModal } from "../../components/SupaModal";
 import SimpleModal from "../../components/SimpleModal";
+import { WarehouseBinSelect } from "../../components/WarehouseBinSelect";
 import dayjs from "dayjs";
 
 type SubcontractIssue = Tables["erp_subcontract_issues_s_539dcf81_b"]["Row"];
@@ -1035,8 +1036,35 @@ export function SubcontractIssues() {
                     ))}
                   </Select>
                 </Form.Item>
+                <Form.Item label={t("mrp.subcontractIssues.remark")} name="remark">
+                  <Input.TextArea rows={2} />
+                </Form.Item>
               </Col>
-              <Col span={12}>
+              <Col span={12}>                
+                <Form.Item
+                  label={t("mrp.subcontractIssues.totalCost")}
+                  name="total_cost"
+                  initialValue={0}
+                >
+                  <InputNumber disabled precision={2} style={{ width: "100%" }} />
+                </Form.Item>
+                <Form.Item
+                  label={t("common.status")}
+                  name="status"
+                  initialValue="draft"
+                >
+                  <Select>
+                    <Option value="draft">
+                      {t("mrp.subcontractIssues.statusDraft")}
+                    </Option>
+                    <Option value="approved">
+                      {t("mrp.subcontractIssues.statusApproved")}
+                    </Option>
+                    <Option value="cancelled">
+                      {t("mrp.subcontractIssues.statusCancelled")}
+                    </Option>
+                  </Select>
+                </Form.Item>
                 <Form.Item
                   label={t("mrp.subcontractIssues.warehouse")}
                   name="warehouse_id"
@@ -1064,47 +1092,8 @@ export function SubcontractIssues() {
                   name="location_id"
                   extra={t("mrp.subcontractIssues.locationHint")}
                 >
-                  <Select allowClear showSearch optionFilterProp="children">
-                    {bins
-                      .filter(
-                        (b) =>
-                          headerWarehouseId == null ||
-                          b.warehouse_id === headerWarehouseId,
-                      )
-                      .map((b) => (
-                        <Option key={b.id} value={b.id}>
-                          {b.code} - {b.name}
-                        </Option>
-                      ))}
-                  </Select>
-                </Form.Item>
-                <Form.Item
-                  label={t("mrp.subcontractIssues.totalCost")}
-                  name="total_cost"
-                  initialValue={0}
-                >
-                  <InputNumber disabled precision={2} style={{ width: "100%" }} />
-                </Form.Item>
-                <Form.Item
-                  label={t("common.status")}
-                  name="status"
-                  initialValue="draft"
-                >
-                  <Select>
-                    <Option value="draft">
-                      {t("mrp.subcontractIssues.statusDraft")}
-                    </Option>
-                    <Option value="approved">
-                      {t("mrp.subcontractIssues.statusApproved")}
-                    </Option>
-                    <Option value="cancelled">
-                      {t("mrp.subcontractIssues.statusCancelled")}
-                    </Option>
-                  </Select>
-                </Form.Item>
-                <Form.Item label={t("mrp.subcontractIssues.remark")} name="remark">
-                  <Input.TextArea rows={2} />
-                </Form.Item>
+                  <WarehouseBinSelect warehouseId={headerWarehouseId} />
+                </Form.Item>                
               </Col>
             </Row>
           </Form>

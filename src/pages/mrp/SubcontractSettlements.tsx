@@ -641,6 +641,12 @@ export function SubcontractSettlements() {
                     ))}
                   </Select>
                 </Form.Item>
+                <Form.Item
+                  label={t("mrp.subcontractSettlements.remark")}
+                  name="remark"
+                >
+                  <Input.TextArea rows={2} />
+                </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item
@@ -746,13 +752,7 @@ export function SubcontractSettlements() {
                       {t("mrp.subcontractSettlements.statusConfirmed")}
                     </Option>
                   </Select>
-                </Form.Item>
-                <Form.Item
-                  label={t("mrp.subcontractSettlements.remark")}
-                  name="remark"
-                >
-                  <Input.TextArea rows={2} />
-                </Form.Item>
+                </Form.Item>                
               </Col>
             </Row>
           </Form>

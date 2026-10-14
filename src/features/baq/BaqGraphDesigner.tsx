@@ -14,6 +14,7 @@ import {
   Button,
   Card,
   Checkbox,
+  ConfigProvider,
   Empty,
   Input,
   Modal,
@@ -21,6 +22,7 @@ import {
   Space,
   Switch,
   Tag,
+  theme as antdTheme,
   Tooltip,
   Typography,
   message,
@@ -156,6 +158,45 @@ const shortType = (type: string) => {
     return "number";
   return raw.slice(0, 8);
 };
+
+/** ProLayout 把暗色开关写在 <html data-erp-dark> 上；画布（X6 背景/网格/连线标签）
+ *  和 foreignObject 里的 React root 都拿不到全局 ConfigProvider，需要自己跟随它切换。 */
+function useIsDarkTheme() {
+  const [isDark, setIsDark] = useState(
+    () => document.documentElement.getAttribute("data-erp-dark") === "true",
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setIsDark(root.getAttribute("data-erp-dark") === "true");
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ["data-erp-dark"] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
+/** 画布明暗两套取色：X6 的背景 / 网格 / 连线标签颜色只能走 JS，没法靠 CSS 继承 */
+const CANVAS_COLORS = {
+  light: {
+    background: "#fafafa",
+    grid: "#e6e6e6",
+    labelComplete: "#1677ff",
+    labelIncomplete: "#d46b08",
+    labelBody: "#fff",
+    labelBodyStrokeComplete: "#d6e4ff",
+    labelBodyStrokeIncomplete: "#ffe7ba",
+  },
+  dark: {
+    background: "#141414",
+    grid: "rgba(255, 255, 255, 0.18)",
+    labelComplete: "#4096ff",
+    labelIncomplete: "#ffc53d",
+    labelBody: "#1f1f1f",
+    labelBodyStrokeComplete: "rgba(77, 141, 255, 0.5)",
+    labelBodyStrokeIncomplete: "rgba(250, 173, 20, 0.5)",
+  },
+} as const;
 
 let baqShapeRegistered = false;
 
@@ -336,6 +377,8 @@ export function BaqGraphDesigner({
   patchDef,
 }: BaqGraphDesignerProps) {
   const { t, i18n } = useTranslation();
+  const isDark = useIsDarkTheme();
+  const canvasColors = isDark ? CANVAS_COLORS.dark : CANVAS_COLORS.light;
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const hostsRef = useRef(new Map<string, { root: Root; el: HTMLDivElement }>());
@@ -712,6 +755,18 @@ export function BaqGraphDesigner({
     };
   }, [hasMainTable]);
 
+  // ------------------------------------------------- 画布明暗主题（背景 / 网格）
+  // X6 的背景与网格是 JS 画出来的，切主题时重画；建图 effect 重跑后也要补一次。
+  useEffect(() => {
+    const graph = graphRef.current;
+    if (!graph) return;
+    graph.drawBackground({ color: canvasColors.background });
+    graph.drawGrid({
+      type: "dot",
+      args: { color: canvasColors.grid, thickness: 1 },
+    });
+  }, [isDark, hasMainTable, canvasColors]);
+
   // ------------------------------------------------- 结构同步（节点 / 连线 / 内容）
   useEffect(() => {
     const graph = graphRef.current;
@@ -781,7 +836,12 @@ export function BaqGraphDesigner({
         ? undefined
         : () => removeAliases([item.alias]);
       host.root.render(
-        <BaqTableCard
+        <ConfigProvider
+          theme={{
+            algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+          }}
+        >
+          <BaqTableCard
           alias={item.alias}
           table={item.table}
           label={labelOf(item.table)}
@@ -829,7 +889,8 @@ export function BaqGraphDesigner({
             level: depths.get(item.alias) ?? 1,
           })}
           fieldUnit={t("baqDesigner.graphFieldUnit")}
-        />,
+          />
+        </ConfigProvider>,
       );
     });
 
@@ -856,12 +917,14 @@ export function BaqGraphDesigner({
       const labelAttrs = {
         label: {
           text: label,
-          fill: complete ? "#1677ff" : "#d46b08",
+          fill: complete ? canvasColors.labelComplete : canvasColors.labelIncomplete,
           fontSize: 11,
         },
         body: {
-          fill: "#fff",
-          stroke: complete ? "#d6e4ff" : "#ffe7ba",
+          fill: canvasColors.labelBody,
+          stroke: complete
+            ? canvasColors.labelBodyStrokeComplete
+            : canvasColors.labelBodyStrokeIncomplete,
           strokeWidth: 1,
           rx: 3,
           ry: 3,
@@ -902,8 +965,9 @@ export function BaqGraphDesigner({
         AUTO_FIT_DELAY,
       );
     }
-    // 只随结构签名重跑；effect 闭包里的 definition / aliases 等都由该签名覆盖
-  }, [structureKey]);
+    // 只随结构签名重跑；effect 闭包里的 definition / aliases 等都由该签名覆盖。
+    // isDark 变化时也重跑一遍：连线标签的明暗配色在这里统一刷新。
+  }, [structureKey, isDark]);
 
   // -------------------------------------------------------------------- 交互
   const toggleJoin = (joinId: string, patch: Partial<BaqJoin>) => {
