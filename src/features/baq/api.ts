@@ -1,5 +1,5 @@
 import { supabase } from '../../utils/supabase';
-import type { BaqQuery, BaqResult, BaqTable } from './types';
+import type { BaqQuery, BaqRelation, BaqResult, BaqTable } from './types';
 
 export interface TableLabelRow { id: number; table_name: string; table_label: string; module_name: string }
 
@@ -10,6 +10,10 @@ export async function listBaqs(publishedOnly = false) {
 }
 export async function loadCatalog() {
   const { data, error } = await supabase.rpc('baq_catalog'); if (error) throw error; return (data || []) as BaqTable[];
+}
+/** 表间外键关系（deploy_120 的 baq_relations），图形化设计器用来推导可连的主子表 */
+export async function loadRelations() {
+  const { data, error } = await supabase.rpc('baq_relations'); if (error) throw error; return (data || []) as BaqRelation[];
 }
 export async function listTableLabels() {
   const { data, error } = await supabase.from('sys_tables').select('id, table_name, table_label, module_name').eq('is_deleted', 'n').eq('status', '1').order('module_name').order('table_name');

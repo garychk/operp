@@ -1,4 +1,5 @@
 import { loadCatalog, saveBaq } from "../features/baq/api";
+import { joinConditions, withJoinConditions } from "../features/baq/joinGraph";
 import type {
   Aggregate,
   BaqDefinition,
@@ -73,11 +74,18 @@ const validateDefinition = (definition: BaqDefinition, catalog: BaqTable[]) => {
     if (!join.table || !tables.has(join.table)) throw new Error(`关联表不存在：${join.table || "-"}`);
     if (tableByAlias.has(join.alias)) throw new Error(`表别名重复：${join.alias}`);
     if (!tableByAlias.has(join.leftAlias)) throw new Error(`关联左表别名不存在：${join.leftAlias}`);
-    if (!columnExists(catalog, tableByAlias, join.leftAlias, join.leftField)) {
-      throw new Error(`关联左字段不存在：${join.leftAlias}.${join.leftField}`);
+    // 关联条件：两端都可以是任意真实列（非主外键关联也允许，例如 code = code）
+    const conditions = joinConditions(join);
+    if (conditions.length === 0 || conditions.some((c) => !c.leftField || !c.rightField)) {
+      throw new Error(`关联条件不完整：${join.leftAlias} → ${join.alias}`);
     }
-    if (!tables.get(join.table)?.columns.some((column) => column.name === join.rightField)) {
-      throw new Error(`关联右字段不存在：${join.table}.${join.rightField}`);
+    for (const condition of conditions) {
+      if (!columnExists(catalog, tableByAlias, join.leftAlias, condition.leftField)) {
+        throw new Error(`关联左字段不存在：${join.leftAlias}.${condition.leftField}`);
+      }
+      if (!tables.get(join.table)?.columns.some((column) => column.name === condition.rightField)) {
+        throw new Error(`关联右字段不存在：${join.table}.${condition.rightField}`);
+      }
     }
     tableByAlias.set(join.alias, join.table);
   }
@@ -106,15 +114,34 @@ const validateDefinition = (definition: BaqDefinition, catalog: BaqTable[]) => {
 const normalizeDefinition = (raw: unknown): BaqDefinition => {
   const value = (raw || {}) as Partial<BaqDefinition>;
   const source = value.source || { table: "", alias: "t0" };
-  const joins = (value.joins || []).map((join) => ({
-    id: stringValue(join.id, uid()),
-    type: join.type === "inner" ? "inner" : "left",
-    table: stringValue(join.table),
-    alias: stringValue(join.alias),
-    leftAlias: stringValue(join.leftAlias, "t0"),
-    leftField: stringValue(join.leftField),
-    rightField: stringValue(join.rightField),
-  })) as BaqJoin[];
+  const joins = (value.joins || []).map((join) => {
+    const rawConditions = Array.isArray(join.conditions) ? join.conditions : [];
+    const conditions =
+      rawConditions.length > 0
+        ? rawConditions.map((condition) => ({
+            leftField: stringValue(condition?.leftField),
+            rightField: stringValue(condition?.rightField),
+          }))
+        : [
+            {
+              leftField: stringValue(join.leftField),
+              rightField: stringValue(join.rightField),
+            },
+          ];
+    // conditions 是完整条件列表，leftField / rightField 由 withJoinConditions 镜像首对
+    return withJoinConditions(
+      {
+        id: stringValue(join.id, uid()),
+        type: join.type === "inner" ? "inner" : "left",
+        table: stringValue(join.table),
+        alias: stringValue(join.alias),
+        leftAlias: stringValue(join.leftAlias, "t0"),
+        leftField: "",
+        rightField: "",
+      },
+      conditions,
+    );
+  }) as BaqJoin[];
   const fields = (value.fields || []).map((field) => ({
     id: stringValue(field.id, uid()),
     alias: stringValue(field.alias, stringValue(field.field)),
@@ -153,7 +180,9 @@ const requestStructuredBaq = async (prompt: string, provider: AIProviderConfig, 
     "你是 OPERP 的 BAQ 查询设计器。请根据用户描述设计一个可执行的 BAQ。",
     "只返回 JSON，不要 Markdown，不要解释。必须包含 name、code、description、definition。",
     "definition 必须包含 source、joins、fields、filters、sorts。",
-    "source: {table, alias}，主表别名固定为 t0；join: {type, table, alias, leftAlias, leftField, rightField}。",
+    "source: {table, alias}，主表别名固定为 t0。",
+    "join: {type, table, alias, leftAlias, leftField, rightField, conditions}；conditions 为 [{leftField,rightField},...]，多对字段用 AND 关联，leftField/rightField 等于 conditions[0]。",
+    "关联两端都可以选任意真实列，不限于外键：按业务编码关联时就写 code = code。",
     "field: {alias, field, groupBy, aggregate, tableAlias}，aggregate 只能是 none/sum/count/avg/min/max。",
     "filter: {tableAlias, field, operator, value}，operator 只能是 eq/neq/gt/gte/lt/lte/like/is_null/not_null。",
     "sort: {fieldAlias, direction}，direction 只能是 asc/desc。只能使用数据目录中的真实表和字段。",

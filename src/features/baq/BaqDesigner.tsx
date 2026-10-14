@@ -30,13 +30,25 @@ import {
   Typography,
   Tooltip,
 } from "antd";
-import { executeBaq, listBaqs, listTableLabels, loadCatalog, refreshSysTables, removeBaq, saveBaq, updateTableLabels } from "./api";
+import { executeBaq, listBaqs, listTableLabels, loadCatalog, loadRelations, refreshSysTables, removeBaq, saveBaq, updateTableLabels } from "./api";
 import type { TableLabelRow } from "./api";
+import { BaqGraphDesigner } from "./BaqGraphDesigner";
+import { JoinConditionEditor } from "./JoinConditionEditor";
+import {
+  isJoinComplete,
+  joinConditions,
+  nextAlias,
+  normalizeDefinition,
+  summarizeJoinConditions,
+  withJoinConditions,
+} from "./joinGraph";
+import { shortTableName } from "./tableLabel";
 import { emptyBaq } from "./types";
 import type {
   Aggregate,
   BaqDefinition,
   BaqQuery,
+  BaqRelation,
   BaqResult,
   BaqTable,
   FilterOperator,
@@ -67,8 +79,10 @@ export function BaqDesigner() {
   ];
   const [items, setItems] = useState<BaqQuery[]>([]);
   const [catalog, setCatalog] = useState<BaqTable[]>([]);
+  const [relations, setRelations] = useState<BaqRelation[]>([]);
   const [baq, setBaq] = useState<BaqQuery>(emptyBaq);
   const [result, setResult] = useState<BaqResult>();
+  const [activeTab, setActiveTab] = useState("graph");
   const [busy, setBusy] = useState(false);
   const [tableLabelOpen, setTableLabelOpen] = useState(false);
   const [tableLabels, setTableLabels] = useState<TableLabelRow[]>([]);
@@ -87,6 +101,11 @@ export function BaqDesigner() {
           t('baqDesigner.catalogLoadFailed', { message: e.message }),
         ),
       );
+    loadRelations()
+      .then(setRelations)
+      .catch(() =>
+        message.warning(t('baqDesigner.relationsLoadFailed')),
+      );
   }, []);
   const aliases = useMemo(
     () => [
@@ -98,10 +117,16 @@ export function BaqDesigner() {
     ],
     [baq.definition],
   );
-  const tableOptions = catalog.map((x) => ({
-    value: x.table,
-    label: `${x.label}`,
-  }));
+  const tableOptions = catalog.map((x) => {
+    const short = shortTableName(x.table);
+    const label = shortTableName(x.label);
+    return {
+      // value 必须是完整物理表名（落库、执行查询都用它），别去掉后缀
+      value: x.table,
+      title: x.table,
+      label: label && label !== short ? `${label} · ${short}` : short,
+    };
+  });
   const columns = (alias: string) =>
     catalog.find(
       (x) => x.table === aliases.find((a) => a.alias === alias)?.table,
@@ -114,7 +139,13 @@ export function BaqDesigner() {
   const save = async (status = baq.status) => {
     setBusy(true);
     try {
-      const saved = await saveBaq({ ...baq, status });
+      // 保存前把 joins 排成依赖顺序：多级关联下，手工编辑 / 历史数据都可能留下
+      // 「子表排在父表前面」，那样生成的 SQL 会引用尚未出现的别名而报错。
+      const saved = await saveBaq({
+        ...baq,
+        definition: normalizeDefinition(baq.definition),
+        status,
+      });
       setBaq(saved);
       await refresh();
       message.success(
@@ -135,6 +166,8 @@ export function BaqDesigner() {
     setBusy(true);
     try {
       setResult(await executeBaq(saved.code));
+      // 预览结果在末页签，执行完直接切过去，否则用户看不到结果
+      setActiveTab("result");
     } catch (e) {
       message.error(e instanceof Error ? e.message : t('baqDesigner.executeFailed'));
     } finally {
@@ -275,7 +308,7 @@ export function BaqDesigner() {
           </Space>
         }
       >
-        <Form layout="vertical">
+        <Form layout="horizontal">
           <div className="baq-meta">
             <Form.Item label={t('common.name')} required>
               <Input
@@ -301,7 +334,22 @@ export function BaqDesigner() {
           </div>
         </Form>
         <Tabs
+          activeKey={activeTab}
+          onChange={setActiveTab}
+          tabPlacement="start"
           items={[
+            {
+              key: "graph",
+              label: t('baqDesigner.graphTab'),
+              children: (
+                <BaqGraphDesigner
+                  definition={baq.definition}
+                  catalog={catalog}
+                  relations={relations}
+                  patchDef={patchDef}
+                />
+              ),
+            },
             {
               key: "source",
               label: t('baqDesigner.sourceTab'),
@@ -331,6 +379,27 @@ export function BaqDesigner() {
                     pagination={false}
                     rowKey="id"
                     dataSource={baq.definition.joins}
+                    expandable={{
+                      // 多字段关联条件在展开行里编辑（左/右字段可选任意列，不限外键）
+                      expandedRowRender: (r, i) => (
+                        <JoinConditionEditor
+                          compact
+                          conditions={joinConditions(r)}
+                          leftAlias={r.leftAlias}
+                          rightAlias={r.alias}
+                          leftColumns={columns(r.leftAlias)}
+                          rightColumns={columns(r.alias)}
+                          onChange={(conditions) =>
+                            patchDef({
+                              joins: baq.definition.joins.map((x, n) =>
+                                n === i ? withJoinConditions(x, conditions) : x,
+                              ),
+                            })
+                          }
+                        />
+                      ),
+                      rowExpandable: () => true,
+                    }}
                     columns={[
                       {
                         title: t('common.type'),
@@ -405,49 +474,25 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: t('baqDesigner.leftField'),
-                        width: 260,
-                        render: (_, r, i) => (
-                          <Select
-                            className="join-field-select"
-                            showSearch
-                            value={r.leftField}
-                            options={columns(r.leftAlias).map((c) => ({
-                              value: c.name,
-                              label: c.name,
-                            }))}
-                            style={{ width: 260 }}
-                            onChange={(leftField) =>
-                              patchDef({
-                                joins: baq.definition.joins.map((x, n) =>
-                                  n === i ? { ...x, leftField } : x,
-                                ),
-                              })
-                            }
-                          />
-                        ),
-                      },
-                      {
-                        title: t('baqDesigner.rightField'),
-                        width: 260,
-                        render: (_, r, i) => (
-                          <Select
-                            className="join-field-select"
-                            showSearch
-                            value={r.rightField}
-                            style={{ width: 260 }}
-                            options={(
-                              catalog.find((x) => x.table === r.table)
-                                ?.columns || []
-                            ).map((c) => ({ value: c.name, label: c.name }))}
-                            onChange={(rightField) =>
-                              patchDef({
-                                joins: baq.definition.joins.map((x, n) =>
-                                  n === i ? { ...x, rightField } : x,
-                                ),
-                              })
-                            }
-                          />
+                        title: t('baqDesigner.joinConditions'),
+                        width: 320,
+                        render: (_, r) => (
+                          <Space size={4}>
+                            <span
+                              className="baq-join-summary"
+                              title={summarizeJoinConditions(r)}
+                            >
+                              {summarizeJoinConditions(r)}
+                            </span>
+                            {joinConditions(r).length > 1 && (
+                              <Tag color="blue">{joinConditions(r).length}</Tag>
+                            )}
+                            {!isJoinComplete(r) && (
+                              <Tag color="orange">
+                                {t('baqDesigner.graphJoinIncomplete')}
+                              </Tag>
+                            )}
+                          </Space>
                         ),
                       },
                       {
@@ -464,15 +509,21 @@ export function BaqDesigner() {
                       patchDef({
                         joins: [
                           ...baq.definition.joins,
-                          {
-                            id: uid(),
-                            type: "left",
-                            table: "",
-                            alias: `t${baq.definition.joins.length + 1}`,
-                            leftAlias: "t0",
-                            leftField: "id",
-                            rightField: "id",
-                          },
+                          withJoinConditions(
+                            {
+                              id: uid(),
+                              type: "left",
+                              table: "",
+                              alias: nextAlias([
+                                baq.definition.source.alias,
+                                ...baq.definition.joins.map((x) => x.alias),
+                              ]),
+                              leftAlias: "t0",
+                              leftField: "",
+                              rightField: "",
+                            },
+                            [{ leftField: "", rightField: "" }],
+                          ),
                         ],
                       })
                     }
@@ -695,6 +746,7 @@ export function BaqDesigner() {
                         title: t('baqDesigner.condition'),
                         render: (_, r, i) => (
                           <Select
+                          className="wide"
                             value={r.operator}
                             options={operatorOptions}
                             onChange={(operator: FilterOperator) =>
@@ -828,41 +880,45 @@ export function BaqDesigner() {
                 </>
               ),
             },
+            {
+              key: "result",
+              label: t('baqDesigner.resultPreview'),
+              children: (
+                <div className="baq-result-tab">
+                  {result && (
+                    <div className="baq-result-summary">
+                      <Typography.Text type="secondary">
+                        {t('baqDesigner.resultSummary', { total: result.total })}
+                      </Typography.Text>
+                    </div>
+                  )}
+                  {result ? (
+                    <Table
+                      className="baq-result-table"
+                      size="small"
+                      rowKey={(_, i) => String(i)}
+                      scroll={{
+                        x: Math.max(baq.definition.fields.length * 180, 900),
+                        y: 420,
+                      }}
+                      dataSource={result.rows}
+                      columns={baq.definition.fields.map((field) => ({
+                        title: field.alias || field.field,
+                        dataIndex: field.alias || field.field,
+                        key: field.id,
+                        width: 180,
+                        ellipsis: true,
+                      }))}
+                      pagination={false}
+                    />
+                  ) : (
+                    <Empty description={t('baqDesigner.emptyPreviewHint')} />
+                  )}
+                </div>
+              ),
+            },
           ]}
         />
-      </Card>
-      <Card
-        title={t('baqDesigner.resultPreview')}
-        extra={
-          result && (
-            <Typography.Text type="secondary">
-              {t('baqDesigner.resultSummary', { total: result.total })}
-            </Typography.Text>
-          )
-        }
-      >
-        {result ? (
-          <Table
-            className="baq-result-table"
-            size="small"
-            rowKey={(_, i) => String(i)}
-            scroll={{
-              x: Math.max(baq.definition.fields.length * 180, 900),
-              y: 420,
-            }}
-            dataSource={result.rows}
-            columns={baq.definition.fields.map((field) => ({
-              title: field.alias || field.field,
-              dataIndex: field.alias || field.field,
-              key: field.id,
-              width: 180,
-              ellipsis: true,
-            }))}
-            pagination={false}
-          />
-        ) : (
-          <Empty description={t('baqDesigner.emptyPreviewHint')} />
-        )}
       </Card>
       <Modal
         title={t('baqDesigner.tableLabelsMaintenance')}
