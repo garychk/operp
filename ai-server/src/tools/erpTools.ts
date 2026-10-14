@@ -4,6 +4,9 @@ import { TenantScopeError } from "../config/tenantContext.js";
 import type { AiChatRequest, AiGraphState } from "../ai/state.js";
 import { createPendingAction, PENDING_ACTION_TTL_MINUTES } from "../services/pendingActions.js";
 import { logAiOperation } from "../services/aiAudit.js";
+import { resolveColumnLabels } from "../services/columnLabels.js";
+import { normalizeUiLocale } from "../services/locale.js";
+import { toolText } from "../services/toolText.js";
 import {
   baseTableName,
   evaluateDeletePolicy,
@@ -1096,6 +1099,8 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
   const tenantId = requireTenantId(state);
   const catalog = await loadBaqCatalog();
   const selectedCatalog = pickAnalysisCatalog(catalog, state);
+  const uiLocale = normalizeUiLocale(state.locale);
+  const uiLanguage = uiLocale === "en" ? "English" : "简体中文";
   const prompt = [
     "你是 OPERP 业务分析 SQL 生成器。",
     "目标：根据用户问题，自动判断要分析什么业务，挑选合适的表和字段，生成只读 SQL，然后用于统计分析。",
@@ -1104,6 +1109,9 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
     "只返回 JSON，不要 Markdown，不要解释。",
     "输出格式：{\"title\":\"...\",\"sql\":\"...\",\"explanation\":\"...\",\"responseMode\":\"text|table|card\",\"target\":\"...\",\"queryMode\":\"count|list|summary|detail|trend|compare|exception|answer\"}",
     "sql 必须是单条 SELECT 或 WITH 查询，只读，不允许 INSERT/UPDATE/DELETE。",
+    `界面语言：${uiLanguage} —— title 与 explanation 必须用 ${uiLanguage} 书写。`,
+    "explanation 用业务语言说明分析口径（查了什么、怎么分组、怎么排序），" +
+      "不要出现物理表名（erp_*）、英文字段名或带下划线的标识符，改用业务名词（如「商品」「仓库」「库存成本」）。",
     `本次查询的租户 tenant_id = ${tenantId}。`,
     `【强制】SQL 中每引用一张 erp_ 业务表，都必须给该表加过滤条件 tenant_id = ${tenantId}；`,
     `多表 JOIN 时每张表都要各加一次，用表别名限定，例如 t0.tenant_id = ${tenantId} AND t1.tenant_id = ${tenantId}。`,
@@ -1163,10 +1171,27 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
   const isSingleValue =
     previewRows.length === 1 && columns.length === 1 && typeof previewRows[0][columns[0]] !== "object";
 
+  /**
+   * 列名本地化：SQL 的列名是英文字段名，直接当表头展示对用户不友好，
+   * 也跟不上界面语言。这里让模型按界面语言给出业务列名（失败自动退回原名）。
+   * 单值结果没有表头，省掉这次调用。
+   */
+  const columnLabels = isSingleValue
+    ? {}
+    : await resolveColumnLabels(columns, {
+        locale: state.locale,
+        provider: state.provider,
+        context: {
+          businessHint: plan.target || state.target || state.domain,
+          tables: selectedCatalog.map((item) => item.table),
+        },
+      });
+  const labelOf = (header: string) => columnLabels[header] || header;
+
   const renderTable = (dataRows: Array<Record<string, unknown>>) => {
-    if (!dataRows.length) return "暂无数据。";
+    if (!dataRows.length) return uiLocale === "en" ? "No data." : "暂无数据。";
     const headers = Object.keys(dataRows[0]);
-    const headerLine = `| ${headers.join(" | ")} |`;
+    const headerLine = `| ${headers.map((header) => labelOf(header)).join(" | ")} |`;
     const separator = `| ${headers.map(() => "---").join(" | ")} |`;
     const body = dataRows
       .map((row) => `| ${headers.map((header) => String(row[header] ?? "")).join(" | ")} |`)
@@ -1175,12 +1200,16 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
   };
 
   const reply = isSingleValue
-    ? `${plan.title || "分析结果"}：${String(previewRows[0][columns[0]])}`
+    ? `${plan.title || (uiLocale === "en" ? "Result" : "分析结果")}：${String(previewRows[0][columns[0]])}`
     : [
-        plan.title ? `# ${plan.title}` : "# 业务分析结果",
+        plan.title ? `# ${plan.title}` : `# ${uiLocale === "en" ? "Analysis result" : "业务分析结果"}`,
         plan.explanation ? `\n${plan.explanation}` : "",
         "\n" + renderTable(previewRows),
-        rows.length > previewRows.length ? `\n\n已显示前 ${previewRows.length} 条，共 ${rows.length} 条。` : "",
+        rows.length > previewRows.length
+          ? uiLocale === "en"
+            ? `\n\nShowing first ${previewRows.length} of ${rows.length} rows.`
+            : `\n\n已显示前 ${previewRows.length} 条，共 ${rows.length} 条。`
+          : "",
       ].join("\n");
 
   return {
@@ -1193,6 +1222,7 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
       responseMode: plan.responseMode || state.responseMode,
       rowCount: rows.length,
       rows: previewRows,
+      columnLabels,
       catalog: selectedCatalog.map((item) => ({ table: item.table, label: item.label })),
     },
     focus: {
@@ -1244,6 +1274,7 @@ export async function countMasterDataTool(state: AiGraphState): Promise<ToolResu
 
 export async function financeSummaryTool(state: AiGraphState): Promise<ToolResult> {
   const tenantId = requireTenantId(state);
+  const tt = toolText(state.locale);
   const [receivablesRes, payablesRes, vouchersRes, assetsRes] = await Promise.all([
     supabase.from("erp_receivables_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("tenant_id", tenantId),
     supabase.from("erp_payables_s_539dcf81_b").select("*").eq("is_deleted", "n").eq("tenant_id", tenantId),
@@ -1268,33 +1299,44 @@ export async function financeSummaryTool(state: AiGraphState): Promise<ToolResul
   const topPayables = [...payables].sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0)).slice(0, 5);
 
   const money = (value: unknown) => Number(value || 0).toFixed(2);
+  const amountHeader = tt.locale === "en" ? "Amount" : "金额";
+  const nameHeader = tt.locale === "en" ? "Name" : "名称";
   const renderTopRows = (title: string, rows: Array<Record<string, unknown>>, nameField: string, amountField: string) =>
     rows.length
-      ? `### ${title}\n| 名称 | 金额 |\n| --- | ---: |\n${rows.map((row) => `| ${String(row[nameField] || row.doc_no || row.id || "-")} | ${money(row[amountField])} |`).join("\n")}`
-      : `### ${title}\n暂无`;
+      ? `### ${title}\n| ${nameHeader} | ${amountHeader} |\n| --- | ---: |\n${rows.map((row) => `| ${String(row[nameField] || row.doc_no || row.id || "-")} | ${money(row[amountField])} |`).join("\n")}`
+      : `### ${title}\n${tt("common.none")}`;
 
   const reply = [
-    `# 财务分析报表`,
+    `# ${tt("fin.title")}`,
     ``,
-    `## 关键指标`,
-    `- 应收单据：${receivables.length} 条`,
-    `- 应收余额：${sum(receivables, "balance").toFixed(2)}`,
-    `- 逾期应收：${overdueReceivables.length} 条，逾期金额 ${sum(overdueReceivables, "balance").toFixed(2)}`,
-    `- 应付单据：${payables.length} 条`,
-    `- 应付余额：${sum(payables, "balance").toFixed(2)}`,
-    `- 逾期应付：${overduePayables.length} 条，逾期金额 ${sum(overduePayables, "balance").toFixed(2)}`,
-    `- 凭证数量：${vouchers.length} 张，金额合计 ${sum(vouchers, "total_amount").toFixed(2)}`,
-    `- 固资数量：${assets.length} 项，净值合计 ${sum(assets, "net_value").toFixed(2)}`,
+    `## ${tt("fin.kpiTitle")}`,
+    `- ${tt("fin.receivableDocs", { count: receivables.length })}`,
+    `- ${tt("fin.receivableBalance", { amount: sum(receivables, "balance").toFixed(2) })}`,
+    `- ${tt("fin.overdueReceivable", {
+      count: overdueReceivables.length,
+      amount: sum(overdueReceivables, "balance").toFixed(2),
+    })}`,
+    `- ${tt("fin.payableDocs", { count: payables.length })}`,
+    `- ${tt("fin.payableBalance", { amount: sum(payables, "balance").toFixed(2) })}`,
+    `- ${tt("fin.overduePayable", {
+      count: overduePayables.length,
+      amount: sum(overduePayables, "balance").toFixed(2),
+    })}`,
+    `- ${tt("fin.vouchers", {
+      count: vouchers.length,
+      amount: sum(vouchers, "total_amount").toFixed(2),
+    })}`,
+    `- ${tt("fin.assets", { count: assets.length, amount: sum(assets, "net_value").toFixed(2) })}`,
     ``,
-    `## 风险提示`,
+    `## ${tt("fin.riskTitle")}`,
     overdueReceivables.length || overduePayables.length
-      ? `- 存在逾期账款，建议优先跟进回款与付款。`
-      : `- 当前未发现明显逾期账款。`,
-    `- 财务数据以当前已启用单据为准。`,
+      ? `- ${tt("fin.riskOverdue")}`
+      : `- ${tt("fin.riskOk")}`,
+    `- ${tt("fin.scopeNote")}`,
     ``,
-    renderTopRows("应收Top5", topReceivables, "customer_name", "balance"),
+    renderTopRows(tt("fin.topReceivable"), topReceivables, "customer_name", "balance"),
     ``,
-    renderTopRows("应付Top5", topPayables, "supplier_name", "balance"),
+    renderTopRows(tt("fin.topPayable"), topPayables, "supplier_name", "balance"),
   ].join("\n");
 
   return {

@@ -38,6 +38,25 @@
   flex-shrink: 0;
 }
 
+/* 品牌区：logo 可点击返回 ERP 主页 */
+.docs-logo-link {
+  display: inline-flex;
+  flex-shrink: 0;
+  text-decoration: none;
+  border-radius: 8px;
+  outline-offset: 2px;
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.docs-logo-link:hover {
+  opacity: 0.78;
+  transform: scale(1.04);
+}
+
+.docs-logo-link:active {
+  transform: scale(0.97);
+}
+
 /* 与主控台左上角使用同一个品牌 logo（src/assets/opelix.svg） */
 .docs-logo {
   display: inline-flex;

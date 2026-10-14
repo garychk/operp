@@ -79,6 +79,7 @@ import heroLogo from "../assets/opelix.svg";
 import defaultAvatar from "../assets/avatar.png";
 import { supabase } from "../utils/supabase";
 import { loadCurrencyRegistry } from "../utils/money";
+import { APP_VERSION_TAG } from "../utils/appVersion";
 import { useTranslation } from "react-i18next";
 import type { SupportedLanguage } from "../i18n";
 
@@ -1078,7 +1079,7 @@ export function ProLayout() {
         menuItemRender={(item, dom) => (
           <div onClick={() => navigate(item.path || "/")}>{dom}</div>
         )}
-        headerContentRender={() => <Tag color="gold">V1.0.6</Tag>}
+        headerContentRender={() => <Tag color="gold">{APP_VERSION_TAG}</Tag>}
         avatarProps={{
           src: user?.profile.avatar_url || defaultAvatar,
           size: "small",
@@ -1406,6 +1407,7 @@ export function ProLayout() {
           </Typography.Paragraph>
           <Typography.Paragraph type="secondary">
             {t("layout.version")}
+            {APP_VERSION_TAG}
           </Typography.Paragraph>
           <Typography.Paragraph type="secondary">
             {t("layout.author")}

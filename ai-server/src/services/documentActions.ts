@@ -15,7 +15,8 @@ import { randomUUID } from "node:crypto";
 import { supabase } from "../config/supabase.js";
 import { extractErrorMessage } from "./errors.js";
 import { logAiOperation } from "./aiAudit.js";
-import { DOCUMENT_TYPES, actionLabel, statusLabel } from "./documentService.js";
+import { DOCUMENT_TYPES, actionLabel, documentLabel, statusLabel } from "./documentService.js";
+import { toolText } from "./toolText.js";
 
 export interface DocumentIdentity {
   userId: number;
@@ -75,10 +76,13 @@ export async function executeDocumentAction(
   identity: DocumentIdentity,
 ): Promise<DocumentExecutionOutcome> {
   const payload = action.payload || {};
+  // 草稿上冻结的界面语言（创建草稿时写入），确认阶段沿用它渲染文案
+  const locale = typeof action.context?.locale === "string" ? action.context.locale : undefined;
+  const tt = toolText(locale);
   const documentType = String(payload.documentType || action.entity_key || "");
   const meta = DOCUMENT_TYPES[documentType];
   if (!meta) {
-    throw new DocumentActionError(`不支持的单据类型：${documentType}`);
+    throw new DocumentActionError(tt("doc.err.unsupportedType", { type: documentType }));
   }
 
   const baseArgs = { p_user_id: identity.userId, p_tenant_id: identity.tenantId };
@@ -113,7 +117,7 @@ export async function executeDocumentAction(
     operation = actionName === "post" ? "ai.document.post" : "ai.document.reverse";
   } else if (actionName === "convert") {
     const ruleCode = String(payload.ruleCode || "");
-    if (!ruleCode) throw new DocumentActionError("缺少转单规则，无法执行。");
+    if (!ruleCode) throw new DocumentActionError(tt("doc.err.missingRule"));
     result = await callRpc("service_ai_doc_flow_generate", {
       ...baseArgs,
       p_rule_code: ruleCode,
@@ -128,11 +132,12 @@ export async function executeDocumentAction(
       p_document_type: documentType,
       p_document_id: targetId,
       p_action: actionName,
-      p_comment: String(payload.comment || `AI ${actionLabel(actionName)}`),
+      // 审批意见会落进单据数据里 → 也按界面语言写
+      p_comment: String(payload.comment || `AI ${actionLabel(actionName, locale)}`),
     });
     operation = `ai.document.${actionName}`;
   } else {
-    throw new DocumentActionError(`未支持的单据动作：${actionName}`);
+    throw new DocumentActionError(tt("doc.err.unsupportedAction", { action: actionName }));
   }
 
   await logAiOperation({
@@ -152,7 +157,7 @@ export async function executeDocumentAction(
   });
 
   return {
-    reply: renderOutcome(actionName, meta.label, result, action.context),
+    reply: renderOutcome(actionName, meta.label, result, action.context, locale),
     focus: {
       type: meta.type,
       id: targetId ?? undefined,
@@ -172,22 +177,47 @@ const renderOutcome = (
   label: string,
   result: Record<string, unknown>,
   context: Record<string, unknown>,
+  locale?: string,
 ): string => {
+  const tt = toolText(locale);
+  // 单据类型名按界面语言渲染（草稿 context 里存的是中文名，这里按 meta 反查更稳）
+  const meta = Object.values(DOCUMENT_TYPES).find((item) => item.label === label);
+  const displayLabel = meta ? documentLabel(meta, locale) : label;
+
   if (actionName === "create") {
     const lineCount = result.line_count ?? context.lineCount ?? "-";
     const amount = result.total_amount;
     return [
-      `已创建${label}：**${result.document_no}**（${lineCount} 行${amount ? `，金额 ${amount}` : ""}）`,
-      "单据为草稿状态。需要的话可以继续说「提交审批」「审批通过」或「转成下游单据」。",
+      tt("doc.exec.created", {
+        label: displayLabel,
+        no: String(result.document_no ?? "-"),
+        lines: String(lineCount),
+        amount: amount ? tt("doc.exec.createdAmount", { amount: String(amount) }) : "",
+      }),
+      tt("doc.exec.createHint"),
     ].join("\n");
   }
   if (actionName === "convert") {
     return [
-      `已转单：${context.display || label} → **${result.target_document_no || result.target_document_id || "-"}**`,
-      `新单据为草稿状态${result.target_initial_status ? `（${statusLabel(String(result.target_initial_status))}）` : ""}，可以继续「把它过账」。`,
+      tt("doc.exec.converted", {
+        source: String(context.display || label),
+        target: String(result.target_document_no || result.target_document_id || "-"),
+      }),
+      tt("doc.exec.convertHint", {
+        status: result.target_initial_status
+          ? tt("doc.exec.statusSuffix", { status: statusLabel(String(result.target_initial_status), locale) })
+          : "",
+      }),
     ].join("\n");
   }
-  const status = result.status ? `（当前状态：${statusLabel(String(result.status))}）` : "";
-  const idempotent = result.idempotent ? "（幂等命中：本次未重复执行）" : "";
-  return `已${actionLabel(actionName)}：**${context.display || `${label} #${result.document_id ?? ""}`}**${status}${idempotent}`;
+  const status = result.status
+    ? tt("doc.exec.statusSuffix", { status: statusLabel(String(result.status), locale) })
+    : "";
+  const idempotent = result.idempotent ? tt("doc.exec.idempotent") : "";
+  return tt("doc.exec.done", {
+    action: actionLabel(actionName, locale),
+    display: String(context.display || `${displayLabel} #${result.document_id ?? ""}`),
+    status,
+    idempotent,
+  });
 };

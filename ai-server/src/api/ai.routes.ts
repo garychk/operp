@@ -51,6 +51,8 @@ const chatSchema = z.object({
   tenant_id: z.number().int().optional(),
   text: z.string().min(1),
   skill: z.enum(["auto", "analysis", "create", "action", "baq", "chat"]).optional(),
+  /** 界面语言（zh-CN / en-US）：查询结果列名按它本地化 */
+  locale: z.string().max(20).optional(),
   provider: z
     .object({
       id: z.string().optional(),
@@ -317,6 +319,8 @@ aiRouter.post("/confirm", async (req, res) => {
         tenantId: identity.tenantId,
         text: String(req.body?.text || ""),
         skill: "auto",
+        // 续跑里可能有分析步骤 → 列名本地化语言要跟着带过来
+        locale: typeof req.body?.locale === "string" ? req.body.locale : undefined,
         provider: req.body?.provider as AiGraphState["provider"],
         recentMessages: [],
         toolResults: [],

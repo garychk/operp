@@ -21,7 +21,9 @@ import {
   describeDocument,
   detectDocumentAction,
   detectDocumentType,
+  documentLabel,
   extractDocumentDraft,
+  flowRuleLabel,
   locateDocumentById,
   prepareDocumentInput,
   resolveDocumentTarget,
@@ -33,6 +35,7 @@ import {
 } from "../services/documentService.js";
 
 import { createPendingAction } from "../services/pendingActions.js";
+import { documentHeaderLabel, toolText, type ToolText } from "../services/toolText.js";
 import { baseTableName } from "./entityRegistry.js";
 
 /** 动作名类型定义在 documentService（与库内 RPC 对齐的唯一一处），这里转出去供上层沿用 */
@@ -72,11 +75,14 @@ const buildFocus = (
 /** 单据草稿预览（人可读，确认前看清楚要写什么） */
 const renderDocumentPreview = (
   meta: DocumentTypeMeta,
-  header: Record<string, unknown>,
   lines: Array<Record<string, unknown>>,
   notes: string[],
+  tt: ToolText,
 ): string => {
-  const headerLines = notes.length ? notes.map((note) => `- ${note}`) : ["- （无额外字段）"];
+  const label = documentLabel(meta, tt.locale);
+  const headerLines = notes.length
+    ? notes.map((note) => `- ${note}`)
+    : [`- ${tt("common.noExtraFields")}`];
   const lineRows = lines
     .map((line, index) => {
       const product = Object.entries(line).find(([key]) => key.endsWith("_id") && key !== "tenant_id");
@@ -86,15 +92,15 @@ const renderDocumentPreview = (
     })
     .join("\n");
   return [
-    `将要创建**${meta.label}**（草稿状态，单号由系统生成）：`,
+    tt("doc.preview.title", { label }),
     "",
     ...headerLines,
     "",
-    "| 行 | 物料ID | 数量 | 单价 |",
+    tt("doc.preview.tableHeader"),
     "| --- | --- | --- | --- |",
     lineRows,
     "",
-    `确认无误请回复「确认」，我会写入（${meta.label}页签：${meta.routeLabel}）；回复「取消」则不写入。`,
+    tt("doc.preview.confirmHint", { label, routeLabel: meta.routeLabel }),
   ].join("\n");
 };
 
@@ -102,8 +108,9 @@ const renderDocumentPreview = (
  * document.create
  * ------------------------------------------------------------------ */
 export async function createDocumentTool(state: AiGraphState): Promise<DocumentToolResult> {
+  const tt = toolText(state.locale);
   if (typeof state.userId !== "number" || typeof state.tenantId !== "number") {
-    return { status: "error", reply: "缺少用户或租户上下文，无法建单。" };
+    return { status: "error", reply: tt("doc.err.missingUserCreate") };
   }
 
   const documentType = detectDocumentType(state.text, focusTypeOf(state));
@@ -111,8 +118,12 @@ export async function createDocumentTool(state: AiGraphState): Promise<DocumentT
     const creatable = Object.values(DOCUMENT_TYPES).filter((meta) => meta.creatable);
     return {
       status: "needs_more",
-      reply: `请说明要建哪种单据：${creatable.map((meta) => meta.label).join("、")}。`,
-      nextQuestions: creatable.slice(0, 4).map((meta) => `新建一张${meta.label}`),
+      reply: tt("doc.err.askType", {
+        types: creatable.map((meta) => documentLabel(meta, tt.locale)).join(tt.locale === "en" ? ", " : "、"),
+      }),
+      nextQuestions: creatable
+        .slice(0, 4)
+        .map((meta) => tt("doc.create.quickAsk", { label: documentLabel(meta, tt.locale) })),
     };
   }
 
@@ -120,14 +131,18 @@ export async function createDocumentTool(state: AiGraphState): Promise<DocumentT
   if (!meta.creatable) {
     return {
       status: "error",
-      reply: `${meta.label}不支持 AI 直接建单（这类单据一般由转单生成或前端录入）。可以让我帮你查询或过账已有单据。`,
+      reply: tt("doc.err.notCreatable", { label: documentLabel(meta, tt.locale) }),
     };
   }
 
   const raw = await extractDocumentDraft(state, meta, state.provider);
   const resolved = await prepareDocumentInput(state, meta, raw);
   if (resolved.error || !resolved.prepared) {
-    return { status: "needs_more", reply: resolved.error || "单据信息不完整，请补充。", nextQuestions: [] };
+    return {
+      status: "needs_more",
+      reply: resolved.error || tt("doc.err.incompleteDraft"),
+      nextQuestions: [],
+    };
   }
   const { header, lines, fieldLines } = resolved.prepared;
 
@@ -145,10 +160,15 @@ export async function createDocumentTool(state: AiGraphState): Promise<DocumentT
       documentType: meta.type,
       label: meta.label,
       tableTag: baseTableName(meta.headerTable),
-      display: `${meta.label}（${lines.length} 行）`,
+      display: tt("doc.preview.draftDisplay", {
+        label: documentLabel(meta, tt.locale),
+        count: lines.length,
+      }),
       fieldLines,
       route: meta.route,
       routeLabel: meta.routeLabel,
+      // 草稿记住**下单时**的界面语言：稍后确认/续跑时回复文案仍按这个语言渲染
+      locale: tt.locale,
       // 多步计划：本步确认执行后继续跑剩余步骤
       remainingPlan: state.planRemaining,
     },
@@ -156,7 +176,7 @@ export async function createDocumentTool(state: AiGraphState): Promise<DocumentT
 
   return {
     status: "success",
-    reply: renderDocumentPreview(meta, header, lines, fieldLines),
+    reply: renderDocumentPreview(meta, lines, fieldLines, tt),
     needConfirmation: true,
     route: meta.route,
     routeLabel: meta.routeLabel,
@@ -179,16 +199,21 @@ export async function documentActionTool(
   state: AiGraphState,
   options?: DocumentActionOptions,
 ): Promise<DocumentToolResult> {
+  const tt = toolText(state.locale);
   if (typeof state.userId !== "number" || typeof state.tenantId !== "number") {
-    return { status: "error", reply: "缺少用户或租户上下文，无法执行单据动作。" };
+    return { status: "error", reply: tt("doc.err.missingUserAction") };
   }
 
   const action = options?.action || detectDocumentAction(state.text);
   if (!action) {
     return {
       status: "needs_more",
-      reply: "请说明要对单据做什么：过账、反过账、提交审批、审批通过、驳回、或转单。",
-      nextQuestions: ["把它过账", "提交审批", "转成下一张单据"],
+      reply: tt("doc.action.ask"),
+      nextQuestions: [
+        tt("doc.action.quickPost"),
+        tt("doc.action.quickSubmit"),
+        tt("doc.action.quickConvert"),
+      ],
     };
   }
 
@@ -196,27 +221,32 @@ export async function documentActionTool(
   const explicitType = options?.documentType || detectDocumentType(state.text) || undefined;
   let located: { document?: LocatedDocument; error?: string };
   if (options?.documentId && explicitType && DOCUMENT_TYPES[explicitType]) {
-    located = await locateDocumentById(DOCUMENT_TYPES[explicitType], options.documentId, state.tenantId);
+    located = await locateDocumentById(
+      DOCUMENT_TYPES[explicitType],
+      options.documentId,
+      state.tenantId,
+      state.locale,
+    );
   } else {
     located = await resolveDocumentTarget(state, explicitType);
   }
   if (located.error || !located.document) {
-    return { status: "needs_more", reply: located.error || "没有定位到单据。", nextQuestions: [] };
+    return { status: "needs_more", reply: located.error || tt("doc.err.notLocated"), nextQuestions: [] };
   }
   const { document: doc } = located;
   const meta = doc.meta;
 
   // 状态前置校验（给可读提示；真正的约束仍在库内函数里）
   // 规则本体在 documentService.validateDocumentAction，与 MCP 工具共用同一份。
-  const invalid = validateDocumentAction(doc, action);
+  const invalid = validateDocumentAction(doc, action, state.locale);
   if (invalid) return { status: "error", reply: invalid };
 
   if (action === "convert") {
     const rule = FLOW_RULES[meta.type];
     return stageAction(state, doc.id, meta, "convert", {
       ruleCode: rule.ruleCode,
-      targetLabel: rule.label,
-      display: `${doc.no} → ${rule.label}`,
+      targetLabel: flowRuleLabel(rule, state.locale),
+      display: `${doc.no} → ${flowRuleLabel(rule, state.locale)}`,
       remainingPlan: state.planRemaining,
     });
   }
@@ -232,6 +262,7 @@ async function stageAction(
   action: "post" | "reverse" | "submit" | "approve" | "reject" | "withdraw" | "convert",
   extra: { ruleCode?: string; targetLabel?: string; display?: string; remainingPlan?: unknown[] },
 ): Promise<DocumentToolResult> {
+  const tt = toolText(state.locale);
   const display = extra.display || `#${documentId}`;
   const pendingId = await createPendingAction({
     sessionId: state.sessionId,
@@ -257,17 +288,24 @@ async function stageAction(
       display,
       route: meta.route,
       routeLabel: meta.routeLabel,
+      locale: tt.locale,
       remainingPlan: extra.remainingPlan,
     },
   });
 
-  const actionName = actionLabel(action);
+  const actionName = actionLabel(action, state.locale);
   const tail = extra.remainingPlan?.length
-    ? `\n\n确认后我会继续执行后续 ${extra.remainingPlan.length} 个步骤。`
+    ? `\n\n${tt("doc.action.confirmTail", { count: extra.remainingPlan.length })}`
     : "";
   return {
     status: "success",
-    reply: `将对${meta.label} **${display}** 执行「${actionName}」${extra.targetLabel ? `，生成${extra.targetLabel}` : ""}。\n\n回复「确认」执行，回复「取消」放弃。${tail}`,
+    reply: tt("doc.action.preview", {
+      label: documentLabel(meta, state.locale),
+      display,
+      action: actionName,
+      target: extra.targetLabel ? tt("doc.action.previewTarget", { targetLabel: extra.targetLabel }) : "",
+      tail,
+    }),
     needConfirmation: true,
     route: meta.route,
     routeLabel: meta.routeLabel,
@@ -280,8 +318,9 @@ async function stageAction(
  * document.query —— 只读
  * ------------------------------------------------------------------ */
 export async function queryDocumentTool(state: AiGraphState): Promise<DocumentToolResult> {
+  const tt = toolText(state.locale);
   if (typeof state.tenantId !== "number") {
-    return { status: "error", reply: "缺少租户上下文，无法查询单据。" };
+    return { status: "error", reply: tt("doc.err.missingTenantQuery") };
   }
   const tenantId = state.tenantId;
 
@@ -291,25 +330,30 @@ export async function queryDocumentTool(state: AiGraphState): Promise<DocumentTo
     const doc = located.document;
     const detail = await describeDocument(doc.meta, doc.id, tenantId);
     if (detail) {
+      // 单头字段名也走本地化词典（order_no → 单据编号 / Document number）
       const headerLines = Object.entries(detail.header)
         .filter(([key]) =>
           ["id", doc.meta.noField, doc.meta.dateField, "status", "total_amount", "tax_amount",
             "receivable_amount", "payable_amount", "customer_id", "supplier_id", "warehouse_id", "remark"].includes(key),
         )
-        .map(([key, value]) => `- ${key}: ${key === "status" ? statusLabel(String(value)) : String(value ?? "-")}`);
+        .map(([key, value]) =>
+          `- ${documentHeaderLabel(key, state.locale)}: ${
+            key === "status" ? statusLabel(String(value), state.locale) : String(value ?? "-")
+          }`,
+        );
       const lineRows = detail.lines
         .map((line) => `| ${line.line_no ?? "-"} | ${line[doc.meta.lineProductField] ?? "-"} | ${line.quantity ?? line.planned_quantity ?? "-"} | ${line.amount ?? "-"} |`)
         .join("\n");
       return {
         status: "success",
         reply: [
-          `# ${doc.label} ${doc.no}`,
+          `# ${documentLabel(doc.meta, state.locale)} ${doc.no}`,
           "",
           ...headerLines,
           "",
-          "| 行 | 物料 | 数量 | 金额 |",
+          tt("doc.query.tableHeader"),
           "| --- | --- | --- | --- |",
-          lineRows || "| - | - | - | - |",
+          lineRows || tt("doc.query.emptyRow"),
         ].join("\n"),
         route: doc.meta.route,
         routeLabel: doc.meta.routeLabel,
@@ -332,27 +376,29 @@ export async function queryDocumentTool(state: AiGraphState): Promise<DocumentTo
       .order("id", { ascending: false })
       .limit(5);
     for (const row of (data || []) as unknown as Array<Record<string, unknown>>) {
-      rows.push(`| ${meta.label} | ${row[meta.noField]} | ${statusLabel(String(row.status))} | ${row[meta.dateField] ?? "-"} |`);
+      rows.push(
+        `| ${documentLabel(meta, state.locale)} | ${row[meta.noField]} | ${statusLabel(String(row.status), state.locale)} | ${row[meta.dateField] ?? "-"} |`,
+      );
     }
   }
   if (!rows.length) {
     return {
       status: "success",
       reply: located.error
-        ? `${located.error}最近也没有查询到任何单据。`
-        : "最近没有查询到单据。",
+        ? tt("doc.query.noneWithError", { error: located.error })
+        : tt("doc.query.none"),
     };
   }
   return {
     status: "success",
     reply: [
-      "# 最近单据",
+      `# ${tt("doc.query.recentTitle")}`,
       "",
-      "| 类型 | 单号 | 状态 | 日期 |",
+      tt("doc.query.recentTableHeader"),
       "| --- | --- | --- | --- |",
       ...rows,
       "",
-      "可以继续说「把 XX 单号过账」或「看一下 XX 单号的明细」。",
+      tt("doc.query.followUp"),
     ].join("\n"),
   };
 }

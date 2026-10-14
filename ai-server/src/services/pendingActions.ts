@@ -54,6 +54,11 @@ export interface PendingActionContext {
   routeLabel?: string;
   tenantScoped?: boolean;
   /**
+   * 草稿创建时的界面语言。确认/续跑阶段回复文案按它渲染 ——
+   * 用户可能中途切换界面语言，草稿要记住「下单时」的语言而不是重启后猜。
+   */
+  locale?: string;
+  /**
    * 多步计划：本步确认执行后还要继续跑的剩余步骤。
    * 例「建销售订单然后过账」→ 第一步是建单草稿，remainingPlan=[{tool:'document.post',...}]
    */
