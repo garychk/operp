@@ -2,7 +2,18 @@ export type Aggregate = 'none' | 'sum' | 'count' | 'avg' | 'min' | 'max';
 export type FilterOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'is_null' | 'not_null';
 export interface BaqColumn { name: string; type: string }
 export interface BaqTable { table: string; label: string; columns: BaqColumn[] }
-export interface BaqJoin { id: string; type: 'inner' | 'left'; table: string; alias: string; leftAlias: string; leftField: string; rightField: string }
+/** 一对关联字段。两端都可以是任意列，不限于外键（例如 code = code） */
+export interface BaqJoinCondition { leftField: string; rightField: string }
+/**
+ * 一条关联。conditions 是**完整**条件列表（含第一对），多对之间用 AND 连接；
+ * leftField / rightField 保留为 conditions[0] 的镜像，兼容旧版 execute_baq 与
+ * AI 设计链路（它们只读这一对）。读取一律走 joinGraph.joinConditions()。
+ */
+export interface BaqJoin {
+  id: string; type: 'inner' | 'left'; table: string; alias: string; leftAlias: string;
+  leftField: string; rightField: string;
+  conditions?: BaqJoinCondition[];
+}
 export interface BaqField { id: string; tableAlias: string; field: string; alias: string; aggregate: Aggregate; groupBy: boolean }
 export interface BaqFilter { id: string; tableAlias: string; field: string; operator: FilterOperator; value: string }
 export interface BaqSort { id: string; fieldAlias: string; direction: 'asc' | 'desc' }

@@ -895,6 +895,22 @@ const sortBaqJoins = (source: { alias?: string }, joins: unknown[]): unknown[] =
   return out;
 };
 
+const normalizeBaqJoinConditions = (join: Record<string, unknown>) => {
+  const raw = Array.isArray(join.conditions)
+    ? (join.conditions as Array<Record<string, unknown>>)
+    : [];
+  const list =
+    raw.length > 0
+      ? raw.map((item) => ({
+          leftField: String(item?.leftField || ""),
+          rightField: String(item?.rightField || ""),
+        }))
+      : [{ leftField: String(join.leftField || ""), rightField: String(join.rightField || "") }];
+  const [first] = list;
+  // conditions 是完整条件列表，leftField / rightField 保留为首对镜像（旧读取方只看这对）
+  return { ...join, conditions: list, leftField: first.leftField, rightField: first.rightField };
+};
+
 const normalizeBaqDefinition = (definition: unknown) => {
   if (!definition || typeof definition !== "object") return null;
   const value = definition as Record<string, unknown>;
@@ -904,7 +920,10 @@ const normalizeBaqDefinition = (definition: unknown) => {
   return {
     source: { table: String(source.table), alias: String(source.alias || "t0") },
     joins: Array.isArray(value.joins)
-      ? sortBaqJoins({ alias: String(source.alias || "t0") }, value.joins)
+      ? sortBaqJoins(
+          { alias: String(source.alias || "t0") },
+          (value.joins as Array<Record<string, unknown>>).map(normalizeBaqJoinConditions),
+        )
       : [],
     fields: Array.isArray(value.fields) ? value.fields : [],
     filters: Array.isArray(value.filters) ? value.filters : [],
@@ -924,16 +943,23 @@ const validateBaqDefinition = (definition: Record<string, unknown>, catalog: Baq
     const table = String(join.table || "");
     const alias = String(join.alias || "");
     const leftAlias = String(join.leftAlias || "");
-    const leftField = String(join.leftField || "");
-    const rightField = String(join.rightField || "");
+    const conditions =
+      Array.isArray(join.conditions) && join.conditions.length > 0
+        ? (join.conditions as Array<Record<string, unknown>>)
+        : [{ leftField: join.leftField, rightField: join.rightField }];
     const leftTable = tables.get(aliases.get(leftAlias) || "");
     const rightTable = tables.get(table);
     if (!rightTable || !alias || aliases.has(alias) || !leftTable) {
       throw new Error(`BAQ关联配置无效：${table || alias}`);
     }
-    if (!leftTable.columns.some((column) => column.name === leftField) ||
-        !rightTable.columns.some((column) => column.name === rightField)) {
-      throw new Error(`BAQ关联字段不存在：${leftAlias}.${leftField} = ${table}.${rightField}`);
+    // 关联条件：两端都可以是任意真实列（非主外键关联也允许，例如 code = code）
+    for (const condition of conditions) {
+      const leftField = String(condition?.leftField || "");
+      const rightField = String(condition?.rightField || "");
+      if (!leftTable.columns.some((column) => column.name === leftField) ||
+          !rightTable.columns.some((column) => column.name === rightField)) {
+        throw new Error(`BAQ关联字段不存在：${leftAlias}.${leftField} = ${table}.${rightField}`);
+      }
     }
     aliases.set(alias, table);
   }
@@ -968,7 +994,9 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
     "只返回 JSON，不要 Markdown，不要解释。必须包含 name、code、description、definition。",
     "definition 必须完整包含 source、joins、fields、filters、sorts。",
     "source 格式为 {table, alias}，主表 alias 固定为 t0。",
-    "join 格式为 {id,type,table,alias,leftAlias,leftField,rightField}，type 只能是 left 或 inner。",
+    "join 格式为 {id,type,table,alias,leftAlias,leftField,rightField,conditions}，type 只能是 left 或 inner。",
+    "conditions 是这条关联的完整条件列表 [{leftField,rightField},...]，多对字段之间用 AND 连接；leftField/rightField 必须等于 conditions[0]，只有一对条件时 conditions 可以省略。",
+    "关联两端都可以选任意真实列，不限于外键：需要按业务编码关联时就写 code = code（例如 物料.code = 单据明细.物料编码列），不要因为没有外键就放弃关联。",
     "关联支持多级：一条 join 的 leftAlias 可以是主表 alias，也可以是前面某条 join 的 alias（即子表再关联子表）；joins 数组顺序必须满足左别名先出现。",
     "field 格式为 {id,alias,field,groupBy,aggregate,tableAlias}，aggregate 只能是 none、sum、count、avg、min、max。",
     "filter 格式为 {id,tableAlias,field,operator,value}，operator 只能是 eq、neq、gt、gte、lt、lte、like、is_null、not_null。",

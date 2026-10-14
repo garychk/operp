@@ -1,4 +1,4 @@
-import type { BaqDefinition, BaqJoin, BaqRelation } from "./types";
+import type { BaqColumn, BaqDefinition, BaqJoin, BaqJoinCondition, BaqRelation } from "./types";
 
 /**
  * BAQ 关联（joins）的依赖关系工具。
@@ -17,6 +17,27 @@ export interface BaqSourceRef {
   alias: string;
   table: string;
 }
+
+/**
+ * 「同名字段关联」要排除的技术列。
+ *
+ * 这些列几乎每张表都有、且同名，但拿它们关联毫无业务意义（tenant_id 尤其危险：
+ * 只在同租户内成立，连出来全是噪音）。
+ */
+const TECHNICAL_JOIN_COLUMNS = new Set([
+  "id",
+  "tenant_id",
+  "corp_id",
+  "emp_id",
+  "is_deleted",
+  "created_at",
+  "updated_at",
+  "created_by",
+  "updated_by",
+  "deleted_at",
+  "version",
+  "sort_order",
+]);
 
 export interface JoinSortResult {
   joins: BaqJoin[];
@@ -201,13 +222,19 @@ export function suggestParentAlias(
 }
 
 /**
- * 一次性把 definition 的 joins 修成「依赖顺序合法」。
- * 用于保存 / 预览前的兜底（人工编辑、历史数据都可能留下乱序）。
+ * 一次性把 definition 的 joins 修成「依赖顺序合法 + 条件镜像一致」。
+ * 用于保存 / 预览前的兜底（人工编辑、历史数据、AI 输出都可能留下脏数据）：
+ *   · joins 顺序 = SQL JOIN 顺序，左别名必须先出现；
+ *   · leftField / rightField 是 conditions[0] 的镜像，必须同步（旧读取方只看这对）。
  */
 export function normalizeDefinition(definition: BaqDefinition): BaqDefinition {
-  const result = sortJoinsByDependency(definition.source, definition.joins);
-  if (!result.changed || result.cycle) return definition;
-  return { ...definition, joins: result.joins };
+  const mirrored = definition.joins.map((join) =>
+    withJoinConditions(join, joinConditions(join)),
+  );
+  const result = sortJoinsByDependency(definition.source, mirrored);
+  const joins = result.cycle ? mirrored : result.joins;
+  const changed = joins.some((join, index) => join !== definition.joins[index]);
+  return changed ? { ...definition, joins } : definition;
 }
 
 /** 下一个未被占用的别名 t{n}（删过 join 也不会撞名） */
@@ -216,4 +243,82 @@ export function nextAlias(used: Iterable<string>): string {
   let index = 1;
   while (taken.has(`t${index}`)) index += 1;
   return `t${index}`;
+}
+
+/* ---------------------------------------------------------------- 关联条件 */
+
+/**
+ * 读取一条关联的条件列表。
+ *
+ * 历史数据（以及只读第一对的旧读取方）把条件存在 leftField / rightField 上，
+ * 所以统一从这里读：有 conditions 用 conditions，没有就回退成单对。
+ */
+export function joinConditions(join: BaqJoin): BaqJoinCondition[] {
+  const list = Array.isArray(join.conditions) ? join.conditions : [];
+  if (list.length === 0) {
+    return [{ leftField: join.leftField ?? "", rightField: join.rightField ?? "" }];
+  }
+  return list.map((item) => ({
+    leftField: item?.leftField ?? "",
+    rightField: item?.rightField ?? "",
+  }));
+}
+
+/** 写回条件：总是同时维护 conditions 与 leftField / rightField（首对镜像） */
+export function withJoinConditions(
+  join: BaqJoin,
+  conditions: BaqJoinCondition[],
+): BaqJoin {
+  const list =
+    conditions.length > 0 ? conditions : [{ leftField: "", rightField: "" }];
+  const [first] = list;
+  return {
+    ...join,
+    conditions: list,
+    leftField: first.leftField,
+    rightField: first.rightField,
+  };
+}
+
+/** 至少有一对条件，且每对都填齐了左右字段 */
+export function isJoinComplete(join: BaqJoin): boolean {
+  const list = joinConditions(join);
+  return list.length > 0 && list.every((item) => !!item.leftField && !!item.rightField);
+}
+
+/** 连线标签：t0.id = t1.product_id（多条件时补 +N，完整内容在右侧面板） */
+export function describeJoinConditions(join: BaqJoin): string {
+  const list = joinConditions(join);
+  const text = list
+    .map(
+      (item) =>
+        `${join.leftAlias}.${item.leftField || "?"} = ${join.alias}.${item.rightField || "?"}`,
+    )
+    .join(" AND ");
+  return list.length > 1 ? `${text} (+${list.length - 1})` : text;
+}
+
+/** 关联条件摘要（经典页签表格里显示） */
+export function summarizeJoinConditions(join: BaqJoin): string {
+  return joinConditions(join)
+    .map((item) => `${item.leftField || "?"} = ${item.rightField || "?"}`)
+    .join(" AND ");
+}
+
+/**
+ * 同名字段关联候选：两表共有的业务列。
+ *
+ * 用于「用 code 关联 code」这类**非主外键**关联——两端同名、值域一致。
+ * 技术列（id / tenant_id / created_at…）一律排除，避免连出一堆噪音。
+ */
+export function sameNameConditions(
+  leftColumns: BaqColumn[],
+  rightColumns: BaqColumn[],
+): BaqJoinCondition[] {
+  const right = new Set(rightColumns.map((column) => column.name));
+  return leftColumns
+    .filter(
+      (column) => right.has(column.name) && !TECHNICAL_JOIN_COLUMNS.has(column.name),
+    )
+    .map((column) => ({ leftField: column.name, rightField: column.name }));
 }

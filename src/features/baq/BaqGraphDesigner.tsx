@@ -21,17 +21,23 @@ import {
   Space,
   Switch,
   Tag,
+  Tooltip,
   Typography,
   message,
 } from "antd";
 import { useTranslation } from "react-i18next";
+import { JoinConditionEditor } from "./JoinConditionEditor";
 import {
   aliasTableMap,
   descendantsOf,
+  describeJoinConditions,
+  isJoinComplete,
+  joinConditions,
   joinDepths,
   nextAlias,
   sortJoinsByDependency,
   suggestParentAlias,
+  withJoinConditions,
   wouldCreateCycle,
 } from "./joinGraph";
 import { shortTableName, tableDisplayName } from "./tableLabel";
@@ -40,6 +46,7 @@ import type {
   BaqColumn,
   BaqDefinition,
   BaqJoin,
+  BaqJoinCondition,
   BaqRelation,
   BaqTable,
 } from "./types";
@@ -49,7 +56,8 @@ import type {
  *
  * 与原表格页签共用同一份 definition：
  *   · 卡片 = 一张数据表；勾选字段 → definition.fields
- *   · 连线 = definition.joins（左端 leftAlias.leftField，右端 alias.rightField）
+ *   · 连线 = definition.joins（左端 leftAlias.leftField，右端 alias.rightField，
+ *     多字段条件在 join.conditions 里，读取统一走 joinGraph.joinConditions）
  *   · 卡片坐标 → definition.layout，随 definition 一起落库（execute_baq 不读该键）
  *
  * 画布用项目已有的 @antv/x6（RoutingMap / BomEditableTreeGraph 同款依赖），
@@ -377,19 +385,39 @@ export function BaqGraphDesigner({
     [relations],
   );
 
-  /** 依据外键元数据猜关联字段；猜不到就留空让用户在右侧面板选 */
-  const guessJoinFields = useCallback((leftTable: string, rightTable: string) => {
-    const list = relationsRef.current;
-    const direct = list.find(
-      (item) => item.table === leftTable && item.refTable === rightTable,
-    );
-    if (direct) return { leftField: direct.column, rightField: direct.refColumn };
-    const reverse = list.find(
-      (item) => item.table === rightTable && item.refTable === leftTable,
-    );
-    if (reverse) return { leftField: reverse.refColumn, rightField: reverse.column };
-    return { leftField: "", rightField: "" };
-  }, []);
+  /**
+   * 依据外键元数据猜一组关联条件；猜不到返回 null，由右侧面板手选。
+   *
+   * 注意猜出来的只是「默认的主外键关联」，用户随时可以在面板里改成任意字段
+   * （例如用 code 关联 code），也可以追加更多条件。
+   */
+  const guessJoinCondition = useCallback(
+    (leftTable: string, rightTable: string): BaqJoinCondition | null => {
+      const list = relationsRef.current;
+      const direct = list.find(
+        (item) => item.table === leftTable && item.refTable === rightTable,
+      );
+      if (direct) return { leftField: direct.column, rightField: direct.refColumn };
+      const reverse = list.find(
+        (item) => item.table === rightTable && item.refTable === leftTable,
+      );
+      if (reverse) return { leftField: reverse.refColumn, rightField: reverse.column };
+      return null;
+    },
+    [],
+  );
+
+  /** 某张表的全部外键列名（仅用于在下拉里标注默认主外键字段） */
+  const fkColumnsOf = useCallback(
+    (table: string) =>
+      new Set(
+        (relationsRef.current ?? [])
+          .filter((item) => item.table === table)
+          .map((item) => item.column),
+      ),
+    [],
+  );
+
 
   /** 结构签名：只在真正影响画布的内容变化时重跑同步，避免拖动中反复重建 */
   const structureKey = useMemo(
@@ -448,19 +476,20 @@ export function BaqGraphDesigner({
         ) ??
         def.source.alias;
       const tableOf = aliasTableMap(def.source, def.joins);
-      const guess = guessJoinFields(
+      const guess = guessJoinCondition(
         tableOf.get(parentAlias) ?? def.source.table,
         table,
       );
-      const join: BaqJoin = {
+      const base: BaqJoin = {
         id: uid(),
         type: "left",
         table,
         alias,
         leftAlias: parentAlias,
-        leftField: guess.leftField,
-        rightField: guess.rightField,
+        leftField: "",
+        rightField: "",
       };
+      const join = withJoinConditions(base, guess ? [guess] : []);
       // 新 join 可能挂在更深的层级上，统一重排一次保证 JOIN 顺序合法
       const sorted = sortJoinsByDependency(def.source, [...def.joins, join]);
       patchDef({
@@ -473,7 +502,7 @@ export function BaqGraphDesigner({
       setSelectedJoinId(join.id);
       setSelectedAlias(alias);
     },
-    [guessJoinFields, patchDef],
+    [guessJoinCondition, patchDef],
   );
 
   /**
@@ -492,10 +521,7 @@ export function BaqGraphDesigner({
       return;
     }
     const tableOf = aliasTableMap(def.source, def.joins);
-    const guess = guessJoinFields(
-      tableOf.get(parentAlias) ?? "",
-      join.table,
-    );
+    const guess = guessJoinCondition(tableOf.get(parentAlias) ?? "", join.table);
     const sorted = sortJoinsByDependency(
       def.source,
       def.joins.map((item) =>
@@ -505,12 +531,16 @@ export function BaqGraphDesigner({
     patchDef({
       joins: sorted.joins.map((item) =>
         item.id === joinId
-          ? {
-              ...item,
-              // 左字段属于旧父表，换表后必须重取；右字段是子表自己的列，猜不到就留着
-              leftField: guess.leftField,
-              rightField: guess.rightField || item.rightField,
-            }
+          ? withJoinConditions(
+              { ...item, leftAlias: parentAlias },
+              // 左字段属于旧父表，换表后必须重取；右字段是子表自己的列，留着不清
+              guess
+                ? [guess]
+                : joinConditions(item).map((condition) => ({
+                    leftField: "",
+                    rightField: condition.rightField,
+                  })),
+            )
           : item,
       ),
     });
@@ -812,10 +842,9 @@ export function BaqGraphDesigner({
       }
     });
     liveJoins.forEach((join) => {
-      const complete = !!join.leftField && !!join.rightField;
-      const label =
-        `${join.type === "inner" ? "INNER" : "LEFT"} · ` +
-        `${join.leftAlias}.${join.leftField || "?"} = ${join.alias}.${join.rightField || "?"}`;
+      const complete = isJoinComplete(join);
+      // 多字段条件在标签里只补 +N，完整内容在右侧「关联」面板
+      const label = `${join.type === "inner" ? "INNER" : "LEFT"} · ${describeJoinConditions(join)}`;
       const attrs = {
         line: {
           stroke: complete ? "#1677ff" : "#faad14",
@@ -963,17 +992,23 @@ export function BaqGraphDesigner({
     ]);
     let filled = 0;
     const joins = def.joins.map((join) => {
-      if (join.leftField && join.rightField) return join;
-      const guess = guessJoinFields(
+      if (isJoinComplete(join)) return join;
+      const guess = guessJoinCondition(
         tableOf.get(join.leftAlias) ?? "",
         join.table,
       );
-      const leftField = join.leftField || guess.leftField;
-      const rightField = join.rightField || guess.rightField;
-      if (leftField !== join.leftField || rightField !== join.rightField) {
-        filled += 1;
-      }
-      return { ...join, leftField, rightField };
+      if (!guess) return join;
+      // 只补空着的左右字段：已经手选了条件的不动
+      const patched = joinConditions(join).map((condition) =>
+        condition.leftField && condition.rightField
+          ? condition
+          : {
+              leftField: condition.leftField || guess.leftField,
+              rightField: condition.rightField || guess.rightField,
+            },
+      );
+      filled += 1;
+      return withJoinConditions(join, patched);
     });
     const present = new Set([
       def.source.table,
@@ -1249,6 +1284,7 @@ export function BaqGraphDesigner({
                           <span>{t("baqDesigner.groupBy")}</span>
                           <Switch
                             size="small"
+                            style={{ justifySelf: "start" }}
                             checked={field.groupBy}
                             onChange={(groupBy) =>
                               patchField(field.id, { groupBy })
@@ -1301,6 +1337,8 @@ export function BaqGraphDesigner({
             ) : (
               definition.joins.map((join) => {
                 const active = join.id === selectedJoinId;
+                const joinLeftTable =
+                  aliases.find((item) => item.alias === join.leftAlias)?.table ?? "";
                 return (
                   <div
                     key={join.id}
@@ -1320,9 +1358,11 @@ export function BaqGraphDesigner({
                           toggleJoin(join.id, { type })
                         }
                       />
-                      <span className="baq-graph-join-table">
-                        {join.alias} · {labelOf(join.table)}
-                      </span>
+                      <Tooltip title={`${join.alias} · ${labelOf(join.table)}`}>
+                        <span className="baq-graph-join-table">
+                          {join.alias} · {labelOf(join.table)}
+                        </span>
+                      </Tooltip>
                       <span className="baq-graph-join-level">
                         {t("baqDesigner.graphLevelTag", {
                           level: panelDepths.get(join.alias) ?? 1,
@@ -1354,42 +1394,25 @@ export function BaqGraphDesigner({
                       />
                     </div>
                     <div className="baq-graph-join-body">
-                      <Select
-                        size="small"
-                        className="baq-graph-join-field"
-                        showSearch
-                        value={join.leftField || undefined}
-                        placeholder={t("baqDesigner.leftField")}
-                        options={columnsOf(
-                          aliases.find((item) => item.alias === join.leftAlias)
-                            ?.table ?? "",
-                        ).map((column) => ({
-                          value: column.name,
-                          label: column.name,
-                        }))}
-                        onChange={(leftField) =>
-                          toggleJoin(join.id, { leftField })
-                        }
-                      />
-                      <span className="baq-graph-join-eq">=</span>
-                      <Select
-                        size="small"
-                        className="baq-graph-join-field"
-                        showSearch
-                        value={join.rightField || undefined}
-                        placeholder={t("baqDesigner.rightField")}
-                        options={columnsOf(join.table).map((column) => ({
-                          value: column.name,
-                          label: column.name,
-                        }))}
-                        onChange={(rightField) =>
-                          toggleJoin(join.id, { rightField })
+                      <JoinConditionEditor
+                        conditions={joinConditions(join)}
+                        leftAlias={join.leftAlias}
+                        rightAlias={join.alias}
+                        leftColumns={columnsOf(joinLeftTable)}
+                        rightColumns={columnsOf(join.table)}
+                        leftFk={fkColumnsOf(joinLeftTable)}
+                        rightFk={fkColumnsOf(join.table)}
+                        onChange={(conditions) =>
+                          toggleJoin(
+                            join.id,
+                            withJoinConditions(join, conditions),
+                          )
                         }
                       />
                     </div>
                     <div className="baq-graph-join-note">
                       {join.leftAlias} → {join.alias}
-                      {(!join.leftField || !join.rightField) && (
+                      {!isJoinComplete(join) && (
                         <Tag color="orange">
                           {t("baqDesigner.graphJoinIncomplete")}
                         </Tag>

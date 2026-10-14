@@ -143,3 +143,4 @@
 \i supabase/tables/deploy_118_employee_jobs_dict.sql
 \i supabase/tables/deploy_119_shift_master_and_capacity.sql
 \i supabase/tables/deploy_120_baq_relations.sql
+\i supabase/tables/deploy_121_baq_multi_condition_join.sql

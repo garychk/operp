@@ -1,4 +1,4 @@
-.baq-page{display:grid;gap:12px}.baq-page .ant-card{border-radius:6px}.baq-page h4{margin:0}.baq-picker{width:220px}.baq-meta{display:grid;grid-template-columns:1fr 1fr 2fr;gap:12px}.baq-source{display:grid;grid-template-columns:auto minmax(280px,560px) auto;align-items:center;gap:12px;margin-bottom:12px}.baq-page .wide{min-width:210px}.baq-page .join-field-select{width:100%;min-width:240px}.baq-page .add-row{margin-top:12px}.baq-result-table .ant-table-body{height:420px;overflow-y:auto!important}@media(max-width:900px){.baq-meta{grid-template-columns:1fr}.baq-picker{width:160px}.baq-source{grid-template-columns:1fr}.baq-page .ant-card-head{align-items:flex-start}.baq-page .ant-card-extra{max-width:100%;overflow:auto}}
+.baq-page{display:grid;gap:12px}.baq-page .ant-card{border-radius:6px}.baq-page h4{margin:0}.baq-picker{width:220px}.baq-meta{display:grid;grid-template-columns:1fr 1fr 2fr;gap:12px}.baq-source{display:grid;grid-template-columns:auto minmax(280px,560px) auto;align-items:center;gap:12px;margin-bottom:12px} .wide{min-width:210px}.baq-page .join-field-select{width:100%;min-width:240px}.add-row{margin-top:12px}.baq-result-table .ant-table-body{height:420px;overflow-y:auto!important}@media(max-width:900px){.baq-meta{grid-template-columns:1fr}.baq-picker{width:160px}.baq-source{grid-template-columns:1fr}.baq-page .ant-card-head{align-items:flex-start}.baq-page .ant-card-extra{max-width:100%;overflow:auto}}
 .baq-page{min-width:0;max-width:100%}.baq-page>.ant-card{min-width:0;overflow:hidden}.baq-result-table{width:100%;max-width:100%}
 
 /* ---------------------------------------------------------------- 图形化设计器 */
@@ -32,13 +32,13 @@
 .baq-graph-field-key{flex:0 0 auto;font-size:10px;color:#fa8c16;width:16px;text-align:center}
 .baq-graph-field-type{flex:0 0 auto;max-width:52px;overflow:hidden;text-overflow:ellipsis;font-size:10px;color:#bfbfbf;white-space:nowrap}
 .baq-graph-card-footer{flex:0 0 auto;padding:2px 10px 4px;font-size:10px;color:#bfbfbf;text-align:right}
-.baq-graph-panel{width:288px;flex:0 0 288px;border-left:1px solid #f0f0f0;padding:10px 12px;overflow-y:auto;max-height:640px;background:#fff}
+.baq-graph-panel{width:320px;flex:0 0 320px;border-left:1px solid #f0f0f0;padding:10px 12px;overflow-y:auto;max-height:640px;background:#fff}
 .baq-graph-panel-section{border-bottom:1px solid #f5f5f5;padding-bottom:10px;margin-bottom:10px}
 .baq-graph-panel-section:last-child{border-bottom:none;margin-bottom:0}
 .baq-graph-panel-section.is-muted{padding:0 0 10px}
 .baq-graph-panel-title{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;margin-bottom:8px}
 .baq-graph-panel-count{margin-left:auto;font-size:12px;color:#8c8c8c;font-weight:400}
-.baq-graph-field-list,.baq-graph-join-list{display:grid;gap:6px;max-height:300px;overflow-y:auto}
+.baq-graph-field-list,.baq-graph-join-list{display:grid;gap:6px; overflow-y:auto}
 .baq-graph-field-item-head{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:12px}
 .baq-graph-field-item-head:hover{background:#fafafa}
 .baq-graph-field-item-head.is-active{background:#e6f4ff}
@@ -51,15 +51,25 @@
 .baq-graph-join-item.is-active{border-color:#1677ff;background:#fafcff}
 .baq-graph-join-head{display:flex;align-items:center;gap:6px}
 .baq-graph-join-type{width:84px;flex:0 0 84px}
-.baq-graph-join-table{flex:1;min-width:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.baq-graph-join-table{flex:1;min-width:0;max-width:100px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .baq-graph-join-body{display:flex;align-items:center;gap:4px;margin-top:6px}
-.baq-graph-join-field{flex:1;min-width:0}
-.baq-graph-join-eq{font-size:12px;color:#8c8c8c}
+
+
 .baq-graph-join-level{font-size:10px;color:#8c8c8c;background:#fafafa;border:1px solid #f0f0f0;border-radius:3px;padding:0 4px;white-space:nowrap}
 .baq-graph-join-parent{display:flex;align-items:center;gap:4px;margin-top:6px}
 .baq-graph-join-parent-label{font-size:11px;color:#8c8c8c;flex:0 0 auto}
 .baq-graph-join-parent-select{flex:1;min-width:0}
 .baq-graph-join-note{margin-top:4px;font-size:11px;color:#8c8c8c;display:flex;align-items:center;gap:4px}
+.baq-join-cond{display:flex;flex-direction:column;gap:4px;width:100%;min-width:0}
+.baq-join-cond.is-compact{padding:4px 0}
+.baq-join-cond-row{display:flex;align-items:center;gap:4px;min-width:0}
+.baq-join-cond-and{font-size:10px;color:#8c8c8c;flex:0 0 26px;text-align:right}
+.baq-join-cond-field{flex:1;min-width:0}
+.baq-join-cond-eq{font-size:12px;color:#8c8c8c;flex:0 0 auto}
+.baq-join-cond-actions{display:flex;align-items:center;gap:2px;flex-wrap:wrap}
+.baq-join-cond-actions .ant-btn{padding:0 4px;height:22px;font-size:12px}
+.baq-join-cond-hint{font-size:11px;color:#bfbfbf;margin-left:4px}
+.baq-join-summary{display:inline-block;vertical-align:middle;max-width:250px;font-size:12px;color:#595959;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 @media(max-width:1200px){.baq-graph-panel{width:250px;flex:0 0 250px}}
 @media(max-width:900px){.baq-graph-layout{flex-direction:column}.baq-graph-panel{width:100%;flex:1 1 auto;border-left:none;border-top:1px solid #f0f0f0;max-height:none}.baq-graph-toolbar-hint{max-width:100%;margin-left:0}}
 .baq-result-tab{min-width:0;max-width:100%}

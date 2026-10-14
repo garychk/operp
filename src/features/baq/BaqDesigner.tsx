@@ -33,7 +33,15 @@ import {
 import { executeBaq, listBaqs, listTableLabels, loadCatalog, loadRelations, refreshSysTables, removeBaq, saveBaq, updateTableLabels } from "./api";
 import type { TableLabelRow } from "./api";
 import { BaqGraphDesigner } from "./BaqGraphDesigner";
-import { nextAlias, normalizeDefinition } from "./joinGraph";
+import { JoinConditionEditor } from "./JoinConditionEditor";
+import {
+  isJoinComplete,
+  joinConditions,
+  nextAlias,
+  normalizeDefinition,
+  summarizeJoinConditions,
+  withJoinConditions,
+} from "./joinGraph";
 import { shortTableName } from "./tableLabel";
 import { emptyBaq } from "./types";
 import type {
@@ -328,6 +336,7 @@ export function BaqDesigner() {
         <Tabs
           activeKey={activeTab}
           onChange={setActiveTab}
+          tabPlacement="start"
           items={[
             {
               key: "graph",
@@ -370,6 +379,27 @@ export function BaqDesigner() {
                     pagination={false}
                     rowKey="id"
                     dataSource={baq.definition.joins}
+                    expandable={{
+                      // 多字段关联条件在展开行里编辑（左/右字段可选任意列，不限外键）
+                      expandedRowRender: (r, i) => (
+                        <JoinConditionEditor
+                          compact
+                          conditions={joinConditions(r)}
+                          leftAlias={r.leftAlias}
+                          rightAlias={r.alias}
+                          leftColumns={columns(r.leftAlias)}
+                          rightColumns={columns(r.alias)}
+                          onChange={(conditions) =>
+                            patchDef({
+                              joins: baq.definition.joins.map((x, n) =>
+                                n === i ? withJoinConditions(x, conditions) : x,
+                              ),
+                            })
+                          }
+                        />
+                      ),
+                      rowExpandable: () => true,
+                    }}
                     columns={[
                       {
                         title: t('common.type'),
@@ -444,49 +474,25 @@ export function BaqDesigner() {
                         ),
                       },
                       {
-                        title: t('baqDesigner.leftField'),
-                        width: 260,
-                        render: (_, r, i) => (
-                          <Select
-                            className="join-field-select"
-                            showSearch
-                            value={r.leftField}
-                            options={columns(r.leftAlias).map((c) => ({
-                              value: c.name,
-                              label: c.name,
-                            }))}
-                            style={{ width: 260 }}
-                            onChange={(leftField) =>
-                              patchDef({
-                                joins: baq.definition.joins.map((x, n) =>
-                                  n === i ? { ...x, leftField } : x,
-                                ),
-                              })
-                            }
-                          />
-                        ),
-                      },
-                      {
-                        title: t('baqDesigner.rightField'),
-                        width: 260,
-                        render: (_, r, i) => (
-                          <Select
-                            className="join-field-select"
-                            showSearch
-                            value={r.rightField}
-                            style={{ width: 260 }}
-                            options={(
-                              catalog.find((x) => x.table === r.table)
-                                ?.columns || []
-                            ).map((c) => ({ value: c.name, label: c.name }))}
-                            onChange={(rightField) =>
-                              patchDef({
-                                joins: baq.definition.joins.map((x, n) =>
-                                  n === i ? { ...x, rightField } : x,
-                                ),
-                              })
-                            }
-                          />
+                        title: t('baqDesigner.joinConditions'),
+                        width: 320,
+                        render: (_, r) => (
+                          <Space size={4}>
+                            <span
+                              className="baq-join-summary"
+                              title={summarizeJoinConditions(r)}
+                            >
+                              {summarizeJoinConditions(r)}
+                            </span>
+                            {joinConditions(r).length > 1 && (
+                              <Tag color="blue">{joinConditions(r).length}</Tag>
+                            )}
+                            {!isJoinComplete(r) && (
+                              <Tag color="orange">
+                                {t('baqDesigner.graphJoinIncomplete')}
+                              </Tag>
+                            )}
+                          </Space>
                         ),
                       },
                       {
@@ -503,18 +509,21 @@ export function BaqDesigner() {
                       patchDef({
                         joins: [
                           ...baq.definition.joins,
-                          {
-                            id: uid(),
-                            type: "left",
-                            table: "",
-                            alias: nextAlias([
-                              baq.definition.source.alias,
-                              ...baq.definition.joins.map((x) => x.alias),
-                            ]),
-                            leftAlias: "t0",
-                            leftField: "id",
-                            rightField: "id",
-                          },
+                          withJoinConditions(
+                            {
+                              id: uid(),
+                              type: "left",
+                              table: "",
+                              alias: nextAlias([
+                                baq.definition.source.alias,
+                                ...baq.definition.joins.map((x) => x.alias),
+                              ]),
+                              leftAlias: "t0",
+                              leftField: "",
+                              rightField: "",
+                            },
+                            [{ leftField: "", rightField: "" }],
+                          ),
                         ],
                       })
                     }
@@ -737,6 +746,7 @@ export function BaqDesigner() {
                         title: t('baqDesigner.condition'),
                         render: (_, r, i) => (
                           <Select
+                          className="wide"
                             value={r.operator}
                             options={operatorOptions}
                             onChange={(operator: FilterOperator) =>
