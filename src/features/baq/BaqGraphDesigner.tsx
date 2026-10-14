@@ -25,6 +25,15 @@ import {
   message,
 } from "antd";
 import { useTranslation } from "react-i18next";
+import {
+  aliasTableMap,
+  descendantsOf,
+  joinDepths,
+  nextAlias,
+  sortJoinsByDependency,
+  suggestParentAlias,
+  wouldCreateCycle,
+} from "./joinGraph";
 import { shortTableName, tableDisplayName } from "./tableLabel";
 import type {
   Aggregate,
@@ -67,6 +76,45 @@ const autoPosition = (index: number) => ({
   x: 40 + (index % GRID_COLUMNS) * GRID_COLUMN_GAP,
   y: 40 + Math.floor(index / GRID_COLUMNS) * GRID_ROW_GAP,
 });
+
+/** 别名当前实际位置（layout 里没有就按画布顺序推算） */
+const effectivePosition = (definition: BaqDefinition, alias: string) => {
+  const stored = definition.layout?.[alias];
+  if (stored) return stored;
+  const order = [
+    definition.source.alias,
+    ...definition.joins.map((join) => join.alias),
+  ];
+  return autoPosition(Math.max(order.indexOf(alias), 0));
+};
+
+/**
+ * 新表默认放在父表右侧，同一父表下依次向下排；
+ * 位置被占就继续下移，避免新卡片压在已有卡片上。
+ */
+const childPosition = (
+  definition: BaqDefinition,
+  parentAlias: string,
+  alias: string,
+) => {
+  const base = effectivePosition(definition, parentAlias);
+  const taken = Object.entries(definition.layout ?? {})
+    .filter(([key]) => key !== alias)
+    .map(([, value]) => value);
+  const x = base.x + CARD_WIDTH + 72;
+  let y = base.y;
+  let guard = 0;
+  while (
+    taken.some(
+      (pos) => Math.abs(pos.x - x) < CARD_WIDTH && Math.abs(pos.y - y) < 160,
+    ) &&
+    guard < 40
+  ) {
+    y += 160;
+    guard += 1;
+  }
+  return { x, y };
+};
 
 const joinEdgeId = (joinId: string) => `${JOIN_EDGE_PREFIX}${joinId}`;
 
@@ -161,6 +209,8 @@ interface BaqTableCardProps {
   onRemove?: () => void;
   removeTitle: string;
   mainTag: string;
+  /** 非主表的层级标签（如「2 级」），主表用 mainTag */
+  depthTag: string;
   fieldUnit: string;
 }
 
@@ -176,6 +226,7 @@ function BaqTableCard({
   onRemove,
   removeTitle,
   mainTag,
+  depthTag,
   fieldUnit,
 }: BaqTableCardProps) {
   return (
@@ -193,7 +244,8 @@ function BaqTableCard({
           </span>
           <span className="baq-graph-card-alias">
             {alias}
-            {isMain ? ` · ${mainTag}` : ""}
+            {" · "}
+            {isMain ? mainTag : depthTag}
           </span>
         </div>
       }
@@ -372,20 +424,34 @@ export function BaqGraphDesigner({
     [definition.source, definition.joins],
   );
 
+  /**
+   * 把一张表加进画布。
+   *
+   * fromAlias 为空时不再恒定挂主表，而是按外键猜一个父表（下钻场景：详情表 →
+   * 主档表），这样「子表再关联子表」只点两下就能连出来。
+   */
   const appendTable = useCallback(
     (table: string, fromAlias?: string) => {
       const def = defRef.current;
       if (!def.source.table) return;
-      const used = new Set([
+      const alias = nextAlias([
         def.source.alias,
         ...def.joins.map((join) => join.alias),
       ]);
-      let index = 1;
-      while (used.has(`t${index}`)) index += 1;
-      const alias = `t${index}`;
-      const parentAlias = fromAlias ?? def.source.alias;
-      const parent = aliases.find((item) => item.alias === parentAlias);
-      const guess = guessJoinFields(parent?.table ?? def.source.table, table);
+      const parentAlias =
+        fromAlias ??
+        suggestParentAlias(
+          def.source,
+          def.joins,
+          table,
+          relationsRef.current ?? [],
+        ) ??
+        def.source.alias;
+      const tableOf = aliasTableMap(def.source, def.joins);
+      const guess = guessJoinFields(
+        tableOf.get(parentAlias) ?? def.source.table,
+        table,
+      );
       const join: BaqJoin = {
         id: uid(),
         type: "left",
@@ -395,18 +461,61 @@ export function BaqGraphDesigner({
         leftField: guess.leftField,
         rightField: guess.rightField,
       };
+      // 新 join 可能挂在更深的层级上，统一重排一次保证 JOIN 顺序合法
+      const sorted = sortJoinsByDependency(def.source, [...def.joins, join]);
       patchDef({
-        joins: [...def.joins, join],
+        joins: sorted.joins,
         layout: {
           ...(def.layout ?? {}),
-          [alias]: autoPosition(def.joins.length + 1),
+          [alias]: childPosition(def, parentAlias, alias),
         },
       });
       setSelectedJoinId(join.id);
       setSelectedAlias(alias);
     },
-    [aliases, guessJoinFields, patchDef],
+    [guessJoinFields, patchDef],
   );
+
+  /**
+   * 改一条关联的父表（左表）。
+   *
+   * 不再限制方向（原来只允许「靠前的表 → 靠后的表」，所以子表没法挂到另一张
+   * 子表下面），改成：成环才拒绝，合法的改动自动把 joins 重排成依赖顺序。
+   * 父表换掉后左字段所属表也变了，用外键元数据重新猜一次。
+   */
+  const reparentJoin = (joinId: string, parentAlias: string) => {
+    const def = defRef.current;
+    const join = def.joins.find((item) => item.id === joinId);
+    if (!join || join.leftAlias === parentAlias) return;
+    if (wouldCreateCycle(def.source, def.joins, join.alias, parentAlias)) {
+      message.warning(t("baqDesigner.graphJoinCycle"));
+      return;
+    }
+    const tableOf = aliasTableMap(def.source, def.joins);
+    const guess = guessJoinFields(
+      tableOf.get(parentAlias) ?? "",
+      join.table,
+    );
+    const sorted = sortJoinsByDependency(
+      def.source,
+      def.joins.map((item) =>
+        item.id === joinId ? { ...item, leftAlias: parentAlias } : item,
+      ),
+    );
+    patchDef({
+      joins: sorted.joins.map((item) =>
+        item.id === joinId
+          ? {
+              ...item,
+              // 左字段属于旧父表，换表后必须重取；右字段是子表自己的列，猜不到就留着
+              leftField: guess.leftField,
+              rightField: guess.rightField || item.rightField,
+            }
+          : item,
+      ),
+    });
+    setSelectedJoinId(joinId);
+  };
 
   /** 拖线落点：连到已加入的表 → 改关联父表；落在空白 → 弹窗选表新增 */
   const connectHandlerRef = useRef<(edge: Edge) => void>(() => undefined);
@@ -421,12 +530,7 @@ export function BaqGraphDesigner({
       drop();
       return;
     }
-    const order = [
-      def.source.alias,
-      ...def.joins.map((join) => join.alias),
-    ];
-    const sourceIndex = order.indexOf(source.id);
-    if (sourceIndex < 0) {
+    if (!aliasTableMap(def.source, def.joins).has(source.id)) {
       drop();
       return;
     }
@@ -447,24 +551,13 @@ export function BaqGraphDesigner({
       message.info(t("baqDesigner.graphTargetNotOnCanvas"));
       return;
     }
-    const targetIndex = order.indexOf(join.alias);
     if (join.leftAlias === source.id) {
       drop();
       message.info(t("baqDesigner.graphJoinExists"));
       return;
     }
-    if (sourceIndex > targetIndex) {
-      drop();
-      message.warning(t("baqDesigner.graphJoinOrderInvalid"));
-      return;
-    }
     drop();
-    patchDef({
-      joins: def.joins.map((item) =>
-        item.id === join.id ? { ...item, leftAlias: source.id } : item,
-      ),
-    });
-    setSelectedJoinId(join.id);
+    reparentJoin(join.id, source.id);
   };
 
   /**
@@ -645,6 +738,7 @@ export function BaqGraphDesigner({
     });
 
     // 3) 重渲染每张卡片的内容
+    const depths = joinDepths(def.source, def.joins);
     liveAliases.forEach((item) => {
       const host = hostsRef.current.get(item.alias);
       if (!host) return;
@@ -655,20 +749,7 @@ export function BaqGraphDesigner({
       );
       const removeNode = item.isMain
         ? undefined
-        : () => {
-            const current = defRef.current;
-            patchDef({
-              joins: current.joins.filter(
-                (join) => join.alias !== item.alias,
-              ),
-              fields: current.fields.filter(
-                (field) => field.tableAlias !== item.alias,
-              ),
-              filters: current.filters.filter(
-                (filter) => filter.tableAlias !== item.alias,
-              ),
-            });
-          };
+        : () => removeAliases([item.alias]);
       host.root.render(
         <BaqTableCard
           alias={item.alias}
@@ -714,6 +795,9 @@ export function BaqGraphDesigner({
           onRemove={removeNode}
           removeTitle={t("baqDesigner.graphRemoveTable")}
           mainTag={t("baqDesigner.graphMainTag")}
+          depthTag={t("baqDesigner.graphLevelTag", {
+            level: depths.get(item.alias) ?? 1,
+          })}
           fieldUnit={t("baqDesigner.graphFieldUnit")}
         />,
       );
@@ -802,15 +886,51 @@ export function BaqGraphDesigner({
     });
   };
 
+  /**
+   * 移除表（含其全部下游表）。
+   *
+   * 下游表的左别名指向被删掉的表，留着会让生成的 SQL 引用不存在的别名而报错，
+   * 所以必须整棵子树一起摘掉。layout 里的残留坐标顺手清掉。
+   */
+  const removeAliases = (targets: Iterable<string>) => {
+    const def = defRef.current;
+    const doomed = new Set<string>(targets);
+    doomed.forEach((alias) => {
+      descendantsOf(def.joins, alias).forEach((child) => doomed.add(child));
+    });
+    if (doomed.size === 0) return;
+    const layout: Record<string, { x: number; y: number }> = {};
+    Object.entries(def.layout ?? {}).forEach(([alias, position]) => {
+      if (!doomed.has(alias)) layout[alias] = position;
+    });
+    const removedAliases = def.joins.filter((join) =>
+      doomed.has(join.alias),
+    ).length;
+    patchDef({
+      joins: def.joins.filter((join) => !doomed.has(join.alias)),
+      fields: def.fields.filter((field) => !doomed.has(field.tableAlias)),
+      filters: def.filters.filter((filter) => !doomed.has(filter.tableAlias)),
+      layout,
+    });
+    setSelectedJoinId((id) =>
+      def.joins.some((join) => join.id === id && doomed.has(join.alias))
+        ? null
+        : id,
+    );
+    setSelectedAlias((alias) => (alias && doomed.has(alias) ? null : alias));
+    // 被删的表还带着下游时给个提示，避免用户以为只删了一张
+    if (removedAliases > 1) {
+      message.info(
+        t("baqDesigner.graphCascadeRemoved", { count: removedAliases - 1 }),
+      );
+    }
+  };
+
   const removeJoin = (joinId: string) => {
     const def = defRef.current;
     const join = def.joins.find((item) => item.id === joinId);
     if (!join) return;
-    patchDef({
-      joins: def.joins.filter((item) => item.id !== joinId),
-      fields: def.fields.filter((field) => field.tableAlias !== join.alias),
-      filters: def.filters.filter((filter) => filter.tableAlias !== join.alias),
-    });
+    removeAliases([join.alias]);
     setSelectedJoinId(null);
   };
 
@@ -939,6 +1059,40 @@ export function BaqGraphDesigner({
 
   const selectedField = definition.fields.find(
     (field) => field.id === selectedFieldId,
+  );
+
+  /** 右侧关联面板用：别名层级 + 每条关联可选的父表 */
+  const panelDepths = useMemo(
+    () => joinDepths(definition.source, definition.joins),
+    [definition.source, definition.joins],
+  );
+
+  const parentOptionsOf = useCallback(
+    (join: BaqJoin) => {
+      const blocked = descendantsOf(definition.joins, join.alias);
+      return [
+        {
+          alias: definition.source.alias,
+          table: definition.source.table,
+        },
+        ...definition.joins.map((item) => ({
+          alias: item.alias,
+          table: item.table,
+        })),
+      ]
+        .filter(
+          (item) =>
+            item.table &&
+            item.alias !== join.alias &&
+            !blocked.has(item.alias),
+        )
+        .map((item) => ({
+          value: item.alias,
+          label: `${item.alias} · ${labelOf(item.table)}`,
+          title: item.table,
+        }));
+    },
+    [definition.joins, definition.source, labelOf],
   );
 
   if (!definition.source.table) {
@@ -1169,6 +1323,11 @@ export function BaqGraphDesigner({
                       <span className="baq-graph-join-table">
                         {join.alias} · {labelOf(join.table)}
                       </span>
+                      <span className="baq-graph-join-level">
+                        {t("baqDesigner.graphLevelTag", {
+                          level: panelDepths.get(join.alias) ?? 1,
+                        })}
+                      </span>
                       <Button
                         size="small"
                         type="text"
@@ -1178,6 +1337,20 @@ export function BaqGraphDesigner({
                           event.stopPropagation();
                           removeJoin(join.id);
                         }}
+                      />
+                    </div>
+                    <div className="baq-graph-join-parent">
+                      <span className="baq-graph-join-parent-label">
+                        {t("baqDesigner.graphParentTable")}
+                      </span>
+                      <Select
+                        size="small"
+                        className="baq-graph-join-parent-select"
+                        value={join.leftAlias}
+                        options={parentOptionsOf(join)}
+                        onChange={(parentAlias: string) =>
+                          reparentJoin(join.id, parentAlias)
+                        }
                       />
                     </div>
                     <div className="baq-graph-join-body">

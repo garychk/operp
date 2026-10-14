@@ -33,6 +33,7 @@ import {
 import { executeBaq, listBaqs, listTableLabels, loadCatalog, loadRelations, refreshSysTables, removeBaq, saveBaq, updateTableLabels } from "./api";
 import type { TableLabelRow } from "./api";
 import { BaqGraphDesigner } from "./BaqGraphDesigner";
+import { nextAlias, normalizeDefinition } from "./joinGraph";
 import { shortTableName } from "./tableLabel";
 import { emptyBaq } from "./types";
 import type {
@@ -130,7 +131,13 @@ export function BaqDesigner() {
   const save = async (status = baq.status) => {
     setBusy(true);
     try {
-      const saved = await saveBaq({ ...baq, status });
+      // 保存前把 joins 排成依赖顺序：多级关联下，手工编辑 / 历史数据都可能留下
+      // 「子表排在父表前面」，那样生成的 SQL 会引用尚未出现的别名而报错。
+      const saved = await saveBaq({
+        ...baq,
+        definition: normalizeDefinition(baq.definition),
+        status,
+      });
       setBaq(saved);
       await refresh();
       message.success(
@@ -500,7 +507,10 @@ export function BaqDesigner() {
                             id: uid(),
                             type: "left",
                             table: "",
-                            alias: `t${baq.definition.joins.length + 1}`,
+                            alias: nextAlias([
+                              baq.definition.source.alias,
+                              ...baq.definition.joins.map((x) => x.alias),
+                            ]),
                             leftAlias: "t0",
                             leftField: "id",
                             rightField: "id",
