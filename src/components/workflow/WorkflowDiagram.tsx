@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Empty } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { Edge, Graph } from '@antv/x6';
@@ -55,10 +55,74 @@ type DiagramNode = {
 const NODE_WIDTH = 252;
 const COLUMN_GAP = 220;
 const ROW_GAP = 92;
-let shapeRegistered = false;
 
-const ensureShapeRegistered = () => {
-  if (shapeRegistered) return;
+/** ProLayout 把暗色开关写在 <html data-erp-dark> 上；X6 画布（背景 / 网格 / 节点 / 连线）
+ *  的颜色在 JS 里画，拿不到 antd 主题，需要自己跟随它切换。 */
+function useIsDarkTheme() {
+  const [isDark, setIsDark] = useState(
+    () => document.documentElement.getAttribute('data-erp-dark') === 'true',
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setIsDark(root.getAttribute('data-erp-dark') === 'true');
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ['data-erp-dark'] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
+/** 画布明暗两套取色：X6 的背景 / 网格 / 节点 / 连线颜色只能走 JS，没法靠 CSS 继承 */
+const WORKFLOW_CANVAS_COLORS = {
+  light: {
+    background: '#fafafa',
+    grid: '#eef2f6',
+    nodeFill: '#fff',
+    nodeFillCondition: '#fff7e6',
+    nodeStroke: '#d9d9d9',
+    nodeStrokeSelected: '#1677ff',
+    nodeStrokeCondition: '#fa8c16',
+    nodeStrokeStart: '#52c41a',
+    nodeStrokeEnd: '#722ed1',
+    title: '#1f1f1f',
+    subtitle: '#667085',
+    tag: '#5b6b7d',
+    portStroke: '#91a4b7',
+    portFill: '#fff',
+    edgeStroke: '#91a4b7',
+    labelText: '#475467',
+    labelBg: '#ffffff',
+  },
+  dark: {
+    background: '#141414',
+    grid: 'rgba(255, 255, 255, 0.10)',
+    nodeFill: 'rgba(255, 255, 255, 0.06)',
+    nodeFillCondition: 'rgba(250, 140, 22, 0.16)',
+    nodeStroke: 'rgba(255, 255, 255, 0.25)',
+    nodeStrokeSelected: '#4096ff',
+    nodeStrokeCondition: '#ffa940',
+    nodeStrokeStart: '#73d13d',
+    nodeStrokeEnd: '#9254de',
+    title: '#e6e6e6',
+    subtitle: '#a6adb8',
+    tag: '#a6adb8',
+    portStroke: '#8c8c8c',
+    portFill: '#1f1f1f',
+    edgeStroke: '#8c8c8c',
+    labelText: '#d9d9d9',
+    labelBg: '#1f1f1f',
+  },
+} as const;
+
+type WorkflowCanvasTheme = keyof typeof WORKFLOW_CANVAS_COLORS;
+
+let shapeRegisteredTheme: WorkflowCanvasTheme | null = null;
+/** 明暗主题各注册一次（force 覆盖）：节点主色由 addNode 的 attrs 覆盖，但标题 / 副标题 /
+ *  标签 / 端口走注册默认值，所以必须按主题重注册，否则切暗色后文字还是深色看不见。 */
+const ensureShapeRegistered = (theme: WorkflowCanvasTheme, colors: (typeof WORKFLOW_CANVAS_COLORS)[WorkflowCanvasTheme]) => {
+  if (shapeRegisteredTheme === theme) return;
+  const portAttrs = { circle: { r: 5, magnet: true, stroke: colors.portStroke, strokeWidth: 1, fill: colors.portFill } };
   Graph.registerNode('workflow-branch-node', {
     inherit: 'rect',
     width: NODE_WIDTH,
@@ -70,27 +134,27 @@ const ensureShapeRegistered = () => {
       { tagName: 'text', selector: 'tag' },
     ],
     attrs: {
-      body: { rx: 12, ry: 12, strokeWidth: 2, fill: '#fff' },
-      title: { refX: 16, refY: 24, fontSize: 14, fontWeight: 600, fill: '#1f1f1f', textAnchor: 'start', textVerticalAnchor: 'middle' },
-      subtitle: { refX: 16, refY: 50, fontSize: 12, fill: '#667085', textAnchor: 'start', textVerticalAnchor: 'middle' },
-      tag: { refX: NODE_WIDTH - 14, refY: 18, fontSize: 11, fill: '#5b6b7d', textAnchor: 'end', textVerticalAnchor: 'middle' },
+      body: { rx: 12, ry: 12, strokeWidth: 2, fill: colors.nodeFill },
+      title: { refX: 16, refY: 24, fontSize: 14, fontWeight: 600, fill: colors.title, textAnchor: 'start', textVerticalAnchor: 'middle' },
+      subtitle: { refX: 16, refY: 50, fontSize: 12, fill: colors.subtitle, textAnchor: 'start', textVerticalAnchor: 'middle' },
+      tag: { refX: NODE_WIDTH - 14, refY: 18, fontSize: 11, fill: colors.tag, textAnchor: 'end', textVerticalAnchor: 'middle' },
     },
     ports: {
       groups: {
-        top: { position: 'top', attrs: { circle: { r: 5, magnet: true, stroke: '#91a4b7', strokeWidth: 1, fill: '#fff' } } },
-        bottom: { position: 'bottom', attrs: { circle: { r: 5, magnet: true, stroke: '#91a4b7', strokeWidth: 1, fill: '#fff' } } },
-        left: { position: 'left', attrs: { circle: { r: 5, magnet: true, stroke: '#91a4b7', strokeWidth: 1, fill: '#fff' } } },
-        right: { position: 'right', attrs: { circle: { r: 5, magnet: true, stroke: '#91a4b7', strokeWidth: 1, fill: '#fff' } } },
+        top: { position: 'top', attrs: portAttrs },
+        bottom: { position: 'bottom', attrs: portAttrs },
+        left: { position: 'left', attrs: portAttrs },
+        right: { position: 'right', attrs: portAttrs },
       },
     },
   }, true);
   Graph.registerEdge('workflow-branch-edge', {
     inherit: 'edge',
-    attrs: { line: { stroke: '#91a4b7', strokeWidth: 2, targetMarker: { name: 'block', width: 10, height: 10 } } },
+    attrs: { line: { stroke: colors.edgeStroke, strokeWidth: 2, targetMarker: { name: 'block', width: 10, height: 10 } } },
     router: { name: 'manhattan' },
     connector: { name: 'rounded' },
   }, true);
-  shapeRegistered = true;
+  shapeRegisteredTheme = theme;
 };
 
 export function WorkflowDiagram({ nodes, edges, selectedKey, selectedEdgeId, onSelectNode, onSelectEdge, onNodeMove, onEdgeChange, height }: WorkflowDiagramProps) {

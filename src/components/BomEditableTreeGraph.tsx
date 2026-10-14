@@ -63,9 +63,77 @@ const NODE_WIDTH = 252;
 const COLUMN_GAP = 220;
 const ROW_GAP = 92;
 
-let shapeRegistered = false;
-function ensureShapeRegistered() {
-  if (shapeRegistered) return;
+/** ProLayout 把暗色开关写在 <html data-erp-dark> 上；X6 画布（背景 / 网格 / 节点 / 连线）
+ *  的颜色在 JS 里画，拿不到 antd 主题，需要自己跟随它切换。 */
+function useIsDarkTheme() {
+  const [isDark, setIsDark] = useState(
+    () => document.documentElement.getAttribute("data-erp-dark") === "true",
+  );
+  useEffect(() => {
+    const root = document.documentElement;
+    const observer = new MutationObserver(() => {
+      setIsDark(root.getAttribute("data-erp-dark") === "true");
+    });
+    observer.observe(root, { attributes: true, attributeFilter: ["data-erp-dark"] });
+    return () => observer.disconnect();
+  }, []);
+  return isDark;
+}
+
+/** 画布明暗两套取色：X6 的背景 / 网格 / 节点 / 连线颜色只能走 JS，没法靠 CSS 继承 */
+const BOM_CANVAS_COLORS = {
+  light: {
+    background: "#fafafa",
+    grid: "#eef2f6",
+    nodeFillBom: "#f8fbff",
+    nodeFillDetail: "#f0fffb",
+    nodeStrokeBom: "#1677ff",
+    nodeStrokeDetail: "#13c2c2",
+    nodeStrokeSelected: "#1677ff",
+    nodeShadow: "drop-shadow(0px 0px 10px rgba(22, 119, 255, 0.32))",
+    title: "#1f2937",
+    titleActive: "#1677ff",
+    subtitle: "#667085",
+    tag: "#5b6b7d",
+    tagActive: "#1677ff",
+    portStroke: "#91a4b7",
+    portFill: "#fff",
+    edgeStroke: "#91a4b7",
+    labelText: "#475467",
+    labelBg: "#ffffff",
+    labelStroke: "#d0d5dd",
+  },
+  dark: {
+    background: "#141414",
+    grid: "rgba(255, 255, 255, 0.10)",
+    nodeFillBom: "rgba(22, 119, 255, 0.16)",
+    nodeFillDetail: "rgba(19, 194, 194, 0.14)",
+    nodeStrokeBom: "#4096ff",
+    nodeStrokeDetail: "#36cfc9",
+    nodeStrokeSelected: "#4096ff",
+    nodeShadow: "drop-shadow(0px 0px 12px rgba(64, 150, 255, 0.55))",
+    title: "#e6e6e6",
+    titleActive: "#4096ff",
+    subtitle: "#a6adb8",
+    tag: "#a6adb8",
+    tagActive: "#4096ff",
+    portStroke: "#8c8c8c",
+    portFill: "#1f1f1f",
+    edgeStroke: "#8c8c8c",
+    labelText: "#d9d9d9",
+    labelBg: "#1f1f1f",
+    labelStroke: "rgba(255, 255, 255, 0.18)",
+  },
+} as const;
+
+type BomCanvasTheme = keyof typeof BOM_CANVAS_COLORS;
+
+let shapeRegisteredTheme: BomCanvasTheme | null = null;
+/** 明暗主题各注册一次（force 覆盖）；节点主色由 addNode 的 attrs 覆盖，
+ *  副标题 / 端口这些用注册默认值，所以必须按主题重注册。 */
+function ensureShapeRegistered(theme: BomCanvasTheme, colors: (typeof BOM_CANVAS_COLORS)[BomCanvasTheme]) {
+  if (shapeRegisteredTheme === theme) return;
+  const portAttrs = { circle: { r: 5, magnet: true, stroke: colors.portStroke, strokeWidth: 1, fill: colors.portFill } };
   Graph.registerNode(
     "bom-edit-node",
     {
@@ -79,17 +147,17 @@ function ensureShapeRegistered() {
         { tagName: "text", selector: "tag" },
       ],
       attrs: {
-        body: { rx: 12, ry: 12, strokeWidth: 2, fill: "#fff" },
-        title: { refX: 16, refY: 24, fontSize: 14, fontWeight: 600, fill: "#1f2937", textAnchor: "start", textVerticalAnchor: "middle" },
-        subtitle: { refX: 16, refY: 50, fontSize: 12, fill: "#667085", textAnchor: "start", textVerticalAnchor: "middle" },
-        tag: { refX: NODE_WIDTH - 14, refY: 18, fontSize: 11, fill: "#5b6b7d", textAnchor: "end", textVerticalAnchor: "middle" },
+        body: { rx: 12, ry: 12, strokeWidth: 2, fill: colors.nodeFillBom },
+        title: { refX: 16, refY: 24, fontSize: 14, fontWeight: 600, fill: colors.title, textAnchor: "start", textVerticalAnchor: "middle" },
+        subtitle: { refX: 16, refY: 50, fontSize: 12, fill: colors.subtitle, textAnchor: "start", textVerticalAnchor: "middle" },
+        tag: { refX: NODE_WIDTH - 14, refY: 18, fontSize: 11, fill: colors.tag, textAnchor: "end", textVerticalAnchor: "middle" },
       },
       ports: {
         groups: {
-          top: { position: "top", attrs: { circle: { r: 5, magnet: true, stroke: "#91a4b7", strokeWidth: 1, fill: "#fff" } } },
-          bottom: { position: "bottom", attrs: { circle: { r: 5, magnet: true, stroke: "#91a4b7", strokeWidth: 1, fill: "#fff" } } },
-          left: { position: "left", attrs: { circle: { r: 5, magnet: true, stroke: "#91a4b7", strokeWidth: 1, fill: "#fff" } } },
-          right: { position: "right", attrs: { circle: { r: 5, magnet: true, stroke: "#91a4b7", strokeWidth: 1, fill: "#fff" } } },
+          top: { position: "top", attrs: portAttrs },
+          bottom: { position: "bottom", attrs: portAttrs },
+          left: { position: "left", attrs: portAttrs },
+          right: { position: "right", attrs: portAttrs },
         },
       },
     },
@@ -101,7 +169,7 @@ function ensureShapeRegistered() {
       inherit: "edge",
       attrs: {
         line: {
-          stroke: "#91a4b7",
+          stroke: colors.edgeStroke,
           strokeWidth: 2,
           targetMarker: { name: "block", width: 10, height: 10 },
         },
@@ -111,7 +179,7 @@ function ensureShapeRegistered() {
     },
     true,
   );
-  shapeRegistered = true;
+  shapeRegisteredTheme = theme;
 }
 
 async function fetchProductsMap(ids: number[]) {
@@ -240,6 +308,11 @@ function findTreeNode(root: BomTreeNode | null, id: string): BomTreeNode | null 
 }
 export function BomEditableTreeGraph({ materialCode }: Props) {
   const { t } = useTranslation();
+  const isDark = useIsDarkTheme();
+  const canvasColors = useMemo(
+    () => (isDark ? BOM_CANVAS_COLORS.dark : BOM_CANVAS_COLORS.light),
+    [isDark],
+  );
   const [loading, setLoading] = useState(false);
   const [treeData, setTreeData] = useState<BomTreeNode | null>(null);
   const [selectedNode, setSelectedNode] = useState<BomTreeNode | null>(null);
@@ -340,7 +413,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
 
   useEffect(() => {
     if (!treeData || !containerRef.current) return;
-    ensureShapeRegistered();
+    ensureShapeRegistered(isDark ? "dark" : "light", canvasColors);
     graphRef.current?.dispose();
     const storageKey = `${POSITION_STORAGE_PREFIX}${materialCode || "default"}`;
     try { positionCacheRef.current = JSON.parse(localStorage.getItem(storageKey) || "{}"); } catch { positionCacheRef.current = {}; }
@@ -349,10 +422,15 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
       container: containerRef.current,
       width: containerRef.current.clientWidth || 900,
       height: Math.max(containerRef.current.clientHeight || 640, model.height),
-      grid: { size: 10, visible: true, type: "mesh", args: { color: "#eef2f6", thickness: 1 } },
-      background: { color: "#fafafa" },
+      grid: { size: 10, visible: true, type: "mesh", args: { color: canvasColors.grid, thickness: 1 } },
+      background: { color: canvasColors.background },
       interacting: { nodeMovable: true, edgeMovable: false, vertexMovable: false, arrowheadMovable: false },
-      panning: { enabled: true, eventTypes: ["rightMouseDown", "mouseWheel"] },
+      // 平移画布：左键拖空白区、右键拖、滚轮（不按 ctrl 时滚轮＝平移，ctrl+滚轮＝缩放）。
+      // 原来只开了 rightMouseDown + mouseWheel，左键在空白处拖拽完全没反应。
+      // x6 的平移只在 blank:mousedown / node:unhandled:mousedown 上启动，所以
+      // 节点拖动与端口拉线不受影响（已用无头 Chrome 实测：加 leftMouseDown 后
+      // 节点仍可被拖走且画布 translate 保持 0，端口仍能建连线）。
+      panning: { enabled: true, eventTypes: ["leftMouseDown", "rightMouseDown", "mouseWheel"] },
       mousewheel: { enabled: true, modifiers: "ctrl", factor: 1.1, minScale: 0.5, maxScale: 1.5 },
       connecting: {
         allowBlank: false, allowLoop: false, allowMulti: false, snap: true, highlight: true, connectionPoint: "anchor",
@@ -366,13 +444,19 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
       data: node,
       ports: [{ id: `${node.key}-top`, group: "top" }, { id: `${node.key}-bottom`, group: "bottom" }, { id: `${node.key}-left`, group: "left" }, { id: `${node.key}-right`, group: "right" }],
       attrs: {
-        body: { stroke: selectedNode?.id === node.key ? "#1677ff" : node.type === "bom" ? "#1677ff" : "#13c2c2", fill: node.type === "bom" ? "#f8fbff" : "#f0fffb", filter: selectedNode?.id === node.key ? "drop-shadow(0px 0px 10px rgba(22, 119, 255, 0.32))" : undefined },
-        title: { text: node.title, fill: selectedNode?.id === node.key ? "#1677ff" : "#1f2937" }, subtitle: { text: node.subtitle }, tag: { text: node.type === "bom" ? "BOM" : "DETAIL", fill: selectedNode?.id === node.key ? "#1677ff" : "#5b6b7d" },
+        body: {
+          stroke: selectedNode?.id === node.key ? canvasColors.nodeStrokeSelected : node.type === "bom" ? canvasColors.nodeStrokeBom : canvasColors.nodeStrokeDetail,
+          fill: node.type === "bom" ? canvasColors.nodeFillBom : canvasColors.nodeFillDetail,
+          filter: selectedNode?.id === node.key ? canvasColors.nodeShadow : undefined,
+        },
+        title: { text: node.title, fill: selectedNode?.id === node.key ? canvasColors.titleActive : canvasColors.title },
+        subtitle: { text: node.subtitle, fill: canvasColors.subtitle },
+        tag: { text: node.type === "bom" ? "BOM" : "DETAIL", fill: selectedNode?.id === node.key ? canvasColors.tagActive : canvasColors.tag },
       },
     }));
     model.edges.forEach((edge) => graph.addEdge({
       id: edge.id, shape: "bom-edit-edge", source: { cell: edge.source, port: `${edge.source}-bottom` }, target: { cell: edge.target, port: `${edge.target}-top` },
-      labels: [{ attrs: { text: { text: edge.label, fill: "#475467", fontSize: 11, fontWeight: 500 }, rect: { fill: "#ffffff", stroke: "#d0d5dd", rx: 6, ry: 6 } }, position: 0.5 }],
+      labels: [{ attrs: { text: { text: edge.label, fill: canvasColors.labelText, fontSize: 11, fontWeight: 500 }, rect: { fill: canvasColors.labelBg, stroke: canvasColors.labelStroke, rx: 6, ry: 6 } }, position: 0.5 }],
     }));
     graph.centerContent();
     const selectGraphNode = (node: any) => { const data = findTreeNode(treeData, String(node.id)); if (data) setSelectedNode(data); };
@@ -381,7 +465,7 @@ export function BomEditableTreeGraph({ materialCode }: Props) {
     graph.on("blank:click", () => setSelectedNode(null));
     graph.on("node:mouseup", ({ node }: { node: any }) => { const pos = node.position(); positionCacheRef.current[String(node.id)] = { x: pos.x, y: pos.y }; localStorage.setItem(storageKey, JSON.stringify(positionCacheRef.current)); });
     return () => { graph.dispose(); graphRef.current = null; };
-  }, [treeData, selectedNode?.id, materialCode]);
+  }, [treeData, selectedNode?.id, materialCode, canvasColors]);
   const handleSaveSelected = async () => {
     if (!selectedNode) return;
     try {

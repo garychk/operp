@@ -1,6 +1,11 @@
 .page-designer {
     min-height: calc(100vh - 180px);
-    background: #f5f7fa;
+    background: var(--page-designer-bg, #f5f7fa);
+}
+
+/* 暗黑模式：页面底色与画布网格线跟随主题，避免浅色线条在暗底上刺眼 */
+html[data-erp-dark='true'] .page-designer {
+    --page-designer-bg: #141414;
 }
 .page-designer .ant-card {
     border-radius: 0px;
@@ -64,10 +69,15 @@
 }
 
 .designer-canvas {
+    --canvas-grid: #e9edf2;
     min-width: 0;
     padding: 12px;
-    background-image: linear-gradient(#e9edf2 1px, transparent 1px), linear-gradient(90deg, #e9edf2 1px, transparent 1px);
+    background-image: linear-gradient(var(--canvas-grid) 1px, transparent 1px), linear-gradient(90deg, var(--canvas-grid) 1px, transparent 1px);
     background-size: 24px 24px;
+}
+
+html[data-erp-dark='true'] .designer-canvas {
+    --canvas-grid: rgba(255, 255, 255, 0.07);
 }
 
 .designer-canvas>.ant-empty {
