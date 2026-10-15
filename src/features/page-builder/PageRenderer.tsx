@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Divider, Empty, Skeleton, Statistic, Table, Typography } from 'antd';
 import { Column, Line, Pie } from '@ant-design/charts';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
@@ -52,10 +52,30 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
   const [error, setError] = useState('');
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
   const [reloadTick, setReloadTick] = useState(0);
+  // 首次加载才显示 Skeleton，后续定时刷新静默更新，避免画面周期性闪烁
+  const hasLoadedRef = useRef(false);
+  const sourceRef = useRef(widget.dataSource);
+
+  // 动态数据源自动刷新：refreshInterval（秒）> 0 时按间隔重新拉取
+  useEffect(() => {
+    const seconds = widget.refreshInterval || 0;
+    if (widget.dataSource.mode === 'static' || seconds <= 0) return;
+    const timer = window.setInterval(
+      () => setReloadTick((tick) => tick + 1),
+      Math.max(2, seconds) * 1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [widget.dataSource.mode, widget.refreshInterval]);
 
   useEffect(() => {
     let active = true;
     const source = widget.dataSource;
+
+    // 数据源配置本身变化（非定时 tick）时重置，重新显示加载态
+    if (sourceRef.current !== source) {
+      sourceRef.current = source;
+      hasLoadedRef.current = false;
+    }
 
     if (source.mode === 'static') {
       setData((source.staticData || []).slice(0, source.limit || 100) as Record<string, unknown>[]);
@@ -73,7 +93,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
       return () => { active = false; };
     }
 
-    setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
     setError('');
     const request: Promise<{ data: unknown[]; error: { message: string; code?: string } | null; columns: string[] }> = (async () => {
       if (source.mode === 'baq') {
@@ -90,6 +110,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
     request
       .then(({ data: rows, error: queryError, columns: orderedColumns }) => {
         if (!active) return;
+        hasLoadedRef.current = true;
         if (queryError) {
           setData([]);
           setColumnOrder([]);
@@ -103,6 +124,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
       })
       .catch((queryError: unknown) => {
         if (!active) return;
+        hasLoadedRef.current = true;
         setData([]);
         setColumnOrder([]);
         setError(queryError instanceof Error ? queryError.message : t('pageRenderer.dataQueryFailed'));
@@ -158,13 +180,21 @@ export function PageCanvas({ page, editable = false, selectedId, onSelect, onLay
   return (
     <ResponsiveGrid className={`custom-page-grid${editable ? ' is-editing' : ''}`} layout={layout} cols={12} rowHeight={editable ? 48 : 48} margin={[12, 12]} isDraggable={editable} isResizable={editable} onLayoutChange={onLayoutChange} draggableHandle=".widget-drag-handle">
       {page.config.widgets.map(widget => {
-        const plain = !editable && (widget.type === 'text' || widget.type === 'button' || widget.type === 'divider');
+        // plain：预览 / 发布页完全裸渲染（无标题、无边框）——文本 / 按钮 / 分割线 / 滚动播报
+        const plain =
+          !editable &&
+          (widget.type === 'text' ||
+            widget.type === 'button' ||
+            widget.type === 'divider' ||
+            widget.type === 'marquee');
+        // 实时时钟在预览 / 发布页不需要卡片标题，但保留卡片边框（编辑态保留标题作拖拽手柄）
+        const headerless = plain || (!editable && widget.type === 'clock');
         return (
           <div key={widget.id} onClick={() => onSelect?.(widget.id)}>
             <Card
               size="small"
               className={['page-widget', selectedId === widget.id ? 'selected' : '', plain ? 'page-widget-plain' : ''].filter(Boolean).join(' ')}
-              title={plain ? undefined : widget.title}
+              title={headerless ? undefined : widget.title}
               variant={plain ? 'borderless' : undefined}
               classNames={{ header: 'widget-drag-handle' }}
             >

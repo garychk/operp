@@ -65,6 +65,8 @@ export interface PageWidget {
   precision?: number;
   /** 自动播放 / 刷新间隔（秒），默认 5 */
   interval?: number;
+  /** 动态数据源（Supabase / BAQ）自动刷新间隔（秒），0 或缺省 = 不自动刷新 */
+  refreshInterval?: number;
   /** 是否自动播放（轮播表 / 滚动播报 / 告警轮播 / 实时流追加） */
   autoPlay?: boolean;
   /** 进度环形态 */

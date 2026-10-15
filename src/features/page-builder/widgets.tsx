@@ -756,12 +756,14 @@ export function LiveStreamWidget({ widget, data, onRefresh }: WidgetProps) {
     interval,
   ]);
 
-  // 远程数据源：按间隔重新拉取
+  // 远程数据源：按间隔重新拉取。
+  // 若组件配置了通用 refreshInterval，则由渲染层统一轮询，这里不再重复计时。
   useEffect(() => {
-    if (!autoPlay || isStatic || !onRefresh) return;
+    if (!autoPlay || isStatic || !onRefresh || (widget.refreshInterval ?? 0) > 0)
+      return;
     const timer = window.setInterval(() => onRefresh(), interval * 1000);
     return () => window.clearInterval(timer);
-  }, [autoPlay, isStatic, interval, onRefresh]);
+  }, [autoPlay, isStatic, interval, onRefresh, widget.refreshInterval]);
 
   return (
     <div className="pb-stream">

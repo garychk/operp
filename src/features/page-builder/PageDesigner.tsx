@@ -509,6 +509,22 @@ export function PageDesigner() {
                     }
                   />
                 </Form.Item>
+                {selected.dataSource.mode !== "static" && (
+                  <Form.Item
+                    label={t("pageDesigner.refreshInterval")}
+                    tooltip={t("pageDesigner.refreshIntervalTip")}
+                  >
+                    <InputNumber
+                      min={0}
+                      max={3600}
+                      style={{ width: "100%" }}
+                      value={selected.refreshInterval || 0}
+                      onChange={(value) =>
+                        patchWidget({ refreshInterval: value || 0 })
+                      }
+                    />
+                  </Form.Item>
+                )}
                 {selected.dataSource.mode === "static" ? (
                   <Form.Item label={t("pageDesigner.jsonArray")}>
                     <Input.TextArea

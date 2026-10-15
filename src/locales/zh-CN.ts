@@ -1610,6 +1610,8 @@ const zhCN = {
     "pageDesigner.previewTitle": "预览：{{name}}",
     "pageDesigner.publish": "发布",
     "pageDesigner.widgets": "组件",
+    "pageDesigner.refreshInterval": "自动刷新(秒)",
+    "pageDesigner.refreshIntervalTip": "动态数据源按该间隔重新拉取数据，最小 2 秒，0 表示不自动刷新",
     "pageDesigner.pageNamePlaceholder": "页面名称",
     "pageDesigner.pageDescriptionPlaceholder": "页面描述",
     "pageDesigner.emptyCanvas": "从左侧添加组件",

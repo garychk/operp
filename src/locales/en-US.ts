@@ -1610,6 +1610,8 @@ const enUS = {
     "pageDesigner.previewTitle": "Preview: {{name}}",
     "pageDesigner.publish": "Publish",
     "pageDesigner.widgets": "Widgets",
+    "pageDesigner.refreshInterval": "Auto refresh (s)",
+    "pageDesigner.refreshIntervalTip": "Re-fetch dynamic data on this interval (minimum 2s); 0 disables auto refresh",
     "pageDesigner.pageNamePlaceholder": "Page name",
     "pageDesigner.pageDescriptionPlaceholder": "Page description",
     "pageDesigner.emptyCanvas": "Add widgets from the left panel",
