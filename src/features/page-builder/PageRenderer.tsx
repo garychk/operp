@@ -1,64 +1,48 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Divider, Empty, Skeleton, Statistic, Table, Typography } from 'antd';
 import { Column, Line, Pie } from '@ant-design/charts';
 import GridLayout, { WidthProvider } from 'react-grid-layout';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
+import { useErpDarkMode } from '../../hooks/useErpDarkMode';
 import { getCustomPage } from './api';
 import type { CustomPage, PageWidget } from './types';
 import { executeBaq } from '../baq/api';
+import { getChartHeight, useElementWidth } from './widgetUtils';
+import {
+  AlertBannerWidget,
+  CarouselTableWidget,
+  ClockWidget,
+  GaugeWidget,
+  LinkageWidget,
+  LiveStreamWidget,
+  MarqueeWidget,
+  ProgressRingWidget,
+  RankingWidget,
+  ScatterWidget,
+  StatusTagWidget,
+} from './widgets';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import './page-builder.css';
 
 const ResponsiveGrid = WidthProvider(GridLayout);
 
-const GRID_ROW_HEIGHT = 48;
-const GRID_MARGIN = 12;
-const CARD_BODY_MIN_HEIGHT = 48;
-
-function getChartHeight(widget: PageWidget) {
-  const totalHeight = widget.h * GRID_ROW_HEIGHT + Math.max(0, widget.h - 1) * GRID_MARGIN;
-  return Math.max(180, totalHeight - 44 - CARD_BODY_MIN_HEIGHT);
-}
-
-function useElementWidth<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
-  const [width, setWidth] = useState(0);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-
-    const update = () => setWidth(element.getBoundingClientRect().width);
-    update();
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', update);
-      return () => window.removeEventListener('resize', update);
-    }
-
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  return { ref, width };
-}
-
 function ChartWidget({ widget, data }: { widget: PageWidget; data: Record<string, unknown>[] }) {
   const { ref, width } = useElementWidth<HTMLDivElement>();
+  const dark = useErpDarkMode();
   const chartHeight = getChartHeight(widget);
   const chartWidth = Math.max(0, Math.floor(width));
+  const theme = dark ? 'classicDark' : 'classic';
 
   if (widget.type === 'line') {
-    return <div ref={ref} className="chart-widget"><Line data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit width={chartWidth} height={chartHeight} /></div>;
+    return <div ref={ref} className="chart-widget"><Line data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit width={chartWidth} height={chartHeight} theme={theme} /></div>;
   }
   if (widget.type === 'column') {
-    return <div ref={ref} className="chart-widget"><Column data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit width={chartWidth} height={chartHeight} /></div>;
+    return <div ref={ref} className="chart-widget"><Column data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit width={chartWidth} height={chartHeight} theme={theme} /></div>;
   }
-  return <div ref={ref} className="chart-widget"><Pie data={data} angleField={widget.yField || 'value'} colorField={widget.colorField || widget.xField || 'name'} innerRadius={0.55} autoFit width={chartWidth} height={chartHeight} /></div>;
+  return <div ref={ref} className="chart-widget"><Pie data={data} angleField={widget.yField || 'value'} colorField={widget.colorField || widget.xField || 'name'} innerRadius={0.55} autoFit width={chartWidth} height={chartHeight} theme={theme} /></div>;
 }
 
 function WidgetBody({ widget }: { widget: PageWidget }) {
@@ -67,6 +51,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
   const [loading, setLoading] = useState(widget.dataSource.mode !== 'static');
   const [error, setError] = useState('');
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -125,11 +110,13 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
       });
 
     return () => { active = false; };
-  }, [widget.dataSource]);
+  }, [widget.dataSource, reloadTick]);
+
   const columns = useMemo(() => {
     const keys = columnOrder.length ? columnOrder : Object.keys(data[0] || {}).slice(0, 8);
     return keys.map(key => ({ title: key, dataIndex: key, key, ellipsis: true }));
   }, [data, columnOrder]);
+
   if (loading) return <Skeleton active paragraph={{ rows: 3 }} />;
   if (error) return <Alert type="error" showIcon message={t('pageRenderer.dataLoadFailed')} description={error} />;
   if (widget.type === 'text') return <Typography.Paragraph>{widget.content}</Typography.Paragraph>;
@@ -147,10 +134,23 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
       </Divider>
     )
   );
+  if (widget.type === 'clock') return <ClockWidget widget={widget} data={data} />;
   if (widget.type === 'statistic') return <Statistic title={String(data[0]?.[widget.xField || 'label'] || widget.title)} value={Number(data[0]?.[widget.yField || 'value'] || 0)} />;
   if (!data.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   if (widget.type === 'table') return <Table size="small" rowKey={(_, index) => String(index)} columns={columns} dataSource={data} pagination={{ pageSize: widget.pageSize || 10, hideOnSinglePage: true, showSizeChanger: false }} scroll={{ x: true }} />;
   if (widget.type === 'line' || widget.type === 'column' || widget.type === 'pie') return <ChartWidget widget={widget} data={data} />;
+
+  if (widget.type === 'progressRing') return <ProgressRingWidget widget={widget} data={data} />;
+  if (widget.type === 'gauge') return <GaugeWidget widget={widget} data={data} />;
+  if (widget.type === 'scatter') return <ScatterWidget widget={widget} data={data} />;
+  if (widget.type === 'linkage') return <LinkageWidget widget={widget} data={data} />;
+  if (widget.type === 'ranking') return <RankingWidget widget={widget} data={data} />;
+  if (widget.type === 'carouselTable') return <CarouselTableWidget widget={widget} data={data} />;
+  if (widget.type === 'liveStream') return <LiveStreamWidget widget={widget} data={data} onRefresh={() => setReloadTick((tick) => tick + 1)} />;
+  if (widget.type === 'marquee') return <MarqueeWidget widget={widget} data={data} />;
+  if (widget.type === 'alertBanner') return <AlertBannerWidget widget={widget} data={data} />;
+  if (widget.type === 'statusTag') return <StatusTagWidget widget={widget} data={data} />;
+  return null;
 }
 
 export function PageCanvas({ page, editable = false, selectedId, onSelect, onLayoutChange }: { page: CustomPage; editable?: boolean; selectedId?: string; onSelect?: (id: string) => void; onLayoutChange?: (layout: GridLayout.Layout[]) => void }) {

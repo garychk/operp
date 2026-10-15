@@ -1,17 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  AlertOutlined,
   AppstoreAddOutlined,
   BarChartOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  DashboardOutlined,
   DeleteOutlined,
+  DotChartOutlined,
   EyeOutlined,
+  InteractionOutlined,
   MinusOutlined,
   LineChartOutlined,
+  OrderedListOutlined,
   PieChartOutlined,
   PlusOutlined,
+  RetweetOutlined,
   SaveOutlined,
   SendOutlined,
+  SoundOutlined,
   TableOutlined,
+  TagsOutlined,
+  ThunderboltOutlined,
 } from "@ant-design/icons";
 import {
   Alert,
@@ -35,7 +46,7 @@ import type { Layout } from "react-grid-layout";
 import { listCustomPages, publishCustomPage, saveCustomPage } from "./api";
 import { PageCanvas } from "./PageRenderer";
 import type { CustomPage, PageWidget, WidgetType } from "./types";
-import { widgetDefaults } from "./types";
+import { createWidgetDefaults } from "./types";
 import "./page-builder.css";
 import { listBaqs } from "../baq/api";
 import type { BaqQuery } from "../baq/types";
@@ -63,7 +74,20 @@ export function PageDesigner() {
     { type: "column", label: t("pageDesigner.widgetColumn"), icon: <BarChartOutlined /> },
     { type: "pie", label: t("pageDesigner.widgetPie"), icon: <PieChartOutlined /> },
     { type: "divider", label: t("pageDesigner.widgetDivider"), icon: <MinusOutlined /> },
+    { type: "progressRing", label: t("pageDesigner.widgetProgressRing"), icon: <CheckCircleOutlined /> },
+    { type: "gauge", label: t("pageDesigner.widgetGauge"), icon: <DashboardOutlined /> },
+    { type: "scatter", label: t("pageDesigner.widgetScatter"), icon: <DotChartOutlined /> },
+    { type: "linkage", label: t("pageDesigner.widgetLinkage"), icon: <InteractionOutlined /> },
+    { type: "ranking", label: t("pageDesigner.widgetRanking"), icon: <OrderedListOutlined /> },
+    { type: "carouselTable", label: t("pageDesigner.widgetCarouselTable"), icon: <RetweetOutlined /> },
+    { type: "liveStream", label: t("pageDesigner.widgetLiveStream"), icon: <ThunderboltOutlined /> },
+    { type: "marquee", label: t("pageDesigner.widgetMarquee"), icon: <SoundOutlined /> },
+    { type: "alertBanner", label: t("pageDesigner.widgetAlertBanner"), icon: <AlertOutlined /> },
+    { type: "statusTag", label: t("pageDesigner.widgetStatusTag"), icon: <TagsOutlined /> },
+    { type: "clock", label: t("pageDesigner.widgetClock"), icon: <ClockCircleOutlined /> },
   ];
+
+  const defaults = useMemo(() => createWidgetDefaults(t), [t]);
 
   const [pages, setPages] = useState<CustomPage[]>([]);
   const [page, setPage] = useState<CustomPage>(emptyPage);
@@ -96,9 +120,8 @@ export function PageDesigner() {
       },
     }));
   const addWidget = (type: WidgetType) => {
-    const defaults = widgetDefaults[type];
     const widget: PageWidget = {
-      ...defaults,
+      ...defaults[type],
       id: `${type}-${Date.now()}`,
       type,
       x: 0,
@@ -152,6 +175,78 @@ export function PageDesigner() {
       },
     }));
 
+  // ---------------------------------------------------------------
+  // 属性面板字段渲染助手：统一新组件的属性编辑交互
+  // ---------------------------------------------------------------
+  const textField = (label: string, key: keyof PageWidget, placeholder?: string) => (
+    <Form.Item label={label} key={key}>
+      <Input
+        value={(selected?.[key] as string | undefined) ?? ""}
+        placeholder={placeholder}
+        onChange={(event) =>
+          patchWidget({ [key]: event.target.value } as Partial<PageWidget>)
+        }
+      />
+    </Form.Item>
+  );
+  const numericField = (label: string, key: keyof PageWidget, min: number, max: number) => (
+    <Form.Item label={label} key={key}>
+      <InputNumber
+        min={min}
+        max={max}
+        value={selected?.[key] as number | undefined}
+        onChange={(value) =>
+          patchWidget({ [key]: value ?? undefined } as Partial<PageWidget>)
+        }
+      />
+    </Form.Item>
+  );
+  const boolField = (label: string, key: keyof PageWidget) => (
+    <Form.Item label={label} key={key}>
+      <Segmented
+        block
+        value={(selected?.[key] as boolean | undefined) === false ? "no" : "yes"}
+        options={[
+          { label: t("common.yes"), value: "yes" },
+          { label: t("common.no"), value: "no" },
+        ]}
+        onChange={(value) =>
+          patchWidget({ [key]: value === "yes" } as Partial<PageWidget>)
+        }
+      />
+    </Form.Item>
+  );
+  const limitField = () => (
+    <Form.Item label={t("pageDesigner.maxRecords")} key="limit">
+      <InputNumber
+        min={1}
+        max={10000}
+        value={selected?.dataSource.limit || 100}
+        onChange={(value) =>
+          patchWidget({
+            dataSource: { ...selected!.dataSource, limit: value || 100 },
+          })
+        }
+      />
+    </Form.Item>
+  );
+  const selectField = (
+    label: string,
+    key: keyof PageWidget,
+    options: Array<{ label: string; value: string }>,
+    fallback: string,
+  ) => (
+    <Form.Item label={label} key={key}>
+      <Select
+        value={(selected?.[key] as string | undefined) || fallback}
+        options={options}
+        onChange={(value) =>
+          patchWidget({ [key]: value } as Partial<PageWidget>)
+        }
+      />
+    </Form.Item>
+  );
+
   return (
     <div className="page-designer">
       <Card
@@ -160,6 +255,22 @@ export function PageDesigner() {
         styles={{ body: { padding: "1px 0px 0px 0px" } }}
         extra={
           <Space>
+            <Input
+              value={page.name}
+              style={{ width: 200 }}
+              onChange={(event) =>
+                setPage({ ...page, name: event.target.value })
+              }
+              placeholder={t("pageDesigner.pageNamePlaceholder")}
+            />
+            <Input
+              value={page.description || ""}
+              style={{ width: 280 }}
+              onChange={(event) =>
+                setPage({ ...page, description: event.target.value })
+              }
+              placeholder={t("pageDesigner.pageDescriptionPlaceholder")}
+            />
             <Select
               value={page.id || "new"}
               style={{ width: 220 }}
@@ -198,7 +309,7 @@ export function PageDesigner() {
         }
       >
         <div className="designer-workspace">
-          <Card title={t("pageDesigner.widgets")} variant="borderless" size="small">
+          <Card title={t("pageDesigner.widgets")} variant="borderless" size="small" className="component-palette">
             <div className="palette-grid">
               {palette.map((item) => (
                 <Button
@@ -210,24 +321,6 @@ export function PageDesigner() {
                 </Button>
               ))}
             </div>
-            <Divider />
-            <Space orientation="vertical">
-              <Typography.Text strong>{t("pageDesigner.page")}</Typography.Text>
-              <Input
-                value={page.name}
-                onChange={(event) =>
-                  setPage({ ...page, name: event.target.value })
-                }
-                placeholder={t("pageDesigner.pageNamePlaceholder")}
-              />
-              <Input
-                value={page.description || ""}
-                onChange={(event) =>
-                  setPage({ ...page, description: event.target.value })
-                }
-                placeholder={t("pageDesigner.pageDescriptionPlaceholder")}
-              />
-            </Space>
           </Card>
           <main className="designer-canvas">
             {page.config.widgets.length ? (
@@ -246,6 +339,7 @@ export function PageDesigner() {
             title={t("pageDesigner.widgetProperties")}
             variant="borderless"
             size="small"
+            className="property-panel"
             extra={
               <Popconfirm
                 title={t("pageDesigner.deleteWidgetConfirm")}
@@ -543,6 +637,112 @@ export function PageDesigner() {
                         }
                       />
                     </Form.Item>
+                  </>
+                )}
+
+                {/* ============ 增强组件属性 ============ */}
+                {selected.type === "progressRing" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {textField(t("pageDesigner.valueField"), "yField")}
+                    {numericField(t("pageDesigner.maxValue"), "maxValue", 1, 1000000)}
+                    {numericField(t("pageDesigner.precision"), "precision", 0, 4)}
+                    {textField(t("pageDesigner.unit"), "unit")}
+                    {selectField(t("pageDesigner.ringShape"), "ringShape", [
+                      { label: t("pageDesigner.ringCircle"), value: "circle" },
+                      { label: t("pageDesigner.ringDashboard"), value: "dashboard" },
+                    ], "circle")}
+                    {textField(t("pageDesigner.accentColor"), "accentColor", t("pageDesigner.accentColorPlaceholder"))}
+                  </>
+                )}
+                {selected.type === "gauge" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {textField(t("pageDesigner.valueField"), "yField")}
+                    {numericField(t("pageDesigner.maxValue"), "maxValue", 1, 1000000)}
+                    {numericField(t("pageDesigner.precision"), "precision", 0, 4)}
+                    {textField(t("pageDesigner.unit"), "unit")}
+                    {textField(t("pageDesigner.accentColor"), "accentColor", t("pageDesigner.accentColorPlaceholder"))}
+                  </>
+                )}
+                {selected.type === "scatter" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {textField(t("pageDesigner.valueField"), "yField")}
+                    {textField(t("pageDesigner.categoryField"), "colorField")}
+                  </>
+                )}
+                {selected.type === "linkage" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {textField(t("pageDesigner.valueField"), "yField")}
+                    {textField(t("pageDesigner.secondValueField"), "y2Field")}
+                  </>
+                )}
+                {selected.type === "ranking" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {textField(t("pageDesigner.valueField"), "yField")}
+                    {numericField(t("pageDesigner.displayRows"), "displayRows", 1, 20)}
+                    {numericField(t("pageDesigner.precision"), "precision", 0, 4)}
+                    {textField(t("pageDesigner.unit"), "unit")}
+                    {textField(t("pageDesigner.accentColor"), "accentColor", t("pageDesigner.accentColorPlaceholder"))}
+                  </>
+                )}
+                {selected.type === "carouselTable" && (
+                  <>
+                    {numericField(t("pageDesigner.pageSize"), "pageSize", 1, 50)}
+                    {numericField(t("pageDesigner.interval"), "interval", 1, 60)}
+                    {boolField(t("pageDesigner.autoPlay"), "autoPlay")}
+                    {limitField()}
+                  </>
+                )}
+                {selected.type === "liveStream" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {textField(t("pageDesigner.statusField"), "statusField")}
+                    {numericField(t("pageDesigner.displayRows"), "displayRows", 1, 50)}
+                    {numericField(t("pageDesigner.interval"), "interval", 2, 120)}
+                    {boolField(t("pageDesigner.autoPlay"), "autoPlay")}
+                  </>
+                )}
+                {selected.type === "marquee" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {numericField(t("pageDesigner.displayRows"), "displayRows", 1, 6)}
+                    {numericField(t("pageDesigner.interval"), "interval", 4, 120)}
+                    {boolField(t("pageDesigner.autoPlay"), "autoPlay")}
+                    {selectField(t("pageDesigner.scrollDirection"), "scrollDirection", [
+                      { label: t("pageDesigner.vertical"), value: "vertical" },
+                      { label: t("pageDesigner.horizontal"), value: "horizontal" },
+                    ], "vertical")}
+                  </>
+                )}
+                {selected.type === "alertBanner" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {textField(t("pageDesigner.statusField"), "statusField")}
+                    {textField(t("pageDesigner.statusMap"), "statusMap", t("pageDesigner.statusMapPlaceholder"))}
+                    {numericField(t("pageDesigner.interval"), "interval", 2, 60)}
+                    {boolField(t("pageDesigner.autoPlay"), "autoPlay")}
+                  </>
+                )}
+                {selected.type === "statusTag" && (
+                  <>
+                    {textField(t("pageDesigner.xLabelField"), "xField")}
+                    {textField(t("pageDesigner.statusField"), "statusField")}
+                    {textField(t("pageDesigner.statusMap"), "statusMap", t("pageDesigner.statusMapPlaceholder"))}
+                  </>
+                )}
+                {selected.type === "clock" && (
+                  <>
+                    {textField(t("pageDesigner.timeFormat"), "timeFormat")}
+                    {textField(t("pageDesigner.dateFormat"), "dateFormat")}
+                    {selectField(t("pageDesigner.orientation"), "orientation", [
+                      { label: t("pageDesigner.horizontal"), value: "horizontal" },
+                      { label: t("pageDesigner.vertical"), value: "vertical" },
+                    ], "vertical")}
+                    {textField(t("pageDesigner.accentColor"), "accentColor", t("pageDesigner.accentColorPlaceholder"))}
                   </>
                 )}
               </Form>
