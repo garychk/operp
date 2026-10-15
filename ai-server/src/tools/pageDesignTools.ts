@@ -469,6 +469,7 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
   const payload = {
     tenant_id: tenantId, // 显式带租户：ai-server 走 service_role，auth.uid() 为 null，
     // 表的 DEFAULT current_tenant_id() 会解析成 null，必须显式写入当前租户
+    is_deleted: "n", // 显式标记未删除，避免依赖列默认值（service_role 下默认值行为不可控）
     name: pageName,
     slug,
     description: String(spec.description || "").slice(0, 200) || null,
@@ -503,6 +504,7 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
   if (createdBaqs.length) lines.push(tt("page.baq.created", { list: createdBaqs.join("、") }));
   if (reusedBaqs.length) lines.push(tt("page.baq.reused", { list: [...new Set(reusedBaqs)].join("、") }));
   if (failedNeeds.length) lines.push(tt("page.baq.failed", { list: failedNeeds.join("、") }));
+  if (createdBaqs.length || reusedBaqs.length) lines.push(tt("baq.manageLink"));
   lines.push("", tt("page.created.links", { preview: previewPath, designer: "/system/page-designer" }), "", tt("page.created.draftNote"));
 
   return {

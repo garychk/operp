@@ -1033,38 +1033,68 @@ export async function designAndPersistBaq(options: {
   const { tenantId } = options;
   const catalog = options.catalog ?? (await loadBaqCatalog());
   const current = options.current || null;
-  const prompt = [
-    "你是 OPERP BAQ 设计助手。请根据用户的完整需求设计真正可执行的 BAQ，不要只创建一条空记录。",
-    "请分析应该使用哪张主表、关联哪些表、关联字段、输出字段、分组聚合、筛选条件和排序方式。",
-    "只返回 JSON，不要 Markdown，不要解释。必须包含 name、code、description、definition。",
-    "definition 必须完整包含 source、joins、fields、filters、sorts。",
-    "source 格式为 {table, alias}，主表 alias 固定为 t0。",
-    "join 格式为 {id,type,table,alias,leftAlias,leftField,rightField,conditions}，type 只能是 left 或 inner。",
-    "conditions 是这条关联的完整条件列表 [{leftField,rightField},...]，多对字段之间用 AND 连接；leftField/rightField 必须等于 conditions[0]，只有一对条件时 conditions 可以省略。",
-    "关联两端都可以选任意真实列，不限于外键：需要按业务编码关联时就写 code = code（例如 物料.code = 单据明细.物料编码列），不要因为没有外键就放弃关联。",
-    "关联支持多级：一条 join 的 leftAlias 可以是主表 alias，也可以是前面某条 join 的 alias（即子表再关联子表）；joins 数组顺序必须满足左别名先出现。",
-    "field 格式为 {id,alias,field,groupBy,aggregate,tableAlias}，aggregate 只能是 none、sum、count、avg、min、max。",
-    "filter 格式为 {id,tableAlias,field,operator,value}，operator 只能是 eq、neq、gt、gte、lt、lte、like、is_null、not_null。",
-    "sort 格式为 {id,fieldAlias,direction}，direction 只能是 asc 或 desc。",
-    "如果用户要求统计、数量、金额、合计或平均值，必须正确设置 aggregate 和 groupBy。",
-    "只能从下面数据目录的 table 字段中选择真实表名，不能使用 PartBin、Part、Customer 等 ERP 逻辑表名，也不能使用中文字段名或臆造字段。",
-    "如果需求无法匹配数据目录中的真实表和字段，必须返回 definition 为空，而不是猜测表名。",
-    current ? `当前BAQ：${JSON.stringify(current)}` : "当前BAQ：无",
-    `数据目录：${JSON.stringify(pickBaqCatalog(catalog, options.text))}`,
-    `用户原话：${options.text}`,
-    "如果用户是在修改已有BAQ，请尽量保留原有结构并仅按要求调整。",
-  ].join("\n");
-  const { content } = await callChatModel([{ role: "system", content: "只返回JSON。" }, { role: "user", content: prompt }], options.provider);
-  const parsed = parseJson<{ name?: string; code?: string; description?: string; definition?: unknown }>(content);
   const isUpdate = Boolean(current?.id);
-  const definition = normalizeBaqDefinition(
-    isUpdate ? mergeBaqDefinition(current?.definition, parsed?.definition) : parsed?.definition,
-  );
+  const trimmedCatalog = pickBaqCatalog(catalog, options.text, 24);
+  const MAX_ROUNDS = 4; // 首次 + 最多 3 次修复；校验失败会把具体错误回喂模型
+  let definition: ReturnType<typeof normalizeBaqDefinition> = null;
+  let parsed: { name?: string; code?: string; description?: string; definition?: unknown } | null = null;
+  let retryError = "";
+  for (let round = 0; round < MAX_ROUNDS && !definition; round += 1) {
+    // 首轮用裁剪目录（省 token）；修复轮改用全量目录（含列），方便模型纠正表名/字段名
+    const catalogForPrompt = round === 0 ? trimmedCatalog : catalog;
+    const prompt = [
+      "你是 OPERP BAQ 设计助手。请根据用户的完整需求设计真正可执行的 BAQ，不要只创建一条空记录。",
+      "请分析应该使用哪张主表、关联哪些表、关联字段、输出字段、分组聚合、筛选条件和排序方式。",
+      "只返回 JSON，不要 Markdown，不要解释。必须包含 name、code、description、definition。",
+      "definition 必须完整包含 source、joins、fields、filters、sorts。",
+      "source 格式为 {table, alias}，主表 alias 固定为 t0。",
+      "join 格式为 {id,type,table,alias,leftAlias,leftField,rightField,conditions}，type 只能是 left 或 inner。",
+      "conditions 是这条关联的完整条件列表 [{leftField,rightField},...]，多对字段之间用 AND 连接；leftField/rightField 必须等于 conditions[0]，只有一对条件时 conditions 可以省略。",
+      "关联两端都可以选任意真实列，不限于外键：需要按业务编码关联时就写 code = code（例如 物料.code = 单据明细.物料编码列），不要因为没有外键就放弃关联。",
+      "关联支持多级：一条 join 的 leftAlias 可以是主表 alias，也可以是前面某条 join 的 alias（即子表再关联子表）；joins 数组顺序必须满足左别名先出现。",
+      "field 格式为 {id,alias,field,groupBy,aggregate,tableAlias}，aggregate 只能是 none、sum、count、avg、min、max。",
+      "filter 格式为 {id,tableAlias,field,operator,value}，operator 只能是 eq、neq、gt、gte、lt、lte、like、is_null、not_null。",
+      "sort 格式为 {id,fieldAlias,direction}，direction 只能是 asc 或 desc。",
+      "如果用户要求统计、数量、金额、合计或平均值，必须正确设置 aggregate 和 groupBy。",
+      "优先从下方「数据目录」中选择真实存在的表名与字段；若确知某个真实 erp_ 业务表/字段确实存在但不在目录中，也可使用（系统会按真实库表校验）。",
+      "不要使用 PartBin、Part、Customer 等臆造的 ERP 逻辑表名，也不要使用中文字段名或不存在的字段。",
+      current ? `当前BAQ：${JSON.stringify(current)}` : "当前BAQ：无",
+      `数据目录：${JSON.stringify(catalogForPrompt)}`,
+      `用户原话：${options.text}`,
+      "如果用户是在修改已有BAQ，请尽量保留原有结构并仅按要求调整。",
+      retryError
+        ? `上次结果无效：${retryError}\n可用的真实表名（含未列入目录的）：${catalog.map((item) => item.table).join(", ")}\n请修正后重新只返回完整的 JSON（definition 必须完整）。`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+    const { content } = await callChatModel(
+      [
+        { role: "system", content: "只返回JSON。" },
+        { role: "user", content: prompt },
+      ],
+      options.provider,
+    );
+    parsed = parseJson<{ name?: string; code?: string; description?: string; definition?: unknown }>(content);
+    const candidate = normalizeBaqDefinition(
+      isUpdate ? mergeBaqDefinition(current?.definition, parsed?.definition) : parsed?.definition,
+    );
+    if (!candidate) {
+      retryError = "模型未生成有效的查询定义（缺少 definition.source.table 或整体结构不完整）。";
+      continue;
+    }
+    try {
+      validateBaqDefinition(candidate, catalog);
+      definition = candidate;
+    } catch (validationError) {
+      retryError = validationError instanceof Error ? validationError.message.slice(0, 200) : "校验失败";
+    }
+  }
   if (!definition) {
     throw new Error(
       isUpdate
-        ? "BAQ 修改失败：没有找到可修改的 BAQ 定义，请先明确 BAQ 名称或编码。"
-        : "BAQ 创建失败：模型未生成有效的查询定义。",
+        ? "BAQ 修改失败：模型多次尝试仍未生成有效的查询定义，请先明确 BAQ 名称或编码。"
+        : "BAQ 创建失败：模型多次尝试仍未生成有效的查询定义。",
     );
   }
   validateBaqDefinition(definition, catalog);
@@ -1089,7 +1119,7 @@ export async function designAndPersistBaq(options: {
   };
   const response = baq.id
     ? await supabase.from("sys_baq_queries").update(payload).eq("id", baq.id).eq("tenant_id", tenantId).select().single()
-    : await supabase.from("sys_baq_queries").insert(payload).select().single();
+    : await supabase.from("sys_baq_queries").insert({ ...payload, is_deleted: "n" }).select().single();
   if (response.error) throw response.error;
   const saved = response.data as Record<string, unknown>;
   await logAiOperation({
@@ -1106,6 +1136,7 @@ export async function designAndPersistBaq(options: {
 }
 
 export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolResult> {
+  const tt = toolText(state.locale);
   const tenantId = requireTenantId(state);
   const target = await findBaqTarget(state.text, tenantId, state.currentFocus);
   try {
@@ -1119,7 +1150,7 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
     });
     return {
       status: "success",
-      reply: `${isUpdate ? "BAQ 已更新" : "BAQ 已创建"}：${String(saved.name || "")}\n编码：${String(saved.code || "")}\n\n${definitionSummary}`,
+      reply: `${isUpdate ? "BAQ 已更新" : "BAQ 已创建"}：${String(saved.name || "")}\n编码：${String(saved.code || "")}\n\n${definitionSummary}\n\n${tt("baq.manageLink")}`,
       data: saved,
       focus: { type: "baq", id: saved.id, code: saved.code, name: saved.name },
     };

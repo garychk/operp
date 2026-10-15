@@ -361,6 +361,13 @@ export function PageDesigner() {
           >
             {selected ? (
               <Form layout="vertical" size="small">
+                <Form.Item label={t("pageDesigner.widgetType")}>
+                  <Input
+                    value={palette.find((item) => item.type === selected.type)?.label || selected.type}
+                    readOnly
+                    disabled
+                  />
+                </Form.Item>
                 <Form.Item label={t("pageDesigner.widgetTitle")}>
                   <Input
                     value={selected.title}

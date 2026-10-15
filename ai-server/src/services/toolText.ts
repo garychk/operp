@@ -112,6 +112,10 @@ const DICT = {
     zh: "（由 AI 页面设计助手创建于 {date}，供页面「{page}」使用，删除前请确认页面已不再使用）",
     en: " (Created by AI Page Designer on {date} for page \"{page}\"; do not delete while the page is in use)",
   },
+  "baq.manageLink": {
+    zh: "[在 BAQ 管理页查看 / 修改](/system/baq)",
+    en: "[View / edit in BAQ Manager](/system/baq)",
+  },
 
   /* ---------------- 单据：草稿预览 ---------------- */
   "doc.preview.title": {
