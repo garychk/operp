@@ -16,7 +16,7 @@ import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventor
 import { useCurrencyRegistry } from '../../utils/money';
 import { SuperTable } from '../../components/SuperTable';
 import SimpleModal from '../../components/SimpleModal';
-import { SupaModal } from '../../components/SupaModal';
+import { SupaModal, buildModalNav } from '../../components/SupaModal';
 import { WarehouseBinSelect } from '../../components/WarehouseBinSelect';
 import { logOperation } from '../../utils/logger';
 
@@ -548,6 +548,7 @@ export function OtherStockDocuments() {
         detailPanelTitle={t('otherStock.detailPanelTitle')}
         historyTable={tableName}
         historyRecordId={selected?.id}
+        navigation={buildModalNav(rows, selected?.id, openDocument)}
         form={form}
         disabled={isLocked}
         formEle={

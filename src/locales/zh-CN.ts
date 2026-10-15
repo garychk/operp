@@ -2458,6 +2458,8 @@ const zhCN = {
     "modal.headerPanelTitle": "单据头",
     "modal.detailPanelTitle": "单据明细",
     "modal.pressEscToClose": "按ESC键可关闭",
+    "modal.prevRecord": "上一条",
+    "modal.nextRecord": "下一条",
     "modal.documentHistory": "单据历史",
     "modal.noHistoryRecords": "暂无历史记录",
     "modal.printDesigner": "打印设计",

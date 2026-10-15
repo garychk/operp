@@ -6,7 +6,7 @@ import { supabase } from '../../utils/supabase';
 import { logWithTiming } from '../../utils/logger';
 import { useTranslation } from 'react-i18next';
 import type { Tables } from '../../utils/supabase';
-import { SupaModal } from '../../components/SupaModal';
+import { SupaModal, buildModalNav } from '../../components/SupaModal';
 import { BizAttachments } from '../../components/BizAttachments';
 import { SuperTable } from '../../components/SuperTable';
 
@@ -235,6 +235,7 @@ export function Suppliers() {
         headerPanelTitle={t('suppliers.headerPanelTitle')}
         historyTable={supplierTable}
         historyRecordId={editingSupplier?.id}
+        navigation={buildModalNav(filteredSuppliers, editingSupplier?.id, handleEdit)}
         detailItems={[
           {
             key: "attachments",

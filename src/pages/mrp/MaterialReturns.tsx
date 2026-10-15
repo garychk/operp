@@ -31,7 +31,7 @@ import { nextDocumentNo } from "../../utils/documentNaming";
 import { voucherNotice, type InventoryVoucherResult } from "../../utils/inventoryVoucher";
 import { SuperTable } from "../../components/SuperTable";
 import { formatMoney } from "../../utils/money";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { BizAttachments } from "../../components/BizAttachments";
 import SimpleModal from "../../components/SimpleModal";
 import dayjs from "dayjs";
@@ -790,6 +790,7 @@ export function MaterialReturns() {
         detailPanelTitle={t("mrp.materialReturns.detailPanelTitle")}
         historyTable={returnTable}
         historyRecordId={editingReturn?.id || selectedReturn?.id}
+        navigation={buildModalNav(filteredReturns, editingReturn?.id || selectedReturn?.id, handleEdit)}
         detailItems={[
           {
             key: "attachments",

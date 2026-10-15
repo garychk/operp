@@ -11,7 +11,7 @@ import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventoryVoucher';
 import dayjs from 'dayjs';
-import { SupaModal } from '../../components/SupaModal';
+import { SupaModal, buildModalNav } from '../../components/SupaModal';
 import { BizAttachments } from '../../components/BizAttachments';
 import { SuperTable } from '../../components/SuperTable';
 import { formatMoney, useCurrencyRegistry, currencyLabel } from '../../utils/money';
@@ -741,6 +741,7 @@ export function PurchaseReceipts() {
         detailPanelTitle={t('purchaseReceipts.detailPanelTitle')}
         historyTable={purchaseReceiptTable}
         historyRecordId={editingReceipt?.id}
+        navigation={buildModalNav(filteredReceipts, editingReceipt?.id, handleEdit)}
         detailItems={[
           {
             key: "attachments",

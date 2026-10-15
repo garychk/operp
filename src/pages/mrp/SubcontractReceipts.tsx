@@ -35,7 +35,7 @@ import {
 } from "../../utils/inventoryVoucher";
 import { SuperTable } from "../../components/SuperTable";
 import { useCurrencyRegistry } from "../../utils/money";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import dayjs from "dayjs";
 
 type SubcontractReceipt = Tables["erp_subcontract_receipts_s_539dcf81_b"]["Row"];
@@ -747,6 +747,7 @@ export function SubcontractReceipts() {
         detailPanelTitle={t("mrp.subcontractReceipts.detailPanelTitle")}
         historyTable={receiptTable}
         historyRecordId={editingReceipt?.id || selectedReceipt?.id}
+        navigation={buildModalNav(filteredReceipts, editingReceipt?.id || selectedReceipt?.id, handleEdit)}
         form={form}
         formEle={
           <Form

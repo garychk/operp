@@ -27,7 +27,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import dayjs from "dayjs";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { BizAttachments } from "../../components/BizAttachments";
 import { SuperTable } from "../../components/SuperTable";
 import type { SuperTableColumn } from "../../components/SuperTable";
@@ -831,6 +831,7 @@ export function SalesOrders() {
         detailPanelTitle={t("salesOrders.detailPanelTitle")}
         historyTable={salesOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
+        navigation={buildModalNav(filteredOrders, editingOrder?.id || selectedOrder?.id, handleEdit)}
         detailItems={[
           {
             key: "attachments",

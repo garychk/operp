@@ -8,7 +8,7 @@ import { generateIdempotencyKey } from '../../utils/uuid';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import dayjs from 'dayjs';
-import { SupaModal } from '../../components/SupaModal';
+import { SupaModal, buildModalNav } from '../../components/SupaModal';
 import { useCurrencyRegistry, fetchExchangeRate } from '../../utils/money';
 import { MoneyInput } from '../../components/MoneyInput';
 import { useTranslation } from 'react-i18next';
@@ -451,6 +451,7 @@ export function Receivables() {
           </Button>
         </Space>}
         historyTable={tableName}
+        navigation={buildModalNav(filteredReceivables, editingReceivable?.id, handleEdit)}
       >
         <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ padding: '0 16px 0 0' }}>
           <Row gutter={16}>

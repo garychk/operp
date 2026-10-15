@@ -30,6 +30,9 @@ import "operp-print-designer/dist/operp-print-designer.css";
 import { supabase } from "../utils/supabase";
 import type { SysFormsInsert } from "../types/database";
 import type { PrintDesignerDataSource } from "operp-print-designer";
+import type { SupaModalNavigation } from "./supaModalNav";
+export { buildModalNav } from "./supaModalNav";
+export type { SupaModalNavigation } from "./supaModalNav";
 import { WorkflowHistoryCard } from "./WorkflowHistoryCard";
 import { WorkflowActionBar } from "./WorkflowActionBar";
 import { DocFlowGenerateButton } from "./DocFlowGenerateButton";
@@ -76,6 +79,8 @@ interface SupaModalProps {
   docFlowUsageType?: string;
   /** 下推源明细里的物料字段名，默认 product_id。 */
   docFlowProductField?: string;
+  /** 标题栏「上一条/下一条」导航，由页面用 buildModalNav() 构造；不传则按钮置灰。 */
+  navigation?: SupaModalNavigation;
   formTable?: string;
   formDescription?: string;
   width?: string | number;
@@ -105,6 +110,7 @@ export function SupaModal({
   documentNo,
   docFlowUsageType,
   docFlowProductField,
+  navigation,
   formTable,
   formDescription,
   width = 1200,
@@ -372,12 +378,30 @@ export function SupaModal({
             {title}
             <Button
               type="default"
-              size="small"
               icon={isExpand ? <CompressOutlined /> : <FullscreenOutlined />}
               onClick={() => setIsExpand(!isExpand)}
             />
-            <Button type="default" size="small" icon={<LeftOutlined />} />
-            <Button type="default" size="small" icon={<RightOutlined />} />
+            <Button
+              type="default"
+              icon={<LeftOutlined />}
+              title={t("modal.prevRecord")}
+              disabled={!navigation?.onPrev}
+              onClick={navigation?.onPrev}
+            />
+            <Button
+              type="default"
+              icon={<RightOutlined />}
+              title={t("modal.nextRecord")}
+              disabled={!navigation?.onNext}
+              onClick={navigation?.onNext}
+            />
+            {navigation?.position && navigation.position.total > 0 && (
+              <span
+                style={{ fontSize: 12, color: "#999", userSelect: "none" }}
+              >
+                {navigation.position.current}/{navigation.position.total}
+              </span>
+            )}
             <WorkflowActionBar
               documentType={workflowDocumentType}
               documentId={historyRecordId}
@@ -411,12 +435,10 @@ export function SupaModal({
               onChange={setIsPreview}
               checkedChildren="P"
               unCheckedChildren="D"
-              size="small"
               disabled={resolvedDisabled}
             />
             <Button
               type="default"
-              size="small"
               icon={<PrinterOutlined />}
               onClick={handleOpenDesigner}
             />

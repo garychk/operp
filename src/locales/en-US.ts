@@ -2458,6 +2458,8 @@ const enUS = {
     "modal.headerPanelTitle": "Document Header",
     "modal.detailPanelTitle": "Document Details",
     "modal.pressEscToClose": "Press ESC to close",
+    "modal.prevRecord": "Previous record",
+    "modal.nextRecord": "Next record",
     "modal.documentHistory": "Document History",
     "modal.noHistoryRecords": "No history records",
     "modal.printDesigner": "Print Designer",

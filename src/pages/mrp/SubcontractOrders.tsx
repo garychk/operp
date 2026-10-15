@@ -30,7 +30,7 @@ import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
 import { useCurrencyRegistry } from "../../utils/money";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import SimpleModal from "../../components/SimpleModal";
 import { WarehouseBinSelect } from "../../components/WarehouseBinSelect";
 import dayjs from "dayjs";
@@ -733,6 +733,7 @@ export function SubcontractOrders() {
         detailPanelTitle={t("mrp.subcontractOrders.detailPanelTitle")}
         historyTable={orderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
+        navigation={buildModalNav(filteredOrders, editingOrder?.id || selectedOrder?.id, handleEdit)}
         form={form}
         formEle={
           <Form
