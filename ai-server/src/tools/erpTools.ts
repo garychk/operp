@@ -176,6 +176,7 @@ function requireTenantId(state: AiGraphState | { tenantId?: number }): number {
   }
   return tenantId;
 }
+export { requireTenantId };
 
 async function runEntitySearch(entity: EntityDef, text: string, tenantId: number) {
   const codeField = entity.codeField || "code";
@@ -639,7 +640,7 @@ async function prepareEntityUpsert(
   };
 }
 
-async function loadBaqCatalog(): Promise<BaqTable[]> {
+export async function loadBaqCatalog(): Promise<BaqTable[]> {
   const { data: tableRows, error: tableError } = await supabase
     .from("sys_tables")
     .select("table_name, table_label, module_name")
@@ -665,6 +666,31 @@ async function loadBaqCatalog(): Promise<BaqTable[]> {
       };
     })
     .filter((item) => item.columns.length > 0);
+}
+
+/**
+ * 按用户文本裁剪 BAQ 数据目录：全量目录（约 90 张表 / 数万字符）直接进 prompt
+ * 既贵又稀释注意力。按「表中文名 / 表名关键词在文本中的命中数」打分取前 maxTables 张，
+ * 校验仍走全量目录（模型若引用了目录外真实表不算错）。
+ */
+export function pickBaqCatalog(catalog: BaqTable[], text: string, maxTables = 16): BaqTable[] {
+  if (catalog.length <= maxTables) return catalog;
+  const haystack = text.toLowerCase();
+  const scored = catalog.map((item, index) => {
+    let score = 0;
+    const label = item.label || "";
+    // 中文名按 2-gram 命中计分（「生产订单」→ 生产/产订/订单）
+    for (let i = 0; i < label.length - 1; i += 1) {
+      if (haystack.includes(label.slice(i, i + 2))) score += 1;
+    }
+    if (label && haystack.includes(label.toLowerCase())) score += 5;
+    for (const part of item.table.replace(/^erp_/, "").split("_")) {
+      if (part.length >= 3 && haystack.includes(part)) score += 2;
+    }
+    return { item, score, index };
+  });
+  scored.sort((a, b) => b.score - a.score || a.index - b.index);
+  return scored.slice(0, maxTables).map((entry) => entry.item);
 }
 
 const normalizeText = (value: string) => value.toLowerCase().replace(/\s+/g, "");
@@ -983,11 +1009,26 @@ const validateBaqDefinition = (definition: Record<string, unknown>, catalog: Baq
   }
 };
 
-export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolResult> {
-  const tenantId = requireTenantId(state);
+/**
+ * BAQ 模型设计 + 校验 + 落库的核心链路（createOrUpdateBaqTool 与页面设计工具共用）。
+ * 失败抛 Error（文案面向用户），由调用方包装成各自的 ToolResult。
+ *
+ * @param current 修改已有 BAQ 时传入（含 id/code/name/description/definition），否则为新建
+ * @param descriptionSuffix 追加到 description 末尾的来源备注（如「由 AI 页面设计创建」，防误删）
+ */
+export async function designAndPersistBaq(options: {
+  text: string;
+  tenantId: number;
+  provider?: AiGraphState["provider"];
+  userId?: number;
+  sessionId?: string;
+  current?: Record<string, unknown> | null;
+  descriptionSuffix?: string;
+  codePrefix?: string;
+}): Promise<{ baq: Record<string, unknown>; isUpdate: boolean; definitionSummary: string }> {
+  const { tenantId } = options;
   const catalog = await loadBaqCatalog();
-  const target = await findBaqTarget(state.text, tenantId, state.currentFocus);
-  const current = target || null;
+  const current = options.current || null;
   const prompt = [
     "你是 OPERP BAQ 设计助手。请根据用户的完整需求设计真正可执行的 BAQ，不要只创建一条空记录。",
     "请分析应该使用哪张主表、关联哪些表、关联字段、输出字段、分组聚合、筛选条件和排序方式。",
@@ -1005,30 +1046,31 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
     "只能从下面数据目录的 table 字段中选择真实表名，不能使用 PartBin、Part、Customer 等 ERP 逻辑表名，也不能使用中文字段名或臆造字段。",
     "如果需求无法匹配数据目录中的真实表和字段，必须返回 definition 为空，而不是猜测表名。",
     current ? `当前BAQ：${JSON.stringify(current)}` : "当前BAQ：无",
-    `数据目录：${JSON.stringify(catalog)}`,
-    `用户原话：${state.text}`,
+    `数据目录：${JSON.stringify(pickBaqCatalog(catalog, options.text))}`,
+    `用户原话：${options.text}`,
     "如果用户是在修改已有BAQ，请尽量保留原有结构并仅按要求调整。",
   ].join("\n");
-  const { content } = await callChatModel([{ role: "system", content: "只返回JSON。" }, { role: "user", content: prompt }], state.provider);
+  const { content } = await callChatModel([{ role: "system", content: "只返回JSON。" }, { role: "user", content: prompt }], options.provider);
   const parsed = parseJson<{ name?: string; code?: string; description?: string; definition?: unknown }>(content);
   const isUpdate = Boolean(current?.id);
   const definition = normalizeBaqDefinition(
     isUpdate ? mergeBaqDefinition(current?.definition, parsed?.definition) : parsed?.definition,
   );
   if (!definition) {
-    return {
-      status: "error",
-      reply: isUpdate
+    throw new Error(
+      isUpdate
         ? "BAQ 修改失败：没有找到可修改的 BAQ 定义，请先明确 BAQ 名称或编码。"
         : "BAQ 创建失败：模型未生成有效的查询定义。",
-    };
+    );
   }
   validateBaqDefinition(definition, catalog);
+  const suffix = options.descriptionSuffix || "";
+  const baseDescription = String(parsed?.description || current?.description || "");
   const baq = {
     id: current?.id as number | undefined,
-    code: String(parsed?.code || current?.code || `baq_${Date.now()}`),
+    code: String(parsed?.code || current?.code || `${options.codePrefix || "baq_"}${Date.now()}`),
     name: String(parsed?.name || current?.name || "未命名查询"),
-    description: String(parsed?.description || current?.description || ""),
+    description: suffix && !baseDescription.includes(suffix) ? `${baseDescription}${suffix}` : baseDescription,
     status: "draft" as const,
     definition,
   };
@@ -1049,19 +1091,40 @@ export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolRe
   await logAiOperation({
     operation: "ai.baq.upsert",
     tenantId,
-    userId: state.userId,
-    sessionId: state.sessionId,
+    userId: options.userId,
+    sessionId: options.sessionId,
     targetTable: "sys_baq_queries",
     targetId: Number(saved.id),
     request: payload,
   });
   const definitionSummary = `数据源：${String((definition.source as Record<string, unknown>).table || "-")}\n关联表：${Array.isArray(definition.joins) ? definition.joins.length : 0} 张\n输出字段：${Array.isArray(definition.fields) ? definition.fields.length : 0} 个\n筛选条件：${Array.isArray(definition.filters) ? definition.filters.length : 0} 个\n排序条件：${Array.isArray(definition.sorts) ? definition.sorts.length : 0} 个`;
-  return {
-    status: "success",
-    reply: `${baq.id ? "BAQ 已更新" : "BAQ 已创建"}：${String(saved.name || baq.name)}\n编码：${String(saved.code || baq.code)}\n\n${definitionSummary}`,
-    data: saved,
-    focus: { type: "baq", id: saved.id, code: saved.code, name: saved.name },
-  };
+  return { baq: saved, isUpdate, definitionSummary };
+}
+
+export async function createOrUpdateBaqTool(state: AiGraphState): Promise<ToolResult> {
+  const tenantId = requireTenantId(state);
+  const target = await findBaqTarget(state.text, tenantId, state.currentFocus);
+  try {
+    const { baq: saved, isUpdate, definitionSummary } = await designAndPersistBaq({
+      text: state.text,
+      tenantId,
+      provider: state.provider,
+      userId: state.userId,
+      sessionId: state.sessionId,
+      current: target || null,
+    });
+    return {
+      status: "success",
+      reply: `${isUpdate ? "BAQ 已更新" : "BAQ 已创建"}：${String(saved.name || "")}\n编码：${String(saved.code || "")}\n\n${definitionSummary}`,
+      data: saved,
+      focus: { type: "baq", id: saved.id, code: saved.code, name: saved.name },
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      reply: error instanceof Error ? error.message : "BAQ 处理失败，请稍后重试。",
+    };
+  }
 }
 
 export async function createOrUpdateEntityTool(

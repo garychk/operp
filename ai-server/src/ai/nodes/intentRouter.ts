@@ -26,6 +26,9 @@ const BAQ_WORDS = /(baq|报表查询|查询设计)/i;
 const KNOWLEDGE_WORDS = /(知识库|制度|流程|手册|说明|怎么做|怎么处理|为什么|规则|规范)/i;
 const ANALYSIS_WORDS = /(分析|统计|汇总|报表|经营|财务|采购|销售|生产|应收|应付|凭证|利润|库存)/i;
 const MRP_WORDS = /(mrp|物料需求计划|产能|净需求)/i;
+/** 页面设计信号：「看板 / 大屏 / 驾驶舱」+ 创建类动词 → 走 AI 页面设计（不是建主数据） */
+const PAGE_DESIGN_WORDS = /(看板|大屏|驾驶舱|cockpit|dashboard)/i;
+const PAGE_CREATE_WORDS = /(创建|新建|新增|生成|搭建|设计|做|来一)/i;
 
 /**
  * 菜单导航：「XX 菜单在哪里 / 菜单地址是什么 / XX 在哪个页面」。
@@ -214,6 +217,11 @@ export const ruleFallback = (state: AiGraphState): RoutedIntent => {
     // 找菜单：先于 knowledge / analysis（「采购订单菜单在哪里」含「采购」也会被判成 analysis）
     intent = "navigation";
     domain = "navigation";
+  } else if (PAGE_DESIGN_WORDS.test(text) && PAGE_CREATE_WORDS.test(text)) {
+    // 页面设计：「帮我创建一个生产车间看板」→ AI 设计自定义页面（缺数据源自动建 BAQ）。
+    // 必须在 create / analysis 之前判：句子里常带「生产/库存」等分析词和「创建」动词。
+    intent = "page_design";
+    domain = "page_design";
   } else if (KNOWLEDGE_WORDS.test(text)) {
     intent = "knowledge";
     domain = targetInfo.domain === "general" ? "knowledge" : targetInfo.domain;
@@ -266,9 +274,10 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
   const prompt = [
     "你是 ERP 智能路由器，只能输出 JSON。",
     "你要判断：intent、target、queryMode、responseMode、action、domain、confidence。",
-    "intent 只能是：chat, knowledge, create, update, baq, analysis, document, navigation。",
+    "intent 只能是：chat, knowledge, create, update, baq, analysis, document, navigation, page_design。",
     "document 指单据类操作：建单据（销售订单/采购订单/入库单/出货单/领料单/生产订单）、对单据过账/反过账/审批/转单，或查询某张单据的明细与状态。",
     "navigation 指用户在**找某个菜单/页面在哪里**（例如「采购订单菜单在哪里」「菜单地址是什么」「XX 在哪个页面下」），此时 target 填 general 即可。只含名词不带导航问法（如「采购订单列表」）时不要用 navigation。",
+    "page_design 指用户想**创建/设计一个可视化页面、看板、大屏或驾驶舱**（例如「帮我创建一个生产车间看板」「做一个库存大屏」），此时 target 填 general。只是问看板/页面在哪里时用 navigation，不要用它。",
     "target 优先从下面的业务对象清单中选择，也可以用历史值：dictItem, customer, supplier, product, warehouse, department, workCenter, operation, bom, routing, purchaseOrder, purchaseReceipt, salesOrder, salesDelivery, productionOrder, uom, bin, company, employee, finance, inventory, mrp, baq, general。",
     "重要：dictItem 指系统字典项（sys_dict_items，挂在 sys_dict_types 类型下的枚举值）。用户说“在字典 XX 里加 / 加个字典项 / 字典值”时用 dictItem；说“加个计量单位、加个客户”这种业务数据时用对应业务 target。两者是不同的数据，不要混淆。",
     "queryMode 只能是：count, list, summary, detail, trend, compare, exception, definition, answer。",

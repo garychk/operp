@@ -103,6 +103,24 @@
       }
     },
     {
+      "text": "帮我创建一个生产车间看板，可以随时查看生产进度，产能状况，缺料状况",
+      "expect": {
+        "intent": "page_design"
+      }
+    },
+    {
+      "text": "做一个库存大屏",
+      "expect": {
+        "intent": "page_design"
+      }
+    },
+    {
+      "text": "帮我搭建一个销售经营驾驶舱",
+      "expect": {
+        "intent": "page_design"
+      }
+    },
+    {
       "text": "建一张采购订单给供应商上海钢铁",
       "expect": {
         "intent": "document"

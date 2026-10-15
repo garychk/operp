@@ -79,6 +79,40 @@ const DICT = {
   "doc.action.quickConvert": { zh: "转成下一张单据", en: "Convert to the next document" },
   "doc.err.notLocated": { zh: "没有定位到单据。", en: "No document was located." },
 
+  /* ---------------- 页面设计（AI 一句话建看板） ---------------- */
+  "page.err.noTenant": {
+    zh: "缺少租户上下文，无法创建页面。",
+    en: "Missing tenant context; cannot create the page.",
+  },
+  "page.err.designFailed": {
+    zh: "页面设计失败：模型未生成有效的页面布局。可以换个更具体的说法再试（比如说明要看哪些指标）。",
+    en: "Page design failed: the model did not produce a valid layout. Try again with more specifics (e.g. which metrics you want).",
+  },
+  "page.err.saveFailed": {
+    zh: "页面保存失败：{reason}",
+    en: "Failed to save the page: {reason}",
+  },
+  "page.created.title": { zh: "页面已创建：**{name}**", en: "Page created: **{name}**" },
+  "page.created.widgets": { zh: "共 {count} 个组件", en: "{count} widgets" },
+  "page.baq.created": { zh: "新建 BAQ 数据源：{list}", en: "Created BAQ data sources: {list}" },
+  "page.baq.reused": { zh: "复用已有 BAQ：{list}", en: "Reused existing BAQs: {list}" },
+  "page.baq.failed": {
+    zh: "以下数据源创建失败，对应组件已先放入静态演示数据，可在设计器中重新配置：{list}",
+    en: "These data sources failed to build; the affected widgets fell back to static demo data and can be reconfigured in the designer: {list}",
+  },
+  "page.created.links": {
+    zh: "[打开页面预览]({preview}) ｜ [在页面设计器中编辑]({designer})",
+    en: "[Open page preview]({preview}) | [Edit in Page Designer]({designer})",
+  },
+  "page.created.draftNote": {
+    zh: "页面当前为草稿；在设计器中确认无误后，可一键发布并生成菜单。",
+    en: "The page is a draft; once it looks right, publish it in the designer to generate a menu entry.",
+  },
+  "page.baq.sourceNote": {
+    zh: "（由 AI 页面设计助手创建于 {date}，供页面「{page}」使用，删除前请确认页面已不再使用）",
+    en: " (Created by AI Page Designer on {date} for page \"{page}\"; do not delete while the page is in use)",
+  },
+
   /* ---------------- 单据：草稿预览 ---------------- */
   "doc.preview.title": {
     zh: "将要创建**{label}**（草稿状态，单号由系统生成）：",

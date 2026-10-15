@@ -113,7 +113,9 @@ export async function plannerNode(state: AiGraphState): Promise<AiGraphState> {
 
   // ③ 单步映射
   const plan: PlanStep[] =
-    state.intent === "document"
+    state.intent === "page_design"
+      ? [{ step: "design_custom_page", tool: "page.design", input: { text: state.text } }]
+      : state.intent === "document"
       ? documentPlan(state)
       : state.intent === "baq"
         ? [{ step: "create_or_update_baq", tool: "baq.upsert", input: { text: state.text, currentFocus: state.currentFocus } }]
