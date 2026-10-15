@@ -287,6 +287,77 @@ html[data-erp-dark='true'] .workbench-hero__blob {
   opacity: 0.3;
 }
 
+/* 欢迎条右侧的通知跑马灯：半透明玻璃面板，滚动播报最近通知 */
+.workbench-hero__marquee {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workbench-hero__marquee-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1d4ed8;
+  white-space: nowrap;
+}
+
+.workbench-hero__marquee-viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  overflow: hidden;
+}
+
+.workbench-hero__marquee-track {
+  display: flex;
+  flex-direction: column;
+  animation: workbench-marquee-up linear infinite;
+}
+
+.workbench-hero__marquee:hover .workbench-hero__marquee-track {
+  animation-play-state: paused;
+}
+
+.workbench-hero__marquee-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 22px;
+  line-height: 22px;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.workbench-hero__marquee-item:hover .workbench-hero__marquee-text {
+  text-decoration: underline;
+}
+
+.workbench-hero__marquee-text {
+  font-size: 12px;
+  color: #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-erp-dark='true'] .workbench-hero__marquee-badge {
+  color: #93c5fd;
+}
+
+html[data-erp-dark='true'] .workbench-hero__marquee-text {
+  color: #cbd5e1;
+}
+
+@keyframes workbench-marquee-up {
+  from { transform: translateY(0); }
+  to { transform: translateY(-50%); }
+}
+
 /* ---------------- MPS 计划工作台（清新极光 + 玻璃指标卡） ---------------- */
 .mps-hero {
   position: relative;

@@ -22,7 +22,6 @@ import {
   ApartmentOutlined,
   AuditOutlined,
   BarChartOutlined,
-  CheckOutlined,
   ClockCircleOutlined,
   ContainerOutlined,
   DatabaseOutlined,
@@ -31,7 +30,6 @@ import {
   RightOutlined,
   RiseOutlined,
   ScheduleOutlined,
-  SendOutlined,
   ShoppingCartOutlined,
   TeamOutlined,
   ToolOutlined,
@@ -288,6 +286,11 @@ const PENDING_ORDER_STATUSES = ['draft', 'pending'];
 const OPEN_PRODUCTION_STATUSES = ['draft', 'planned', 'released', 'in_progress'];
 const PENDING_MATERIAL_ISSUE_STATUSES = ['draft'];
 
+/** 欢迎条右侧通知跑马灯同时可见的条数（每条 22px，视口 44px） */
+const MARQUEE_VISIBLE_ROWS = 1;
+/** 滚动一轮的时长（秒），条目越多转得越慢，保证可读 */
+const MARQUEE_DURATION_SECONDS = 10;
+
 const severityColorMap: Record<string, string> = {
   info: 'blue',
   warning: 'orange',
@@ -529,6 +532,10 @@ export function Workbench() {
     }
   }, [navigate]);
 
+  const notificationMarqueeItems =
+    notifications.length > MARQUEE_VISIBLE_ROWS ? [...notifications, ...notifications] : notifications;
+  const marqueeAnimationPaused = notifications.length <= MARQUEE_VISIBLE_ROWS;
+
   const roleScopeHint = useMemo(() => {
     if (roleGroups.has('admin')) return 'workbench.stats.roleHint.admin';
     if (roleGroups.has('finance')) return 'workbench.stats.roleHint.finance';
@@ -577,10 +584,59 @@ export function Workbench() {
                 </Tag>
               </div>
             </Col>
+            <Col flex="none" style={{ minWidth: 0 }}>
+              <div
+                className="workbench-hero__marquee"
+                style={{ width: 420, maxWidth: '100%' }}
+                title={t('notification.title')}
+              >
+                <span className="workbench-hero__marquee-badge">
+                  <BellOutlined />
+                  <Badge count={unreadNotifications.length} size="small" />
+                </span>
+                {notifications.length === 0 ? (
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    {t('notification.empty')}
+                  </Typography.Text>
+                ) : (
+                  <div className="workbench-hero__marquee-viewport">
+                    <div
+                      className="workbench-hero__marquee-track"
+                      style={{
+                        animationDuration: `${MARQUEE_DURATION_SECONDS}s`,
+                        animationPlayState: marqueeAnimationPaused ? 'paused' : 'running',
+                      }}
+                    >
+                      {notificationMarqueeItems.map((row, index) => (
+                        <div
+                          className="workbench-hero__marquee-item"
+                          key={`${row.id}-${index}`}
+                          title={`${row.title} · ${row.content}`}
+                          onClick={() => void markNotificationRead(row)}
+                        >
+                          {!row.is_read ? <Badge status="processing" /> : null}
+                          <span
+                            className="workbench-hero__marquee-text"
+                            style={{ fontWeight: row.is_read ? 400 : 600 }}
+                          >
+                            {row.title}
+                          </span>
+                          <Tag
+                            color={severityColorMap[row.severity] ?? 'default'}
+                            style={{ marginInlineEnd: 0, fontSize: 11, lineHeight: '16px', padding: '0 6px' }}
+                          >
+                            {t(notificationTypeLabelKey(row.notification_type))}
+                          </Tag>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Col>
           </Row>
         </div>
       </Card>
-
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col xs={24} lg={8}>
           <Card
@@ -745,89 +801,6 @@ export function Workbench() {
               </Col>
             ))}
           </Row>
-        </Skeleton>
-      </Card>
-
-      <Card
-        variant="borderless"
-        size="small"
-        title={
-          <span>
-            <BellOutlined style={{ marginRight: 8 }} />
-            {t('notification.title')}
-          </span>
-        }
-        extra={
-          unreadNotifications.length > 0 ? (
-            <Tag color="orange">
-              {t('workbench.notification.unreadCount', { count: unreadNotifications.length })}
-            </Tag>
-          ) : null
-        }
-      >
-        <Skeleton loading={loading} active paragraph={{ rows: 4 }}>
-          {notifications.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('notification.empty')} />
-          ) : (
-            <List
-              size="small"
-              dataSource={notifications}
-              rowKey={(row) => String(row.id)}
-              renderItem={(row) => (
-                <List.Item
-                  style={{
-                    cursor: 'pointer',
-                    padding: '8px 4px',
-                    background: row.is_read ? undefined : 'var(--accent-bg, rgba(22, 119, 255, 0.06))',
-                    borderRadius: 6,
-                  }}
-                  onClick={() => void markNotificationRead(row)}
-                >
-                  <List.Item.Meta
-                    avatar={
-                      <span style={{ fontSize: 16 }}>
-                        {row.notification_type === 'approval_pending' ? <AuditOutlined /> : null}
-                        {row.notification_type === 'approval_result' ? <SendOutlined /> : null}
-                        {row.notification_type === 'inventory_warning' ? <DatabaseOutlined /> : null}
-                        {row.notification_type === 'order_delay' ? <ClockCircleOutlined /> : null}
-                        {row.notification_type === 'task_completed' ? <ScheduleOutlined /> : null}
-                      </span>
-                    }
-                    title={
-                      <span>
-                        {!row.is_read ? <Badge status="processing" style={{ marginRight: 6 }} /> : null}
-                        <Typography.Text strong={!row.is_read}>{row.title}</Typography.Text>
-                        <Tag color={severityColorMap[row.severity] ?? 'default'} style={{ marginLeft: 8 }}>
-                          {t(notificationTypeLabelKey(row.notification_type))}
-                        </Tag>
-                      </span>
-                    }
-                    description={
-                      <>
-                        <div>{row.content}</div>
-                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                          {formatShanghaiDateTime(row.created_at)}
-                          {row.source_no ? ` · ${row.source_no}` : ''}
-                        </Typography.Text>
-                      </>
-                    }
-                  />
-                  {!row.is_read ? (
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<CheckOutlined />}
-                      aria-label={t('notification.markRead')}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        void markNotificationRead({ ...row, link_path: null });
-                      }}
-                    />
-                  ) : null}
-                </List.Item>
-              )}
-            />
-          )}
         </Skeleton>
       </Card>
     </Card>
