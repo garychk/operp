@@ -7,6 +7,8 @@
  *   3. 需要业务数据的组件带 dataNeed（自然语言数据需求）——
  *      先按关键词匹配租户已有 BAQ，匹配不到就走 designAndPersistBaq 自动创建，
  *      创建的 BAQ 在 description 末尾追加来源备注（防误删）；
+ *      多个数据需求按 dataNeed 去重后并发解析（上限 4），避免逐一串行等模型，
+ *      BAQ 数据目录只加载一次、所有 BAQ 共享；
  *   4. BAQ 就绪后按它的输出字段别名确定性回写组件的 xField/yField 等映射
  *      （两次模型调用不可能对齐字段名，必须系统侧接线）；
  *   5. 组装 config 落 sys_custom_pages（草稿），回复预览 / 设计器链接。
@@ -19,7 +21,7 @@ import { callChatModel } from "../config/llm.js";
 import type { AiGraphState } from "../ai/state.js";
 import { logAiOperation } from "../services/aiAudit.js";
 import { toolText } from "../services/toolText.js";
-import { designAndPersistBaq, requireTenantId } from "./erpTools.js";
+import { designAndPersistBaq, loadBaqCatalog, requireTenantId } from "./erpTools.js";
 
 type ToolStatus = "success" | "needs_more" | "error";
 interface ToolResult {
@@ -64,6 +66,29 @@ const clampInt = (value: unknown, min: number, max: number, fallback: number) =>
   if (!Number.isFinite(num)) return fallback;
   return Math.min(max, Math.max(min, Math.round(num)));
 };
+
+/**
+ * 带并发上限的串行映射。
+ * 页面设计的多个 BAQ 需求并行解析时会同时打本地 LLM（如 Ollama），
+ * 一次性发起过多并行请求容易把本地模型压垮或触发排队，这里限制同时在飞的数量。
+ */
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await fn(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
 
 /* ------------------------------------------------------------------ */
 /* 模型 prompt                                                          */
@@ -298,8 +323,14 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
 
   const widgets = normalizeWidgets(spec.widgets || []);
   const pageName = String(spec.name || "AI 看板").slice(0, 60);
+  const stamp = Date.now().toString(36);
 
-  // ② 动态组件逐个准备数据源：优先复用已有 BAQ，缺了自动创建（带来源备注）
+  const sourceNote = tt("page.baq.sourceNote", {
+    date: new Date().toISOString().slice(0, 10),
+    page: pageName,
+  });
+
+  // ② 拉取租户已有 BAQ（只读匹配用）与数据目录（一次加载，多个 BAQ 共享，避免重复 RPC）
   const { data: existingRows, error: baqListError } = await supabase
     .from("sys_baq_queries")
     .select("id, code, name, description, definition")
@@ -307,20 +338,10 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
     .eq("is_deleted", "n");
   if (baqListError) throw baqListError;
   const existingBaqs = (existingRows || []) as BaqRow[];
+  const catalog = await loadBaqCatalog();
 
-  const baqByNeed = new Map<string, BaqRow>(); // dataNeed → 本次已建好的 BAQ（页内复用）
-  const createdBaqs: string[] = [];
-  const reusedBaqs: string[] = [];
-  const failedNeeds: string[] = [];
-  const sourceNote = tt("page.baq.sourceNote", {
-    date: new Date().toISOString().slice(0, 10),
-    page: pageName,
-  });
-
-  const resolveBaq = async (need: string, widgetTitle: string): Promise<BaqRow | null> => {
-    const cached = baqByNeed.get(need);
-    if (cached) return cached;
-    // 已有 BAQ 里找最相关的
+  /** 在租户已有 BAQ 里找最相关的（只读，可安全并发） */
+  const matchExistingBaq = (need: string): BaqRow | null => {
     let best: BaqRow | null = null;
     let bestScore = { matched: 0, ratio: 0 };
     for (const baq of existingBaqs) {
@@ -333,36 +354,81 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
         bestScore = score;
       }
     }
-    if (best && bestScore.matched >= REUSE_MIN_HITS && bestScore.ratio >= REUSE_MIN_RATIO) {
-      reusedBaqs.push(`${best.name || best.code}（${best.code}）`);
-      baqByNeed.set(need, best);
-      return best;
-    }
-    // 没有就自动创建
-    const { baq } = await designAndPersistBaq({
-      text: `为看板组件「${widgetTitle}」提供数据：${need}。输出字段少而精（1 个维度字段 + 1~2 个数值字段），字段别名用英文小写。`,
-      tenantId,
-      provider: state.provider,
-      userId: state.userId,
-      sessionId: state.sessionId,
-      descriptionSuffix: sourceNote,
-      codePrefix: "baq_page_",
-    });
-    const created: BaqRow = {
-      id: Number(baq.id),
-      code: String(baq.code),
-      name: String(baq.name || ""),
-      definition: baq.definition as Record<string, unknown> | undefined,
-    };
-    createdBaqs.push(`${created.name}（${created.code}）`);
-    existingBaqs.push(created); // 后续组件可以复用本次新建的
-    baqByNeed.set(need, created);
-    return created;
+    if (best && bestScore.matched >= REUSE_MIN_HITS && bestScore.ratio >= REUSE_MIN_RATIO) return best;
+    return null;
   };
 
-  // ③ 组装最终组件配置
-  const stamp = Date.now().toString(36);
+  /** 为某个 dataNeed 解析 BAQ：命中已有就复用，否则自动创建（并行安全，不写 existingBaqs） */
+  const resolveNeed = async (
+    need: string,
+    widgetTitle: string,
+    codeSeed: string,
+  ): Promise<{ baq: BaqRow | null; kind: "reused" | "created" | "failed" }> => {
+    const existing = matchExistingBaq(need);
+    if (existing) return { baq: existing, kind: "reused" };
+    try {
+      const { baq } = await designAndPersistBaq({
+        text: `为看板组件「${widgetTitle}」提供数据：${need}。输出字段少而精（1 个维度字段 + 1~2 个数值字段），字段别名用英文小写。`,
+        tenantId,
+        provider: state.provider,
+        userId: state.userId,
+        sessionId: state.sessionId,
+        descriptionSuffix: sourceNote,
+        codePrefix: "baq_page_",
+        catalog,
+        codeSeed,
+      });
+      return {
+        baq: {
+          id: Number(baq.id),
+          code: String(baq.code),
+          name: String(baq.name || ""),
+          definition: baq.definition as Record<string, unknown> | undefined,
+        },
+        kind: "created",
+      };
+    } catch {
+      return { baq: null, kind: "failed" };
+    }
+  };
+
+  // ③ 收集数据需求并按 dataNeed 去重（同一句话只建一个 BAQ），随后并发解析
+  const dataWidgets = widgets.filter((widget) => widget.dataNeed);
+  const needItems: Array<{ need: string; title: string }> = [];
+  const seenNeeds = new Set<string>();
+  for (const widget of dataWidgets) {
+    if (!seenNeeds.has(widget.dataNeed)) {
+      seenNeeds.add(widget.dataNeed);
+      needItems.push({ need: widget.dataNeed, title: widget.title });
+    }
+  }
+
+  // 并发上限 4：本地 Ollama 扛不住太多并行，远程模型也可借此削峰；
+  // 耗时从「逐个串行 ≈ N × 单次调用」降到「≈ 最慢那一次调用」。
+  const resolvedNeeds = await mapWithConcurrency(
+    needItems,
+    4,
+    async (item, index) => ({
+      need: item.need,
+      ...(await resolveNeed(item.need, item.title, `${stamp}-${index}`)),
+    }),
+  );
+
+  const baqByNeed = new Map<string, BaqRow>();
+  const createdBaqs: string[] = [];
+  const reusedBaqs: string[] = [];
+  for (const result of resolvedNeeds) {
+    if (result.baq && (result.kind === "reused" || result.kind === "created")) {
+      baqByNeed.set(result.need, result.baq);
+      (result.kind === "reused" ? reusedBaqs : createdBaqs).push(
+        `${result.baq.name || result.baq.code}（${result.baq.code}）`,
+      );
+    }
+  }
+
+  // ④ 组装最终组件配置（BAQ 已就绪，按 need 查表接线）
   const finalWidgets = [] as Array<Record<string, unknown>>;
+  const failedNeeds: string[] = [];
   for (const [index, widget] of widgets.entries()) {
     const base: Record<string, unknown> = {
       id: `w${index + 1}-${stamp}`,
@@ -377,15 +443,13 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
     if (NO_DATA_TYPES.has(widget.type)) {
       base.dataSource = { mode: "static", staticData: widget.staticData };
     } else if (widget.dataNeed) {
-      try {
-        const baq = await resolveBaq(widget.dataNeed, widget.title);
-        if (baq) {
-          wireWidgetFields(widget, baq.definition);
-          Object.assign(base, widget.config); // 接线后的字段映射盖回 base
-          base.dataSource = { mode: "baq", baqCode: baq.code, limit: 100 };
-          base.refreshInterval = widget.refreshInterval > 0 ? widget.refreshInterval : 30;
-        }
-      } catch {
+      const baq = baqByNeed.get(widget.dataNeed);
+      if (baq) {
+        wireWidgetFields(widget, baq.definition);
+        Object.assign(base, widget.config); // 接线后的字段映射盖回 base
+        base.dataSource = { mode: "baq", baqCode: baq.code, limit: 100 };
+        base.refreshInterval = widget.refreshInterval > 0 ? widget.refreshInterval : 30;
+      } else {
         failedNeeds.push(widget.title);
         base.dataSource = {
           mode: "static",
@@ -400,9 +464,11 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
     finalWidgets.push(base);
   }
 
-  // ④ 落库（草稿，设计器里确认后再发布）
+  // ⑤ 落库（草稿，设计器里确认后再发布）
   const slug = `ai-${stamp}`;
   const payload = {
+    tenant_id: tenantId, // 显式带租户：ai-server 走 service_role，auth.uid() 为 null，
+    // 表的 DEFAULT current_tenant_id() 会解析成 null，必须显式写入当前租户
     name: pageName,
     slug,
     description: String(spec.description || "").slice(0, 200) || null,
@@ -428,7 +494,7 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
     request: payload,
   });
 
-  // ⑤ 回复（预览 + 设计器链接，站内 markdown 链接前端可点击跳转）
+  // ⑥ 回复（预览 + 设计器链接，站内 markdown 链接前端可点击跳转）
   const previewPath = `/custom/${slug}`;
   const lines = [
     tt("page.created.title", { name: pageName }),

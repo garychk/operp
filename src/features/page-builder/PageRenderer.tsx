@@ -187,8 +187,10 @@ export function PageCanvas({ page, editable = false, selectedId, onSelect, onLay
             widget.type === 'button' ||
             widget.type === 'divider' ||
             widget.type === 'marquee');
-        // 实时时钟在预览 / 发布页不需要卡片标题，但保留卡片边框（编辑态保留标题作拖拽手柄）
-        const headerless = plain || (!editable && widget.type === 'clock');
+        // 这些组件在预览 / 发布页不需要卡片标题，但保留卡片边框（编辑态保留标题作拖拽手柄）
+        // 包含：实时时钟、统计数值、仪表盘、进度环
+        const headerlessTypes = ['clock', 'statistic', 'gauge', 'progressRing'];
+        const headerless = plain || (!editable && headerlessTypes.includes(widget.type));
         return (
           <div key={widget.id} onClick={() => onSelect?.(widget.id)}>
             <Card

@@ -1025,9 +1025,13 @@ export async function designAndPersistBaq(options: {
   current?: Record<string, unknown> | null;
   descriptionSuffix?: string;
   codePrefix?: string;
+  /** 复用调用方已加载的数据目录（页面设计一次加载、多个 BAQ 共享），省略则内部重新加载 */
+  catalog?: Awaited<ReturnType<typeof loadBaqCatalog>>;
+  /** 模型未返回编码时生成唯一编码的种子；并行创建多个 BAQ 时必须传入，避免编码冲突 */
+  codeSeed?: string;
 }): Promise<{ baq: Record<string, unknown>; isUpdate: boolean; definitionSummary: string }> {
   const { tenantId } = options;
-  const catalog = await loadBaqCatalog();
+  const catalog = options.catalog ?? (await loadBaqCatalog());
   const current = options.current || null;
   const prompt = [
     "你是 OPERP BAQ 设计助手。请根据用户的完整需求设计真正可执行的 BAQ，不要只创建一条空记录。",
@@ -1068,7 +1072,7 @@ export async function designAndPersistBaq(options: {
   const baseDescription = String(parsed?.description || current?.description || "");
   const baq = {
     id: current?.id as number | undefined,
-    code: String(parsed?.code || current?.code || `${options.codePrefix || "baq_"}${Date.now()}`),
+    code: String(parsed?.code || current?.code || `${options.codePrefix || "baq_"}${options.codeSeed ?? Date.now()}`),
     name: String(parsed?.name || current?.name || "未命名查询"),
     description: suffix && !baseDescription.includes(suffix) ? `${baseDescription}${suffix}` : baseDescription,
     status: "draft" as const,
