@@ -11,7 +11,7 @@ import type { Tables } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventoryVoucher';
 import dayjs from 'dayjs';
-import { SupaModal } from '../../components/SupaModal';
+import { SupaModal, buildModalNav } from '../../components/SupaModal';
 import { BizAttachments } from '../../components/BizAttachments';
 import { SuperTable } from '../../components/SuperTable';
 import type { SuperTableColumn } from '../../components/SuperTable';
@@ -819,6 +819,7 @@ export function SalesDeliveries() {
         detailPanelTitle={t('salesDeliveries.detailPanelTitle')}
         historyTable={salesDeliveryTable}
         historyRecordId={editingDelivery?.id || selectedDelivery?.id}
+        navigation={buildModalNav(filteredDeliveries, editingDelivery?.id || selectedDelivery?.id, handleEdit)}
         detailItems={[
           {
             key: "attachments",

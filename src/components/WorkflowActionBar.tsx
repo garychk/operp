@@ -101,9 +101,7 @@ export function WorkflowActionBar({ documentType, documentId, currentStatus, onA
           icon={ACTION_CONFIG[action].icon}
           onClick={() => void handleWorkflowAction(action)}
           disabled={disabled || checkingWorkflow || hasAvailableWorkflow !== true}
-          loading={checkingWorkflow}
-          size="small"
-          
+          loading={checkingWorkflow}          
         >
           {t('workflow.actionBar.' + ACTION_CONFIG[action].key)}
         </Button>

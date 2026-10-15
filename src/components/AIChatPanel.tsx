@@ -8,13 +8,16 @@ import {
   DatabaseOutlined,
   DeleteOutlined,
   DownOutlined,
+  EditOutlined,
   MoreOutlined,
   LinkOutlined,
   PlusOutlined,
+  RedoOutlined,
   SendOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
 import {
+  Actions,
   Bubble,
   Conversations,
   Prompts,
@@ -1153,6 +1156,25 @@ export function AIChatPanel({
     }
   };
 
+  /** 编辑某条用户消息：弹框改文本后重新发送 */
+  const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
+  const [editingText, setEditingText] = useState("");
+
+  const openEditMessage = (messageItem: ChatMessage) => {
+    setEditingMessage(messageItem);
+    setEditingText(messageItem.content);
+  };
+
+  const confirmEditMessage = () => {
+    const nextText = editingText.trim();
+    if (!editingMessage || !nextText) {
+      setEditingMessage(null);
+      return;
+    }
+    setEditingMessage(null);
+    void submitMessage(nextText);
+  };
+
   const submitMessage = async (value: string) => {
     const prompt = value.trim();
     if (!prompt || loading) {
@@ -1612,7 +1634,35 @@ export function AIChatPanel({
                         ) : null}
                       </div>
                     ) : (
-                      <Bubble placement="end" content={item.content} />
+                      <Bubble
+                        placement="end"
+                        content={item.content}
+                        footer={
+                          item.status !== "loading" ? (
+                            <Actions
+                              items={[
+                                {
+                                  key: "retry",
+                                  label: t("aiChat.action.retry"),
+                                  icon: <RedoOutlined />,
+                                },
+                                {
+                                  key: "edit",
+                                  label: t("aiChat.action.edit"),
+                                  icon: <EditOutlined />,
+                                },
+                              ]}
+                              onClick={({ key }) => {
+                                if (key === "retry") {
+                                  void submitMessage(item.content);
+                                } else if (key === "edit") {
+                                  openEditMessage(item);
+                                }
+                              }}
+                            />
+                          ) : null
+                        }
+                      />
                     )}
                   </div>
                 ))}
@@ -1872,6 +1922,22 @@ export function AIChatPanel({
             </Card>
           ))}
         </Flex>
+      </Modal>
+
+      <Modal
+        title={t("aiChat.action.edit")}
+        open={editingMessage !== null}
+        onCancel={() => setEditingMessage(null)}
+        onOk={confirmEditMessage}
+        okText={t("common.save")}
+        cancelText={t("common.cancel")}
+      >
+        <Input.TextArea
+          value={editingText}
+          onChange={(event) => setEditingText(event.target.value)}
+          autoSize={{ minRows: 3, maxRows: 8 }}
+          autoFocus
+        />
       </Modal>
     </>
   );

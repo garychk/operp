@@ -30,7 +30,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
-import { SupaModal } from '../../components/SupaModal';
+import { SupaModal, buildModalNav } from '../../components/SupaModal';
 import SimpleModal from '../../components/SimpleModal';
 import { logOperation } from '../../utils/logger';
 import { useCurrencyRegistry } from '../../utils/money';
@@ -697,6 +697,7 @@ export function Batches() {
         headerPanelTitle={editing ? t('batches.editTitle') : t('batches.add')}
         historyTable={batchTable}
         historyRecordId={editing?.batch_id}
+        navigation={buildModalNav(filtered, editing?.batch_id, handleEdit, (row) => row.batch_id)}
         form={form}
         formEle={
           <Form form={form} layout="vertical" onFinish={handleSubmit}>

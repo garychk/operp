@@ -28,7 +28,7 @@ import { nextDocumentNo } from "../../utils/documentNaming";
 import { Categories } from "./Categories";
 import { ProductUoms } from "./ProductUoms";
 import { ProductImages, IMAGE_BUCKET, imagePublicUrl } from "./ProductImages";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { SuperTable } from "../../components/SuperTable";
 import { formatMoney } from "../../utils/money";
 import type { SuperTableColumn } from "../../components/SuperTable";
@@ -444,6 +444,7 @@ export function Products() {
         headerPanelTitle={t("products.masterTitle")}
         historyTable={productTable}
         historyRecordId={editingProduct?.id}
+        navigation={buildModalNav(filteredProducts, editingProduct?.id, handleEdit)}
         form={form}
         formEle={
           <Form

@@ -31,7 +31,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { SuperTable } from "../../components/SuperTable";
 import dayjs from 'dayjs';
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { BizAttachments } from "../../components/BizAttachments";
 import { useUoms, buildUomOptions, productUnitText, normalizeUnitText } from "../../hooks/useUoms";
 import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
@@ -822,6 +822,7 @@ export function Boms() {
         detailPanelTitle={t("mrp.boms.detailPanelTitle")}
         historyTable={bomTable}
         historyRecordId={editingBom?.id || selectedBom?.id}
+        navigation={buildModalNav(filteredBoms, editingBom?.id || selectedBom?.id, handleEdit)}
         detailItems={[
           {
             key: "attachments",

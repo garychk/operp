@@ -5,60 +5,44 @@ import GridLayout, { WidthProvider } from 'react-grid-layout';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../../utils/supabase';
+import { useErpDarkMode } from '../../hooks/useErpDarkMode';
 import { getCustomPage } from './api';
 import type { CustomPage, PageWidget } from './types';
 import { executeBaq } from '../baq/api';
+import { getChartHeight, useElementWidth } from './widgetUtils';
+import {
+  AlertBannerWidget,
+  CarouselTableWidget,
+  ClockWidget,
+  GaugeWidget,
+  LinkageWidget,
+  LiveStreamWidget,
+  MarqueeWidget,
+  ProgressRingWidget,
+  RankingWidget,
+  ScatterWidget,
+  StatusTagWidget,
+} from './widgets';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import './page-builder.css';
 
 const ResponsiveGrid = WidthProvider(GridLayout);
 
-const GRID_ROW_HEIGHT = 48;
-const GRID_MARGIN = 12;
-const CARD_BODY_MIN_HEIGHT = 48;
-
-function getChartHeight(widget: PageWidget) {
-  const totalHeight = widget.h * GRID_ROW_HEIGHT + Math.max(0, widget.h - 1) * GRID_MARGIN;
-  return Math.max(180, totalHeight - 44 - CARD_BODY_MIN_HEIGHT);
-}
-
-function useElementWidth<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
-  const [width, setWidth] = useState(0);
-
-  useEffect(() => {
-    const element = ref.current;
-    if (!element) return;
-
-    const update = () => setWidth(element.getBoundingClientRect().width);
-    update();
-
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', update);
-      return () => window.removeEventListener('resize', update);
-    }
-
-    const observer = new ResizeObserver(update);
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  return { ref, width };
-}
-
 function ChartWidget({ widget, data }: { widget: PageWidget; data: Record<string, unknown>[] }) {
   const { ref, width } = useElementWidth<HTMLDivElement>();
+  const dark = useErpDarkMode();
   const chartHeight = getChartHeight(widget);
   const chartWidth = Math.max(0, Math.floor(width));
+  const theme = dark ? 'classicDark' : 'classic';
 
   if (widget.type === 'line') {
-    return <div ref={ref} className="chart-widget"><Line data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit width={chartWidth} height={chartHeight} /></div>;
+    return <div ref={ref} className="chart-widget"><Line data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit width={chartWidth} height={chartHeight} theme={theme} /></div>;
   }
   if (widget.type === 'column') {
-    return <div ref={ref} className="chart-widget"><Column data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit width={chartWidth} height={chartHeight} /></div>;
+    return <div ref={ref} className="chart-widget"><Column data={data} xField={widget.xField || 'name'} yField={widget.yField || 'value'} autoFit width={chartWidth} height={chartHeight} theme={theme} /></div>;
   }
-  return <div ref={ref} className="chart-widget"><Pie data={data} angleField={widget.yField || 'value'} colorField={widget.colorField || widget.xField || 'name'} innerRadius={0.55} autoFit width={chartWidth} height={chartHeight} /></div>;
+  return <div ref={ref} className="chart-widget"><Pie data={data} angleField={widget.yField || 'value'} colorField={widget.colorField || widget.xField || 'name'} innerRadius={0.55} autoFit width={chartWidth} height={chartHeight} theme={theme} /></div>;
 }
 
 function WidgetBody({ widget }: { widget: PageWidget }) {
@@ -67,10 +51,31 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
   const [loading, setLoading] = useState(widget.dataSource.mode !== 'static');
   const [error, setError] = useState('');
   const [columnOrder, setColumnOrder] = useState<string[]>([]);
+  const [reloadTick, setReloadTick] = useState(0);
+  // 首次加载才显示 Skeleton，后续定时刷新静默更新，避免画面周期性闪烁
+  const hasLoadedRef = useRef(false);
+  const sourceRef = useRef(widget.dataSource);
+
+  // 动态数据源自动刷新：refreshInterval（秒）> 0 时按间隔重新拉取
+  useEffect(() => {
+    const seconds = widget.refreshInterval || 0;
+    if (widget.dataSource.mode === 'static' || seconds <= 0) return;
+    const timer = window.setInterval(
+      () => setReloadTick((tick) => tick + 1),
+      Math.max(2, seconds) * 1000,
+    );
+    return () => window.clearInterval(timer);
+  }, [widget.dataSource.mode, widget.refreshInterval]);
 
   useEffect(() => {
     let active = true;
     const source = widget.dataSource;
+
+    // 数据源配置本身变化（非定时 tick）时重置，重新显示加载态
+    if (sourceRef.current !== source) {
+      sourceRef.current = source;
+      hasLoadedRef.current = false;
+    }
 
     if (source.mode === 'static') {
       setData((source.staticData || []).slice(0, source.limit || 100) as Record<string, unknown>[]);
@@ -88,7 +93,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
       return () => { active = false; };
     }
 
-    setLoading(true);
+    if (!hasLoadedRef.current) setLoading(true);
     setError('');
     const request: Promise<{ data: unknown[]; error: { message: string; code?: string } | null; columns: string[] }> = (async () => {
       if (source.mode === 'baq') {
@@ -105,6 +110,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
     request
       .then(({ data: rows, error: queryError, columns: orderedColumns }) => {
         if (!active) return;
+        hasLoadedRef.current = true;
         if (queryError) {
           setData([]);
           setColumnOrder([]);
@@ -118,6 +124,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
       })
       .catch((queryError: unknown) => {
         if (!active) return;
+        hasLoadedRef.current = true;
         setData([]);
         setColumnOrder([]);
         setError(queryError instanceof Error ? queryError.message : t('pageRenderer.dataQueryFailed'));
@@ -125,11 +132,13 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
       });
 
     return () => { active = false; };
-  }, [widget.dataSource]);
+  }, [widget.dataSource, reloadTick]);
+
   const columns = useMemo(() => {
     const keys = columnOrder.length ? columnOrder : Object.keys(data[0] || {}).slice(0, 8);
     return keys.map(key => ({ title: key, dataIndex: key, key, ellipsis: true }));
   }, [data, columnOrder]);
+
   if (loading) return <Skeleton active paragraph={{ rows: 3 }} />;
   if (error) return <Alert type="error" showIcon message={t('pageRenderer.dataLoadFailed')} description={error} />;
   if (widget.type === 'text') return <Typography.Paragraph>{widget.content}</Typography.Paragraph>;
@@ -147,10 +156,23 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
       </Divider>
     )
   );
+  if (widget.type === 'clock') return <ClockWidget widget={widget} data={data} />;
   if (widget.type === 'statistic') return <Statistic title={String(data[0]?.[widget.xField || 'label'] || widget.title)} value={Number(data[0]?.[widget.yField || 'value'] || 0)} />;
   if (!data.length) return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} />;
   if (widget.type === 'table') return <Table size="small" rowKey={(_, index) => String(index)} columns={columns} dataSource={data} pagination={{ pageSize: widget.pageSize || 10, hideOnSinglePage: true, showSizeChanger: false }} scroll={{ x: true }} />;
   if (widget.type === 'line' || widget.type === 'column' || widget.type === 'pie') return <ChartWidget widget={widget} data={data} />;
+
+  if (widget.type === 'progressRing') return <ProgressRingWidget widget={widget} data={data} />;
+  if (widget.type === 'gauge') return <GaugeWidget widget={widget} data={data} />;
+  if (widget.type === 'scatter') return <ScatterWidget widget={widget} data={data} />;
+  if (widget.type === 'linkage') return <LinkageWidget widget={widget} data={data} />;
+  if (widget.type === 'ranking') return <RankingWidget widget={widget} data={data} />;
+  if (widget.type === 'carouselTable') return <CarouselTableWidget widget={widget} data={data} />;
+  if (widget.type === 'liveStream') return <LiveStreamWidget widget={widget} data={data} onRefresh={() => setReloadTick((tick) => tick + 1)} />;
+  if (widget.type === 'marquee') return <MarqueeWidget widget={widget} data={data} />;
+  if (widget.type === 'alertBanner') return <AlertBannerWidget widget={widget} data={data} />;
+  if (widget.type === 'statusTag') return <StatusTagWidget widget={widget} data={data} />;
+  return null;
 }
 
 export function PageCanvas({ page, editable = false, selectedId, onSelect, onLayoutChange }: { page: CustomPage; editable?: boolean; selectedId?: string; onSelect?: (id: string) => void; onLayoutChange?: (layout: GridLayout.Layout[]) => void }) {
@@ -158,13 +180,23 @@ export function PageCanvas({ page, editable = false, selectedId, onSelect, onLay
   return (
     <ResponsiveGrid className={`custom-page-grid${editable ? ' is-editing' : ''}`} layout={layout} cols={12} rowHeight={editable ? 48 : 48} margin={[12, 12]} isDraggable={editable} isResizable={editable} onLayoutChange={onLayoutChange} draggableHandle=".widget-drag-handle">
       {page.config.widgets.map(widget => {
-        const plain = !editable && (widget.type === 'text' || widget.type === 'button' || widget.type === 'divider');
+        // plain：预览 / 发布页完全裸渲染（无标题、无边框）——文本 / 按钮 / 分割线 / 滚动播报
+        const plain =
+          !editable &&
+          (widget.type === 'text' ||
+            widget.type === 'button' ||
+            widget.type === 'divider' ||
+            widget.type === 'marquee');
+        // 这些组件在预览 / 发布页不需要卡片标题，但保留卡片边框（编辑态保留标题作拖拽手柄）
+        // 包含：实时时钟、统计数值、仪表盘、进度环
+        const headerlessTypes = ['clock', 'statistic', 'gauge', 'progressRing'];
+        const headerless = plain || (!editable && headerlessTypes.includes(widget.type));
         return (
           <div key={widget.id} onClick={() => onSelect?.(widget.id)}>
             <Card
               size="small"
               className={['page-widget', selectedId === widget.id ? 'selected' : '', plain ? 'page-widget-plain' : ''].filter(Boolean).join(' ')}
-              title={plain ? undefined : widget.title}
+              title={headerless ? undefined : widget.title}
               variant={plain ? 'borderless' : undefined}
               classNames={{ header: 'widget-drag-handle' }}
             >

@@ -31,7 +31,7 @@ export async function updateTableLabels(rows: Array<Pick<TableLabelRow, 'id' | '
 }
 export async function saveBaq(baq: BaqQuery) {
   const payload = { code: baq.code, name: baq.name, description: baq.description || null, status: baq.status, definition: baq.definition, updated_at: new Date().toISOString() };
-  const response = baq.id ? await supabase.from('sys_baq_queries').update(payload).eq('id', baq.id).select().single() : await supabase.from('sys_baq_queries').insert(payload).select().single();
+  const response = baq.id ? await supabase.from('sys_baq_queries').update(payload).eq('id', baq.id).select().single() : await supabase.from('sys_baq_queries').insert({ ...payload, is_deleted: 'n' }).select().single();
   if (response.error) throw response.error; return response.data as BaqQuery;
 }
 export async function removeBaq(id: number) {

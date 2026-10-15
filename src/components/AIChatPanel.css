@@ -567,3 +567,80 @@
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+/* ===================== 暗色模式 =====================
+   AI 面板里的「对话历史」浮层、markdown 表格容器都是纯 CSS 自绘容器：底色取自
+   var(--bg)，而 :root 的 --bg 是 #fff 且没有暗色覆盖 —— 于是暗色下这些容器实打实
+   渲染成白底；里面的文字却来自 antd darkAlgorithm / XProvider 的浅色 token
+   （历史浮层的标题、会话名、空态提示、按钮）→ 白底 + 浅字，等于看不见。
+   这里在面板作用域内重定义这批变量（而不是逐条改属性），顺带把写死的
+   「黑色半透明」（叠在深底上同样不可见）换成白色半透明。
+   颜色取值与 antd darkAlgorithm 对齐：colorBgContainer #141414 / colorBorder #303030。 */
+html[data-erp-dark='true'] .ai-chat-panel {
+  --bg: #141414;
+  --text: rgba(255, 255, 255, 0.72);
+  --text-h: rgba(255, 255, 255, 0.92);
+  --border: #303030;
+}
+
+/* 历史浮层：阴影加深——浅色阴影在深底上看不见，浮层会和背后的消息区糊在一起 */
+html[data-erp-dark='true'] .ai-chat-history-pane {
+  box-shadow: 8px 0 24px rgba(0, 0, 0, 0.45);
+}
+
+/* 会话项 hover / 选中：原来是黑色半透明 */
+html[data-erp-dark='true'] .ai-chat-session-list .ant-conversations-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-erp-dark='true'] .ai-chat-session-list .ant-conversations-item-active {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* 滚动条：深底上黑色滑条不可见 */
+html[data-erp-dark='true'] .ai-chat-message-list:hover,
+html[data-erp-dark='true'] .ai-chat-welcome:hover,
+html[data-erp-dark='true'] .ai-chat-session-list:hover,
+html[data-erp-dark='true'] .ai-chat-history:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+
+html[data-erp-dark='true'] .ai-chat-message-list:hover::-webkit-scrollbar-thumb,
+html[data-erp-dark='true'] .ai-chat-welcome:hover::-webkit-scrollbar-thumb,
+html[data-erp-dark='true'] .ai-chat-session-list:hover::-webkit-scrollbar-thumb,
+html[data-erp-dark='true'] .ai-chat-history:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* 消息区的浅色底块 / 灰字（源引用、引用块、行内代码、表格） */
+html[data-erp-dark='true'] .ai-source-list {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-erp-dark='true'] .ai-markdown-quote {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-erp-dark='true'] .ai-markdown-inline-code {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+html[data-erp-dark='true'] .ai-markdown-table th {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+html[data-erp-dark='true'] .ai-markdown-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-erp-dark='true'] .ai-markdown-table-total td {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-erp-dark='true'] .ai-markdown-table-zero {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+html[data-erp-dark='true'] .ai-markdown-table-empty {
+  color: rgba(255, 255, 255, 0.28);
+}

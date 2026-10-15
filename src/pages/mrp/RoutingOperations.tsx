@@ -31,7 +31,7 @@ import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { BizAttachments } from "../../components/BizAttachments";
 import { RoutingMap } from "../../components/RoutingMap";
 import SimpleModal from "../../components/SimpleModal";
@@ -600,6 +600,7 @@ export function RoutingOperations() {
         detailPanelTitle={t('mrp.routingOperations.detailPanelTitle')}
         historyTable={routingTable}
         historyRecordId={editingRouting?.id || selectedRouting?.id}
+        navigation={buildModalNav(filteredRoutings, editingRouting?.id || selectedRouting?.id, handleEdit)}
         detailItems={[
           {
             key: "attachments",

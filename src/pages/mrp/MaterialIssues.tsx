@@ -31,7 +31,7 @@ import { nextDocumentNo } from "../../utils/documentNaming";
 import { voucherNotice, type InventoryVoucherResult } from "../../utils/inventoryVoucher";
 import { SuperTable } from "../../components/SuperTable";
 import { formatMoney } from "../../utils/money";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import SimpleModal from "../../components/SimpleModal";
 import dayjs from "dayjs";
 
@@ -897,6 +897,7 @@ export function MaterialIssues() {
         detailPanelTitle={t("mrp.materialIssues.detailPanelTitle")}
         historyTable={materialIssueTable}
         historyRecordId={editingIssue?.id || selectedIssue?.id}
+        navigation={buildModalNav(filteredIssues, editingIssue?.id || selectedIssue?.id, handleEdit)}
         form={form}
         formEle={
           <Form

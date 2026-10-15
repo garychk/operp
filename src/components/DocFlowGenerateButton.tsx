@@ -88,7 +88,6 @@ export function DocFlowGenerateButton({
       <>
         <Button
           type="default"
-          size="small"
           icon={<ArrowDownOutlined />}
           disabled={!enabled(rule)}
           onClick={() => openWith(rule.rule_code)}
@@ -116,7 +115,6 @@ export function DocFlowGenerateButton({
       >
         <Button
           type="default"
-          size="small"
           disabled={rules.every((rule) => !enabled(rule))}
           icon={<ArrowDownOutlined />}
         >

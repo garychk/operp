@@ -15,6 +15,7 @@ import {
   suggestMenusForQuestion,
 } from "../../services/menuCatalog.js";
 import { menuLocateTool } from "../../tools/menuTools.js";
+import { designCustomPageTool } from "../../tools/pageDesignTools.js";
 import {
   cancelPendingAction,
   executePendingAction,
@@ -229,6 +230,10 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
 
   if (tool === "baq.upsert") {
     return fromToolResult("create_or_update_baq", await createOrUpdateBaqTool(state));
+  }
+
+  if (tool === "page.design") {
+    return fromToolResult("design_custom_page", await designCustomPageTool(state));
   }
 
   if (tool === "entity.upsert") {

@@ -4,7 +4,7 @@ import { Button, Input, Table, Tag, Modal, Form, Select, Space, message, InputNu
 import { PlusOutlined, DeleteOutlined, EditOutlined, AccountBookOutlined } from '@ant-design/icons';
 import { supabase } from '../../utils/supabase';
 import type { Tables } from '../../utils/supabase';
-import { SupaModal } from '../../components/SupaModal';
+import { SupaModal, buildModalNav } from '../../components/SupaModal';
 import { logWithTiming } from '../../utils/logger';
 import { runBusinessAction } from '../../utils/businessEngine';
 import { nextDocumentNo } from '../../utils/documentNaming';
@@ -708,6 +708,7 @@ export function Vouchers() {
         detailPanelTitle={t('vouchers.detailPanelTitle')}
         historyTable={voucherTable}
         historyRecordId={editingVoucher?.id || selectedVoucher?.id}
+        navigation={buildModalNav(filteredVouchers, editingVoucher?.id || selectedVoucher?.id, handleEdit)}
         detailExtra={
           <Button type="link" size="small" icon={<PlusOutlined />} onClick={handleAddDetail}>{t('vouchers.addDetail')}</Button>
         }

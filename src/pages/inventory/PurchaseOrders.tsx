@@ -26,7 +26,7 @@ import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { BizAttachments } from "../../components/BizAttachments";
 import { SuperTable } from "../../components/SuperTable";
 import {
@@ -818,6 +818,7 @@ export function PurchaseOrders() {
         detailPanelTitle={t('purchaseOrders.detailPanelTitle')}
         historyTable={purchaseOrderTable}
         historyRecordId={editingOrder?.id || selectedOrder?.id}
+        navigation={buildModalNav(filteredOrders, editingOrder?.id || selectedOrder?.id, handleEdit)}
         detailItems={[
           {
             key: "attachments",

@@ -34,7 +34,7 @@ import {
 } from "../../utils/inventoryVoucher";
 import { SuperTable } from "../../components/SuperTable";
 import { useCurrencyRegistry } from "../../utils/money";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import SimpleModal from "../../components/SimpleModal";
 import { WarehouseBinSelect } from "../../components/WarehouseBinSelect";
 import dayjs from "dayjs";
@@ -969,6 +969,7 @@ export function SubcontractIssues() {
         detailPanelTitle={t("mrp.subcontractIssues.detailPanelTitle")}
         historyTable={issueTable}
         historyRecordId={editingIssue?.id || selectedIssue?.id}
+        navigation={buildModalNav(filteredIssues, editingIssue?.id || selectedIssue?.id, handleEdit)}
         form={form}
         formEle={
           <Form

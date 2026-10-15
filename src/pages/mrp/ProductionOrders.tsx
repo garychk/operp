@@ -32,7 +32,7 @@ import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { formatQuantity } from "../../utils/money";
 import dayjs from "dayjs";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { ProductionOrderOperations } from "./ProductionOrderOperations";
 import { useTranslation } from "react-i18next";
 
@@ -992,6 +992,7 @@ export function ProductionOrders() {
         }}
         historyTable={productionOrderTable}
         historyRecordId={editingOrder?.id}
+        navigation={buildModalNav(filteredOrders, editingOrder?.id, handleEdit)}
         form={form}
         formEle={
           <Form

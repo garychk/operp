@@ -30,7 +30,7 @@ import type { Tables } from "../../utils/supabase";
 import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
 import { useCurrencyRegistry } from "../../utils/money";
-import { SupaModal } from "../../components/SupaModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import dayjs from "dayjs";
 
 type SubcontractSettlement =
@@ -558,6 +558,7 @@ export function SubcontractSettlements() {
         detailPanelTitle={t("mrp.subcontractSettlements.detailPanelTitle")}
         historyTable={settlementTable}
         historyRecordId={editingSettlement?.id || selectedSettlement?.id}
+        navigation={buildModalNav(filteredSettlements, editingSettlement?.id || selectedSettlement?.id, handleEdit)}
         form={form}
         formEle={
           <Form
