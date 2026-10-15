@@ -56,3 +56,36 @@ export async function publishCustomPage(page: CustomPage) {
   window.dispatchEvent(new Event('custom-pages-changed'));
   return { ...saved, menu_id: menuId };
 }
+
+export interface DeletePageResult {
+  ok: boolean;
+  /** 被引用（已发布并在菜单中生成入口）而阻止删除 */
+  referenced?: boolean;
+  menuName?: string;
+}
+
+/**
+ * 删除自定义页面：先校验是否被引用（已发布页面会在 sys_menus 生成菜单项），
+ * 被引用的页面阻止删除，避免菜单入口失效；未被引用的页面走软删除（is_deleted = 'y'）。
+ */
+export async function deleteCustomPage(page: CustomPage): Promise<DeletePageResult> {
+  if (!page.id) return { ok: true };
+  const menuCode = `custom_${page.slug}`;
+  const { data: menu, error: menuErr } = await supabase
+    .from('sys_menus')
+    .select('id, menu_name')
+    .eq('menu_code', menuCode)
+    .eq('is_deleted', 'n')
+    .maybeSingle();
+  if (menuErr) throw menuErr;
+  if (menu) {
+    return { ok: false, referenced: true, menuName: (menu as { menu_name?: string }).menu_name };
+  }
+  const { error } = await supabase
+    .from('sys_custom_pages')
+    .update({ is_deleted: 'y' })
+    .eq('id', page.id);
+  if (error) throw error;
+  window.dispatchEvent(new Event('custom-pages-changed'));
+  return { ok: true };
+}
