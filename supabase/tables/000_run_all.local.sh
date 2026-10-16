@@ -162,6 +162,8 @@ ORDER=(
   deploy_119_shift_master_and_capacity.sql
   deploy_120_baq_relations.sql
   deploy_121_baq_multi_condition_join.sql
+  deploy_122_category_planning_defaults.sql
+  deploy_123_product_stock_columns_drop_default.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

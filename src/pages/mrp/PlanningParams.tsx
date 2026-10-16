@@ -29,6 +29,7 @@ import {
   Space,
   Switch,
   Tag,
+  Tooltip,
   message,
 } from "antd";
 import { EditOutlined, SettingOutlined } from "@ant-design/icons";
@@ -39,6 +40,7 @@ import { logWithTiming } from "../../utils/logger";
 import SimpleModal from "../../components/SimpleModal";
 
 const productTable = "erp_products_s_539dcf81_b";
+const categoryTable = "erp_product_categories_s_539dcf81_b";
 
 /** MRP 计划参数子集（src/types/database.ts 的生成类型早于 deploy_114，未含这些列） */
 export interface PlanningParamRow {
@@ -47,9 +49,26 @@ export interface PlanningParamRow {
   name: string;
   specification: string | null;
   unit: string | null;
+  category_id: number | null;
   is_purchased: boolean | null;
   is_manufactured: boolean | null;
   is_mrp_relevant: boolean | null;
+  safety_stock: number | null;
+  min_stock: number | null;
+  max_stock: number | null;
+  order_point: number | null;
+  lead_time_purchase: number | null;
+  lead_time_production: number | null;
+  lot_policy: string | null;
+  min_order_qty: number | null;
+  order_multiple: number | null;
+  max_order_qty: number | null;
+}
+
+/** 类别默认参数（deploy_120：erp_product_categories 上的同名列） */
+interface CategoryDefaults {
+  id: number;
+  name: string;
   safety_stock: number | null;
   min_stock: number | null;
   max_stock: number | null;
@@ -102,13 +121,31 @@ export function PlanningParams() {
   const [editing, setEditing] = useState<PlanningParamRow | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBatchOpen, setIsBatchOpen] = useState(false);
+  const [categories, setCategories] = useState<CategoryDefaults[]>([]);
   const [form] = Form.useForm();
   const [batchForm] = Form.useForm();
 
   useEffect(() => {
     void fetchRows();
+    void fetchCategories();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from(categoryTable)
+        .select(
+          "id, name, safety_stock, min_stock, max_stock, order_point, lead_time_purchase, " +
+            "lead_time_production, lot_policy, min_order_qty, order_multiple, max_order_qty",
+        )
+        .eq("is_deleted", "n");
+      if (error) throw error;
+      setCategories((data || []) as unknown as CategoryDefaults[]);
+    } catch (error) {
+      console.error("Error fetching category defaults:", error);
+    }
+  };
 
   const fetchRows = async () => {
     try {
@@ -122,6 +159,7 @@ export function PlanningParams() {
             "name",
             "specification",
             "unit",
+            "category_id",
             "is_purchased",
             "is_manufactured",
             "is_mrp_relevant",
@@ -162,6 +200,45 @@ export function PlanningParams() {
       ? Boolean(row.is_purchased || row.is_manufactured)
       : Boolean(row.is_mrp_relevant);
 
+  // -------------------------------------------------------------------
+  // deploy_120 生效值取值链：物料显式值 → 类别默认 → 引擎默认（0 / lot_for_lot）
+  // -------------------------------------------------------------------
+  const categoryById = useMemo(
+    () => new Map(categories.map((c) => [c.id, c] as const)),
+    [categories],
+  );
+  type ParamField =
+    | "safety_stock"
+    | "min_stock"
+    | "max_stock"
+    | "order_point"
+    | "lead_time_purchase"
+    | "lead_time_production"
+    | "lot_policy"
+    | "min_order_qty"
+    | "order_multiple"
+    | "max_order_qty";
+  const effective = (
+    row: PlanningParamRow,
+    field: ParamField,
+  ): { value: unknown; fromCategory: boolean } => {
+    const own = (row as unknown as Record<string, unknown>)[field];
+    if (own !== null && own !== undefined) return { value: own, fromCategory: false };
+    const cat = row.category_id != null ? categoryById.get(row.category_id) : undefined;
+    const cv = cat ? (cat as unknown as Record<string, unknown>)[field] : undefined;
+    return { value: cv ?? null, fromCategory: cv !== null && cv !== undefined };
+  };
+  const effectiveNum = (row: PlanningParamRow, field: ParamField) =>
+    Number(effective(row, field).value ?? 0);
+  /** 生效值来自类别默认时的角标 */
+  const CategoryTag = () => (
+    <Tooltip title={t("mrp.planningParams.fromCategory")}>
+      <Tag color="blue" style={{ marginLeft: 4 }}>
+        {t("mrp.planningParams.sourceCategoryShort")}
+      </Tag>
+    </Tooltip>
+  );
+
   const filtered = useMemo(() => {
     const kw = searchTerm.trim().toLowerCase();
     return rows.filter((row) => {
@@ -184,35 +261,37 @@ export function PlanningParams() {
           : record.is_mrp_relevant
             ? "yes"
             : "no",
-      safety_stock: record.safety_stock ?? 0,
-      min_stock: record.min_stock ?? 0,
-      max_stock: record.max_stock ?? 0,
-      order_point: record.order_point ?? 0,
-      lot_policy: (record.lot_policy || "lot_for_lot") as LotPolicyValue,
-      min_order_qty: record.min_order_qty ?? 0,
-      order_multiple: record.order_multiple ?? 0,
-      max_order_qty: record.max_order_qty ?? 0,
-      lead_time_purchase: record.lead_time_purchase ?? 0,
-      lead_time_production: record.lead_time_production ?? 0,
+      // deploy_120：null 保留为空（= 跟随类别默认），不再强转 0
+      safety_stock: record.safety_stock ?? undefined,
+      min_stock: record.min_stock ?? undefined,
+      max_stock: record.max_stock ?? undefined,
+      order_point: record.order_point ?? undefined,
+      lot_policy: (record.lot_policy ?? undefined) as LotPolicyValue | undefined,
+      min_order_qty: record.min_order_qty ?? undefined,
+      order_multiple: record.order_multiple ?? undefined,
+      max_order_qty: record.max_order_qty ?? undefined,
+      lead_time_purchase: record.lead_time_purchase ?? undefined,
+      lead_time_production: record.lead_time_production ?? undefined,
     });
     setIsModalOpen(true);
   };
 
   const handleSubmit = async (values: Record<string, unknown>) => {
     if (!editing) return;
+    // deploy_120：空值显式写 NULL = 跟随类别默认（不能省略键，否则清不掉旧值）
     const patch = {
       is_mrp_relevant:
         values.is_mrp_relevant === "inherit" ? null : values.is_mrp_relevant === "yes",
-      safety_stock: values.safety_stock ?? 0,
-      min_stock: values.min_stock ?? 0,
-      max_stock: values.max_stock ?? 0,
-      order_point: values.order_point ?? 0,
-      lot_policy: values.lot_policy ?? "lot_for_lot",
-      min_order_qty: values.min_order_qty ?? 0,
-      order_multiple: values.order_multiple ?? 0,
-      max_order_qty: values.max_order_qty ?? 0,
-      lead_time_purchase: values.lead_time_purchase ?? 0,
-      lead_time_production: values.lead_time_production ?? 0,
+      safety_stock: values.safety_stock ?? null,
+      min_stock: values.min_stock ?? null,
+      max_stock: values.max_stock ?? null,
+      order_point: values.order_point ?? null,
+      lot_policy: values.lot_policy ?? null,
+      min_order_qty: values.min_order_qty ?? null,
+      order_multiple: values.order_multiple ?? null,
+      max_order_qty: values.max_order_qty ?? null,
+      lead_time_purchase: values.lead_time_purchase ?? null,
+      lead_time_production: values.lead_time_production ?? null,
     };
 
     try {
@@ -298,83 +377,154 @@ export function PlanningParams() {
       title: t("mrp.planningParams.safetyStock"),
       dataIndex: "safety_stock",
       key: "safety_stock",
-      width: 110,
+      width: 130,
       align: "right",
-      render: (v: number | null) => num(v),
+      render: (_: unknown, record: PlanningParamRow) => {
+        const e = effective(record, "safety_stock");
+        return (
+          <span>
+            {num(e.value as number | null)}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("mrp.planningParams.orderPoint"),
       dataIndex: "order_point",
       key: "order_point",
-      width: 110,
+      width: 130,
       align: "right",
-      render: (v: number | null) =>
-        (v ?? 0) > 0 ? <Tag color="blue">{num(v)}</Tag> : num(v),
+      render: (_: unknown, record: PlanningParamRow) => {
+        const v = effectiveNum(record, "order_point");
+        const e = effective(record, "order_point");
+        return (
+          <span>
+            {v > 0 ? <Tag color="blue">{num(v)}</Tag> : num(v)}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("mrp.planningParams.maxStock"),
       dataIndex: "max_stock",
       key: "max_stock",
-      width: 110,
+      width: 130,
       align: "right",
-      render: (v: number | null) => num(v),
+      render: (_: unknown, record: PlanningParamRow) => {
+        const e = effective(record, "max_stock");
+        return (
+          <span>
+            {num(e.value as number | null)}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("mrp.planningParams.lotPolicy"),
       dataIndex: "lot_policy",
       key: "lot_policy",
-      width: 120,
-      render: (v: string | null) => lotPolicyLabels[v || "lot_for_lot"] || v,
+      width: 140,
+      render: (_: unknown, record: PlanningParamRow) => {
+        const e = effective(record, "lot_policy");
+        const label = lotPolicyLabels[String(e.value ?? "lot_for_lot")] || String(e.value ?? "");
+        return (
+          <span>
+            {label}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("mrp.planningParams.minOrderQty"),
       dataIndex: "min_order_qty",
       key: "min_order_qty",
-      width: 110,
+      width: 130,
       align: "right",
-      render: (v: number | null) => num(v),
+      render: (_: unknown, record: PlanningParamRow) => {
+        const e = effective(record, "min_order_qty");
+        return (
+          <span>
+            {num(e.value as number | null)}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("mrp.planningParams.orderMultiple"),
       dataIndex: "order_multiple",
       key: "order_multiple",
-      width: 110,
+      width: 130,
       align: "right",
-      render: (v: number | null) => num(v),
+      render: (_: unknown, record: PlanningParamRow) => {
+        const e = effective(record, "order_multiple");
+        return (
+          <span>
+            {num(e.value as number | null)}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("mrp.planningParams.maxOrderQty"),
       dataIndex: "max_order_qty",
       key: "max_order_qty",
-      width: 110,
+      width: 130,
       align: "right",
       // max_qty 规则却没维护上限 → 引擎会退化为逐批，标出来让计划员顺手补上
-      render: (v: number | null, record: PlanningParamRow) =>
-        (v ?? 0) > 0 ? (
-          num(v)
-        ) : record.lot_policy === "max_qty" ? (
-          <Tag color="orange">0</Tag>
-        ) : (
-          num(v)
-        ),
+      render: (_: unknown, record: PlanningParamRow) => {
+        const v = effectiveNum(record, "max_order_qty");
+        const e = effective(record, "max_order_qty");
+        return (
+          <span>
+            {v > 0 ? (
+              num(v)
+            ) : String(effective(record, "lot_policy").value) === "max_qty" ? (
+              <Tag color="orange">0</Tag>
+            ) : (
+              num(v)
+            )}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("mrp.planningParams.leadTimePurchase"),
       dataIndex: "lead_time_purchase",
       key: "lead_time_purchase",
-      width: 120,
+      width: 140,
       align: "center",
-      render: (v: number | null) =>
-        t("mrp.planningParams.leadTimeUnit", { days: v ?? 0 }),
+      render: (_: unknown, record: PlanningParamRow) => {
+        const e = effective(record, "lead_time_purchase");
+        return (
+          <span>
+            {t("mrp.planningParams.leadTimeUnit", { days: Number(e.value ?? 0) })}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("mrp.planningParams.leadTimeProduction"),
       dataIndex: "lead_time_production",
       key: "lead_time_production",
-      width: 120,
+      width: 140,
       align: "center",
-      render: (v: number | null) =>
-        t("mrp.planningParams.leadTimeUnit", { days: v ?? 0 }),
+      render: (_: unknown, record: PlanningParamRow) => {
+        const e = effective(record, "lead_time_production");
+        return (
+          <span>
+            {t("mrp.planningParams.leadTimeUnit", { days: Number(e.value ?? 0) })}
+            {e.fromCategory && <CategoryTag />}
+          </span>
+        );
+      },
     },
     {
       title: t("common.actions"),
@@ -456,6 +606,12 @@ export function PlanningParams() {
       >
         <Card size="small">
           <Form form={form} layout="vertical" onFinish={handleSubmit}>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={t("mrp.planningParams.followCategory")}
+            />
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
@@ -479,7 +635,7 @@ export function PlanningParams() {
                   rules={[nonNegative]}
                   extra={t("mrp.planningParams.orderPointHint")}
                 >
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
 
@@ -489,23 +645,25 @@ export function PlanningParams() {
                   name="safety_stock"
                   rules={[nonNegative]}
                 >
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
               <Col span={12}>
                 <Form.Item label={t("mrp.planningParams.minStock")} name="min_stock" rules={[nonNegative]}>
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
 
               <Col span={12}>
                 <Form.Item label={t("mrp.planningParams.maxStock")} name="max_stock" rules={[nonNegative]}>
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item label={t("mrp.planningParams.lotPolicy")} name="lot_policy" initialValue="lot_for_lot">
+                <Form.Item label={t("mrp.planningParams.lotPolicy")} name="lot_policy">
                   <Select
+                    allowClear
+                    placeholder={t("mrp.planningParams.followCategory")}
                     options={LOT_POLICIES.map((value) => ({ value, label: lotPolicyLabels[value] }))}
                   />
                 </Form.Item>
@@ -517,7 +675,7 @@ export function PlanningParams() {
                   name="min_order_qty"
                   rules={[nonNegative]}
                 >
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -526,7 +684,7 @@ export function PlanningParams() {
                   name="order_multiple"
                   rules={[nonNegative]}
                 >
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
 
@@ -537,7 +695,7 @@ export function PlanningParams() {
                   rules={[nonNegative]}
                   extra={t("mrp.planningParams.maxOrderQtyHint")}
                 >
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -547,7 +705,7 @@ export function PlanningParams() {
                   rules={[nonNegative]}
                   extra={t("mrp.planningParams.leadTimeHint")}
                 >
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
 
@@ -557,7 +715,7 @@ export function PlanningParams() {
                   name="lead_time_production"
                   rules={[nonNegative]}
                 >
-                  <InputNumber style={{ width: "100%" }} min={0} />
+                  <InputNumber style={{ width: "100%" }} min={0} placeholder={t("mrp.planningParams.followCategory")} />
                 </Form.Item>
               </Col>
             </Row>

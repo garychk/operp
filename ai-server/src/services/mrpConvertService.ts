@@ -21,6 +21,8 @@ import { loadPlan, type MrpPlanRow } from "./mrpService.js";
 const T = {
   requirements: "erp_mrp_requirements_s_539dcf81_b",
   products: "erp_products_s_539dcf81_b",
+  productCategories: "erp_product_categories_s_539dcf81_b",
+  suppliers: "erp_suppliers_s_539dcf81_b",
   boms: "erp_boms_s_539dcf81_b",
   purchaseOrders: "erp_purchase_orders_s_539dcf81_b",
   purchaseOrderDetails: "erp_purchase_order_details_s_539dcf81_b",
@@ -52,6 +54,11 @@ export interface ConversionCandidate {
   orderDate: string;
   target: ConversionTarget;
   bomId: number | null;
+  /**
+   * 默认供应商（deploy_120）：物料显式值 → 类别默认值，且必须是本租户启用中的
+   * 供应商；取不到 / 已停用 = null（留空由人工指定，不给建议单带死数据）。
+   */
+  supplierId: number | null;
   unitPrice: number;
   warnings: string[];
 }
@@ -115,6 +122,9 @@ interface ProductMeta {
   isManufactured: boolean;
   purchasePrice: number;
   costPrice: number;
+  /** deploy_120：物料显式默认供应商（可能为 null = 跟随类别默认） */
+  defaultSupplierId: number | null;
+  categoryId: number | null;
 }
 
 export async function buildConversionPreview(
@@ -149,7 +159,10 @@ export async function buildConversionPreview(
 
   const { data: prodData, error: prodErr } = await supabase
     .from(T.products)
-    .select("id, code, name, is_purchased, is_manufactured, purchase_price, cost_price")
+    .select(
+      "id, code, name, is_purchased, is_manufactured, purchase_price, cost_price, " +
+        "category_id, default_supplier_id",
+    )
     .eq("tenant_id", tenantId)
     .eq("is_deleted", "n")
     .in("id", productIds);
@@ -165,8 +178,68 @@ export async function buildConversionPreview(
       isManufactured: p.is_manufactured === true || p.is_manufactured === "true",
       purchasePrice: num(p.purchase_price),
       costPrice: num(p.cost_price),
+      defaultSupplierId:
+        p.default_supplier_id === null || p.default_supplier_id === undefined
+          ? null
+          : num(p.default_supplier_id) || null,
+      categoryId: p.category_id === null || p.category_id === undefined ? null : num(p.category_id) || null,
     });
   }
+
+  // deploy_120：类别默认供应商 + 启用校验
+  //   供应商必须「本租户 + 未删除 + 启用」才回填；取不到就留空并告警，
+  //   绝不让建议单带着停用供应商出去。
+  const categoryIds = Array.from(
+    new Set(
+      [...products.values()]
+        .map((p) => p.categoryId)
+        .filter((id): id is number => id !== null && id > 0),
+    ),
+  );
+  const categorySupplierById = new Map<number, number | null>();
+  if (categoryIds.length > 0) {
+    const { data: catData, error: catErr } = await supabase
+      .from(T.productCategories)
+      .select("id, default_supplier_id")
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n")
+      .in("id", categoryIds);
+    if (catErr) throw catErr;
+    for (const c of asRows(catData)) {
+      categorySupplierById.set(
+        num(c.id),
+        c.default_supplier_id === null || c.default_supplier_id === undefined
+          ? null
+          : num(c.default_supplier_id) || null,
+      );
+    }
+  }
+
+  const candidateSupplierIds = new Set<number>();
+  for (const p of products.values()) {
+    const sid = p.defaultSupplierId ?? (p.categoryId !== null ? (categorySupplierById.get(p.categoryId) ?? null) : null);
+    if (sid !== null && sid > 0) candidateSupplierIds.add(sid);
+  }
+  const activeSupplierIds = new Set<number>();
+  if (candidateSupplierIds.size > 0) {
+    const { data: supData, error: supErr } = await supabase
+      .from(T.suppliers)
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n")
+      .eq("status", "active")
+      .in("id", [...candidateSupplierIds]);
+    if (supErr) throw supErr;
+    for (const s of asRows(supData)) activeSupplierIds.add(num(s.id));
+  }
+
+  /** 物料显式 → 类别默认 → 校验启用；失败返回 null（建单留空） */
+  const resolveSupplierId = (p: ProductMeta): number | null => {
+    const sid =
+      p.defaultSupplierId ??
+      (p.categoryId !== null ? (categorySupplierById.get(p.categoryId) ?? null) : null);
+    return sid !== null && sid > 0 && activeSupplierIds.has(sid) ? sid : null;
+  };
 
   // 默认 BOM：优先 is_default，其次 id 最小
   const { data: bomData, error: bomErr } = await supabase
@@ -236,6 +309,18 @@ export async function buildConversionPreview(
 
     const warnings: string[] = [];
     let bomId: number | null = null;
+    // deploy_120：默认供应商取值链 + 启用校验（只有采购建议单关心）
+    const rawSupplierId =
+      product.defaultSupplierId ??
+      (product.categoryId !== null ? (categorySupplierById.get(product.categoryId) ?? null) : null);
+    const supplierId = rawSupplierId !== null && activeSupplierIds.has(rawSupplierId) ? rawSupplierId : null;
+    if (target === "purchase_order") {
+      if (rawSupplierId !== null && supplierId === null) {
+        warnings.push("supplier_inactive"); // 配了默认供应商但已停用/删除
+      } else if (supplierId === null) {
+        warnings.push("supplier_missing"); // 没配默认供应商，留空由人工指定
+      }
+    }
 
     if (target === "production_order") {
       bomId = bomByProduct.get(productId)?.id ?? null;
@@ -256,6 +341,7 @@ export async function buildConversionPreview(
       orderDate,
       target,
       bomId,
+      supplierId,
       unitPrice: round4(product.purchasePrice > 0 ? product.purchasePrice : product.costPrice),
       warnings,
     });
@@ -330,7 +416,9 @@ async function createPurchaseOrder(
     .insert({
       order_no: orderNo,
       order_date: candidate.orderDate || todayStr(),
-      supplier_id: null, // 无货源清单：留给人工指定
+      // deploy_120：回填默认供应商（物料显式 → 类别默认，建单前已校验启用）；
+      // null = 留空由人工指定
+      supplier_id: candidate.supplierId,
       delivery_date: candidate.requirementDate || candidate.orderDate,
       total_amount: amount,
       tax_amount: 0,
@@ -373,7 +461,9 @@ async function createPurchaseOrder(
     throw dErr;
   }
 
-  warnings.push("supplier_missing");
+  if (candidate.supplierId === null) {
+    warnings.push("supplier_missing");
+  }
   return { id: orderId, no: orderNo, warnings };
 }
 

@@ -23,6 +23,7 @@ const T = {
   products: "erp_products_s_539dcf81_b",
   boms: "erp_boms_s_539dcf81_b",
   bomDetails: "erp_bom_details_s_539dcf81_b",
+  productCategories: "erp_product_categories_s_539dcf81_b",
   warehouses: "erp_warehouses_s_539dcf81_b",
   inventory: "erp_inventory_s_539dcf81_b",
   salesOrders: "erp_sales_orders_s_539dcf81_b",
@@ -142,10 +143,12 @@ export async function saveAnalysisReport(
 
 export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promise<MrpEngineInput> {
   // ---- 物料 ----
+  // deploy_120：计划参数列可空，NULL = 跟随类别默认（erp_product_categories 同名列），
+  // 两端皆空再落现状默认（0 / lot_for_lot）。合并在这一层做完，引擎仍只收具体数值。
   const { data: productRows, error: productErr } = await supabase
     .from(T.products)
     .select(
-      "id, code, name, is_purchased, is_manufactured, is_mrp_relevant, safety_stock, " +
+      "id, code, name, category_id, is_purchased, is_manufactured, is_mrp_relevant, safety_stock, " +
         "max_stock, order_point, " +
         "lead_time_purchase, lead_time_production, lot_policy, min_order_qty, order_multiple, max_order_qty",
     )
@@ -153,7 +156,39 @@ export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promi
     .eq("is_deleted", "n");
   if (productErr) throw productErr;
 
-  const products: MrpProductInput[] = asRows(productRows).map((r) => ({
+  // 物料涉及的类别默认参数（deploy_120）
+  const categoryIds = Array.from(
+    new Set(asRows(productRows).map((r) => num(r.category_id)).filter((id) => id > 0)),
+  );
+  const categoryById = new Map<number, Record<string, unknown>>();
+  if (categoryIds.length > 0) {
+    const { data: catRows, error: catErr } = await supabase
+      .from(T.productCategories)
+      .select(
+        "id, safety_stock, min_stock, max_stock, order_point, min_order_qty, " +
+          "order_multiple, max_order_qty, lead_time_purchase, lead_time_production, lot_policy",
+      )
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n")
+      .in("id", categoryIds);
+    if (catErr) throw catErr;
+    for (const c of asRows(catRows)) categoryById.set(num(c.id), c);
+  }
+
+  /** 物料显式值 → 类别默认值 → 兜底值（deploy_120 取值链） */
+  const pickNum = (v: unknown, cat: Record<string, unknown> | undefined, key: string, fallback = 0) =>
+    num(v === null || v === undefined ? (cat?.[key] ?? fallback) : v);
+  const LOT_POLICIES = ["lot_for_lot", "fixed_qty", "multiples", "max_qty"] as const;
+  const pickLotPolicy = (v: unknown, cat: Record<string, unknown> | undefined): MrpProductInput["lotPolicy"] => {
+    for (const candidate of [v, cat?.lot_policy]) {
+      if (LOT_POLICIES.includes(candidate as never)) return candidate as MrpProductInput["lotPolicy"];
+    }
+    return "lot_for_lot";
+  };
+
+  const products: MrpProductInput[] = asRows(productRows).map((r) => {
+    const cat = categoryById.get(num(r.category_id));
+    return {
     id: num(r.id),
     code: String(r.code ?? ""),
     name: String(r.name ?? ""),
@@ -163,21 +198,18 @@ export async function loadEngineInput(tenantId: number, plan: MrpPlanRow): Promi
       r.is_mrp_relevant === null || r.is_mrp_relevant === undefined
         ? null
         : Boolean(r.is_mrp_relevant),
-    safetyStock: num(r.safety_stock),
-    maxStock: num(r.max_stock),
-    orderPoint: num(r.order_point),
-    leadTimePurchase: num(r.lead_time_purchase),
-    leadTimeProduction: num(r.lead_time_production),
+    safetyStock: pickNum(r.safety_stock, cat, "safety_stock"),
+    maxStock: pickNum(r.max_stock, cat, "max_stock"),
+    orderPoint: pickNum(r.order_point, cat, "order_point"),
+    leadTimePurchase: pickNum(r.lead_time_purchase, cat, "lead_time_purchase"),
+    leadTimeProduction: pickNum(r.lead_time_production, cat, "lead_time_production"),
     // 数据库 CHECK 保证取值；脏数据回退 lot_for_lot
-    lotPolicy: (["lot_for_lot", "fixed_qty", "multiples", "max_qty"] as const).includes(
-      r.lot_policy as never,
-    )
-      ? (r.lot_policy as MrpProductInput["lotPolicy"])
-      : "lot_for_lot",
-    minOrderQty: num(r.min_order_qty),
-    orderMultiple: num(r.order_multiple),
-    maxOrderQty: num(r.max_order_qty),
-  }));
+    lotPolicy: pickLotPolicy(r.lot_policy, cat),
+    minOrderQty: pickNum(r.min_order_qty, cat, "min_order_qty"),
+    orderMultiple: pickNum(r.order_multiple, cat, "order_multiple"),
+    maxOrderQty: pickNum(r.max_order_qty, cat, "max_order_qty"),
+    };
+  });
   const productById = new Map(products.map((p) => [p.id, p]));
 
   // ---- 工作日历（P0-4） ----
