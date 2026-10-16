@@ -1,5 +1,6 @@
 import type { ThoughtChainItemType } from "@ant-design/x/es/thought-chain";
 import { supabase } from "./supabase";
+import { createId } from "./aiConfig";
 
 export interface AIChatSessionRecord {
   id: string;
@@ -85,6 +86,22 @@ export async function createChatSession(input: {
       "id, user_id, title, last_message_preview, created_at, updated_at, last_message_at, is_deleted",
     )
     .single();
+
+  // 兜底：传入的 id 已存在（换用户复用旧会话 id / 遗留脏数据）时会撞主键，
+  // 用全新 id 重试一次，避免整条对话创建失败。
+  if (error?.code === "23505" && error.message.includes("sys_ai_chat_sessions_pkey")) {
+    const retryPayload = { ...payload, id: createId() };
+    const retry = await supabase
+      .from("sys_ai_chat_sessions")
+      .insert(retryPayload)
+      .select(
+        "id, user_id, title, last_message_preview, created_at, updated_at, last_message_at, is_deleted",
+      )
+      .single();
+
+    if (retry.error) throw retry.error;
+    return retry.data as AIChatSessionRecord;
+  }
 
   if (error) throw error;
   return data as AIChatSessionRecord;

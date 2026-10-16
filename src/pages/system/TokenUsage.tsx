@@ -4,8 +4,10 @@ import { Table, Card, DatePicker, Input, Button, Space, Tag, message, Statistic,
 import { SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import type { Dayjs } from 'dayjs';
+import { Line, Pie } from '@ant-design/charts';
 import { supabase } from '../../utils/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useErpDarkMode } from '../../hooks/useErpDarkMode';
 
 interface TokenUsageRow {
   id: number;
@@ -36,6 +38,9 @@ export function TokenUsage() {
   const [searchModel, setSearchModel] = useState('');
   const [dateRange, setDateRange] = useState<[Dayjs | null, Dayjs | null] | null>(null);
   const [pagination, setPagination] = useState({ current: 1, pageSize: 20 });
+  // 图表聚合数据：按用途（operation）、按日（created_at 的日期部分）
+  const [operationStats, setOperationStats] = useState<{ operation: string; tokens: number }[]>([]);
+  const [dailyStats, setDailyStats] = useState<{ date: string; tokens: number }[]>([]);
 
   // 角色判定：超管看全部租户；租户管理员看本租户全部用户；普通用户只看自己
   const isSuperAdmin = user?.isSuperAdmin === true;
@@ -43,6 +48,30 @@ export function TokenUsage() {
   const canSeeOthers = isSuperAdmin || isTenantAdmin;
 
   const operationLabel = (op: string) => t(`tokenUsage.op.${op}`, op) as string;
+  const dark = useErpDarkMode();
+
+  // 共用的筛选条件：图表与明细表保持同一口径，避免「图里一个数、表里另一个数」。
+  // 用宽松类型承载 Supabase 查询构造器（.eq/.ilike/.gte/.lte/.range 链式返回类型复杂）。
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const applyFilters = (query: any) => {
+    let q = query;
+    // 普通用户：只看自己（RLS 已兜底，这里再显式过滤一次更稳）
+    if (!canSeeOthers && user?.profile?.id) {
+      q = q.eq('user_id', user.profile.id);
+    }
+    if (canSeeOthers && searchUser) {
+      q = q.eq('user_id', searchUser);
+    }
+    if (searchModel) {
+      q = q.ilike('model', `%${searchModel}%`);
+    }
+    if (dateRange && dateRange[0] && dateRange[1]) {
+      q = q
+        .gte('created_at', dateRange[0].startOf('day').toISOString())
+        .lte('created_at', dateRange[1].endOf('day').toISOString());
+    }
+    return q;
+  };
 
   const fetchUsers = async () => {
     if (!canSeeOthers) return;
@@ -63,22 +92,7 @@ export function TokenUsage() {
         .from('sys_ai_token_usage')
         .select('*', { count: 'exact' })
         .order('created_at', { ascending: false });
-
-      // 普通用户：只看自己（RLS 已兜底，这里再显式过滤一次更稳）
-      if (!canSeeOthers && user?.profile?.id) {
-        query = query.eq('user_id', user.profile.id);
-      }
-      if (canSeeOthers && searchUser) {
-        query = query.eq('user_id', searchUser);
-      }
-      if (searchModel) {
-        query = query.ilike('model', `%${searchModel}%`);
-      }
-      if (dateRange && dateRange[0] && dateRange[1]) {
-        query = query
-          .gte('created_at', dateRange[0].startOf('day').toISOString())
-          .lte('created_at', dateRange[1].endOf('day').toISOString());
-      }
+      query = applyFilters(query);
 
       const from = (page - 1) * pageSize;
       const to = from + pageSize - 1;
@@ -94,9 +108,53 @@ export function TokenUsage() {
     }
   };
 
+  // 图表聚合：拉全量轻量字段（operation / total_tokens / created_at）后在前端聚合。
+  // 不用分页，确保饼图/曲线图覆盖当前筛选下的完整数据，而不是只有当前页 20 条。
+  const fetchCharts = async () => {
+    try {
+      let query = supabase
+        .from('sys_ai_token_usage')
+        .select('operation, total_tokens, created_at');
+      query = applyFilters(query);
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const rowsData = (data || []) as Pick<TokenUsageRow, 'operation' | 'total_tokens' | 'created_at'>[];
+
+      // 按用途聚合
+      const opMap = new Map<string, number>();
+      // 按日聚合（用 UTC 日期，避免本地时区把 created_at 拆到两天）
+      const dayMap = new Map<string, number>();
+      for (const row of rowsData) {
+        const tokens = Number(row.total_tokens) || 0;
+        const op = row.operation || 'chat';
+        opMap.set(op, (opMap.get(op) || 0) + tokens);
+
+        const day = new Date(row.created_at).toISOString().slice(0, 10);
+        dayMap.set(day, (dayMap.get(day) || 0) + tokens);
+      }
+
+      setOperationStats(
+        Array.from(opMap.entries())
+          .map(([operation, tokens]) => ({ operation, tokens }))
+          .sort((a, b) => b.tokens - a.tokens),
+      );
+
+      setDailyStats(
+        Array.from(dayMap.entries())
+          .map(([date, tokens]) => ({ date, tokens }))
+          .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0)),
+      );
+    } catch (error) {
+      console.error('Failed to fetch token charts:', error);
+    }
+  };
+
   useEffect(() => {
     fetchRows(pagination.current, pagination.pageSize);
     fetchUsers();
+    fetchCharts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canSeeOthers]);
 
@@ -107,9 +165,28 @@ export function TokenUsage() {
     return { prompt: p, completion: c, total: p + c };
   }, [rows]);
 
+  // 图表数据（带本地化标签）
+  const pieData = useMemo(
+    () =>
+      operationStats.map((item) => ({
+        operation: operationLabel(item.operation),
+        tokens: item.tokens,
+      })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [operationStats],
+  );
+  const lineData = useMemo(
+    () => dailyStats.map((item) => ({ date: item.date, tokens: item.tokens })),
+    [dailyStats],
+  );
+
+  const chartTheme = dark ? 'classicDark' : 'classic';
+  const chartHeight = 260;
+
   const handleSearch = () => {
     setPagination({ current: 1, pageSize: pagination.pageSize });
     fetchRows(1, pagination.pageSize);
+    fetchCharts();
   };
 
   const handleReset = () => {
@@ -118,6 +195,7 @@ export function TokenUsage() {
     setDateRange(null);
     setPagination({ current: 1, pageSize: pagination.pageSize });
     fetchRows(1, pagination.pageSize);
+    fetchCharts();
   };
 
   const handlePageChange = (page: number, pageSize: number) => {
@@ -216,6 +294,50 @@ export function TokenUsage() {
         </Col>
         <Col span={8}>
           <Statistic title={t('tokenUsage.pageTotal')} value={pageTotals.total} />
+        </Col>
+      </Row>
+      <Row gutter={16} style={{ marginBottom: 16 }}>
+        <Col span={12}>
+          <Card variant="borderless" size="small" title={t('tokenUsage.byOperation')}>
+            {pieData.length ? (
+              <Pie
+                data={pieData}
+                angleField="tokens"
+                colorField="operation"
+                innerRadius={0.55}
+                autoFit
+                height={chartHeight}
+                theme={chartTheme}
+                legend={{ color: { position: 'bottom' } }}
+                label={{ text: 'tokens', style: { fontSize: 11, fontWeight: 600 } }}
+              />
+            ) : (
+              <div style={{ height: chartHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                {t('tokenUsage.noChartData')}
+              </div>
+            )}
+          </Card>
+        </Col>
+        <Col span={12}>
+          <Card variant="borderless" size="small" title={t('tokenUsage.dailyTrend')}>
+            {lineData.length ? (
+              <Line
+                data={lineData}
+                xField="date"
+                yField="tokens"
+                shapeField="smooth"
+                autoFit
+                height={chartHeight}
+                theme={chartTheme}
+                axis={{ y: { title: t('tokenUsage.totalTokens') } }}
+                style={{ lineWidth: 2.5 }}
+              />
+            ) : (
+              <div style={{ height: chartHeight, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999' }}>
+                {t('tokenUsage.noChartData')}
+              </div>
+            )}
+          </Card>
         </Col>
       </Row>
       <Table

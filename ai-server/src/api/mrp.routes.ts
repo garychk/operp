@@ -89,7 +89,8 @@ mrpRouter.post("/run", async (req, res) => {
 
     // LLM 报告（generateMrpReport 内部捕获一切异常，失败回退确定性摘要，不影响运算结果）
     const reportOutcome = await generateMrpReport(plan, result);
-    await saveAnalysisReport(identity.tenantId, plan_id, reportOutcome.report);
+    // 结构化 stats 随报告一起落库（deploy_127），历史报告回看也能画图
+    await saveAnalysisReport(identity.tenantId, plan_id, reportOutcome.report, result.stats);
 
     res.json({
       ok: true,
@@ -245,7 +246,7 @@ mrpRouter.get("/report/:planId", async (req, res) => {
     const identity = getIdentity(req);
     const { data, error } = await supabase
       .from("erp_mrp_plans_s_539dcf81_b")
-      .select("analysis_report, plan_no")
+      .select("analysis_report, analysis_stats, plan_no")
       .eq("id", planId)
       .eq("tenant_id", identity.tenantId)
       .eq("is_deleted", "n")
@@ -256,7 +257,12 @@ mrpRouter.get("/report/:planId", async (req, res) => {
       res.status(404).json({ ok: false, error: "计划不存在或不属于当前租户。" });
       return;
     }
-    res.json({ ok: true, plan_no: data.plan_no, report: data.analysis_report });
+    res.json({
+      ok: true,
+      plan_no: data.plan_no,
+      report: data.analysis_report,
+      stats: data.analysis_stats ?? null,
+    });
   } catch (err) {
     res.status(500).json({ ok: false, error: extractErrorMessage(err) });
   }

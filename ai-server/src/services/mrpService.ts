@@ -128,10 +128,16 @@ export async function saveAnalysisReport(
   tenantId: number,
   planId: number,
   report: string,
+  stats?: MrpEngineResult["stats"] | null,
 ): Promise<void> {
   const { error } = await supabase
     .from(T.plans)
-    .update({ analysis_report: report, updated_at: new Date().toISOString() })
+    .update({
+      analysis_report: report,
+      // 结构化统计随报告一起落库（deploy_127），供前端报告弹窗画图；stats 缺失时不动该列
+      ...(stats ? { analysis_stats: stats } : {}),
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", planId)
     .eq("tenant_id", tenantId);
   if (error) throw error;

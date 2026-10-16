@@ -169,9 +169,20 @@ const resolveAIBaseUrl = () => {
 };
 
 const AI_SERVER_URL = resolveAIBaseUrl();
-const readSessionId = () => {
+
+/**
+ * 会话 id 的 localStorage 缓存 key。
+ *
+ * 必须带用户维度：否则换一个用户登录同一浏览器时，会复用上一个用户的 sessionId
+ * 去 createChatSession，撞 sys_ai_chat_sessions.id 主键（duplicate key）。
+ * user_id 为空（未登录）时退回全局 key，行为和旧实现一致。
+ */
+const sessionStorageKey = (userId?: number | null) =>
+  `operp-ai-chat-session-id${typeof userId === "number" ? `:${userId}` : ""}`;
+
+const readSessionId = (userId?: number | null) => {
   try {
-    const key = "operp-ai-chat-session-id";
+    const key = sessionStorageKey(userId);
     const existing = localStorage.getItem(key);
     if (existing) return existing;
     const next = createId();
@@ -933,7 +944,7 @@ export function AIChatPanel({
 
   const syncSessionId = (sessionId: string) => {
     try {
-      localStorage.setItem("operp-ai-chat-session-id", sessionId);
+      localStorage.setItem(sessionStorageKey(user?.profile.id ?? null), sessionId);
     } catch {
       // ignore local storage errors
     }
@@ -1000,7 +1011,7 @@ export function AIChatPanel({
       return activeConversationId;
     }
 
-    const sessionId = readSessionId();
+    const sessionId = readSessionId(user?.profile.id ?? null);
 
     // 面板初始化时不再加载历史。只有在真正要发消息、且本地还没有激活会话时，
     // 才按 localStorage 里的 id 尝试恢复既有会话（避免重复插入），恢复到就顺带把

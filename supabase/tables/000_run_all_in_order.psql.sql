@@ -149,3 +149,4 @@
 \i supabase/tables/deploy_124_ai_document_optional_lines.sql
 \i supabase/tables/deploy_125_ai_token_usage.sql
 \i supabase/tables/deploy_126_ai_token_usage_menu.sql
+\i supabase/tables/deploy_127_mrp_analysis_stats.sql

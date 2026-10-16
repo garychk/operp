@@ -167,6 +167,7 @@ ORDER=(
   deploy_124_ai_document_optional_lines.sql
   deploy_125_ai_token_usage.sql
   deploy_126_ai_token_usage_menu.sql
+  deploy_127_mrp_analysis_stats.sql
 )
 
 # ---------------------------------------------------------------- 文件自检
