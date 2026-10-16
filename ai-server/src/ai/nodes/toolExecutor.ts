@@ -321,6 +321,7 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
       [{ role: "system", content: knowledgePrompt }],
       state.provider,
       emitDelta,
+      "knowledge_answer",
     );
     const knowledgeReply =
       content ||
@@ -374,6 +375,7 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
     ],
     state.provider,
     emitDelta,
+    "chat",
   );
 
   return {

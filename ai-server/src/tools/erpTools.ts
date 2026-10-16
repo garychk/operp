@@ -373,7 +373,7 @@ async function extractEntityPayload(
   const { content } = await callChatModel([
     { role: "system", content: "你只返回JSON。" },
     { role: "user", content: prompt },
-  ], provider);
+  ], provider, "field_extract");
   const parsed = parseJson<{ fields?: Record<string, unknown>; need_more?: string[]; summary?: string }>(content);
   return {
     fields: parsed?.fields || {},
@@ -523,6 +523,7 @@ async function inferMissingFields(
       { role: "user", content: prompt },
     ],
     provider,
+    "field_extract",
   );
   const parsed = parseJson<{
     fields?: Record<string, unknown>;
@@ -1172,6 +1173,7 @@ export async function designAndPersistBaq(options: {
         { role: "user", content: prompt },
       ],
       options.provider,
+      "baq_design",
     );
     parsed = parseJson<{ name?: string; code?: string; description?: string; definition?: unknown }>(content);
     const candidate = normalizeBaqDefinition(
@@ -1395,6 +1397,7 @@ export async function businessAnalysisTool(state: AiGraphState): Promise<ToolRes
       { role: "user", content: prompt },
     ],
     state.provider,
+    "analysis",
   );
 
   const plan = parseAnalysisPlan(content);

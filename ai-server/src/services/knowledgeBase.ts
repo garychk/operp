@@ -230,7 +230,7 @@ export async function searchKnowledgeRag(
       throw new Error("No embedding provider configured");
     }
 
-    const embedding = await callEmbeddingModel(query, embeddingProvider);
+    const embedding = await callEmbeddingModel(query, embeddingProvider, "embedding_query");
     // 提问侧同样要挡：维度不符时余弦相似度会报 SQL 错，被外层 catch 后静默降级为
     // 关键字搜索，用户只会觉得「怎么搜不准」，查不到真正原因。这里明确抛出来记日志。
     if (embedding.length && embedding.length !== EMBEDDING_DIM) {
@@ -480,7 +480,7 @@ export async function indexKnowledgeDocument(
   const payload = [];
 
   for (let index = 0; index < chunks.length; index += 1) {
-    const embedding = await callEmbeddingModel(chunks[index], embeddingProvider);
+    const embedding = await callEmbeddingModel(chunks[index], embeddingProvider, "embedding_index");
 
     // 提前比对维度：交给 pgvector 报错会得到「expected 768 dimensions, not 1024」
     // 这种 SQL 级信息，用户无从下手。

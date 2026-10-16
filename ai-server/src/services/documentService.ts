@@ -783,6 +783,7 @@ export async function extractDocumentDraft(
       { role: "user", content: prompt },
     ],
     provider ?? state.provider,
+    "document_extract",
   );
 
   const fenced = content.trim().match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);

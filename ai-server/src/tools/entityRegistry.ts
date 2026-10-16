@@ -838,6 +838,7 @@ async function matchByModel(tables: EntityTable[], state: AiGraphState): Promise
         { role: "user", content: prompt },
       ],
       state.provider,
+      "entity_match",
     );
     const raw = String(content || "").trim().replace(/^```(?:json)?\s*([\s\S]*?)\s*```$/i, "$1");
     const parsed = JSON.parse(raw) as { table?: string | null };

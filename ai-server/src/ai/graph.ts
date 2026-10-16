@@ -7,6 +7,7 @@ import { shouldContinuePlan, toolExecutorNode } from "./nodes/toolExecutor.js";
 import { memoryWriterNode } from "./nodes/memoryWriter.js";
 import { responseComposerNode } from "./nodes/responseComposer.js";
 import { streamContext } from "./streamContext.js";
+import { tokenUsageContext } from "../services/tokenUsage.js";
 
 /** 多步计划的硬上限（防计划自激 / 死循环） */
 const MAX_PLAN_STEPS = 5;
@@ -103,29 +104,39 @@ export type StreamEvent =
   | { type: "final"; result: AiChatResult };
 
 export async function runChatGraph(input: AiChatRequest): Promise<AiChatResult> {
-  const result = (await compiled.invoke(buildState(input))) as AiGraphState;
-
-  return {
-    status: "success",
-    reply: result.reply || "已处理。",
-    focus: result.focus,
-    route: result.route,
-    routeLabel: result.routeLabel,
-    sources: result.sources,
-    need_confirmation: result.needConfirmation,
-    next_questions: result.nextQuestions,
-    data: {
-      intent: result.intent,
-      domain: result.domain,
-      target: result.target,
-      queryMode: result.queryMode,
-      responseMode: result.responseMode,
-      confidence: result.confidence,
-      plan: result.plan,
-      toolResults: result.toolResults,
-      sources: result.sources,
+  // token 统计上下文：包住整条节点链，底层 LLM 函数靠 ALS 拿到身份
+  return tokenUsageContext.run(
+    {
+      userId: input.user_id,
+      tenantId: input.tenant_id,
+      sessionId: input.session_id,
     },
-  };
+    async () => {
+      const result = (await compiled.invoke(buildState(input))) as AiGraphState;
+
+      return {
+        status: "success",
+        reply: result.reply || "已处理。",
+        focus: result.focus,
+        route: result.route,
+        routeLabel: result.routeLabel,
+        sources: result.sources,
+        need_confirmation: result.needConfirmation,
+        next_questions: result.nextQuestions,
+        data: {
+          intent: result.intent,
+          domain: result.domain,
+          target: result.target,
+          queryMode: result.queryMode,
+          responseMode: result.responseMode,
+          confidence: result.confidence,
+          plan: result.plan,
+          toolResults: result.toolResults,
+          sources: result.sources,
+        },
+      };
+    },
+  );
 }
 
 export async function runChatGraphStream(
@@ -134,7 +145,15 @@ export async function runChatGraphStream(
 ): Promise<AiChatResult> {
   // 真流式（#7）：整条节点链包在 streamContext 里，节点内生成 LLM 文本时
   // 调 emitDelta()，这里转发成 delta 事件。无节点产生增量时行为与旧版一致。
-  return streamContext.run(async (text) => onEvent({ type: "delta", text }), async () => {
+  // 外层再包 tokenUsageContext，让底层 LLM 函数能拿到 user/tenant/session 记录 token。
+  return tokenUsageContext.run(
+    {
+      userId: input.user_id,
+      tenantId: input.tenant_id,
+      sessionId: input.session_id,
+    },
+    () =>
+      streamContext.run(async (text) => onEvent({ type: "delta", text }), async () => {
     let state = buildState(input);
 
     await onEvent({ type: "step", step: "contextLoader", message: "正在加载上下文..." });
@@ -245,5 +264,6 @@ export async function runChatGraphStream(
 
     await onEvent({ type: "final", result });
     return result;
-  });
+  }),
+  );
 }

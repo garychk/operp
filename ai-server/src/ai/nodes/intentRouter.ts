@@ -303,6 +303,7 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
         { role: "user", content: prompt },
       ],
       state.provider,
+      "intent_route",
     );
     const parsed = parseJson<RoutedIntent>(content);
     if (!parsed?.intent) return null;

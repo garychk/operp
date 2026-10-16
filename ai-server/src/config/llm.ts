@@ -1,6 +1,12 @@
 // 先加载 env：本文件模块级读取的 process.env.*（超时 / 重试 / 向量维度）依赖 .env 已就位。
 import { env } from "./env.js";
 import { logger } from "../services/logger.js";
+import { recordTokenUsage } from "../services/tokenUsage.js";
+
+const toInt = (value: unknown): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+};
 
 export interface LlmProviderConfig {
   endpoint?: string;
@@ -183,6 +189,7 @@ const extractContent = (data: Record<string, unknown>) => {
 export async function callChatModel(
   messages: ChatMessage[],
   provider?: LlmProviderConfig,
+  operation = "chat",
 ) {
   const endpoint = provider?.endpoint;
   if (!endpoint) {
@@ -216,10 +223,19 @@ export async function callChatModel(
       }
 
       const data = (await response.json()) as Record<string, unknown>;
+      const usage = (data.usage ?? {}) as Record<string, unknown>;
       logger.info("llm", "chat ok", {
         durationMs: Date.now() - startedAt,
         model: activeProvider?.model,
         chars: extractContent(data).length,
+      });
+      // 旁路记录 token 消耗（不阻断，见 services/tokenUsage.ts）
+      void recordTokenUsage({
+        operation,
+        model: activeProvider?.model,
+        promptTokens: toInt(usage.prompt_tokens),
+        completionTokens: toInt(usage.completion_tokens),
+        totalTokens: toInt(usage.total_tokens),
       });
       return { raw: data, content: extractContent(data) };
     },
@@ -242,6 +258,7 @@ export async function callChatModelStream(
   messages: ChatMessage[],
   provider: LlmProviderConfig | undefined,
   onDelta: (text: string) => void,
+  operation = "chat",
 ): Promise<string> {
   const endpoint = provider?.endpoint;
   if (!endpoint) {
@@ -254,6 +271,8 @@ export async function callChatModelStream(
       const activeEndpoint = activeProvider?.endpoint || endpoint;
       const startedAt = Date.now();
       let received = "";
+      // 流式最后一个 chunk 的 usage（OpenAI 兼容需显式开 include_usage）
+      let usage: Record<string, unknown> = {};
 
       const controller = new AbortController();
       // 空闲超时：每次收到数据都重置；连接阶段同样受此约束
@@ -278,6 +297,10 @@ export async function callChatModelStream(
             messages,
             stream: true,
             temperature: activeProvider?.temperature ?? 0.3,
+            // 让 OpenAI 兼容接口在最后一个 chunk 返回 usage（token 统计依赖它）
+            ...(activeProvider?.apiType === "ollama"
+              ? {}
+              : { stream_options: { include_usage: true } }),
           }),
           signal: controller.signal,
         });
@@ -307,6 +330,16 @@ export async function callChatModelStream(
                   received += piece;
                   onDelta(piece);
                 }
+                // Ollama 最后一行 done=true 时带 eval 计数
+                if (parsed.done === true) {
+                  usage = {
+                    prompt_tokens: parsed.prompt_eval_count,
+                    completion_tokens: parsed.eval_count,
+                    total_tokens:
+                      Number(parsed.prompt_eval_count ?? 0) +
+                      Number(parsed.eval_count ?? 0),
+                  };
+                }
               } catch {
                 // 忽略不完整行
               }
@@ -329,6 +362,10 @@ export async function callChatModelStream(
               if (piece) {
                 received += piece;
                 onDelta(piece);
+              }
+              // 最后一个 chunk（choices 为空）带 usage
+              if (parsed.usage) {
+                usage = parsed.usage as Record<string, unknown>;
               }
             } catch {
               // 忽略无法解析的心跳 / 注释行
@@ -355,6 +392,14 @@ export async function callChatModelStream(
           model: activeProvider?.model,
           chars: received.length,
         });
+        // 旁路记录 token 消耗（不阻断，见 services/tokenUsage.ts）
+        void recordTokenUsage({
+          operation,
+          model: activeProvider?.model,
+          promptTokens: toInt(usage.prompt_tokens),
+          completionTokens: toInt(usage.completion_tokens),
+          totalTokens: toInt(usage.total_tokens),
+        });
         return received;
       } finally {
         if (idleTimer) clearTimeout(idleTimer);
@@ -367,6 +412,7 @@ export async function callChatModelStream(
 export async function callEmbeddingModel(
   input: string,
   provider?: LlmProviderConfig,
+  operation = "embedding",
 ) {
   const endpoint = provider?.endpoint;
   if (!endpoint) {
@@ -471,6 +517,16 @@ export async function callEmbeddingModel(
           `Embedding model returned empty vector. endpoint=${target}, model=${activeProvider?.model || "unknown"}`,
         );
       }
+
+      // 旁路记录 token 消耗（OpenAI 兼容 embedding 返回 usage；Ollama 不返回则跳过）
+      const usage = (data.usage ?? {}) as Record<string, unknown>;
+      void recordTokenUsage({
+        operation,
+        model: activeProvider?.model,
+        promptTokens: toInt(usage.prompt_tokens),
+        completionTokens: toInt(usage.completion_tokens),
+        totalTokens: toInt(usage.total_tokens),
+      });
 
       return vector;
     },

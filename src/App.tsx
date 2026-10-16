@@ -72,6 +72,7 @@ import { Tenants } from './pages/system/Tenants';
 import { Roles } from './pages/system/Roles';
 import { Menus } from './pages/system/Menus';
 import { Logs } from './pages/system/Logs';
+import { TokenUsage } from './pages/system/TokenUsage';
 import { Settings } from './pages/system/Settings';
 import { Dictionaries } from './pages/system/Dictionaries';
 import { WorkflowConfig } from './pages/system/WorkflowConfig';
@@ -214,6 +215,7 @@ function AppContent() {
           <Route path="doc-flow" element={<DocFlowConfig />} />
           <Route path="document-types" element={<DocumentTypeBuilder />} />
           <Route path="logs" element={<Logs />} />
+          <Route path="token-usage" element={<TokenUsage />} />
           <Route path="page-designer" element={<PageDesigner />} />
           <Route path="baq" element={<BaqDesigner />} />
           <Route path="knowledge-base" element={<KnowledgeBase />} />

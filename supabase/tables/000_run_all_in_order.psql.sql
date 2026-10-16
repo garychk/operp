@@ -147,3 +147,5 @@
 \i supabase/tables/deploy_122_category_planning_defaults.sql
 \i supabase/tables/deploy_123_product_stock_columns_drop_default.sql
 \i supabase/tables/deploy_124_ai_document_optional_lines.sql
+\i supabase/tables/deploy_125_ai_token_usage.sql
+\i supabase/tables/deploy_126_ai_token_usage_menu.sql

@@ -12,6 +12,7 @@ import {
   SUPPORTED_UPLOAD_EXTS,
 } from "../services/knowledgeImport.js";
 import { executePendingAction, PendingActionError } from "../services/pendingActions.js";
+import { tokenUsageContext } from "../services/tokenUsage.js";
 import {
   resolveEmbeddingProviderConfig,
   resolveProviderConfig,
@@ -326,7 +327,11 @@ aiRouter.post("/confirm", async (req, res) => {
         toolResults: [],
         planOutputs: [result.output || {}],
       };
-      const continued = await runRemainingPlan(result.remainingPlan, baseState);
+      const remainingPlan = result.remainingPlan;
+      const continued = await tokenUsageContext.run(
+        { userId: identity.userId, tenantId: identity.tenantId, sessionId: String(req.body?.session_id || "confirm") },
+        () => runRemainingPlan(remainingPlan as unknown[], baseState),
+      );
       const nextId = nextPendingActionId(continued);
       res.json({
         ok: true,
