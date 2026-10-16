@@ -172,6 +172,11 @@ const DICT = {
     zh: "{party}：{name}（id={id}）",
     en: "{party}: {name} (id={id})",
   },
+  /** 按编码/简称命中时回显匹配到的记录（如「客户：Carrefour → 匹配到 Carrefour 家乐福（id=75）」） */
+  "doc.preview.noteRefMatched": {
+    zh: "{label}：{input} → 匹配到 {display}（id={id}）",
+    en: "{label}: {input} → matched {display} (id={id})",
+  },
   "doc.preview.noteWarehouse": {
     zh: "仓库：{name}（id={id}）",
     en: "Warehouse: {name} (id={id})",
@@ -275,14 +280,14 @@ const DICT = {
     zh: "请告诉我要操作哪张单据，例如「把销售订单 SO20260005 过账」，或先在单据页面上打开它。",
     en: 'Tell me which document to work on, for example "post sales order SO20260005", or open it on its page first.',
   },
-  "doc.err.nameEmpty": { zh: "{label}名称不能为空。", en: "The {label} name cannot be empty." },
+  "doc.err.nameEmpty": { zh: "{label}名称或编码不能为空。", en: "The {label} name or code cannot be empty." },
   "doc.err.nameQueryFailed": {
     zh: "查询{label}失败：{message}",
     en: "Failed to look up {label}: {message}",
   },
   "doc.err.nameNotFound": {
-    zh: "没有找到{label}「{name}」，请确认名称是否正确。",
-    en: 'No {label} found for "{name}"; please check the name.',
+    zh: "没有找到{label}「{name}」，请确认名称或编码是否正确。",
+    en: 'No {label} found for "{name}"; please check the name or code.',
   },
   "doc.err.nameAmbiguous": {
     zh: "{label}「{name}」有多个匹配：{names}。请说明具体是哪一个。",

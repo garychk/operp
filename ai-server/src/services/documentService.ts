@@ -466,38 +466,104 @@ export async function resolveDocumentTarget(
   };
 }
 
-/** 名称 → 主数据 id：唯一命中才返回；多条命中返回候选（让用户确认） */
-async function resolveByName(
+/* ------------------------------------------------------------------ *
+ * 主数据解析（编码 / 名称 / 简称 → id）
+ * ------------------------------------------------------------------ */
+
+/**
+ * 参与匹配的列与权重（分高者胜，最高分并列则回问用户）。
+ * 顺序与打分对齐 `resolveProductRef`：**编码精确 > 名称精确 > 简称精确 > 编码包含 > 名称包含 > 简称包含**。
+ */
+interface MatchColumn {
+  column: "code" | "name" | "short_name";
+  exact: number;
+  partial: number;
+}
+
+/** 客户 / 供应商：编码、名称、简称都是用户会照抄的写法 */
+const PARTY_MATCH_COLUMNS: MatchColumn[] = [
+  { column: "code", exact: 100, partial: 70 },
+  { column: "name", exact: 90, partial: 60 },
+  { column: "short_name", exact: 85, partial: 50 },
+];
+
+/** 仓库：表里只有 code / name（没有 short_name，别去查不存在的列） */
+const WAREHOUSE_MATCH_COLUMNS: MatchColumn[] = [
+  { column: "code", exact: 100, partial: 70 },
+  { column: "name", exact: 90, partial: 60 },
+];
+
+/** 命中行的展示串：有编码就带上（如 "Carrefour 家乐福"），与前端下拉框展示口径一致 */
+const displayOfRow = (row: Record<string, unknown>): string => {
+  const code = row.code == null ? "" : String(row.code).trim();
+  const name = row.name == null ? "" : String(row.name).trim();
+  return [code, name].filter(Boolean).join(" ") || `#${String(row.id)}`;
+};
+
+/**
+ * 主数据引用 → id：**编码 / 名称 / 简称一起比**，按命中质量取最优，唯一命中才返回；
+ * 多条并列命中返回候选让用户确认（不猜）。
+ *
+ * 历史坑：早前只按 `name` 列 ILIKE，用户直接报**客户编码**（如 Carrefour）时必然查不到
+ * —— 前端下拉框展示的就是「编码 名称」，用户自然会照编码说，所以编码必须进匹配列。
+ */
+async function resolveEntityRef(
   table: string,
-  nameField: string,
-  name: string,
+  ref: string,
+  columns: MatchColumn[],
   tenantId: number,
   label: string,
   locale?: string,
-): Promise<{ id?: number; error?: string; note?: string }> {
+): Promise<{ id?: number; display?: string; matchedBy?: MatchColumn["column"]; error?: string }> {
   const tt = toolText(locale);
   const termName = termLabel(label, locale);
-  const clean = name.trim();
+  const clean = ref.trim();
   if (!clean) return { error: tt("doc.err.nameEmpty", { label: termName }) };
-  const { data, error } = await supabase
-    .from(table)
-    .select(`id, ${nameField}`)
-    .eq("tenant_id", tenantId)
-    .eq("is_deleted", "n")
-    .ilike(nameField, `%${clean}%`)
-    .limit(5);
-  if (error) return { error: tt("doc.err.nameQueryFailed", { label: termName, message: error.message }) };
-  const rows = (data || []) as unknown as Array<Record<string, unknown>>;
-  if (!rows.length) {
-    return { error: tt("doc.err.nameNotFound", { label: termName, name: clean }) };
+
+  const selectCols = ["id", ...columns.map((item) => item.column)].join(", ");
+  const pattern = `%${escapeLike(clean)}%`;
+  const results = await Promise.all(
+    columns.map((item) =>
+      supabase
+        .from(table)
+        .select(selectCols)
+        .eq("tenant_id", tenantId)
+        .eq("is_deleted", "n")
+        .ilike(item.column, pattern)
+        .limit(10),
+    ),
+  );
+  const failed = results.find((item) => item.error)?.error;
+  if (failed) return { error: tt("doc.err.nameQueryFailed", { label: termName, message: failed.message }) };
+
+  const lower = clean.toLowerCase();
+  const scored = new Map<
+    number,
+    { row: Record<string, unknown>; score: number; by: MatchColumn["column"] }
+  >();
+  results.forEach((result, index) => {
+    const col = columns[index];
+    for (const raw of (result.data || []) as unknown as Array<Record<string, unknown>>) {
+      const id = Number(raw.id);
+      const value = String(raw[col.column] ?? "").trim().toLowerCase();
+      const score = value === lower ? col.exact : col.partial;
+      const prev = scored.get(id);
+      if (!prev || score > prev.score) scored.set(id, { row: raw, score, by: col.column });
+    }
+  });
+
+  const ranked = [...scored.values()].sort((a, b) => b.score - a.score);
+  if (!ranked.length) return { error: tt("doc.err.nameNotFound", { label: termName, name: clean }) };
+
+  const top = ranked[0].score;
+  const best = ranked.filter((item) => item.score === top);
+  if (best.length > 1) {
+    const names = best
+      .map((item) => displayOfRow(item.row))
+      .join(normalizeUiLocale(locale) === "en" ? ", " : "、");
+    return { error: tt("doc.err.nameAmbiguous", { label: termName, name: clean, names }) };
   }
-  const exact = rows.filter((row) => String(row[nameField]).toLowerCase() === clean.toLowerCase());
-  if (exact.length === 1) return { id: Number(exact[0].id) };
-  if (rows.length === 1) return { id: Number(rows[0].id) };
-  const names = (exact.length ? exact : rows)
-    .map((row) => String(row[nameField]))
-    .join(normalizeUiLocale(locale) === "en" ? ", " : "、");
-  return { error: tt("doc.err.nameAmbiguous", { label: termName, name: clean, names }) };
+  return { id: Number(ranked[0].row.id), display: displayOfRow(ranked[0].row), matchedBy: ranked[0].by };
 }
 
 /* ------------------------------------------------------------------ *
@@ -700,7 +766,7 @@ export async function extractDocumentDraft(
     `单头可填字段：${headerFields.join(", ")}`,
     `明细可填字段：${lineFields.join(", ")}`,
     `字段含义：${hints}`,
-    "所有 id 类字段（客户/供应商/物料/仓库）请填写**名称或编码原文**，服务端会解析成 id。",
+    "所有 id 类字段（客户/供应商/物料/仓库）请填写**名称、编码或简称的原文**（用户给什么就填什么，不要自己转换），服务端会解析成 id。",
     "日期请输出 YYYY-MM-DD；没有给日期时不要填，服务端会补当天。",
     "金额：用户给了单价就填 unit_price；只给总额时填 amount。不要自己计算税额。",
     "明细：用户提到了具体物料（名称或编码，如 P-2026-0010）才填 lines，一行一个物料；"
@@ -955,12 +1021,19 @@ export async function prepareDocumentInput(
     const partyLabel = partyLabelOf(meta, locale);
     const partyName = String(raw.party_name || raw.header?.[meta.partyField] || "").trim();
     if (partyName) {
-      const resolved = await resolveByName(
-        meta.partyTable, "name", partyName, tenantId, meta.partyLabel || "往来单位", locale,
+      const resolved = await resolveEntityRef(
+        meta.partyTable, partyName, PARTY_MATCH_COLUMNS, tenantId, meta.partyLabel || "往来单位", locale,
       );
       if (resolved.error) return { error: resolved.error };
       header[meta.partyField] = resolved.id;
-      notes.push(tt("doc.preview.noteParty", { party: partyLabel, name: partyName, id: resolved.id ?? "-" }));
+      // 按编码/简称命中时把匹配到的记录回显出来，避免用户以为「填错了」
+      notes.push(
+        resolved.matchedBy && resolved.matchedBy !== "name"
+          ? tt("doc.preview.noteRefMatched", {
+              label: partyLabel, input: partyName, display: resolved.display ?? "-", id: resolved.id ?? "-",
+            })
+          : tt("doc.preview.noteParty", { party: partyLabel, name: partyName, id: resolved.id ?? "-" }),
+      );
     } else if (meta.partyField === "supplier_id") {
       if (!products.length) {
         return { error: tt("doc.err.needParty", { label, party: partyLabel }) };
@@ -1004,14 +1077,22 @@ export async function prepareDocumentInput(
     };
   }
 
-  // ④ 仓库（名称 → id）
+  // ④ 仓库（编码 / 名称 → id）
   if (raw.warehouse_name) {
-    const resolved = await resolveByName(
-      `erp_warehouses${TABLE_SUFFIX}`, "name", String(raw.warehouse_name), tenantId, "仓库", locale,
+    const warehouseInput = String(raw.warehouse_name);
+    const resolved = await resolveEntityRef(
+      `erp_warehouses${TABLE_SUFFIX}`, warehouseInput, WAREHOUSE_MATCH_COLUMNS, tenantId, "仓库", locale,
     );
     if (resolved.error) return { error: resolved.error };
     header.warehouse_id = resolved.id;
-    notes.push(tt("doc.preview.noteWarehouse", { name: String(raw.warehouse_name), id: resolved.id ?? "-" }));
+    notes.push(
+      resolved.matchedBy && resolved.matchedBy !== "name"
+        ? tt("doc.preview.noteRefMatched", {
+            label: termLabel("仓库", locale), input: warehouseInput,
+            display: resolved.display ?? "-", id: resolved.id ?? "-",
+          })
+        : tt("doc.preview.noteWarehouse", { name: warehouseInput, id: resolved.id ?? "-" }),
+    );
   }
 
   notes.push(...lineNotes);

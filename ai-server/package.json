@@ -11,6 +11,7 @@
     "mcp": "tsx src/mcp/server.ts",
     "mcp:start": "node dist/mcp/server.js",
     "eval": "tsx eval/run_eval.ts",
+    "resolve:check": "tsx src/scripts/partyResolveCheck.ts",
     "mcp:smoke": "tsx src/scripts/mcpSmoke.ts"
   },
   "dependencies": {
