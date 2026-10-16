@@ -276,6 +276,26 @@
     {
       "table": "doc_flow_rules",
       "writable": true
+    },
+    {
+      "table": "erp_purchase_orders_s_539dcf81_b",
+      "writable": false
+    },
+    {
+      "table": "erp_purchase_orders",
+      "writable": false
+    },
+    {
+      "table": "erp_purchase_order_details_s_539dcf81_b",
+      "writable": false
+    },
+    {
+      "table": "erp_sales_orders",
+      "writable": false
+    },
+    {
+      "table": "erp_material_issue_details",
+      "writable": false
     }
   ],
   "delete_cases": [
@@ -292,6 +312,11 @@
     },
     {
       "text": "建一张采购订单给供应商 Intel",
+      "type": "purchase_order",
+      "action": null
+    },
+    {
+      "text": "帮我新建一个采购订单，采购物料P-2026-0010，数量200 pcs",
       "type": "purchase_order",
       "action": null
     },
@@ -368,6 +393,11 @@
         "create",
         "post"
       ]
+    },
+    {
+      "text": "帮我新建一个采购订单，采购物料P-2026-0010，数量200 pcs",
+      "tools": null,
+      "actions": null
     },
     {
       "text": "把采购订单 PO20260001 转成入库单然后过账",
@@ -553,6 +583,51 @@
       "path": "/system/settings",
       "parentPath": "系统管理",
       "aliases": []
+    }
+  ],
+  "lock_cases": [
+    {
+      "text": "帮我新建一个采购订单，采购物料P-2026-0010，数量200 pcs",
+      "routed_intent": "create",
+      "routed_target": "purchaseOrder",
+      "expect_intent": "document",
+      "expect_locked_by": "document"
+    },
+    {
+      "text": "建一张采购订单给供应商上海钢铁",
+      "routed_intent": "create",
+      "expect_intent": "document",
+      "expect_locked_by": "document"
+    },
+    {
+      "text": "帮我新建一张销售订单，客户上海钢铁",
+      "routed_intent": "update",
+      "expect_intent": "document",
+      "expect_locked_by": "document"
+    },
+    {
+      "text": "把采购入库单过账",
+      "routed_intent": "create",
+      "expect_intent": "document",
+      "expect_locked_by": "document"
+    },
+    {
+      "text": "采购订单菜单在哪里",
+      "routed_intent": "knowledge",
+      "expect_intent": "navigation",
+      "expect_locked_by": "navigation"
+    },
+    {
+      "text": "本月库存汇总",
+      "routed_intent": "analysis",
+      "expect_intent": "analysis",
+      "expect_locked_by": null
+    },
+    {
+      "text": "加一个客户 上海钢铁",
+      "routed_intent": "analysis",
+      "expect_intent": "analysis",
+      "expect_locked_by": null
     }
   ]
 }

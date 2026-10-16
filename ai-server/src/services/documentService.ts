@@ -20,6 +20,7 @@ import {
   statusLabel as statusLabelOf,
   termLabel,
   toolText,
+  type ToolText,
 } from "./toolText.js";
 
 /**
@@ -74,9 +75,27 @@ export interface DocumentTypeMeta {
   postable: boolean;
   /** 明细里的物料字段名（多数是 product_id，领料单是 material_id） */
   lineProductField: string;
+  /**
+   * 明细里承载单价的字段。用户没给单价时，用物料的计划属性（采购价/销售价/成本价）带入。
+   * 生产订单这类「没有金额」的明细不填。
+   */
+  linePriceField?: "unit_price" | "unit_cost";
+  /** 单价来源：erp_products 的 purchase_price / sale_price / cost_price */
+  priceSource?: "purchase" | "sale" | "cost";
 }
 
 const TABLE_SUFFIX = "_s_539dcf81_b";
+const PRODUCTS_TABLE = `erp_products${TABLE_SUFFIX}`;
+const PRODUCT_CATEGORIES_TABLE = `erp_product_categories${TABLE_SUFFIX}`;
+const SUPPLIERS_TABLE = `erp_suppliers${TABLE_SUFFIX}`;
+const PRODUCT_UOMS_TABLE = `erp_product_uoms${TABLE_SUFFIX}`;
+const UOMS_TABLE = `erp_uoms${TABLE_SUFFIX}`;
+
+/** 建单用到的物料列（一次取全，避免逐列回查） */
+const PRODUCT_COLUMNS = [
+  "id", "code", "name", "specification", "unit", "base_uom_id",
+  "category_id", "default_supplier_id", "purchase_price", "sale_price", "cost_price",
+].join(", ");
 
 export const DOCUMENT_TYPES: Record<string, DocumentTypeMeta> = {
   sales_order: {
@@ -85,20 +104,23 @@ export const DOCUMENT_TYPES: Record<string, DocumentTypeMeta> = {
     noField: "order_no", fkField: "order_id", dateField: "order_date",
     partyField: "customer_id", partyTable: `erp_customers${TABLE_SUFFIX}`, partyLabel: "客户",
     creatable: true, postable: false, lineProductField: "product_id",
+    linePriceField: "unit_price", priceSource: "sale",
   },
   purchase_order: {
     type: "purchase_order", label: "采购订单", labelEn: "Purchase order", route: "/inventory/purchase", routeLabel: "采购订单",
     headerTable: `erp_purchase_orders${TABLE_SUFFIX}`, detailTable: `erp_purchase_order_details${TABLE_SUFFIX}`,
     noField: "order_no", fkField: "order_id", dateField: "order_date",
-    partyField: "supplier_id", partyTable: `erp_suppliers${TABLE_SUFFIX}`, partyLabel: "供应商",
+    partyField: "supplier_id", partyTable: SUPPLIERS_TABLE, partyLabel: "供应商",
     creatable: true, postable: false, lineProductField: "product_id",
+    linePriceField: "unit_price", priceSource: "purchase",
   },
   purchase_receipt: {
     type: "purchase_receipt", label: "采购入库单", labelEn: "Purchase receipt", route: "/inventory/purchase-receipts", routeLabel: "采购入库单",
     headerTable: `erp_purchase_receipts${TABLE_SUFFIX}`, detailTable: `erp_purchase_receipt_details${TABLE_SUFFIX}`,
     noField: "receipt_no", fkField: "receipt_id", dateField: "receipt_date",
-    partyField: "supplier_id", partyTable: `erp_suppliers${TABLE_SUFFIX}`, partyLabel: "供应商",
+    partyField: "supplier_id", partyTable: SUPPLIERS_TABLE, partyLabel: "供应商",
     creatable: true, postable: true, lineProductField: "product_id",
+    linePriceField: "unit_price", priceSource: "purchase",
   },
   sales_delivery: {
     type: "sales_delivery", label: "销售出货单", labelEn: "Sales delivery", route: "/inventory/sales-deliveries", routeLabel: "销售出货单",
@@ -106,12 +128,14 @@ export const DOCUMENT_TYPES: Record<string, DocumentTypeMeta> = {
     noField: "delivery_no", fkField: "delivery_id", dateField: "delivery_date",
     partyField: "customer_id", partyTable: `erp_customers${TABLE_SUFFIX}`, partyLabel: "客户",
     creatable: true, postable: true, lineProductField: "product_id",
+    linePriceField: "unit_price", priceSource: "sale",
   },
   material_issue: {
     type: "material_issue", label: "生产领料单", labelEn: "Material issue", route: "/mrp/material-issues", routeLabel: "生产领料单",
     headerTable: `erp_material_issues${TABLE_SUFFIX}`, detailTable: `erp_material_issue_details${TABLE_SUFFIX}`,
     noField: "issue_no", fkField: "issue_id", dateField: "issue_date",
     creatable: true, postable: true, lineProductField: "material_id",
+    linePriceField: "unit_cost", priceSource: "cost",
   },
   production_order: {
     type: "production_order", label: "生产订单", labelEn: "Production order", route: "/mrp/production", routeLabel: "生产订单",
@@ -176,7 +200,7 @@ const FIELD_HINTS: Record<string, string> = {
   product_id: "物料/产品", material_id: "物料",
   quantity: "数量", unit_price: "单价", unit_cost: "单位成本",
   tax_rate: "税率(小数)", tax_amount: "税额", amount: "金额",
-  planned_quantity: "计划数量", unit: "单位",
+  planned_quantity: "计划数量", unit: "单位（pcs/个/箱，仅作核对提示）",
   delivery_address: "交货地址", contact_person: "联系人", contact_phone: "联系电话",
   remark: "备注", batch_no: "批号", priority: "优先级",
 };
@@ -476,11 +500,174 @@ async function resolveByName(
   return { error: tt("doc.err.nameAmbiguous", { label: termName, name: clean, names }) };
 }
 
+/* ------------------------------------------------------------------ *
+ * 物料解析（建单明细用）：支持 编码 / 名称 / 规格
+ * ------------------------------------------------------------------ */
+
+/** 建单需要的最小物料信息（一次查询取全，避免逐列回查） */
+export interface ResolvedProduct {
+  id: number;
+  code: string;
+  name: string;
+  specification: string | null;
+  unit: string | null;
+  baseUomId: number | null;
+  categoryId: number | null;
+  defaultSupplierId: number | null;
+  purchasePrice: number | null;
+  salePrice: number | null;
+  costPrice: number | null;
+}
+
+/** LIKE 通配符转义：用户可能输入含 % / _ 的编码（如 P_2026） */
+const escapeLike = (input: string): string => input.replace(/([\\%_])/g, "\\$1");
+
+const toNullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
+
+const mapProductRow = (row: Record<string, unknown>): ResolvedProduct => ({
+  id: Number(row.id),
+  code: String(row.code ?? ""),
+  name: String(row.name ?? ""),
+  specification: row.specification == null ? null : String(row.specification),
+  unit: row.unit == null ? null : String(row.unit),
+  baseUomId: toNullableNumber(row.base_uom_id),
+  categoryId: toNullableNumber(row.category_id),
+  defaultSupplierId: toNullableNumber(row.default_supplier_id),
+  purchasePrice: toNullableNumber(row.purchase_price),
+  salePrice: toNullableNumber(row.sale_price),
+  costPrice: toNullableNumber(row.cost_price),
+});
+
+/** 依据商家侧计划属性取「建单默认单价」 */
+export const priceOfProduct = (
+  product: ResolvedProduct,
+  source: "purchase" | "sale" | "cost",
+): number | null => {
+  if (source === "purchase") return product.purchasePrice;
+  if (source === "sale") return product.salePrice;
+  return product.costPrice;
+};
+
+/** 价格来源的展示名（用于草稿预览说明） */
+export const PRICE_SOURCE_TERM: Record<"purchase" | "sale" | "cost", string> = {
+  purchase: "采购价",
+  sale: "销售价",
+  cost: "成本价",
+};
+
+/**
+ * 物料引用 → 物料。**先编码、后名称、再规格**，按命中质量打分取最优：
+ *   主键精确(110) > 编码精确(100) > 名称精确(90) > 编码包含(70) > 名称包含(60) > 规格包含(40)
+ * 最高分并列（例如两个物料名字都包含同一关键词）则报「多个匹配」让用户确认，不猜。
+ */
+async function resolveProductRef(
+  ref: string,
+  tenantId: number,
+  locale?: string,
+): Promise<{ product?: ResolvedProduct; error?: string }> {
+  const tt = toolText(locale);
+  const termName = termLabel("物料", locale);
+  const clean = ref.trim();
+  if (!clean) return { error: tt("doc.err.nameEmpty", { label: termName }) };
+
+  const base = () =>
+    supabase
+      .from(PRODUCTS_TABLE)
+      .select(PRODUCT_COLUMNS)
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n");
+  const pattern = `%${escapeLike(clean)}%`;
+  // 纯数字也可能是用户直接报的物料 id，一并按主键查（取不到就当普通文本）
+  const numericRef = /^\d+$/.test(clean) ? Number(clean) : null;
+  const [byCode, byName, bySpec] = await Promise.all([
+    base().ilike("code", pattern).limit(10),
+    base().ilike("name", pattern).limit(10),
+    base().ilike("specification", pattern).limit(10),
+  ]);
+  const byId = numericRef ? await base().eq("id", numericRef).limit(1) : { data: [] };
+  const firstError = byCode.error || byName.error || bySpec.error;
+  if (firstError) {
+    return { error: tt("doc.err.nameQueryFailed", { label: termName, message: firstError.message }) };
+  }
+
+  const lower = clean.toLowerCase();
+  const scored = new Map<number, { product: ResolvedProduct; score: number }>();
+  const bump = (rows: unknown, scoreOf: (p: ResolvedProduct) => number) => {
+    for (const raw of (rows || []) as Array<Record<string, unknown>>) {
+      const product = mapProductRow(raw);
+      const score = scoreOf(product);
+      const prev = scored.get(product.id);
+      if (!prev || score > prev.score) scored.set(product.id, { product, score });
+    }
+  };
+  bump(byCode.data, (p) => (p.code.toLowerCase() === lower ? 100 : 70));
+  bump(byName.data, (p) => (p.name.toLowerCase() === lower ? 90 : 60));
+  bump(bySpec.data, () => 40);
+  bump(byId.data, () => 110);
+
+  const ranked = [...scored.values()].sort((a, b) => b.score - a.score);
+  if (!ranked.length) return { error: tt("doc.err.nameNotFound", { label: termName, name: clean }) };
+
+  const top = ranked[0].score;
+  const best = ranked.filter((item) => item.score === top);
+  if (best.length > 1) {
+    const names = best
+      .map((item) => `${item.product.code} ${item.product.name}`)
+      .join(locale === "en" ? ", " : "、");
+    return { error: tt("doc.err.nameAmbiguous", { label: termName, name: clean, names }) };
+  }
+  return { product: ranked[0].product };
+}
+
+/**
+ * 物料的**采购单位**（与前端 `ProductUnit` 组件同一套回退链）：
+ *   erp_product_uoms(usage_type='purchase') → erp_uoms → 物料基本单位 → 物料 unit 文本。
+ * 返回展示串（如 "件 (PCS)"），仅用于草稿预览提示 —— 明细表里**没有**单位列。
+ */
+async function fetchPurchaseUnits(
+  productIds: number[],
+  tenantId: number,
+): Promise<Map<number, string>> {
+  const result = new Map<number, string>();
+  if (!productIds.length) return result;
+  const { data } = await supabase
+    .from(PRODUCT_UOMS_TABLE)
+    .select("product_id, uom_id, usage_type")
+    .eq("tenant_id", tenantId)
+    .eq("is_deleted", "n")
+    .eq("usage_type", "purchase")
+    .in("product_id", productIds);
+  const uomIdByProduct = new Map<number, number>();
+  for (const row of (data || []) as unknown as Array<Record<string, unknown>>) {
+    uomIdByProduct.set(Number(row.product_id), Number(row.uom_id));
+  }
+  const uomIds = [...new Set([...uomIdByProduct.values()])];
+  const uomName = new Map<number, string>();
+  if (uomIds.length) {
+    const { data: uoms } = await supabase
+      .from(UOMS_TABLE)
+      .select("id, name, symbol")
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n")
+      .in("id", uomIds);
+    for (const row of (uoms || []) as unknown as Array<Record<string, unknown>>) {
+      const symbol = row.symbol ? ` (${String(row.symbol)})` : "";
+      uomName.set(Number(row.id), `${String(row.name)}${symbol}`);
+    }
+  }
+  return uomName.size ? new Map(
+    [...uomIdByProduct.entries()].map(([pid, uid]) => [pid, uomName.get(uid) ?? ""] as [number, string]),
+  ) : result;
+}
+
 /**
  * 单据草稿的中间形态（名称尚未解析为 id）。
  * 两个来源共用：对话链路由 LLM 抽取，MCP 工具由结构化入参直接拼装。
- */
-export interface RawDocumentDraft {
+ */export interface RawDocumentDraft {
   party_name?: string;
   warehouse_name?: string;
   header?: Record<string, unknown>;
@@ -499,8 +686,9 @@ export async function extractDocumentDraft(
     "delivery_address", "contact_person", "contact_phone", "remark",
   ].filter(Boolean);
   const lineFields = [
-    `${meta.lineProductField}(物料名称)`, "quantity(数量)", "unit_price(单价)",
-    "unit_cost(单位成本)", "tax_rate(税率小数)", "tax_amount(税额)", "batch_no(批号)", "remark(备注)",
+    `${meta.lineProductField}(物料名称或编码)`, "quantity(数量)", "unit_price(单价)",
+    "unit_cost(单位成本)", "tax_rate(税率小数)", "tax_amount(税额)", "unit(单位，仅作提示)",
+    "batch_no(批号)", "remark(备注)",
   ];
   const hints = headerFields
     .concat([meta.lineProductField, "quantity", "unit_price", "unit_cost", "tax_rate", "tax_amount", "warehouse_id"])
@@ -512,11 +700,15 @@ export async function extractDocumentDraft(
     `单头可填字段：${headerFields.join(", ")}`,
     `明细可填字段：${lineFields.join(", ")}`,
     `字段含义：${hints}`,
-    "所有 id 类字段（客户/供应商/物料/仓库）请填写**中文名称原文**，服务端会解析成 id。",
+    "所有 id 类字段（客户/供应商/物料/仓库）请填写**名称或编码原文**，服务端会解析成 id。",
     "日期请输出 YYYY-MM-DD；没有给日期时不要填，服务端会补当天。",
     "金额：用户给了单价就填 unit_price；只给总额时填 amount。不要自己计算税额。",
+    "明细：用户提到了具体物料（名称或编码，如 P-2026-0010）才填 lines，一行一个物料；"
+      + "用户没提任何物料时 lines 必须是空数组 []，**不要编造明细**。",
+    "单价可以留空：服务端会按物料的计划属性（采购价/销售价/成本价）带入。",
+    "数量后面的单位（pcs/个/箱…）放进 line 的 unit 字段，仅作核对提示，不会写入单据。",
     `用户原话：${state.text}`,
-    '返回格式：{"party_name":"","warehouse_name":"","header":{},"lines":[{"物料字段":"名称","quantity":0,"unit_price":0}],"summary":""}',
+    '返回格式：{"party_name":"","warehouse_name":"","header":{},"lines":[{"物料字段":"名称或编码","quantity":0,"unit":"pcs"}],"summary":""}',
   ].join("\n");
 
   const { content } = await callChatModel(
@@ -546,8 +738,108 @@ export interface PreparedDocument {
 }
 
 /**
+ * 取库内 `ai_document_meta()` 的字段白名单（deploy_83/124）。
+ * 这是「哪些字段能写」的唯一权威；TS 侧的 DOCUMENT_TYPES 只是展示镜像。
+ * LLM 常常多抽一两个键（如 unit / product_code），若不放行会被库内 fail-loud 拒绝，
+ * 所以在解析阶段先用白名单剃掉。取不到白名单时不剃（退化为旧行为）。
+ */
+async function fetchMetaWhitelist(
+  documentType: string,
+): Promise<{ header?: string[]; lines?: string[] }> {
+  const { data, error } = await supabase.rpc("ai_document_meta", {
+    p_document_type: documentType,
+  });
+  if (error || !data) return {};
+  const meta = data as Record<string, unknown>;
+  const toList = (value: unknown): string[] | undefined =>
+    Array.isArray(value) ? value.map((item) => String(item)) : undefined;
+  return { header: toList(meta.header_fields), lines: toList(meta.line_fields) };
+}
+
+/** 物料在草稿说明里的展示串：编码 + 名称（+ 规格） */
+const productDisplay = (product: ResolvedProduct): string => {
+  const spec = product.specification ? ` [${product.specification}]` : "";
+  return `${product.code} ${product.name}${spec}`.trim();
+};
+
+/**
+ * 采购类单据的供应商回填：**物料默认供应商 → 物料所属类别的默认供应商**，并校验启用。
+ * 只在用户没指定供应商时兜底；多个不同默认值（多头供应商）则回问，不静默挑一个。
+ */
+async function resolveSupplierFromProducts(
+  products: ResolvedProduct[],
+  tenantId: number,
+  locale: string | undefined,
+  tt: ToolText,
+): Promise<{
+  supplierId?: number;
+  name?: string;
+  source?: "product" | "category";
+  error?: string;
+}> {
+  const unique = (values: Array<number | null>): number[] => [
+    ...new Set(values.filter((id): id is number => typeof id === "number" && id > 0)),
+  ];
+
+  let ids = unique(products.map((product) => product.defaultSupplierId));
+  let source: "product" | "category" = "product";
+
+  if (!ids.length) {
+    const categoryIds = unique(products.map((product) => product.categoryId));
+    if (categoryIds.length) {
+      const { data } = await supabase
+        .from(PRODUCT_CATEGORIES_TABLE)
+        .select("id, default_supplier_id")
+        .eq("tenant_id", tenantId)
+        .eq("is_deleted", "n")
+        .in("id", categoryIds);
+      ids = unique(
+        ((data || []) as unknown as Array<Record<string, unknown>>).map((row) =>
+          toNullableNumber(row.default_supplier_id),
+        ),
+      );
+      if (ids.length) source = "category";
+    }
+  }
+  if (!ids.length) return {};
+
+  const { data: suppliers } = await supabase
+    .from(SUPPLIERS_TABLE)
+    .select("id, name, status")
+    .eq("tenant_id", tenantId)
+    .eq("is_deleted", "n")
+    .in("id", ids);
+  const rows = (suppliers || []) as unknown as Array<Record<string, unknown>>;
+
+  if (ids.length > 1) {
+    const names = ids
+      .map((id) => {
+        const hit = rows.find((row) => Number(row.id) === id);
+        return hit ? String(hit.name) : `#${id}`;
+      })
+      .join(isEnglishLocale(locale) ? ", " : "、");
+    return { error: tt("doc.err.multiSupplier", { names }) };
+  }
+
+  const supplierId = ids[0];
+  const row = rows.find((item) => Number(item.id) === supplierId);
+  if (!row) {
+    return { error: tt("doc.err.supplierInactive", { names: `#${supplierId}` }) };
+  }
+  if (String(row.status ?? "") !== "active") {
+    return { error: tt("doc.err.supplierInactive", { names: String(row.name) }) };
+  }
+  return { supplierId, name: String(row.name), source };
+}
+
+/**
  * 把 LLM 抽取结果解析成库内 RPC 可直接消费的 header / lines（名称 → id）。
- * 任何一处解析不出来都返回 error，让工具回问用户（不猜）。
+ *
+ * 明细是**可选**的：用户没提供明细就只建单头（库内 RPC 已允许空明细，deploy_124）；
+ * 提供了明细就必须建进去 —— 物料支持「编码 / 名称 / 规格」三种写法，单价缺省时
+ * 按物料计划属性（采购价 / 销售价 / 成本价）带入，采购类的供应商可由
+ * 「物料默认供应商 → 类别默认供应商」回填。
+ * 解析不出实体一律返回 error 让工具回问用户（不猜）。
  */
 export async function prepareDocumentInput(
   state: AiGraphState,
@@ -560,30 +852,147 @@ export async function prepareDocumentInput(
   if (typeof state.tenantId !== "number") return { error: tt("doc.err.missingTenant") };
   const tenantId = state.tenantId;
   const notes: string[] = [];
+  const lineNotes: string[] = [];
   const header: Record<string, unknown> = {};
   const lines: Array<Record<string, unknown>> = [];
 
-  // ① 往来单位
-  if (meta.partyField && meta.partyTable) {
-    const partyName =
-      String(raw.party_name || raw.header?.[meta.partyField] || "").trim();
-    const partyLabel = partyLabelOf(meta, locale);
-    if (!partyName) {
-      return { error: tt("doc.err.needParty", { label, party: partyLabel }) };
+  // 字段白名单（库内权威）：用来剃掉 LLM 多抽的提示性字段
+  const whitelist = await fetchMetaWhitelist(meta.type);
+
+  // ① 明细（可选）—— 先解析：采购类单据的供应商可能要从物料计划属性回填
+  const rawLines = Array.isArray(raw.lines) ? raw.lines : [];
+  const products: ResolvedProduct[] = [];
+  const unitHints: string[] = [];
+  for (const [index, rawLine] of rawLines.entries()) {
+    const ref = String(
+      rawLine[meta.lineProductField] ||
+        rawLine.product_code ||
+        rawLine.product_id ||
+        rawLine.product_name ||
+        rawLine.material_name ||
+        rawLine.material_id ||
+        "",
+    ).trim();
+    if (!ref) {
+      return { error: tt("doc.err.lineMissingProduct", { index: index + 1 }) };
     }
-    const resolved = await resolveByName(
-      meta.partyTable, "name", partyName, tenantId, meta.partyLabel || "往来单位", locale,
+    const resolved = await resolveProductRef(ref, tenantId, locale);
+    if (resolved.error || !resolved.product) {
+      return {
+        error: tt("doc.err.linePrefix", { index: index + 1, error: resolved.error || "" }),
+      };
+    }
+    const product = resolved.product;
+    products.push(product);
+    unitHints.push(String(rawLine.unit ?? rawLine.uom ?? "").trim());
+
+    const line: Record<string, unknown> = { [meta.lineProductField]: product.id };
+    for (const [key, value] of Object.entries(rawLine)) {
+      if (key === meta.lineProductField || key.endsWith("_name")) continue;
+      if (value === null || value === undefined || value === "") continue;
+      // 只保留库内白名单里的列：unit / product_code 之类「给解析用的提示字段」一律丢弃
+      if (whitelist.lines && !whitelist.lines.includes(key)) continue;
+      line[key] = value;
+    }
+
+    // 单价缺省 → 按物料计划属性带入（采购单=采购价 / 出货单=销售价 / 领料单=成本价）
+    if (meta.linePriceField && meta.priceSource && line[meta.linePriceField] == null) {
+      const price = priceOfProduct(product, meta.priceSource);
+      if (price != null && price > 0) {
+        line[meta.linePriceField] = price;
+        lineNotes.push(
+          tt("doc.preview.noteLinePrice", {
+            index: index + 1,
+            source: termLabel(PRICE_SOURCE_TERM[meta.priceSource], locale),
+            price: String(price),
+            name: productDisplay(product),
+          }),
+        );
+      }
+    }
+
+    lines.push(line);
+    lineNotes.push(
+      tt("doc.preview.noteLine", {
+        index: index + 1,
+        name: productDisplay(product),
+        qty: String(line.quantity ?? line.planned_quantity ?? "-"),
+      }),
     );
-    if (resolved.error) return { error: resolved.error };
-    header[meta.partyField] = resolved.id;
-    notes.push(tt("doc.preview.noteParty", { party: partyLabel, name: partyName, id: resolved.id ?? "-" }));
   }
 
-  // ② 单头其他字段（去掉 id 类原始值，避免把名称写进 id 列）
+  // 明细单位是「展示派生」的（明细表没有单位列）→ 按物料采购单位带出并提示，
+  // 用户话里给了单位但与物料采购单位不符时给一条提醒，避免数量口径误解。
+  if (products.length) {
+    const units = await fetchPurchaseUnits(
+      products.map((product) => product.id),
+      tenantId,
+    );
+    const unitText = (product: ResolvedProduct): string =>
+      units.get(product.id) || product.unit || "-";
+    notes.push(
+      tt("doc.preview.noteLineUnits", {
+        list: products
+          .map((product) => `${product.code} → ${unitText(product)}`)
+          .join(isEnglishLocale(locale) ? "; " : "；"),
+      }),
+    );
+    const mismatches = products
+      .map((product, index) => ({ product, hint: unitHints[index] }))
+      .filter(({ product, hint }) => {
+        if (!hint) return false;
+        const actual = unitText(product).toLowerCase();
+        return !actual.includes(hint.toLowerCase()) && hint.toLowerCase() !== actual;
+      })
+      .map(({ product, hint }) => `${productDisplay(product)}：${hint} ≠ ${unitText(product)}`);
+    if (mismatches.length) {
+      notes.push(tt("doc.preview.noteUnitMismatch", { list: mismatches.join("；") }));
+    }
+  }
+
+  // ② 往来单位（客户必填；采购类的供应商可由物料计划属性回填）
+  if (meta.partyField && meta.partyTable) {
+    const partyLabel = partyLabelOf(meta, locale);
+    const partyName = String(raw.party_name || raw.header?.[meta.partyField] || "").trim();
+    if (partyName) {
+      const resolved = await resolveByName(
+        meta.partyTable, "name", partyName, tenantId, meta.partyLabel || "往来单位", locale,
+      );
+      if (resolved.error) return { error: resolved.error };
+      header[meta.partyField] = resolved.id;
+      notes.push(tt("doc.preview.noteParty", { party: partyLabel, name: partyName, id: resolved.id ?? "-" }));
+    } else if (meta.partyField === "supplier_id") {
+      if (!products.length) {
+        return { error: tt("doc.err.needParty", { label, party: partyLabel }) };
+      }
+      const fromProduct = await resolveSupplierFromProducts(products, tenantId, locale, tt);
+      if (fromProduct.error) return { error: fromProduct.error };
+      if (!fromProduct.supplierId) {
+        return { error: tt("doc.err.needParty", { label, party: partyLabel }) };
+      }
+      header[meta.partyField] = fromProduct.supplierId;
+      notes.push(
+        tt("doc.preview.notePartyFromProduct", {
+          party: partyLabel,
+          name: fromProduct.name ?? "-",
+          id: fromProduct.supplierId,
+          source: termLabel(
+            fromProduct.source === "category" ? "类别默认供应商" : "物料默认供应商",
+            locale,
+          ),
+        }),
+      );
+    } else {
+      return { error: tt("doc.err.needParty", { label, party: partyLabel }) };
+    }
+  }
+
+  // ③ 单头其他字段（去掉 id 类原始值，避免把名称写进 id 列）
   const rawHeader = raw.header || {};
   for (const [key, value] of Object.entries(rawHeader)) {
     if (key === meta.partyField || key === "status" || key === meta.noField) continue;
     if (value === null || value === undefined || value === "") continue;
+    if (whitelist.header && !whitelist.header.includes(key)) continue;
     if (/_(id)$/.test(key) && typeof value === "string" && !/^\d+$/.test(value)) continue;
     header[key] = value;
   }
@@ -595,7 +1004,7 @@ export async function prepareDocumentInput(
     };
   }
 
-  // ③ 仓库（名称 → id）
+  // ④ 仓库（名称 → id）
   if (raw.warehouse_name) {
     const resolved = await resolveByName(
       `erp_warehouses${TABLE_SUFFIX}`, "name", String(raw.warehouse_name), tenantId, "仓库", locale,
@@ -605,38 +1014,8 @@ export async function prepareDocumentInput(
     notes.push(tt("doc.preview.noteWarehouse", { name: String(raw.warehouse_name), id: resolved.id ?? "-" }));
   }
 
-  // ④ 明细
-  const rawLines = Array.isArray(raw.lines) ? raw.lines : [];
-  if (!rawLines.length) return { error: tt("doc.err.needLines", { label }) };
-  for (const [index, rawLine] of rawLines.entries()) {
-    const productName = String(
-      rawLine[meta.lineProductField] || rawLine.product_name || rawLine.material_name || "",
-    ).trim();
-    if (!productName) {
-      return { error: tt("doc.err.lineMissingProduct", { index: index + 1 }) };
-    }
-    const product = await resolveByName(
-      `erp_products${TABLE_SUFFIX}`, "name", productName, tenantId, "物料", locale,
-    );
-    if (product.error) {
-      return { error: tt("doc.err.linePrefix", { index: index + 1, error: product.error }) };
-    }
-
-    const line: Record<string, unknown> = { [meta.lineProductField]: product.id };
-    for (const [key, value] of Object.entries(rawLine)) {
-      if (key === meta.lineProductField || key.endsWith("_name")) continue;
-      if (value === null || value === undefined || value === "") continue;
-      line[key] = value;
-    }
-    lines.push(line);
-    notes.push(
-      tt("doc.preview.noteLine", {
-        index: index + 1,
-        name: productName,
-        qty: String(line.quantity ?? "-"),
-      }),
-    );
-  }
+  notes.push(...lineNotes);
+  if (!lines.length) notes.push(tt("doc.preview.noteNoLines"));
 
   return {
     prepared: { documentType: meta.type, meta, header, lines, fieldLines: notes, notes },

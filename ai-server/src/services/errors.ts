@@ -35,3 +35,48 @@ export function extractErrorMessage(err: unknown): string {
   }
   return String(err);
 }
+
+/** 数据库错误的归类结果（PG SQLSTATE + 命中的约束 / 列名，用于本地化文案） */
+export interface PgErrorInfo {
+  /** PG SQLSTATE，如 23505；取不到时为空串 */
+  code: string;
+  /** 唯一 / 外键 / check 约束名 */
+  constraint: string;
+  /** not-null 违规的列名 */
+  column: string;
+  /** 原始信息（兜底展示） */
+  raw: string;
+}
+
+const pickString = (err: unknown, key: string): string => {
+  if (!err || typeof err !== "object") return "";
+  const value = (err as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+};
+
+/**
+ * 归类 supabase-js / PG 抛出的写入错误。
+ *
+ * 抽出来是因为「确认操作执行失败，请稍后重试。」这种兜底文案会把真正的原因
+ * （2026-10-16 事故里的 23505 duplicate key）整个吞掉，事后无从追查 ——
+ * 归类后既能把约束名回显给用户，也能判断这张草稿还值不值得重试。
+ */
+export function classifyPgError(err: unknown): PgErrorInfo {
+  const raw = extractErrorMessage(err);
+  const direct = pickString(err, "code");
+  const code = /^\d{5}$|^[0-9A-Z]{5}$/.test(direct) ? direct : (raw.match(/\b(2[0-9A-Z]{4})\b/)?.[1] ?? "");
+  const constraint =
+    raw.match(/unique constraint "([^"]+)"/i)?.[1] ??
+    raw.match(/foreign key constraint "([^"]+)"/i)?.[1] ??
+    raw.match(/check constraint "([^"]+)"/i)?.[1] ??
+    "";
+  const column =
+    raw.match(/null value in column "([^"]+)"/i)?.[1] ??
+    raw.match(/column "([^"]+)" of relation/i)?.[1] ??
+    "";
+  return { code, constraint, column, raw };
+}
+
+/** 该错误「同样内容再执行一次」是否可能成功（23xxx 约束类错误必然再失败） */
+export const isRetryablePgError = (info: PgErrorInfo): boolean =>
+  !(info.code.startsWith("23") || info.code.startsWith("22") || info.code === "42501");

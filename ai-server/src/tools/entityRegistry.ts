@@ -2,6 +2,7 @@ import { supabase } from "../config/supabase.js";
 import { tenantScopeFilter } from "../config/tenantContext.js";
 import { callChatModel } from "../config/llm.js";
 import type { AiGraphState } from "../ai/state.js";
+import { DOCUMENT_TYPES } from "../services/documentService.js";
 
 /**
  * 数据库驱动的实体注册表。
@@ -447,6 +448,54 @@ const PROTECTED_TABLES = new Set([
 /** AI 平台自身的数据表（会话 / 记忆 / 知识库 / 待确认动作 / 审计）：只读 */
 const PROTECTED_PREFIXES = ["sys_ai_"];
 
+/**
+ * 单据（单头 + 明细）不走 AI 通用写入 —— 必须走 document.create 单据链路。
+ *
+ * 2026-10-16 线上事故：`describeWritableObjects()` 把「采购订单」也当成可直写对象
+ * 喂进意图路由的 prompt，LLM 于是把「帮我新建一个采购订单…」判成 `create` 走
+ * `entity.create`（通用单表 insert），后果：
+ *   · 明细不建（通用路径没有明细概念）；
+ *   · 单价/供应商不带（不读物料计划属性）；
+ *   · 不取号 —— `order_no` 由模型自己编，撞 `(tenant_id, order_no)` 唯一索引报 23505。
+ * 从源头把单据表从可写清单里摘掉，路由器就不会再被误导。
+ */
+const DOCUMENT_TABLES = new Set<string>(
+  Object.values(DOCUMENT_TYPES)
+    .flatMap((meta) => [meta.headerTable, meta.detailTable])
+    .filter((table): table is string => typeof table === "string" && table.length > 0)
+    .map((table) => baseTableName(table)),
+);
+
+/** 是否属于「单据」表（单头或明细）—— 写策略与工具层防御共用同一判据 */
+export function isDocumentTable(table: string): boolean {
+  return DOCUMENT_TABLES.has(baseTableName(table));
+}
+
+/** 反查该表对应的单据类型 meta（单头/明细都能查），供工具层给出精确引导文案 */
+export function documentTypeMetaOfTable(table: string) {
+  const base = baseTableName(table);
+  return Object.values(DOCUMENT_TYPES).find(
+    (meta) =>
+      baseTableName(meta.headerTable) === base ||
+      (typeof meta.detailTable === "string" && baseTableName(meta.detailTable) === base),
+  );
+}
+
+/**
+ * LLM 绝不允许自定的「系统痕迹列」：审批/过账/软删/审计。
+ * 这些列要么由服务端按租户上下文填（tenant_id / is_deleted），
+ * 要么只能由单据过账、审批流写入 —— 让模型填等于伪造业务痕迹。
+ */
+export const AI_FORBIDDEN_COLUMNS = new Set([
+  "approved_at",
+  "approved_by",
+  "posted_at",
+  "posted_by",
+  "reversed_at",
+  "executed_at",
+  "is_deleted",
+]);
+
 export function evaluateWritePolicy(table: string, _module?: string): WritePolicy {
   const base = baseTableName(table);
   if (PROTECTED_TABLES.has(base)) {
@@ -454,6 +503,12 @@ export function evaluateWritePolicy(table: string, _module?: string): WritePolic
   }
   if (PROTECTED_PREFIXES.some((prefix) => base.startsWith(prefix))) {
     return { writable: false, reason: "AI 平台自身数据表，AI 禁止写入，只能查询" };
+  }
+  if (DOCUMENT_TABLES.has(base)) {
+    return {
+      writable: false,
+      reason: "单据必须走单据链路（自动取号、带明细、按物料计划属性带采购价与默认供应商），不能用通用写入",
+    };
   }
   return { writable: true };
 }

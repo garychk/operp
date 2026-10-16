@@ -62,12 +62,16 @@ const jsonBlock = (value: unknown): string => {
   }
 };
 
-const renderLineRows = (lines: Array<Record<string, unknown>>): string => {
+const renderLineRows = (
+  lines: Array<Record<string, unknown>>,
+  productField = "product_id",
+): string => {
+  if (!lines.length) return "（本次未提供明细，只建单头）";
   const rows = lines.map((line, index) => {
-    const product = Object.entries(line).find(([key]) => key.endsWith("_id") && key !== "tenant_id");
+    const productId = line[productField];
     const qty = line.quantity ?? line.planned_quantity ?? "-";
     const price = line.unit_price ?? line.unit_cost ?? "-";
-    return `| ${index + 1} | ${product ? String(product[1]) : "-"} | ${String(qty)} | ${String(price)} |`;
+    return `| ${index + 1} | ${productId != null ? String(productId) : "-"} | ${String(qty)} | ${String(price)} |`;
   });
   return [
     "| 行 | 物料ID | 数量 | 单价/成本 |",
@@ -181,7 +185,9 @@ export function registerDocumentTools(server: McpServer, identity: TenantContext
       description:
         "按结构化字段生成一张单据草稿，**不写业务表**，返回 action_id 与草稿预览。"
         + "确认无误后调用 erp_commit_document(action_id) 才真正建单（状态为草稿 draft）。"
-        + `可建单的类型：${documentTypeLabels(true)}。客户/供应商/物料/仓库请填中文名称，服务端解析成 id。`,
+        + `可建单的类型：${documentTypeLabels(true)}。客户/供应商/物料/仓库均可填名称或编码，服务端解析成 id。`
+        + "明细（lines）可选：用户没给明细时就省略它，只建单头；单价可省略，服务端按物料采购价/销售价带入；"
+        + "采购类的供应商可省略，服务端按物料默认供应商（或所属类别默认供应商）回填。",
       inputSchema: {
         document_type: z
           .string()
@@ -197,17 +203,20 @@ export function registerDocumentTools(server: McpServer, identity: TenantContext
         lines: z
           .array(
             z.object({
-              product_name: z.string().min(1).describe("物料名称，服务端解析成物料 id"),
-              quantity: z.number().describe("数量"),
-              unit_price: z.number().optional().describe("单价"),
-              unit_cost: z.number().optional().describe("单位成本（入库 / 领料类使用）"),
+              product_name: z
+                .string()
+                .min(1)
+                .describe("物料名称或编码（如 P-2026-0010），服务端解析成物料 id"),
+              quantity: z.number().optional().describe("数量；不填按 0（可在单据页补）"),
+              unit_price: z.number().optional().describe("单价；不填按物料采购价/销售价带入"),
+              unit_cost: z.number().optional().describe("单位成本（入库 / 领料类使用，不填按物料成本价带入）"),
               tax_rate: z.number().optional().describe("税率，小数形式（0.13 表示 13%）"),
               batch_no: z.string().optional().describe("批号"),
               remark: z.string().optional().describe("行备注"),
             }),
           )
-          .min(1)
-          .describe("明细行，至少一行"),
+          .optional()
+          .describe("明细行。**可省略**：省略或传空数组时只建单头（用户没提供明细的情况）"),
       },
       annotations: WRITE_DRAFT_ANNOTATIONS,
     },
@@ -234,7 +243,7 @@ export function registerDocumentTools(server: McpServer, identity: TenantContext
             [meta.dateField]: date?.trim() || undefined,
             remark: remark?.trim() || undefined,
           },
-          lines: lines.map((line) => ({
+          lines: (lines ?? []).map((line) => ({
             product_name: line.product_name,
             quantity: line.quantity,
             unit_price: line.unit_price,
@@ -266,7 +275,7 @@ export function registerDocumentTools(server: McpServer, identity: TenantContext
             documentType: meta.type,
             label: meta.label,
             tableTag: baseTableName(meta.headerTable),
-            display: `${meta.label}（${preparedLines.length} 行）`,
+            display: preparedLines.length ? `${meta.label}（${preparedLines.length} 行）` : `${meta.label}（无明细）`,
             fieldLines,
             route: meta.route,
             routeLabel: meta.routeLabel,
@@ -278,7 +287,7 @@ export function registerDocumentTools(server: McpServer, identity: TenantContext
           "",
           ...fieldLines.map((note) => `- ${note}`),
           "",
-          renderLineRows(preparedLines),
+          renderLineRows(preparedLines, meta.lineProductField),
           "",
           commitHint(actionId),
           "",

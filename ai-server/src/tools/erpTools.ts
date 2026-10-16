@@ -8,13 +8,17 @@ import { resolveColumnLabels } from "../services/columnLabels.js";
 import { normalizeUiLocale } from "../services/locale.js";
 import { toolText } from "../services/toolText.js";
 import {
+  AI_FORBIDDEN_COLUMNS,
   baseTableName,
+  documentTypeMetaOfTable,
   evaluateDeletePolicy,
+  isDocumentTable,
   loadDictTypeOptions,
   resolveEntityForState,
   resolveForeignKeyValues,
   type EntityDef,
 } from "./entityRegistry.js";
+import { documentLabel } from "../services/documentService.js";
 
 type ToolStatus = "success" | "needs_more" | "error";
 
@@ -196,6 +200,85 @@ async function runEntitySearch(entity: EntityDef, text: string, tenantId: number
 }
 
 /** 精确查找编码或名称是否已存在，用于避免 create 时触发唯一约束错误。 */
+/**
+ * 该表「编号类唯一索引」的口径：软删行是否仍占号。
+ *
+ * 唯一索引逐表不同 ——
+ *   · `uq_erp_purchase_orders_..(tenant_id, order_no)` **没有** is_deleted 谓词：
+ *     软删的采购订单仍然占着这个号（单号不回收）；
+ *   · `uq_erp_batches..(tenant_id, product_id, batch_no) WHERE is_deleted='n'`：
+ *     软删之后批号可以再用。
+ * 预检若一律只查 is_deleted='n'，就与真实约束不一致：预检放行、写库撞 23505。
+ * 2026-10-16 事故正是这条 —— PO20260010 被软删（is_deleted='y'）后仍占号，
+ * 预检查不到 → 放行 → 插入报 duplicate key。
+ *
+ * 索引定义经只读 RPC（execute_ai_analysis）读取，按表缓存；取不到时退回旧口径。
+ */
+interface UniqueIndexShape {
+  columns: string[];
+  /** 索引自带 `WHERE is_deleted='n'` 之类谓词 → 软删行不占位 */
+  softAware: boolean;
+}
+const uniqueIndexCache = new Map<string, UniqueIndexShape[]>();
+
+const parseIndexColumns = (indexdef: string): string[] => {
+  const upper = indexdef.toUpperCase();
+  const usingAt = upper.indexOf(" USING ");
+  const from = indexdef.indexOf("(", usingAt === -1 ? 0 : usingAt);
+  if (from === -1) return [];
+  const whereAt = upper.indexOf(" WHERE ", from);
+  const to = indexdef.lastIndexOf(")", whereAt === -1 ? indexdef.length : whereAt);
+  if (to <= from) return [];
+  return indexdef
+    .slice(from + 1, to)
+    .split(",")
+    .map((item) => item.trim().replace(/^"|"$/g, "").toLowerCase())
+    .filter(Boolean);
+};
+
+async function loadUniqueIndexes(table: string): Promise<UniqueIndexShape[]> {
+  const cached = uniqueIndexCache.get(table);
+  if (cached) return cached;
+  // 表名来自 sys_tables，仍按白名单字符校验一次，避免拼接进 SQL 的意外
+  if (!/^[a-z0-9_]+$/i.test(table)) return [];
+  const sql = [
+    "select indexdef from pg_indexes",
+    `where schemaname='public' and tablename='${table}'`,
+    "and indexdef ilike '%unique%'",
+  ].join(" ");
+  const { data } = await supabase.rpc("execute_ai_analysis", { sql_text: sql });
+  const rows = ((data as { rows?: Array<{ indexdef?: string }> } | null)?.rows || []).filter(
+    (row) => typeof row.indexdef === "string",
+  );
+  const shapes: UniqueIndexShape[] = rows
+    .map((row) => {
+      const indexdef = String(row.indexdef);
+      return {
+        columns: parseIndexColumns(indexdef),
+        softAware: /where[\s\S]*is_deleted\s*=\s*'n'/i.test(indexdef),
+      };
+    })
+    .filter((shape) => shape.columns.length > 0);
+  uniqueIndexCache.set(table, shapes);
+  return shapes;
+}
+
+/**
+ * 该列作为唯一键时，软删行是否仍占位。
+ * 只认「本列（+ 可选 tenant_id）」这种编号键，带其它列的复合唯一约束不算。
+ */
+async function softDeletedOccupies(table: string, column: string): Promise<boolean> {
+  if (!column || column === "id") return false;
+  const indexes = await loadUniqueIndexes(table);
+  for (const index of indexes) {
+    if (!index.columns.includes(column)) continue;
+    const others = index.columns.filter((name) => name !== column && name !== "tenant_id");
+    if (others.length) continue;
+    return !index.softAware;
+  }
+  return false;
+}
+
 async function findDuplicate(entity: EntityDef, draft: Record<string, unknown>, tenantId: number) {
   const codeField = entity.codeField || "code";
   const nameField = entity.nameField || "name";
@@ -205,7 +288,12 @@ async function findDuplicate(entity: EntityDef, draft: Record<string, unknown>, 
     return null;
   }
   let query = supabase.from(entity.tableName).select("*");
-  if (hasColumn(entity, "is_deleted")) query = query.eq("is_deleted", "n");
+  // 查重口径跟真实唯一索引走：索引不带 is_deleted 谓词时，软删行也算占用
+  const softDeletedBlocks =
+    hasColumn(entity, "is_deleted") && code !== undefined && code !== null && code !== ""
+      ? await softDeletedOccupies(entity.tableName, codeField).catch(() => false)
+      : false;
+  if (hasColumn(entity, "is_deleted") && !softDeletedBlocks) query = query.eq("is_deleted", "n");
   if (isTenantScopedTable(entity.tableName)) query = query.eq("tenant_id", tenantId);
   const conditions: string[] = [];
   if (code !== undefined && code !== null && code !== "") conditions.push(`${codeField}.eq.${code}`);
@@ -551,12 +639,15 @@ async function prepareEntityUpsert(
     };
   }
 
-  // 只写入允许插入的列，避免把 id / 审计字段带进 payload
+  // 只写入允许插入的列，避免把 id / 审计字段带进 payload；
+  // 系统痕迹列（审批 / 过账 / 软删）也一并剔除 —— 那些只能由单据过账、审批流写，
+  // 让模型填等于伪造业务痕迹（本次事故的草稿里就带着 approved_at / approved_by）。
   const insertable = new Set(
     entity.insertableFields.length ? entity.insertableFields : Object.keys(draft),
   );
   const payload: Record<string, unknown> = { updated_at: nowIso() };
   for (const [key, value] of Object.entries(draft)) {
+    if (AI_FORBIDDEN_COLUMNS.has(key)) continue;
     if (insertable.has(key)) payload[key] = value;
   }
   if (hasColumn(entity, "is_deleted") && payload.is_deleted === undefined) {
@@ -590,9 +681,16 @@ async function prepareEntityUpsert(
         tableTag === "sys_dict_items"
           ? "如果你要加的是物料级业务数据（如 erp_uoms），请去掉“字典”二字再说一次。"
           : "如果你说的是系统字典（sys_dict_items 下的数据），请明确说“在字典里加”。";
+      // 命中的是软删行：该表的唯一约束不回收编号，改名才能建
+      const softDeletedHint =
+        duplicate.is_deleted && duplicate.is_deleted !== "n"
+          ? `注意：占用该编号的记录已被删除（is_deleted=${String(duplicate.is_deleted)}），但本表唯一约束不回收编号，需要换一个编号。`
+          : "";
       return {
         kind: "error" as const,
-        reply: `${entity.label}「${dupName}」已存在于表 ${tableTag}，无法重复创建。${crossHint}如需修改，请说“修改${entity.label} ${dupName}”。`,
+        reply:
+          `${entity.label}「${dupName}」已存在于表 ${tableTag}，无法重复创建。${softDeletedHint}${crossHint}` +
+          `如需修改，请说“修改${entity.label} ${dupName}”。`,
       };
     }
   }
@@ -1175,6 +1273,13 @@ export async function createOrUpdateEntityTool(
   const entity = resolution.def as EntityDef;
   if (!entity) {
     return { status: "error", reply: "未识别出要处理的业务对象。" };
+  }
+  // 纵深防御：即使写策略被绕过，单据也绝不走通用单表写入。
+  // 单据必须走 document.create 链路（自动取号 / 带明细 / 按物料计划属性带价与供应商）。
+  if (isDocumentTable(entity.tableName)) {
+    const meta = documentTypeMetaOfTable(entity.tableName);
+    const label = meta ? documentLabel(meta, normalizeUiLocale(state.locale)) : entity.label;
+    return { status: "error", reply: toolText(state.locale)("entity.err.documentTable", { label }) };
   }
   if (!entity.writable) {
     return {

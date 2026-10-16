@@ -85,10 +85,11 @@ const renderDocumentPreview = (
     : [`- ${tt("common.noExtraFields")}`];
   const lineRows = lines
     .map((line, index) => {
-      const product = Object.entries(line).find(([key]) => key.endsWith("_id") && key !== "tenant_id");
+      // 物料取明确字段名（不再靠「第一个 _id」猜：明细行里可能有多个 id 列）
+      const productId = line[meta.lineProductField];
       const qty = line.quantity ?? line.planned_quantity ?? "-";
       const price = line.unit_price ?? line.unit_cost ?? "-";
-      return `| ${index + 1} | ${product ? String(product[1]) : "-"} | ${String(qty)} | ${String(price)} |`;
+      return `| ${index + 1} | ${productId != null ? String(productId) : "-"} | ${String(qty)} | ${String(price)} |`;
     })
     .join("\n");
   return [
@@ -98,7 +99,7 @@ const renderDocumentPreview = (
     "",
     tt("doc.preview.tableHeader"),
     "| --- | --- | --- | --- |",
-    lineRows,
+    lines.length ? lineRows : tt("doc.preview.noLines"),
     "",
     tt("doc.preview.confirmHint", { label, routeLabel: meta.routeLabel }),
   ].join("\n");

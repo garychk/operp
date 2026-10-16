@@ -107,7 +107,7 @@ const TARGET_PATTERNS: Array<{ target: string; pattern: RegExp; domain: string }
   { target: "baq", pattern: /(baq|报表查询|查询设计)/i, domain: "baq" },
 ];
 
-type RoutedIntent = {
+export type RoutedIntent = {
   intent?: AiIntent;
   domain?: string;
   action?: AiAction;
@@ -312,6 +312,92 @@ async function routeByModel(state: AiGraphState): Promise<RoutedIntent | null> {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * 意图锁定：确定性规则覆盖小模型的场景（纯函数，供 eval 回归）
+ * ------------------------------------------------------------------ */
+
+/** 命中的锁定来源；null = 没锁，直接用模型 / 兜底的判断 */
+export type IntentLockReason = "navigation" | "document";
+
+export interface RoutingDecision {
+  intent: AiIntent;
+  target: string;
+  queryMode: AiQueryMode;
+  action: AiAction;
+  domain: string;
+  responseMode: AiResponseMode;
+  confidence: number;
+  lockedBy: IntentLockReason | null;
+}
+
+/** 小模型可能给出、且必须被规则纠正的意图（只纠正这些，其余尊重模型） */
+const NAV_OVERRIDABLE = new Set(["knowledge", "analysis", "chat"]);
+/**
+ * 单据被「降级」的意图：create / update 会走 entity.create 通用单表写入
+ * （无明细、不取号、不带物料计划属性），是 2026-10-16 事故的直接入口。
+ */
+const DOCUMENT_DOWNGRADES = new Set(["create", "update"]);
+
+/**
+ * 把「规则兜底 + 模型路由」合并成最终决策。
+ *
+ * 抽成纯函数是因为这里的每一处「锁定」都是回归风险点：
+ * 词表 / prompt 一改就要能立刻在这个函数上跑断言（见 eval `lock_cases`）。
+ */
+export const resolveRoutedIntent = (
+  state: Pick<AiGraphState, "skill" | "text">,
+  routed: RoutedIntent,
+  fallback: RoutedIntent,
+): RoutingDecision => {
+  const action = routed.action || fallback.action || "chat";
+
+  // ① 导航锁定：小模型常把「采购订单菜单在哪里」判成 knowledge / analysis
+  //    （因为带「采购」），只要不是写操作 / 单据动作，就以确定性菜单问法为准。
+  const navLocked =
+    state.skill === "auto" &&
+    isMenuLocateQuestion(state.text) &&
+    (!routed.intent || NAV_OVERRIDABLE.has(routed.intent)) &&
+    action === "chat";
+
+  // ② 单据优先锁定（2026-10-16）：单据不是可直写的主数据。
+  //    确定性规则（单据类型词 + 建单动词）已判 document 时，不允许模型降级成
+  //    create/update —— 那会走通用写入：明细不建、编号由模型编（撞唯一索引）。
+  const docLocked =
+    !navLocked &&
+    state.skill === "auto" &&
+    fallback.intent === "document" &&
+    (!routed.intent || DOCUMENT_DOWNGRADES.has(routed.intent));
+
+  const lockedBy: IntentLockReason | null = navLocked ? "navigation" : docLocked ? "document" : null;
+  const intent = (lockedBy || routed.intent || fallback.intent || "chat") as AiIntent;
+  const target =
+    lockedBy === "navigation"
+      ? "general"
+      : lockedBy === "document"
+        ? fallback.target && fallback.target !== "general"
+          ? fallback.target
+          : routed.target || "general"
+        : routed.target || fallback.target || "general";
+  const domain =
+    lockedBy === "navigation"
+      ? "navigation"
+      : lockedBy === "document"
+        ? "document"
+        : routed.domain || fallback.domain || "general";
+  const queryMode = lockedBy === "navigation" ? "answer" : routed.queryMode || fallback.queryMode || "answer";
+  const responseMode =
+    lockedBy === "navigation"
+      ? "link"
+      : routed.responseMode || detectResponseMode(intent, target, queryMode);
+  const confidence = lockedBy
+    ? 0.95
+    : typeof routed.confidence === "number"
+      ? routed.confidence
+      : fallback.confidence ?? 0.55;
+
+  return { intent, target, queryMode, action, domain, responseMode, confidence, lockedBy };
+};
+
 export async function intentRouterNode(state: AiGraphState): Promise<AiGraphState> {
   // 确认回路短路：会话里有待确认草稿且用户回复了明确的「确认/取消」，
   // 不再走 LLM 路由（避免小模型把「确认」误路由成别的意图）。
@@ -347,35 +433,20 @@ export async function intentRouterNode(state: AiGraphState): Promise<AiGraphStat
 
   const fallback = ruleFallback(state);
   const routed = (await routeByModel(state)) || {};
-
-  // 导航锁定：小模型常把「采购订单菜单在哪里」判成 knowledge / analysis（因为带「采购」），
-  // 只要不是写操作 / 单据动作，就以确定性的菜单问法为准（写操作风险高，不抢）。
-  const NAV_LOCKABLE_INTENTS = new Set(["knowledge", "analysis", "chat"]);
-  const navLocked =
-    state.skill === "auto" &&
-    isMenuLocateQuestion(state.text) &&
-    (!routed.intent || NAV_LOCKABLE_INTENTS.has(routed.intent)) &&
-    (routed.action ?? fallback.action) === "chat";
-
-  const intent = navLocked ? "navigation" : routed.intent || fallback.intent;
-  const target = navLocked ? "general" : routed.target || fallback.target;
-  const queryMode = navLocked ? "answer" : routed.queryMode || fallback.queryMode;
-  const action = routed.action || fallback.action;
-  const domain = navLocked ? "navigation" : routed.domain || fallback.domain;
-  const responseMode = navLocked
-    ? "link"
-    : routed.responseMode || detectResponseMode(intent!, target || "general", queryMode!);
-  const confidence =
-    typeof routed.confidence === "number" ? routed.confidence : fallback.confidence;
+  const decision = resolveRoutedIntent(
+    { skill: state.skill, text: state.text },
+    routed,
+    fallback,
+  );
 
   return {
     ...state,
-    intent,
-    domain,
-    action,
-    target,
-    queryMode,
-    responseMode,
-    confidence,
+    intent: decision.intent,
+    domain: decision.domain,
+    action: decision.action,
+    target: decision.target,
+    queryMode: decision.queryMode,
+    responseMode: decision.responseMode,
+    confidence: decision.confidence,
   };
 }

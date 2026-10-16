@@ -164,6 +164,7 @@ ORDER=(
   deploy_121_baq_multi_condition_join.sql
   deploy_122_category_planning_defaults.sql
   deploy_123_product_stock_columns_drop_default.sql
+  deploy_124_ai_document_optional_lines.sql
 )
 
 # ---------------------------------------------------------------- 文件自检
