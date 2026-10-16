@@ -16,6 +16,9 @@ import {
 } from "../../services/menuCatalog.js";
 import { menuLocateTool } from "../../tools/menuTools.js";
 import { designCustomPageTool } from "../../tools/pageDesignTools.js";
+import { DocumentActionError } from "../../services/documentActions.js";
+import { extractErrorMessage } from "../../services/errors.js";
+import { toolText } from "../../services/toolText.js";
 import {
   cancelPendingAction,
   executePendingAction,
@@ -56,10 +59,15 @@ const requireConfirmIdentity = (state: AiGraphState) => {
 const withMenuJumps = (text: string, tenantId?: number) =>
   appendMenuJumps(text, tenantId).catch(() => text);
 
-const pendingErrorReply = (error: unknown) => {
+const pendingErrorReply = (error: unknown, locale?: string) => {
   if (error instanceof PendingActionError) return error.message;
   if (error instanceof TenantScopeError) return error.message;
-  return "确认操作执行失败，请稍后重试。";
+  // 单据链路的库内 RPC 报错（业务侧 RAISE EXCEPTION）必须原样回显：
+  // 否则用户只看到「确认操作执行失败，请稍后重试。」，永远不知道错在哪。
+  if (error instanceof DocumentActionError) return error.message;
+  return toolText(locale)("pending.err.generic", {
+    message: extractErrorMessage(error),
+  });
 };
 
 interface StepOutcome {
@@ -179,8 +187,8 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
     } catch (error) {
       return {
         state: {
-          toolResults: [{ step: "execute_pending", ok: false, error: pendingErrorReply(error) }],
-          reply: pendingErrorReply(error),
+          toolResults: [{ step: "execute_pending", ok: false, error: pendingErrorReply(error, state.locale) }],
+          reply: pendingErrorReply(error, state.locale),
         },
       };
     }
@@ -313,6 +321,7 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
       [{ role: "system", content: knowledgePrompt }],
       state.provider,
       emitDelta,
+      "knowledge_answer",
     );
     const knowledgeReply =
       content ||
@@ -366,6 +375,7 @@ async function dispatchTool(step: PlanStep, state: AiGraphState): Promise<StepOu
     ],
     state.provider,
     emitDelta,
+    "chat",
   );
 
   return {

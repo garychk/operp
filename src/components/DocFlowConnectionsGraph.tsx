@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Graph } from "@antv/x6";
 import { Empty, Spin } from "antd";
 import { useTranslation } from "react-i18next";
+import { useErpDarkMode } from "../hooks/useErpDarkMode";
 
 export interface DocFlowConnectionItem {
   document_type: string;
@@ -34,21 +35,77 @@ const NODE_HEIGHT = 72;
 const COLUMN_GAP = 280;
 const ROW_GAP = 92;
 
-const TONE = {
-  current: { stroke: "#1677ff", fill: "#f0f7ff", text: "#1677ff" },
-  upstream: { stroke: "#52c41a", fill: "#f6ffed", text: "#389e0d" },
-  downstream: { stroke: "#fa8c16", fill: "#fff7e6", text: "#d46b08" },
-};
+type DocFlowTone = "current" | "upstream" | "downstream";
 
-let shapeRegistered = false;
+/**
+ * 画布取色表：X6 的背景 / 网格 / 节点 / 连线（含标签底色）颜色都是在 JS 里
+ * 以 SVG 属性下发的，CSS 变量与 antd token 都传不进去，只能按主题切两套值。
+ * 口径与 BomEditableTreeGraph 的 BOM_CANVAS_COLORS 保持一致。
+ */
+const CANVAS_COLORS = {
+  light: {
+    background: "#fafafa",
+    grid: "#eef2f6",
+    border: "#f0f0f0",
+    nodeStroke: "#d9d9d9",
+    nodeFill: "#fff",
+    title: "#1f1f1f",
+    subtitle: "#667085",
+    tag: "#5b6b7d",
+    portStroke: "#91a4b7",
+    portFill: "#fff",
+    edgeStroke: "#91a4b7",
+    labelBg: "#fff",
+    tone: {
+      current: { stroke: "#1677ff", fill: "#f0f7ff", text: "#1677ff" },
+      upstream: { stroke: "#52c41a", fill: "#f6ffed", text: "#389e0d" },
+      downstream: { stroke: "#fa8c16", fill: "#fff7e6", text: "#d46b08" },
+    },
+  },
+  dark: {
+    background: "#141414",
+    grid: "rgba(255, 255, 255, 0.10)",
+    border: "rgba(255, 255, 255, 0.12)",
+    nodeStroke: "#3a3a3a",
+    nodeFill: "#1f1f1f",
+    title: "#e6e6e6",
+    subtitle: "#a6adb8",
+    tag: "#a6adb8",
+    portStroke: "#8c8c8c",
+    portFill: "#1f1f1f",
+    edgeStroke: "#8c8c8c",
+    labelBg: "#1f1f1f",
+    tone: {
+      current: { stroke: "#4096ff", fill: "rgba(22, 119, 255, 0.18)", text: "#7cb2ff" },
+      upstream: { stroke: "#73d13d", fill: "rgba(82, 196, 26, 0.16)", text: "#95de64" },
+      downstream: { stroke: "#ffa940", fill: "rgba(250, 140, 22, 0.16)", text: "#ffc069" },
+    },
+  },
+} as const;
+
+type DocFlowTheme = keyof typeof CANVAS_COLORS;
+type DocFlowCanvasColors = (typeof CANVAS_COLORS)[DocFlowTheme];
+
+let shapeRegisteredTheme: DocFlowTheme | null = null;
 
 const clip = (value: string, max: number) =>
   value.length > max ? `${value.slice(0, max - 1)}…` : value;
 
 // Same node shape and interaction model as WorkflowDiagram: title / subtitle /
 // tag, ports on all four sides, draggable with panning and ctrl+wheel zoom.
-const ensureShapeRegistered = () => {
-  if (shapeRegistered) return;
+// 明暗各注册一次（最后一个参数 force 覆盖）：标题 / 副标题 / 端口这些用注册时
+// 的默认值，只有按主题重注册才能跟着切换。
+const ensureShapeRegistered = (theme: DocFlowTheme, colors: DocFlowCanvasColors) => {
+  if (shapeRegisteredTheme === theme) return;
+  const portAttrs = {
+    circle: {
+      r: 4,
+      magnet: true,
+      stroke: colors.portStroke,
+      strokeWidth: 1,
+      fill: colors.portFill,
+    },
+  };
   Graph.registerNode(
     "doc-flow-link-node",
     {
@@ -66,15 +123,15 @@ const ensureShapeRegistered = () => {
           rx: 10,
           ry: 10,
           strokeWidth: 2,
-          fill: "#fff",
-          stroke: "#d9d9d9",
+          fill: colors.nodeFill,
+          stroke: colors.nodeStroke,
         },
         title: {
           refX: 14,
           refY: 24,
           fontSize: 14,
           fontWeight: 600,
-          fill: "#1f1f1f",
+          fill: colors.title,
           textAnchor: "start",
           textVerticalAnchor: "middle",
         },
@@ -82,7 +139,7 @@ const ensureShapeRegistered = () => {
           refX: 14,
           refY: 48,
           fontSize: 12,
-          fill: "#667085",
+          fill: colors.subtitle,
           textAnchor: "start",
           textVerticalAnchor: "middle",
         },
@@ -90,21 +147,15 @@ const ensureShapeRegistered = () => {
           refX: NODE_WIDTH - 14,
           refY: 24,
           fontSize: 11,
-          fill: "#5b6b7d",
+          fill: colors.tag,
           textAnchor: "end",
           textVerticalAnchor: "middle",
         },
       },
       ports: {
         groups: {
-          left: {
-            position: "left",
-            attrs: { circle: { r: 4, magnet: true, stroke: "#91a4b7", strokeWidth: 1, fill: "#fff" } },
-          },
-          right: {
-            position: "right",
-            attrs: { circle: { r: 4, magnet: true, stroke: "#91a4b7", strokeWidth: 1, fill: "#fff" } },
-          },
+          left: { position: "left", attrs: portAttrs },
+          right: { position: "right", attrs: portAttrs },
         },
       },
     },
@@ -116,7 +167,7 @@ const ensureShapeRegistered = () => {
       inherit: "edge",
       attrs: {
         line: {
-          stroke: "#91a4b7",
+          stroke: colors.edgeStroke,
           strokeWidth: 2,
           targetMarker: { name: "block", width: 10, height: 10 },
         },
@@ -126,7 +177,7 @@ const ensureShapeRegistered = () => {
     },
     true,
   );
-  shapeRegistered = true;
+  shapeRegisteredTheme = theme;
 };
 
 export function DocFlowConnectionsGraph({
@@ -135,12 +186,16 @@ export function DocFlowConnectionsGraph({
   height = 340,
 }: DocFlowConnectionsGraphProps) {
   const { t } = useTranslation();
+  const dark = useErpDarkMode();
+  const theme: DocFlowTheme = dark ? "dark" : "light";
+  const colors = CANVAS_COLORS[theme];
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || !data?.current) return;
-    ensureShapeRegistered();
+    const canvas = CANVAS_COLORS[theme];
+    ensureShapeRegistered(theme, canvas);
 
     graphRef.current?.dispose();
     graphRef.current = null;
@@ -155,8 +210,8 @@ export function DocFlowConnectionsGraph({
       container: containerRef.current,
       width: canvasWidth,
       height: canvasHeight,
-      grid: { size: 10, visible: true, type: "mesh", args: { color: "#eef2f6", thickness: 1 } },
-      background: { color: "#fafafa" },
+      grid: { size: 10, visible: true, type: "mesh", args: { color: canvas.grid, thickness: 1 } },
+      background: { color: canvas.background },
       interacting: { nodeMovable: true, edgeMovable: false, vertexMovable: false, arrowheadMovable: false },
       panning: { enabled: true, eventTypes: ["rightMouseDown", "mouseWheel"] },
       mousewheel: { enabled: true, modifiers: "ctrl", factor: 1.1, minScale: 0.5, maxScale: 1.5 },
@@ -176,9 +231,10 @@ export function DocFlowConnectionsGraph({
       title: string,
       subtitle: string,
       tag: string,
-      tone: keyof typeof TONE,
+      tone: DocFlowTone,
     ) => {
       const y = centerY + (offsetIndex - (total - 1) / 2) * ROW_GAP;
+      const palette = canvas.tone[tone];
       graph.addNode({
         id,
         shape: "doc-flow-link-node",
@@ -189,10 +245,10 @@ export function DocFlowConnectionsGraph({
           { id: `${id}-right`, group: "right" },
         ],
         attrs: {
-          body: { stroke: TONE[tone].stroke, fill: TONE[tone].fill },
+          body: { stroke: palette.stroke, fill: palette.fill },
           title: { text: clip(title, 13) },
           subtitle: { text: clip(subtitle, 24) },
-          tag: { text: tag, fill: TONE[tone].text },
+          tag: { text: tag, fill: palette.text },
         },
       });
     };
@@ -208,17 +264,18 @@ export function DocFlowConnectionsGraph({
       "current",
     );
 
-    const addEdge = (source: string, target: string, label: string, tone: keyof typeof TONE) => {
+    const addEdge = (source: string, target: string, label: string, tone: DocFlowTone) => {
+      const palette = canvas.tone[tone];
       graph.addEdge({
         shape: "doc-flow-link-edge",
         source: { cell: source, port: `${source}-right` },
         target: { cell: target, port: `${target}-left` },
-        attrs: { line: { stroke: TONE[tone].stroke } },
+        attrs: { line: { stroke: palette.stroke } },
         labels: [
           {
             attrs: {
-              text: { text: label, fill: TONE[tone].text, fontSize: 11, fontWeight: 500 },
-              rect: { fill: "#fff", stroke: TONE[tone].stroke, strokeWidth: 0.5, rx: 3, ry: 3 },
+              text: { text: label, fill: palette.text, fontSize: 11, fontWeight: 500 },
+              rect: { fill: canvas.labelBg, stroke: palette.stroke, strokeWidth: 0.5, rx: 3, ry: 3 },
             },
           },
         ],
@@ -261,7 +318,7 @@ export function DocFlowConnectionsGraph({
       graph.dispose();
       graphRef.current = null;
     };
-  }, [data, height, t]);
+  }, [data, height, t, theme]);
 
   const isEmpty =
     !loading &&
@@ -273,7 +330,7 @@ export function DocFlowConnectionsGraph({
       style={{
         position: "relative",
         minHeight: height,
-        border: "1px solid #f0f0f0",
+        border: `1px solid ${colors.border}`,
         borderRadius: 8,
         overflow: "hidden",
       }}

@@ -2,12 +2,60 @@ import { useEffect, useRef, useState } from "react";
 import { Graph } from "@antv/x6";
 import { Spin } from "antd";
 import { useTranslation } from "react-i18next";
+import { useErpDarkMode } from "../hooks/useErpDarkMode";
 
 interface RoutingMapProps {
   details: any[];
   operations: any[];
   routingNo: string;
 }
+
+/**
+ * 画布取色表：X6 的背景 / 网格 / 节点 / 连线（含箭头与标签）颜色都是在 JS 里
+ * 以 SVG 属性下发的，CSS 变量与 antd token 都传不进去，只能按主题切两套值。
+ * 口径与 DocFlowConnectionsGraph / BomEditableTreeGraph 保持一致。
+ */
+const CANVAS_COLORS = {
+  light: {
+    background: "#ffffff",
+    grid: "#e0e0e0",
+    border: "#e8e8e8",
+    titleText: "#000000",
+    nodeFill: "#eaeefa",
+    nodeStroke: "#1890ff",
+    nodeStrokeInspection: "#31d0c6",
+    nodeLabel: "#333333",
+    portFill: "#ffffff",
+    edge: "#1890ff",
+    edgeNext: "#31d0c6",
+    infoBg: "#ffffff",
+    infoLabel: "#333333",
+    infoHeaderBg: "#1a1a1a",
+    infoHeaderText: "#ffffff",
+    emptyText: "#999999",
+  },
+  dark: {
+    background: "#141414",
+    grid: "rgba(255, 255, 255, 0.10)",
+    border: "rgba(255, 255, 255, 0.12)",
+    titleText: "#e6e6e6",
+    nodeFill: "rgba(24, 144, 255, 0.16)",
+    nodeStroke: "#4096ff",
+    nodeStrokeInspection: "#36cfc9",
+    nodeLabel: "#e6e6e6",
+    portFill: "#1f1f1f",
+    edge: "#4096ff",
+    edgeNext: "#36cfc9",
+    infoBg: "#1f1f1f",
+    infoLabel: "#d9d9d9",
+    infoHeaderBg: "#262626",
+    infoHeaderText: "#f0f0f0",
+    emptyText: "#8c8c8c",
+  },
+} as const;
+
+type RoutingMapTheme = keyof typeof CANVAS_COLORS;
+type RoutingMapColors = (typeof CANVAS_COLORS)[RoutingMapTheme];
 
 interface NodeData {
   sequenceNo: number;
@@ -21,6 +69,9 @@ interface NodeData {
 
 export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) {
   const { t } = useTranslation();
+  const dark = useErpDarkMode();
+  const theme: RoutingMapTheme = dark ? "dark" : "light";
+  const colors = CANVAS_COLORS[theme];
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
   const [loading, setLoading] = useState(false);
@@ -53,7 +104,13 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
     timeline: { startX: 250, endX: 1850 },
     text: { fontFamily: 'Inter, Helvetica, Arial, sans-serif',lineHeight: 20 },
   }
-  const updateInfoNode = (graph: Graph, mouseX: number, mouseY: number, data?: NodeData) => {
+  const updateInfoNode = (
+    graph: Graph,
+    mouseX: number,
+    mouseY: number,
+    canvas: RoutingMapColors,
+    data?: NodeData,
+  ) => {
     let infoNode = graph.getCellById("info-node");
 
     if (data) {
@@ -88,7 +145,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
           height: nodeHeight,
           attrs: {
             body: {
-              fill: "#ffffff",
+              fill: canvas.infoBg,
               stroke: 'none',
               rx: 6,
               ry: 6,
@@ -96,7 +153,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
             },
             label: {
               text: infoText,
-              fill: "#333",
+              fill: canvas.infoLabel,
               fontSize: 12,
               textAnchor: "start",
               textVerticalAnchor: "top",
@@ -107,7 +164,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
             header: {
               width: 200,
               height: 40,
-              fill: '#1a1a1a',
+              fill: canvas.infoHeaderBg,
               stroke: 'none',
               rx: 6,
               ry: 6,
@@ -116,7 +173,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
               refX: 100,
               refY: 20,
               text: 'Timeline',
-              fill: '#FFFFFF',
+              fill: canvas.infoHeaderText,
               fontSize: 18,
               fontWeight: 'bold',
               textAnchor: 'middle',
@@ -136,6 +193,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
   useEffect(() => {
     if (!containerRef.current) return;
 
+    const canvas = CANVAS_COLORS[theme];
     setLoading(true);
 
     const container = containerRef.current;
@@ -155,12 +213,12 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
         visible: true,
         type: "mesh",
         args: {
-          color: "#e0e0e0",
+          color: canvas.grid,
           thickness: 1,
         },
       },
       background: {
-        color: "#ffffff",
+        color: canvas.background,
       },
     });
 
@@ -182,7 +240,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
         },
         label: {
           text: titleText,
-          fill: "#000000",
+          fill: canvas.titleText,
           fontSize: 14,
           fontWeight: "bold",
           ...CONFIG.text,
@@ -225,8 +283,8 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
         height: nodeHeight,
         attrs: {
           body: {
-            fill: isInspection ? "#eaeefa" : "#eaeefa",
-            stroke: isInspection ? "#31d0c6" : "#1890ff",
+            fill: canvas.nodeFill,
+            stroke: isInspection ? canvas.nodeStrokeInspection : canvas.nodeStroke,
             strokeWidth: 2,
             rx: 6,
             ry: 6,
@@ -234,7 +292,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
           },
           label: {
             text: getOperationName(detail.operation_id),
-            fill: "#333",
+            fill: canvas.nodeLabel,
             fontSize: 12,
             fontWeight: "bold",
           },
@@ -249,9 +307,9 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
                 circle: {
                   r: 5,
                   magnet: true,
-                  stroke: isInspection ? "#31d0c6" : "#1890ff",
+                  stroke: isInspection ? canvas.nodeStrokeInspection : canvas.nodeStroke,
                   strokeWidth: 1,
-                  fill: "#fff",
+                  fill: canvas.portFill,
                 },
               },
             },
@@ -263,9 +321,9 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
                 circle: {
                   r: 5,
                   magnet: true,
-                  stroke: isInspection ? "#31d0c6" : "#1890ff",
+                  stroke: isInspection ? canvas.nodeStrokeInspection : canvas.nodeStroke,
                   strokeWidth: 1,
-                  fill: "#fff",
+                  fill: canvas.portFill,
                 },
               },
             },
@@ -293,12 +351,12 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
             },
             attrs: {
               line: {
-                stroke: "#31d0c6",
+                stroke: canvas.edgeNext,
                 strokeWidth: 1,
                 targetMarker: {
                   name: "classic",
                   size: 8,
-                  fill: "#31d0c6",
+                  fill: canvas.edgeNext,
                 },
               },
             },
@@ -307,7 +365,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
                 attrs: {
                   text: {
                     text: t("routingMap.nextOperation"),
-                    fill: "#31d0c6",
+                    fill: canvas.edgeNext,
                     fontSize: 10,
                   },
                 },
@@ -328,17 +386,17 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
               radius: 8,
             },
           },
-          attrs: {
-            line: {
-              stroke: "#1890ff",
-              strokeWidth: 1,
-              targetMarker: {
-                name: "classic",
-                size: 8,
-                fill: "#1890ff",
+            attrs: {
+              line: {
+                stroke: canvas.edge,
+                strokeWidth: 1,
+                targetMarker: {
+                  name: "classic",
+                  size: 8,
+                  fill: canvas.edge,
+                },
               },
             },
-          },
         });
       }
     });
@@ -349,7 +407,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
       const data = node.getData();
       if (data && e) {
         const point = graph.clientToLocal(e.clientX, e.clientY);
-        updateInfoNode(graph, point.x, point.y, data);
+        updateInfoNode(graph, point.x, point.y, canvas, data);
       }
     });
 
@@ -363,7 +421,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
         graphRef.current = null;
       }
     };
-  }, [details, operations]);
+  }, [details, operations, theme]);
 
   return (
     <>
@@ -373,7 +431,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
           style={{
             width: "100%",
             height: 400,
-            border: "1px solid #e8e8e8",
+            border: `1px solid ${colors.border}`,
             borderRadius: 4,
           }}
         />
@@ -385,7 +443,7 @@ export function RoutingMap({ details, operations, routingNo }: RoutingMapProps) 
             alignItems: "center",
             justifyContent: "center",
             height: 400,
-            color: "#999",
+            color: colors.emptyText,
           }}
         >
           {t("routingMap.empty.selectRouting")}

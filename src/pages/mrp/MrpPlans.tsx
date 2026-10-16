@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import type { Key } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker, Alert, Table } from 'antd';
-import { PlusOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, FileTextOutlined, SwapOutlined } from '@ant-design/icons';
+import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker, Alert, Table, Card, Col, Row, Statistic } from 'antd';
+import { PlusOutlined, DeleteOutlined, PlayCircleOutlined, FileTextOutlined, SwapOutlined, EditOutlined } from '@ant-design/icons';
+import { Pie, Line } from '@ant-design/charts';
 import { supabase } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import type { Tables } from '../../utils/supabase';
@@ -12,6 +13,7 @@ import dayjs from 'dayjs';
 import SimpleModal from '../../components/SimpleModal';
 import { useAuth } from '../../contexts/AuthContext';
 import { resolveMrpApiBaseUrl, aiServerAuthHeaders } from '../../utils/aiServer';
+import { useErpDarkMode } from '../../hooks/useErpDarkMode';
 
 type MrpPlan = Tables['erp_mrp_plans_s_539dcf81_b']['Row'];
 
@@ -69,6 +71,39 @@ interface MrpRunWarning {
   message: string;
 }
 
+/** 引擎 stats（对应 mrpEngine.MrpEngineResult.stats），用于报告弹窗画图 */
+interface MrpShortageSummary {
+  productId: number;
+  code: string;
+  name: string;
+  firstShortDate: string;
+  totalNetRequirement: number;
+  plannedOrderCount: number;
+  firstPlannedReleaseDate: string | null;
+}
+
+interface MrpStats {
+  relevantProducts: number;
+  plannedProducts: number;
+  bucketDays: number;
+  productsWithShortage: number;
+  totalNetRequirement: number;
+  plannedOrders: number;
+  shortages: MrpShortageSummary[];
+  reorderPointProducts: number;
+  reorderTriggers: number;
+  workCalendar: string | null;
+}
+
+/** 逐日净需求（按物料 × 需求日期，不聚合），来自 erp_mrp_requirements 表，关联产品编码/名称 */
+interface DailyNetReq {
+  productId: number;
+  code: string;
+  name: string;
+  date: string;
+  value: number;
+}
+
 interface MrpRunResponse {
   ok: boolean;
   error?: string;
@@ -78,7 +113,149 @@ interface MrpRunResponse {
   report_error?: string | null;
   /** 引擎警告（P0-4 起在结果弹窗里展示，此前拿到就被丢掉） */
   warnings?: MrpRunWarning[];
-  stats?: { workCalendar?: string | null } & Record<string, unknown>;
+  stats?: MrpStats;
+}
+
+/** 报告弹窗的图表层：把引擎 stats 里的汇总数字 + 缺口清单画成图表，降低纯文字阅读负担 */
+function ReportCharts({
+  stats,
+  dailyNetReq,
+  t,
+}: {
+  stats: MrpStats;
+  dailyNetReq: DailyNetReq[];
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const isDark = useErpDarkMode();
+  const chartTheme = isDark ? 'classicDark' : 'classic';
+  const shortages = [...stats.shortages].sort(
+    (a, b) => b.totalNetRequirement - a.totalNetRequirement,
+  );
+  const topShortages = shortages.slice(0, 10);
+
+  const topData = topShortages.map((s) => ({
+    name: s.code ? `${s.code} ${s.name}` : s.name || `#${s.productId}`,
+    value: s.totalNetRequirement,
+  }));
+
+  // 逐日净需求（来自 erp_mrp_requirements 表，按物料分序列），折线图数据源
+  const dateData = [...dailyNetReq]
+    .sort((a, b) => (a.date < b.date ? -1 : a.name < b.name ? -1 : 1))
+    .map((r) => ({
+      series: r.code ? `${r.code} ${r.name}` : r.name,
+      date: r.date,
+      value: r.value,
+    }));
+
+  const summaryItems = [
+    { label: t('mrp.plans.reportStatsRelevant'), value: stats.relevantProducts },
+    { label: t('mrp.plans.reportStatsPlanned'), value: stats.plannedProducts },
+    { label: t('mrp.plans.reportStatsShortage'), value: stats.productsWithShortage },
+    { label: t('mrp.plans.reportStatsOrders'), value: stats.plannedOrders },
+    {
+      label: t('mrp.plans.reportStatsNet'),
+      value: stats.totalNetRequirement,
+    },
+  ];
+
+  const topColumns = [
+    { title: t('mrp.plans.reportColMaterial'), dataIndex: 'name', key: 'name', ellipsis: true },
+    { title: t('mrp.plans.reportColNetReq'), dataIndex: 'value', key: 'value', align: 'right' as const },
+  ];
+
+  const dateColumns = [
+    { title: t('mrp.plans.reportColMaterial'), dataIndex: 'series', key: 'series', ellipsis: true },
+    { title: t('mrp.plans.reportColDate'), dataIndex: 'date', key: 'date' },
+    { title: t('mrp.plans.reportColNetReq'), dataIndex: 'value', key: 'value', align: 'right' as const },
+  ];
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <Card
+        size="small"
+        title={t('mrp.plans.reportStatsTitle')}
+        style={{ marginBottom: 12 }}
+      >
+        <Row gutter={[12, 12]}>
+          {summaryItems.map((item) => (
+            <Col key={item.label} span={8} xs={12} sm={8}>
+              <Statistic title={item.label} value={item.value} />
+            </Col>
+          ))}
+        </Row>
+      </Card>
+
+      {topShortages.length > 0 ? (
+        <Card
+          size="small"
+          title={t('mrp.plans.reportShortageChart')}
+          style={{ marginBottom: 12 }}
+        >
+          <Row gutter={[12, 12]} align="middle">
+            <Col xs={24} lg={8}>
+              <Pie
+                data={topData}
+                angleField="value"
+                colorField="name"
+                innerRadius={0.5}
+                height={280}
+                theme={chartTheme}
+                label={{ text: 'value', style: { fontSize: 11 } }}
+                legend={{ color: { position: 'bottom' } }}
+              />
+            </Col>
+            <Col xs={24} lg={16}>
+              <Table
+                size="small"
+                rowKey="name"
+                columns={topColumns}
+                dataSource={topData}
+                pagination={false}
+              />
+            </Col>
+          </Row>
+        </Card>
+      ) : (
+        <Alert
+          type="success"
+          showIcon
+          style={{ marginBottom: 12 }}
+          message={t('mrp.plans.reportShortageEmpty')}
+        />
+      )}
+
+      {dateData.length > 0 && (
+        <Card size="small" title={t('mrp.plans.reportShortageDateChart')}>
+          <Row gutter={[0, 12]}>
+            <Col span={24}>
+              <Line
+                data={dateData}
+                xField="date"
+                yField="value"
+                colorField="series"
+                height={220}
+                theme={chartTheme}
+                style={{ lineWidth: 2, shape: 'smooth' }}
+                point={{ style: { r: 3 } }}
+                axis={{ x: { title: false }, y: { title: false } }}
+                legend={{ color: { position: 'bottom' } }}
+              />
+            </Col>
+            <Col span={24}>
+              <Table
+                size="small"
+                rowKey={(r) => `${r.series}__${r.date}`}
+                columns={dateColumns}
+                dataSource={dateData}
+                pagination={false}
+                scroll={{ y: 300 }}
+              />
+            </Col>
+          </Row>
+        </Card>
+      )}
+    </div>
+  );
 }
 
 export function MrpPlans() {
@@ -89,6 +266,7 @@ export function MrpPlans() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<MrpPlan | null>(null);
   const [runningPlanId, setRunningPlanId] = useState<number | null>(null);
   const [reportView, setReportView] = useState<{
     open: boolean;
@@ -98,6 +276,8 @@ export function MrpPlans() {
     llmError: string | null;
     warnings: MrpRunWarning[];
     workCalendar: string | null;
+    stats: MrpStats | null;
+    dailyNetReq: DailyNetReq[];
     /** true = 本次运算的结果弹窗（warning / 日历提示有效）；false = 回看历史报告 */
     fromRun: boolean;
   } | null>(null);
@@ -130,14 +310,82 @@ export function MrpPlans() {
     }
   };
 
-  const handleSubmit = async (values: any) => {
+  // 逐日净需求：从 erp_mrp_requirements 取该计划所有「净需求 > 0」的需求行，
+  // 按物料 × 需求日期逐条返回（不聚合），关联产品编码/名称，供折线图按物料分序列展示。
+  const fetchDailyNetRequirement = async (planId: number): Promise<DailyNetReq[]> => {
     try {
-      const { error } = await supabase
-        .from(mrpPlanTable)
-        .insert([values]);
+      const { data, error } = await supabase
+        .from('erp_mrp_requirements_s_539dcf81_b')
+        .select('product_id, requirement_date, net_requirement')
+        .eq('plan_id', planId)
+        .eq('is_deleted', 'n')
+        .gt('net_requirement', 0);
       if (error) throw error;
-      message.success(t('common.createSuccess'));
+
+      // 收集涉及的 product_id，一次查产品编码/名称
+      const productIds = Array.from(
+        new Set((data ?? []).map((r) => r.product_id).filter((id): id is number => id != null)),
+      );
+      const prodMap = new Map<number, { code: string; name: string }>();
+      if (productIds.length > 0) {
+        const { data: prods, error: perr } = await supabase
+          .from('erp_products_s_539dcf81_b')
+          .select('id, code, name')
+          .in('id', productIds)
+          .eq('is_deleted', 'n');
+        if (perr) throw perr;
+        for (const p of prods ?? []) {
+          prodMap.set(p.id, { code: p.code ?? '', name: p.name ?? '' });
+        }
+      }
+
+      const rows: DailyNetReq[] = [];
+      for (const row of data ?? []) {
+        const date = String(row.requirement_date ?? '').slice(0, 10);
+        if (!date) continue;
+        const pid = row.product_id;
+        const meta = pid != null ? prodMap.get(pid) : undefined;
+        rows.push({
+          productId: pid ?? 0,
+          code: meta?.code ?? '',
+          name: meta?.name ?? `#${pid ?? 0}`,
+          date,
+          value: Number(row.net_requirement) || 0,
+        });
+      }
+      return rows.sort((a, b) => (a.date < b.date ? -1 : 1));
+    } catch (error) {
+      console.error('Error fetching daily net requirement:', error);
+      return [];
+    }
+  };
+
+  const handleSubmit = async (values: any) => {
+    // DatePicker 的 dayjs 值必须转成 YYYY-MM-DD 字符串再写库（否则 UTC 偏移导致日期错位）
+    const payload = { ...values };
+    for (const key of ['plan_date', 'start_date', 'end_date']) {
+      if (payload[key] && typeof payload[key] === 'object' && 'format' in payload[key]) {
+        payload[key] = payload[key].format('YYYY-MM-DD');
+      }
+    }
+
+    try {
+      if (editingPlan) {
+        const { error } = await supabase
+          .from(mrpPlanTable)
+          .update(payload)
+          .eq('id', editingPlan.id);
+        if (error) throw error;
+        message.success(t('mrp.plans.editSuccess'));
+      } else {
+        const { error } = await supabase
+          .from(mrpPlanTable)
+          .insert([payload]);
+        if (error) throw error;
+        message.success(t('common.createSuccess'));
+      }
       setIsModalOpen(false);
+      setEditingPlan(null);
       form.resetFields();
       fetchPlans();
     } catch (error) {
@@ -195,6 +443,7 @@ export function MrpPlans() {
             throw new Error(data.error || `HTTP ${response.status}`);
           }
           message.success(t('mrp.plans.runSuccess'));
+          const dailyNetReq = await fetchDailyNetRequirement(record.id);
           setReportView({
             open: true,
             planNo: data.plan_no || record.plan_no,
@@ -203,6 +452,8 @@ export function MrpPlans() {
             llmError: data.report_error ?? null,
             warnings: data.warnings ?? [],
             workCalendar: data.stats?.workCalendar ?? null,
+            stats: data.stats ?? null,
+            dailyNetReq,
             fromRun: true,
           });
           fetchPlans();
@@ -230,10 +481,16 @@ export function MrpPlans() {
         `${resolveMrpApiBaseUrl()}/report/${record.id}?${params.toString()}`,
         { headers: await aiServerAuthHeaders() },
       );
-      const data = (await response.json()) as { ok: boolean; error?: string; report?: string };
+      const data = (await response.json()) as {
+        ok: boolean;
+        error?: string;
+        report?: string;
+        stats?: MrpStats | null;
+      };
       if (!response.ok || !data.ok) {
         throw new Error(data.error || `HTTP ${response.status}`);
       }
+      const dailyNetReq = await fetchDailyNetRequirement(record.id);
       setReportView({
         open: true,
         planNo: record.plan_no,
@@ -242,7 +499,9 @@ export function MrpPlans() {
         llmError: null,
         // 历史报告：引擎警告不落库，只在运算当次返回，所以这里没有可展示的内容
         warnings: [],
-        workCalendar: null,
+        workCalendar: data.stats?.workCalendar ?? null,
+        stats: data.stats ?? null,
+        dailyNetReq,
         fromRun: false,
       });
     } catch (error) {
@@ -363,6 +622,7 @@ export function MrpPlans() {
       message.error(`${t('common.documentNoFailed')}：${(error as Error).message}`);
       return;
     }
+    setEditingPlan(null);
     form.setFieldsValue({
       plan_no: planNo,
       plan_date: dayjs(new Date()),
@@ -371,6 +631,21 @@ export function MrpPlans() {
       plan_type: 'master',
       remark: '',
       status: 'draft',
+    });
+    setIsModalOpen(true);
+  };
+
+  // 编辑：仅未完成（非 completed）的计划可改，completed 结果已落库、改单会与结果脱节
+  const handleEdit = (record: MrpPlan) => {
+    setEditingPlan(record);
+    form.setFieldsValue({
+      plan_no: record.plan_no,
+      plan_type: record.plan_type || 'master',
+      plan_date: record.plan_date ? dayjs(record.plan_date) : null,
+      start_date: record.start_date ? dayjs(record.start_date) : null,
+      end_date: record.end_date ? dayjs(record.end_date) : null,
+      remark: record.remark ?? '',
+      status: record.status || 'draft',
     });
     setIsModalOpen(true);
   };
@@ -445,9 +720,11 @@ export function MrpPlans() {
       key: 'action',
       render: (_: any, record: MrpPlan) => (
         <Space size="middle">
-          <Button type="text" icon={<EyeOutlined />}>
-            {t('mrp.plans.view')}
-          </Button>
+          {record.status !== 'completed' && (
+            <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('mrp.plans.edit')}
+            </Button>
+          )}
           {(record.status === 'draft' || record.status === 'failed') && (
             <Button
               type="text"
@@ -515,14 +792,18 @@ export function MrpPlans() {
       />
 
       <SimpleModal
-        title={t('mrp.plans.addTitle')}
+        title={editingPlan ? t('mrp.plans.editTitle') : t('mrp.plans.addTitle')}
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
+          setEditingPlan(null);
           form.resetFields();
         }}
         footer={<Space>
-              <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
+              <Button onClick={() => {
+                setIsModalOpen(false);
+                setEditingPlan(null);
+              }}>{t('common.cancel')}</Button>
               <Button type="primary" onClick={() => form.submit()}>
                 {t('common.save')}
               </Button>
@@ -575,7 +856,7 @@ export function MrpPlans() {
             {t('common.close')}
           </Button>,
         ]}
-        width={720}
+        width="70%"
       >
         {reportView?.generatedBy === 'fallback' && (
           <Alert
@@ -613,6 +894,20 @@ export function MrpPlans() {
               </ul>
             }
           />
+        )}
+        {/* 图表层：结构化 stats 存在时优先上图，降低纯文字阅读负担 */}
+        {reportView?.stats ? (
+          <ReportCharts stats={reportView.stats} dailyNetReq={reportView.dailyNetReq} t={t} />
+        ) : (
+          reportView &&
+          reportView.fromRun === false && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 12 }}
+              message={t('mrp.plans.reportStatsUnavailable')}
+            />
+          )
         )}
         <div style={{ whiteSpace: 'pre-wrap', maxHeight: '60vh', overflowY: 'auto' }}>
           {reportView?.report || t('mrp.plans.reportEmpty')}

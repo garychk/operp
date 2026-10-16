@@ -162,6 +162,12 @@ ORDER=(
   deploy_119_shift_master_and_capacity.sql
   deploy_120_baq_relations.sql
   deploy_121_baq_multi_condition_join.sql
+  deploy_122_category_planning_defaults.sql
+  deploy_123_product_stock_columns_drop_default.sql
+  deploy_124_ai_document_optional_lines.sql
+  deploy_125_ai_token_usage.sql
+  deploy_126_ai_token_usage_menu.sql
+  deploy_127_mrp_analysis_stats.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

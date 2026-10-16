@@ -15,14 +15,16 @@
 import { supabase } from "../config/supabase.js";
 import { logAiOperation } from "./aiAudit.js";
 import { executeDocumentAction } from "./documentActions.js";
-// 仅用其纯函数（无环：entityRegistry 只依赖 config 层），展示时剥租户后缀
+import { classifyPgError, isRetryablePgError } from "./errors.js";
+import { toolText } from "./toolText.js";
+// 仅用其纯函数：baseTableName（展示时剥租户后缀）、写策略判据
 import { baseTableName as displayTableName } from "../tools/entityRegistry.js";
 
 export const PENDING_ACTION_TTL_MINUTES = 30;
 
 export class PendingActionError extends Error {
   constructor(
-    readonly code: "not_found" | "expired" | "forbidden" | "already_handled",
+    readonly code: "not_found" | "expired" | "forbidden" | "already_handled" | "write_failed",
     message: string,
   ) {
     super(message);
@@ -149,6 +151,43 @@ export async function loadLatestPendingAction(
   };
 }
 
+/**
+ * 写入失败 → 用户能看懂、可行动的原因 + 这张草稿还值不值得重试。
+ *
+ * 2026-10-16 事故里，`toolExecutor` 把所有非业务异常都吞成
+ * 「确认操作执行失败，请稍后重试。」，23505（单号已存在）被彻底隐藏；
+ * 而且草稿仍是 pending —— 用户再点「确认」会**永远**同样失败。
+ * 这里把原因说清楚，并把「同样内容必然再失败」的草稿直接作废。
+ */
+const describeWriteError = (
+  error: unknown,
+  locale?: string,
+): { message: string; retryable: boolean } => {
+  const tt = toolText(locale);
+  const info = classifyPgError(error);
+  const retryable = isRetryablePgError(info);
+  const tail = retryable ? tt("pending.err.retryable") : tt("pending.err.draftVoided");
+  const reason =
+    info.code === "23505"
+      ? tt("pending.err.duplicateKey", { constraint: info.constraint || "-" })
+      : info.code === "23503"
+        ? tt("pending.err.foreignKey", { constraint: info.constraint || "-" })
+        : info.code === "23502"
+          ? tt("pending.err.notNull", { column: info.column || "-" })
+          : info.code === "23514"
+            ? tt("pending.err.check", { constraint: info.constraint || "-" })
+            : tt("pending.err.generic", { message: info.raw });
+  return { message: `${reason}\n${tail}`, retryable };
+};
+
+/** 作废草稿：避免一张必然失败的草稿被反复「确认」 */
+const voidPendingDraft = async (id: number): Promise<void> => {
+  await supabase
+    .from("sys_ai_pending_actions")
+    .update({ status: "cancelled", updated_at: nowIso() })
+    .eq("id", id);
+};
+
 export async function executePendingAction(
   pendingActionId: number,
   identity: { userId: number; tenantId: number },
@@ -211,18 +250,35 @@ export async function executePendingAction(
 
   // 单据分支：走库内 RPC（deploy_83），不是单表 insert —— 审计在 documentActions 里记录
   if (action.action_type.startsWith("document.")) {
-    const outcome = await executeDocumentAction(
-      {
-        id: action.id,
-        session_id: action.session_id,
-        action_type: action.action_type,
-        entity_key: action.entity_key,
-        table_name: action.table_name,
-        payload: action.payload,
-        context: ctx as unknown as Record<string, unknown>,
-      },
-      identity,
-    );
+    let outcome: Awaited<ReturnType<typeof executeDocumentAction>>;
+    try {
+      outcome = await executeDocumentAction(
+        {
+          id: action.id,
+          session_id: action.session_id,
+          action_type: action.action_type,
+          entity_key: action.entity_key,
+          table_name: action.table_name,
+          payload: action.payload,
+          context: ctx as unknown as Record<string, unknown>,
+        },
+        identity,
+      );
+    } catch (error) {
+      const insight = describeWriteError(error, ctx.locale);
+      await logAiOperation({
+        operation: "ai.document.execute",
+        tenantId: identity.tenantId,
+        userId: identity.userId,
+        sessionId: action.session_id,
+        targetTable: action.table_name,
+        request: action.payload,
+        result: { pending_action_id: action.id, error: insight.message, retryable: insight.retryable },
+        status: "error",
+      });
+      if (!insight.retryable) await voidPendingDraft(action.id);
+      throw new PendingActionError("write_failed", insight.message);
+    }
     const focusId = Number((outcome.focus || {}).id);
     await supabase
       .from("sys_ai_pending_actions")
@@ -264,7 +320,28 @@ export async function executePendingAction(
     written = response.data as Record<string, unknown> | null;
     writeError = response.error;
   }
-  if (writeError) throw writeError;
+  if (writeError) {
+    // 失败也要留痕：以前只在成功分支写审计，出事后日志里只有 draft_create，
+    // 完全看不出「确认之后到底发生了什么」。
+    const insight = describeWriteError(writeError, ctx.locale);
+    const isUpdate = ctx.action === "update" || action.action_type === "entity.update";
+    await logAiOperation({
+      operation: isUpdate ? "ai.entity.execute_update" : "ai.entity.execute_create",
+      tenantId: identity.tenantId,
+      userId: identity.userId,
+      sessionId: action.session_id,
+      targetTable: action.table_name,
+      request: payload,
+      result: {
+        pending_action_id: action.id,
+        error: insight.message,
+        retryable: insight.retryable,
+      },
+      status: "error",
+    });
+    if (!insight.retryable) await voidPendingDraft(action.id);
+    throw new PendingActionError("write_failed", insight.message);
+  }
 
   const rowId = Number(written?.id);
   await supabase

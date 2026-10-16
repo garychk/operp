@@ -43,7 +43,7 @@ import {
   Typography,
 } from "antd";
 import type { Layout } from "react-grid-layout";
-import { listCustomPages, publishCustomPage, saveCustomPage } from "./api";
+import { deleteCustomPage, listCustomPages, publishCustomPage, saveCustomPage } from "./api";
 import { PageCanvas } from "./PageRenderer";
 import type { CustomPage, PageWidget, WidgetType } from "./types";
 import { createWidgetDefaults } from "./types";
@@ -160,6 +160,24 @@ export function PageDesigner() {
       message.error(error instanceof Error ? error.message : t("pageDesigner.publishFailed"));
     } finally {
       setSaving(false);
+    }
+  };
+  const handleDeletePage = async () => {
+    if (!page.id) return;
+    try {
+      const result = await deleteCustomPage(page);
+      if (!result.ok && result.referenced) {
+        message.error(
+          t("pageDesigner.deletePageReferenced", { menu: result.menuName || "" }),
+        );
+        return;
+      }
+      message.success(t("pageDesigner.deletePageSuccess"));
+      setPage(emptyPage());
+      setSelectedId(undefined);
+      refresh();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : t("common.saveFailed"));
     }
   };
   const updateLayout = (layout: Layout[]) =>
@@ -305,6 +323,18 @@ export function PageDesigner() {
             >
               {t("pageDesigner.publish")}
             </Button>
+            <Popconfirm
+              title={t("pageDesigner.deletePageConfirm")}
+              okText={t("common.confirm")}
+              cancelText={t("common.cancel")}
+              okButtonProps={{ danger: true }}
+              disabled={!page.id}
+              onConfirm={handleDeletePage}
+            >
+              <Button danger icon={<DeleteOutlined />} disabled={!page.id}>
+                {t("pageDesigner.deletePage")}
+              </Button>
+            </Popconfirm>
           </Space>
         }
       >

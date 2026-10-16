@@ -14,6 +14,7 @@ import {
   Row,
   Col,
   Image,
+  Alert,
 } from "antd";
 import {
   PlusOutlined,
@@ -43,7 +44,25 @@ const productImageTable = "erp_product_images_s_539dcf81_b";
 
 const { Option } = Select;
 const productTable = "erp_products_s_539dcf81_b";
+const supplierTable = "erp_suppliers_s_539dcf81_b";
 const docType = "products";
+
+/** 批量规则取值（与 deploy_60 CHECK、mrpEngine 一致） */
+const LOT_POLICIES = ["lot_for_lot", "fixed_qty", "multiples", "max_qty"] as const;
+/** 可「跟随类别默认」的计划参数列（deploy_120）：空值显式写 NULL */
+const PLANNING_NULLABLE_FIELDS = [
+  "safety_stock",
+  "min_stock",
+  "max_stock",
+  "order_point",
+  "lot_policy",
+  "min_order_qty",
+  "order_multiple",
+  "max_order_qty",
+  "lead_time_purchase",
+  "lead_time_production",
+  "default_supplier_id",
+] as const;
 
 export function Products() {
   const { t } = useTranslation();
@@ -57,6 +76,10 @@ export function Products() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [, setActiveTab] = useState("basic");
   const [form] = Form.useForm();
+  /** 计划参数页签的独立表单实例（deploy_120）：保存时与主表单合并提交 */
+  const [planningForm] = Form.useForm();
+  /** 默认供应商下拉（仅启用中供应商，与采购订单页同口径） */
+  const [suppliers, setSuppliers] = useState<{ id: number; name: string }[]>([]);
   /** 产品 id -> 首图公开 URL（sort_order 最小者），列表缩略列使用 */
   const [firstImageUrls, setFirstImageUrls] = useState<Map<number, string>>(new Map());
 
@@ -72,7 +95,23 @@ export function Products() {
     fetchProducts();
     fetchCategories();
     fetchFirstImages();
+    fetchSuppliers();
   }, []);
+
+  const fetchSuppliers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from(supplierTable)
+        .select("id, name")
+        .eq("is_deleted", "n")
+        .eq("status", "active")
+        .order("name", { ascending: true });
+      if (error) throw error;
+      setSuppliers(data || []);
+    } catch (error) {
+      console.error("Error fetching suppliers:", error);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -134,6 +173,23 @@ export function Products() {
         const u = uomMap.get(payload.base_uom_id);
         payload.unit = u?.symbol || u?.name || payload.unit;
       }
+      // 计划参数页签（deploy_120）：独立表单实例，getFieldsValue(true) 连未访问过的
+      // 页签字段一起取（preserve 语义），保证「打开即保存」不丢数据。
+      const planningValues = planningForm.getFieldsValue(true) as Record<string, unknown>;
+      // 参与 MRP 三态转换：inherit → NULL（跟随物料属性）
+      payload.is_mrp_relevant =
+        planningValues.is_mrp_relevant === "inherit"
+          ? null
+          : planningValues.is_mrp_relevant === "yes"
+            ? true
+            : planningValues.is_mrp_relevant === "no"
+              ? false
+              : null;
+      // 可空计划参数：空值显式写 NULL（= 跟随类别默认）；不能省略键，
+      // 否则 update 分支清不掉旧值
+      for (const field of PLANNING_NULLABLE_FIELDS) {
+        payload[field] = planningValues[field] ?? null;
+      }
       if (editingProduct) {
         await logWithTiming(t("products.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
@@ -159,6 +215,7 @@ export function Products() {
       }
       setIsModalOpen(false);
       form.resetFields();
+      planningForm.resetFields();
       setEditingProduct(null);
       setActiveTab("basic");
       fetchProducts();
@@ -198,6 +255,23 @@ export function Products() {
       is_sold: record.is_sold ?? true,
       is_manufactured: record.is_manufactured ?? false,
     });
+    // 计划参数页签（deploy_120，独立表单实例）
+    // （生成类型 database.ts 早于 deploy_60/114/120，is_mrp_relevant 等列不在 Row 类型里，
+    //   统一走 Record 视图读取）
+    const rec = record as unknown as Record<string, unknown>;
+    planningForm.setFieldsValue({
+      // 参与 MRP 三态：null = 跟随物料属性
+      is_mrp_relevant:
+        rec.is_mrp_relevant === null || rec.is_mrp_relevant === undefined
+          ? "inherit"
+          : rec.is_mrp_relevant
+            ? "yes"
+            : "no",
+      // 可空计划参数：null → undefined，控件显示为空（跟随类别默认）
+      ...Object.fromEntries(
+        PLANNING_NULLABLE_FIELDS.map((f) => [f, rec[f] ?? undefined]),
+      ),
+    });
     setActiveTab("basic");
     setIsModalOpen(true);
   };
@@ -222,15 +296,17 @@ export function Products() {
       purchase_price: 0,
       sale_price: 0,
       cost_price: 0,
-      safety_stock: 0,
-      max_stock: 0,
-      min_stock: 0,
       is_purchased: true,
       is_sold: true,
       is_manufactured: false,
       status: "active",
       is_batch_managed: false,
       shelf_life_days: undefined,
+    });
+    // 计划参数页签（deploy_120）：新物料默认全部「跟随类别默认」
+    planningForm.setFieldsValue({
+      is_mrp_relevant: "inherit",
+      ...Object.fromEntries(PLANNING_NULLABLE_FIELDS.map((f) => [f, undefined])),
     });
     setActiveTab("basic");
     setIsModalOpen(true);
@@ -251,6 +327,151 @@ export function Products() {
     (p) =>
       p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       p.code.toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  /** 计划参数页签（deploy_120）：独立 Form 实例，与主表单同弹窗、保存时合并提交。
+   *  可空字段留空 = 跟随类别默认（显式 0 仍是显式 0）。 */
+  const planningFormEle = (
+    <div style={{ marginRight: 12 }}>
+    <Form form={planningForm} layout="vertical">
+      <Alert
+        type="info"
+        showIcon
+        style={{ marginBottom: 12 }}
+        message={t("products.planningTabHint")}
+      />
+      <Row gutter={16}>
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.mrpRelevant")}
+            name="is_mrp_relevant"
+            initialValue="inherit"
+          >
+            <Select
+              options={[
+                { value: "inherit", label: t("mrp.planningParams.mrpRelevantInherit") },
+                { value: "yes", label: t("common.yes") },
+                { value: "no", label: t("common.no") },
+              ]}
+            />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.safetyStock")}
+            name="safety_stock"
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.minStock")}
+            name="min_stock"
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.maxStock")}
+            name="max_stock"
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.orderPoint")}
+            name="order_point"
+            extra={t("mrp.planningParams.orderPointHint")}
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.lotPolicy")}
+            name="lot_policy"
+          >
+            <Select
+              allowClear
+              placeholder={t("products.followCategoryDefault")}
+              options={LOT_POLICIES.map((value) => ({
+                value,
+                label: {
+                  lot_for_lot: t("mrp.planningParams.lotPolicyLotForLot"),
+                  fixed_qty: t("mrp.planningParams.lotPolicyFixedQty"),
+                  multiples: t("mrp.planningParams.lotPolicyMultiples"),
+                  max_qty: t("mrp.planningParams.lotPolicyMaxQty"),
+                }[value],
+              }))}
+            />
+          </Form.Item>
+        </Col>
+
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.minOrderQty")}
+            name="min_order_qty"
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.orderMultiple")}
+            name="order_multiple"
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.maxOrderQty")}
+            name="max_order_qty"
+            extra={t("mrp.planningParams.maxOrderQtyHint")}
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.leadTimePurchase")}
+            name="lead_time_purchase"
+            extra={t("mrp.planningParams.leadTimeHint")}
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            label={t("mrp.planningParams.leadTimeProduction")}
+            name="lead_time_production"
+          >
+            <InputNumber style={{ width: "100%" }} min={0} placeholder={t("products.followCategoryDefault")} />
+          </Form.Item>
+        </Col>
+        <Col span={8}>
+          <Form.Item
+            label={t("products.defaultSupplier")}
+            name="default_supplier_id"
+            tooltip={t("products.defaultSupplierHint")}
+          >
+            <Select
+              showSearch
+              allowClear
+              optionFilterProp="label"
+              placeholder={t("products.followCategoryDefault")}
+              options={suppliers.map((s) => ({ value: s.id, label: s.name }))}
+            />
+          </Form.Item>
+        </Col>
+      </Row>
+    </Form>
+    </div>
   );
 
   const columns: SuperTableColumn<Product>[] = [
@@ -438,6 +659,7 @@ export function Products() {
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
+          planningForm.resetFields();
           setEditingProduct(null);
           setActiveTab("basic");
         }}
@@ -473,16 +695,7 @@ export function Products() {
                         </Form.Item>
                         <Form.Item label={t("products.shortName")} name="short_name">
                           <Input placeholder={t("products.shortNamePlaceholder")} />
-                        </Form.Item>
-                        <Form.Item label={t("products.category")} name="category_id">
-                          <Select placeholder={t("products.categoryPlaceholder")}>
-                            {categories.map((c) => (
-                              <Option key={c.id} value={c.id}>
-                                {c.name}
-                              </Option>
-                            ))}
-                          </Select>
-                        </Form.Item>
+                        </Form.Item>                        
                         <Form.Item label={t("products.spec")} name="specification">
                           <Input placeholder={t("products.specPlaceholder")} />
                         </Form.Item>
@@ -506,43 +719,24 @@ export function Products() {
                             style={{ width: "100%" }}
                             placeholder={t("products.salePricePlaceholder")}
                           />
-                        </Form.Item>
+                        </Form.Item>                        
                         <Form.Item label={t("products.costPrice")} name="cost_price" initialValue={0}>
                           <InputNumber
                             style={{ width: "100%" }}
                             placeholder={t("products.costPricePlaceholder")}
                           />
                         </Form.Item>
-                        <Form.Item
-                          label={t("products.safetyStock")}
-                          name="safety_stock"
-                          initialValue={0}
-                        >
-                          <InputNumber
-                            style={{ width: "100%" }}
-                            placeholder={t("products.safetyStockPlaceholder")}
-                          />
-                        </Form.Item>
                       </Col>
                       <Col span={8}>
-                        <Form.Item label={t("products.maxStock")} name="max_stock" initialValue={0}>
-                          <InputNumber
-                            style={{ width: "100%" }}
-                            placeholder={t("products.maxStockPlaceholder")}
-                          />
-                        </Form.Item>
-                        <Form.Item label={t("products.minStock")} name="min_stock" initialValue={0}>
-                          <InputNumber
-                            style={{ width: "100%" }}
-                            placeholder={t("products.minStockPlaceholder")}
-                          />
-                        </Form.Item>
-                        <Form.Item label={t("common.status")} name="status" initialValue="active">
-                          <Select>
-                            <Option value="active">{t("common.enabled")}</Option>
-                            <Option value="inactive">{t("products.disabled")}</Option>
+                        <Form.Item label={t("products.category")} name="category_id">
+                          <Select placeholder={t("products.categoryPlaceholder")}>
+                            {categories.map((c) => (
+                              <Option key={c.id} value={c.id}>
+                                {c.name}
+                              </Option>
+                            ))}
                           </Select>
-                        </Form.Item>
+                        </Form.Item>                        
                         <Form.Item
                           label={t("products.shelfLifeDays")}
                           name="shelf_life_days"
@@ -566,6 +760,12 @@ export function Products() {
                             optionFilterProp="label"
                             options={uomOptions}
                           />
+                        </Form.Item>
+                        <Form.Item label={t("common.status")} name="status" initialValue="active">
+                          <Select>
+                            <Option value="active">{t("common.enabled")}</Option>
+                            <Option value="inactive">{t("products.disabled")}</Option>
+                          </Select>
                         </Form.Item>
                       </Col>
                     </Row>
@@ -616,6 +816,11 @@ export function Products() {
         }
         detailItems={[
           {
+            key: "planning",
+            label: t("products.planningTab"),
+            children: planningFormEle,
+          },
+          {
             key: "units",
             label: t("products.unitConversions"),
             disabled: !editingProduct,
@@ -649,7 +854,7 @@ export function Products() {
           </Space>
         }
         width={"80%"}
-        height={'80%'}
+        height={'628px'}
         workflowDocumentType={docType}
       />
 

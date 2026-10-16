@@ -23,6 +23,44 @@ const DICT = {
   "common.none": { zh: "暂无", en: "None" },
   "common.noExtraFields": { zh: "（无额外字段）", en: "(no extra fields)" },
 
+  /* ---------------- 通用实体写入（entity.*） ---------------- */
+  "entity.err.documentTable": {
+    zh: "「{label}」是单据，不能用通用写入新建。请直接说「新建{label}，物料 xxx，数量 n」——单据链路会自动取号、带出明细，并按物料计划属性带采购价与默认供应商。",
+    en: "\"{label}\" is a document and cannot be created through generic writes. Just say \"create a {label} with product xxx, quantity n\" — the document flow numbers it, adds lines, and fills price/supplier from the product planning attributes.",
+  },
+
+  /* ---------------- 确认回路执行（pending action） ---------------- */
+  "pending.err.duplicateKey": {
+    zh: "写入失败：违反唯一约束 {constraint}（编号/编码已存在，可能被一条已删除的记录占用 —— 单据编号不回收）。",
+    en: "Write failed: unique constraint {constraint} violated (the number/code already exists, possibly held by a deleted record — document numbers are not recycled).",
+  },
+  "pending.err.foreignKey": {
+    zh: "写入失败：引用的关联记录不存在（{constraint}）。",
+    en: "Write failed: referenced record does not exist ({constraint}).",
+  },
+  "pending.err.notNull": {
+    zh: "写入失败：字段 {column} 不能为空。",
+    en: "Write failed: column {column} cannot be null.",
+  },
+  "pending.err.check": {
+    zh: "写入失败：取值不满足校验规则（{constraint}）。",
+    en: "Write failed: value violates a check constraint ({constraint}).",
+  },
+  "pending.err.generic": {
+    zh: "写入失败：{message}",
+    en: "Write failed: {message}",
+  },
+  /** 不可自愈的失败：草稿已作废，避免用户反复「确认」永远失败 */
+  "pending.err.draftVoided": {
+    zh: "这张草稿已作废（同样内容再执行一次还会失败），请重新描述一次要处理的操作。",
+    en: "This draft has been voided (retrying it would fail the same way). Please describe the operation again.",
+  },
+  /** 可重试的失败：保留草稿 */
+  "pending.err.retryable": {
+    zh: "草稿仍保留，可以再说一次「确认」重试；若仍失败请把上面的原因发给管理员。",
+    en: "The draft is kept; say \"confirm\" again to retry. If it still fails, send the reason above to your administrator.",
+  },
+
   /* ---------------- 最终回复组装（responseComposer） ---------------- */
   "compose.needMore": {
     zh: "还需要补充一些信息后才能继续处理。",
@@ -134,6 +172,11 @@ const DICT = {
     zh: "{party}：{name}（id={id}）",
     en: "{party}: {name} (id={id})",
   },
+  /** 按编码/简称命中时回显匹配到的记录（如「客户：Carrefour → 匹配到 Carrefour 家乐福（id=75）」） */
+  "doc.preview.noteRefMatched": {
+    zh: "{label}：{input} → 匹配到 {display}（id={id}）",
+    en: "{label}: {input} → matched {display} (id={id})",
+  },
   "doc.preview.noteWarehouse": {
     zh: "仓库：{name}（id={id}）",
     en: "Warehouse: {name} (id={id})",
@@ -141,6 +184,30 @@ const DICT = {
   "doc.preview.noteLine": {
     zh: "第 {index} 行：{name} × {qty}",
     en: "Line {index}: {name} × {qty}",
+  },
+  "doc.preview.noteLinePrice": {
+    zh: "第 {index} 行单价未指定，按物料{source}带入：{price}（{name}）",
+    en: "Line {index} has no unit price; using the product {source}: {price} ({name})",
+  },
+  "doc.preview.noteLineUnits": {
+    zh: "明细单位（展示派生，按物料采购单位带出，明细表不存单位列）：{list}",
+    en: "Line units (display-derived from each product's purchase unit; the line table has no unit column): {list}",
+  },
+  "doc.preview.noteUnitMismatch": {
+    zh: "⚠️ 你给的单位与物料采购单位不一致，请核对数量口径：{list}",
+    en: "⚠️ The unit you gave differs from the product's purchase unit; please check the quantity: {list}",
+  },
+  "doc.preview.notePartyFromProduct": {
+    zh: "{party}：未指定，按{source}带入 {name}（id={id}）",
+    en: "{party}: not specified; using the {source} {name} (id={id})",
+  },
+  "doc.preview.noteNoLines": {
+    zh: "本次没有提供明细，先只建单头（之后可以在单据页补明细）。",
+    en: "No lines were provided, so only the header will be created (you can add lines on the document page later).",
+  },
+  "doc.preview.noLines": {
+    zh: "（无明细）",
+    en: "(no lines)",
   },
   "doc.preview.draftDisplay": {
     zh: "{label}（{count} 行）",
@@ -213,14 +280,14 @@ const DICT = {
     zh: "请告诉我要操作哪张单据，例如「把销售订单 SO20260005 过账」，或先在单据页面上打开它。",
     en: 'Tell me which document to work on, for example "post sales order SO20260005", or open it on its page first.',
   },
-  "doc.err.nameEmpty": { zh: "{label}名称不能为空。", en: "The {label} name cannot be empty." },
+  "doc.err.nameEmpty": { zh: "{label}名称或编码不能为空。", en: "The {label} name or code cannot be empty." },
   "doc.err.nameQueryFailed": {
     zh: "查询{label}失败：{message}",
     en: "Failed to look up {label}: {message}",
   },
   "doc.err.nameNotFound": {
-    zh: "没有找到{label}「{name}」，请确认名称是否正确。",
-    en: 'No {label} found for "{name}"; please check the name.',
+    zh: "没有找到{label}「{name}」，请确认名称或编码是否正确。",
+    en: 'No {label} found for "{name}"; please check the name or code.',
   },
   "doc.err.nameAmbiguous": {
     zh: "{label}「{name}」有多个匹配：{names}。请说明具体是哪一个。",
@@ -232,13 +299,17 @@ const DICT = {
     zh: "请告诉我这张{label}的{party}是谁。",
     en: "Who is the {party} for this {label}?",
   },
+  "doc.err.multiSupplier": {
+    zh: "明细物料带出的默认供应商不唯一（{names}），请指定这张采购单据的供应商。",
+    en: "The lines imply multiple default suppliers ({names}); please specify the supplier for this purchase document.",
+  },
+  "doc.err.supplierInactive": {
+    zh: "物料计划属性带出的默认供应商「{names}」不可用（不存在或已停用），请指定供应商。",
+    en: 'The default supplier "{names}" from the product planning attributes is unavailable (missing or inactive); please specify a supplier.',
+  },
   "doc.err.draftOnly": {
     zh: "AI 建单只能生成草稿（draft），不能直接设为 {status}；需要审批请在建单后跟我说「提交审批」或「审批通过」。",
     en: 'AI can only create drafts; the status cannot be set to {status}. After creating it, say "submit for approval" or "approve".',
-  },
-  "doc.err.needLines": {
-    zh: "这张{label}至少要有一行明细（物料 + 数量）。",
-    en: "This {label} needs at least one line (product + quantity).",
   },
   "doc.err.lineMissingProduct": {
     zh: "第 {index} 行明细缺少物料名称。",
@@ -262,6 +333,10 @@ const DICT = {
   "doc.exec.created": {
     zh: "已创建{label}：**{no}**（{lines} 行{amount}）",
     en: "Created {label}: **{no}** ({lines} line(s){amount})",
+  },
+  "doc.exec.createdHeadOnly": {
+    zh: "已创建{label}：**{no}**（本次未含明细）",
+    en: "Created {label}: **{no}** (no lines this time)",
   },
   "doc.exec.createdAmount": { zh: "，金额 {amount}", en: ", amount {amount}" },
   "doc.exec.createHint": {
@@ -397,6 +472,11 @@ const TERM_LABELS: Record<string, Entry> = {
   "物料": { zh: "物料", en: "product" },
   "物料/产品": { zh: "物料/产品", en: "product" },
   "库位": { zh: "库位", en: "bin" },
+  "采购价": { zh: "采购价", en: "purchase price" },
+  "销售价": { zh: "销售价", en: "sales price" },
+  "成本价": { zh: "成本价", en: "cost price" },
+  "物料默认供应商": { zh: "物料默认供应商", en: "product default supplier" },
+  "类别默认供应商": { zh: "类别默认供应商", en: "category default supplier" },
 };
 
 const interpolate = (template: string, params?: Record<string, string | number>): string => {

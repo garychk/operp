@@ -16,7 +16,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { ruleFallback, isMenuLocateQuestion } from "../src/ai/nodes/intentRouter.js";
+import { ruleFallback, isMenuLocateQuestion, resolveRoutedIntent } from "../src/ai/nodes/intentRouter.js";
 import { buildMultiStepPlan } from "../src/ai/nodes/planner.js";
 import { detectDocumentAction, detectDocumentType } from "../src/services/documentService.js";
 import { evaluateWritePolicy, evaluateDeletePolicy } from "../src/tools/entityRegistry.js";
@@ -67,6 +67,17 @@ interface MenuFixtureEntry {
   aliases: string[];
 }
 
+/** 意图锁定用例：规则兜底 vs 模型输出 → 最终意图 */
+interface LockCase {
+  text: string;
+  /** 模拟小模型给出的意图（往往是错的） */
+  routed_intent: string;
+  routed_target?: string;
+  expect_intent: string;
+  /** "document" / "navigation" / null */
+  expect_locked_by: string | null;
+}
+
 const here = dirname(fileURLToPath(import.meta.url));
 const cases = JSON.parse(readFileSync(join(here, "cases.json"), "utf-8")) as {
   intent_cases: IntentCase[];
@@ -74,6 +85,7 @@ const cases = JSON.parse(readFileSync(join(here, "cases.json"), "utf-8")) as {
   document_cases: DocumentCase[];
   plan_cases: PlanCase[];
   nav_intent_cases?: NavIntentCase[];
+  lock_cases?: LockCase[];
   menu_cases?: MenuCase[];
   menu_catalog_fixture?: MenuFixtureEntry[];
 };
@@ -184,6 +196,36 @@ if (!deletePolicy.writable) {
   fail += 1;
   failures.push("[delete] 删除能力被放开了！");
   console.log("  FAIL  删除能力被放开了！");
+}
+
+console.log("\n== 意图锁定 resolveRoutedIntent（规则 vs 模型）==");
+
+for (const item of cases.lock_cases ?? []) {
+  const fallback = ruleFallback({
+    sessionId: "eval",
+    text: item.text,
+    skill: "auto",
+  } as Parameters<typeof ruleFallback>[0]);
+  const decision = resolveRoutedIntent(
+    { skill: "auto", text: item.text },
+    { intent: item.routed_intent as never, ...(item.routed_target ? { target: item.routed_target } : {}) },
+    fallback,
+  );
+
+  const bad: string[] = [];
+  if (decision.intent !== item.expect_intent)
+    bad.push(`intent: got=${decision.intent} want=${item.expect_intent}`);
+  if (decision.lockedBy !== item.expect_locked_by)
+    bad.push(`lockedBy: got=${decision.lockedBy} want=${item.expect_locked_by}`);
+
+  if (!bad.length) {
+    pass += 1;
+    console.log(`  PASS  ${item.text} → ${decision.intent}（锁:${decision.lockedBy ?? "无"}）`);
+  } else {
+    fail += 1;
+    failures.push(`[lock] "${item.text}" → ${bad.join("; ")}`);
+    console.log(`  FAIL  ${item.text} → ${bad.join("; ")}`);
+  }
 }
 
 console.log("\n== 菜单导航（找菜单问法 + 关键词抽取 + 菜单匹配）==");

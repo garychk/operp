@@ -303,6 +303,7 @@ export async function designCustomPageTool(state: AiGraphState): Promise<ToolRes
           { role: "user", content: buildDesignPrompt(state.text, english, retryError || undefined) },
         ],
         state.provider,
+        "page_design",
       );
       const parsed = JSON.parse(
         content.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1]?.trim() || content.trim(),

@@ -123,6 +123,7 @@ export async function generateMrpReport(plan: MrpPlanRow, result: MrpEngineResul
         apiType: provider.apiType,
         temperature: provider.temperature ?? 0.2,
       },
+      "mrp_advisor",
     );
 
     const content = String(response.content || "").trim();

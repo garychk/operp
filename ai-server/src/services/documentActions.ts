@@ -185,8 +185,18 @@ const renderOutcome = (
   const displayLabel = meta ? documentLabel(meta, locale) : label;
 
   if (actionName === "create") {
-    const lineCount = result.line_count ?? context.lineCount ?? "-";
+    const lineCount = Number(result.line_count ?? context.lineCount ?? 0);
     const amount = result.total_amount;
+    // 只建单头（用户没给明细）时用单独的文案，避免出现「0 行」这种别扭说法
+    if (!Number.isFinite(lineCount) || lineCount <= 0) {
+      return [
+        tt("doc.exec.createdHeadOnly", {
+          label: displayLabel,
+          no: String(result.document_no ?? "-"),
+        }),
+        tt("doc.exec.createHint"),
+      ].join("\n");
+    }
     return [
       tt("doc.exec.created", {
         label: displayLabel,

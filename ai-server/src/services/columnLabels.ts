@@ -124,6 +124,7 @@ export const resolveColumnLabels = async (
         },
       ],
       options.provider,
+      "column_label",
     );
     const parsed = JSON.parse(stripFence(content)) as Record<string, unknown>;
     for (const name of pending) {
