@@ -1,6 +1,7 @@
 import type { AiGraphState } from "../state.js";
 import { stripTenantSuffixInText } from "../../tools/entityRegistry.js";
 import { toolText } from "../../services/toolText.js";
+import { notifyAiTaskComplete, shouldNotifyOnComplete } from "../../services/aiTaskNotify.js";
 
 /**
  * 组装最终回复。
@@ -44,6 +45,15 @@ export async function responseComposerNode(state: AiGraphState): Promise<AiGraph
       : "";
 
   const composed = trail ? `**${tt("compose.trailTitle")}**\n${trail}\n\n---\n\n${body}` : body;
+
+  // AI 任务完成通知：实际办成事（有成功写步骤、且非待确认草稿）时，通知当前用户。
+  // 软失败不阻断，通知不出去不影响回复结果。
+  if (shouldNotifyOnComplete(state)) {
+    void notifyAiTaskComplete({
+      userId: state.userId,
+      summary: body,
+    });
+  }
 
   return {
     ...state,
