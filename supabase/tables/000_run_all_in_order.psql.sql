@@ -154,3 +154,4 @@
 \i supabase/tables/deploy_129_production_order_edit_lock.sql
 \i supabase/tables/deploy_130_backfill_report_operation.sql
 \i supabase/tables/deploy_131_quality_inspection_doc_type.sql
+\i supabase/tables/deploy_132_quality_return_creates_purchase_return.sql

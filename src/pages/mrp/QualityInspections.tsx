@@ -439,12 +439,21 @@ export function QualityInspections() {
       available_quantity?: number;
       bad_quantity?: number;
       bad_status?: string;
+      created_return?: boolean;
+      return_no?: string;
     };
     if (res.skipped) {
       message.info(
         `${t("mrp.quality.stockMoveSkipped")}：${
           skipReasonLabels[res.reason || ""] || res.reason || ""
         }`,
+      );
+      return;
+    }
+    // 处置=退货：自动生成了采购退货草稿单（方案 B），库存与应付由退货单过账处理
+    if (res.created_return) {
+      message.success(
+        t("mrp.quality.returnDocCreated", { returnNo: res.return_no || "-" }),
       );
       return;
     }

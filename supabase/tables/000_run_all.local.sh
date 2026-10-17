@@ -172,6 +172,7 @@ ORDER=(
   deploy_129_production_order_edit_lock.sql
   deploy_130_backfill_report_operation.sql
   deploy_131_quality_inspection_doc_type.sql
+  deploy_132_quality_return_creates_purchase_return.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

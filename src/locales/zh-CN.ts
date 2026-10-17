@@ -3424,6 +3424,7 @@ const zhCN = {
     "mrp.quality.stockMoveSkipped": "未流转库存",
     "mrp.quality.stockMoveAlreadyDone": "该质检单已流转过库存",
     "mrp.quality.stockMoveDone": "库存流转完成：放行 {{available}}，不良 {{bad}} → {{status}}",
+    "mrp.quality.returnDocCreated": "已生成采购退货单 {{returnNo}}，请在「采购退货」页确认并过账",
     "mrp.quality.skipNoInspectionStock": "该物料当前没有待检库存（入库即可用，无需放行）",
     "mrp.quality.skipWarehouseNotResolved": "来源单据已删除或缺少仓库，无法定位库存",
     "mrp.quality.skipNothingToMove": "没有可流转的数量",

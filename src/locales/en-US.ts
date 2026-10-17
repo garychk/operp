@@ -3424,6 +3424,7 @@ const enUS = {
     "mrp.quality.stockMoveSkipped": "Stock not moved",
     "mrp.quality.stockMoveAlreadyDone": "Stock already moved for this inspection",
     "mrp.quality.stockMoveDone": "Stock moved: released {{available}}, rejected {{bad}} → {{status}}",
+    "mrp.quality.returnDocCreated": "Purchase return {{returnNo}} created. Confirm and post it on the Purchase Returns page.",
     "mrp.quality.skipNoInspectionStock": "No inspection stock for this material (receipt went straight to available)",
     "mrp.quality.skipWarehouseNotResolved": "Source document deleted or missing warehouse — cannot locate stock",
     "mrp.quality.skipNothingToMove": "Nothing to move",
