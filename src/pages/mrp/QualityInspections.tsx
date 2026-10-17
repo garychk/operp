@@ -100,7 +100,12 @@ export function QualityInspections() {
     ["scrap", t("mrp.quality.dispScrap")],
     ["concession", t("mrp.quality.dispConcession")],
     ["sort", t("mrp.quality.dispSort")],
-  ].map(([value, label]) => ({ value, label }));
+  ].map(([value, label]) => ({
+    value,
+    label,
+    // 挑选（sort）暂未闭环，保留选项但禁用，不让选
+    disabled: value === "sort",
+  }));
   const [rows, setRows] = useState<Inspection[]>([]),
     [products, setProducts] = useState<Product[]>([]),
     [sources, setSources] = useState<Source[]>([]),
@@ -155,14 +160,14 @@ export function QualityInspections() {
     createForm.setFieldValue("sourceKey", undefined);
     try {
       if (type === "purchase_receipt") {
-        // 来料检验（IQC）在入库「过账前」做：已过账（posted）的采购入库单
-        // 物料已进正式库存，不应再检验；已取消（cancelled）也不入来源。
-        // status 在采购入库单主表、不在明细表，故先取合法主表 id，再查明细。
+        // 来料检验（IQC）在入库「过账后」做：只有过账后物料才进 inspection（待检）桶，
+        // 质检合格放行才转 available / 不合格走退货·报废·返工。未过账的采购入库单
+        // 库存里没有待检量，此时建质检单会「没有待检库存」无法流转，故只允许 posted。
         const { data: headers, error: hErr } = await supabase
           .from("erp_purchase_receipts_s_539dcf81_b")
           .select("id")
           .eq("is_deleted", "n")
-          .not("status", "in", "(posted,cancelled)");
+          .eq("status", "posted");
         if (hErr) throw hErr;
         const receiptIds = (headers || []).map((h: any) => h.id);
         const { data, error } = await supabase
@@ -189,13 +194,12 @@ export function QualityInspections() {
           }),
         );
       } else if (type === "sales_return") {
-        // 退货入库检验：同样在过账前做，已过账（posted）/已取消（cancelled）不入来源。
-        // status 在主表、明细表无此列，先取合法主表 id 再查明细。
+        // 退货入库检验：同样在过账后做（过账才进待检桶）。已过账（posted）才入来源。
         const { data: retHeaders, error: rHErr } = await supabase
           .from("erp_sales_returns_s_539dcf81_b")
           .select("id")
           .eq("is_deleted", "n")
-          .not("status", "in", "(posted,cancelled)");
+          .eq("status", "posted");
         if (rHErr) throw rHErr;
         const returnIds = (retHeaders || []).map((h: any) => h.id);
         const { data, error } = await supabase
@@ -441,6 +445,10 @@ export function QualityInspections() {
       bad_status?: string;
       created_return?: boolean;
       return_no?: string;
+      created_scrap?: boolean;
+      scrap_doc_no?: string;
+      created_rework?: boolean;
+      rework_order_no?: string;
     };
     if (res.skipped) {
       message.info(
@@ -454,6 +462,22 @@ export function QualityInspections() {
     if (res.created_return) {
       message.success(
         t("mrp.quality.returnDocCreated", { returnNo: res.return_no || "-" }),
+      );
+      return;
+    }
+    // 处置=报废：自动生成了其他出入库报废出库草稿单，过账时扣 rejected 库存 + 记报废损失
+    if (res.created_scrap) {
+      message.success(
+        t("mrp.quality.scrapDocCreated", { scrapNo: res.scrap_doc_no || "-" }),
+      );
+      return;
+    }
+    // 处置=返工：自动生成了返工生产订单草稿单，人工在生产订单页下达/领料/报工/完工入库
+    if (res.created_rework) {
+      message.success(
+        t("mrp.quality.reworkOrderCreated", {
+          reworkNo: res.rework_order_no || "-",
+        }),
       );
       return;
     }

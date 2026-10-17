@@ -200,6 +200,7 @@ export function SalesDeliveries() {
 
   const handleSubmit = async (values: any) => {
     try {
+      if (isDisabled) return;
       const payload = {
         ...values,
         total_amount: calculateDeliveryTotal(details),
@@ -245,6 +246,7 @@ export function SalesDeliveries() {
   const handleDetailSubmit = async (values: any) => {
     try {
       if (!selectedDelivery) return;
+      if (isDisabled) return;
 
       values.amount = (values.quantity || 0) * (values.unit_price || 0);
 
@@ -432,6 +434,7 @@ export function SalesDeliveries() {
     setSelectedDelivery(null);
     setSelectedOrderId(null);
     setSalesOrderDetails([]);
+    setIsDisabled(false);
     form.setFieldsValue({
       delivery_no: deliveryNo,
       delivery_date: dayjs(new Date()),
@@ -447,6 +450,7 @@ export function SalesDeliveries() {
 
   const handleAddDetail = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isDisabled) return;
     setEditingDetail(null);
     detailForm.setFieldsValue({
       order_detail_id: undefined,
@@ -462,12 +466,14 @@ export function SalesDeliveries() {
   };
 
   const handleEditDetail = (record: SalesDeliveryDetail) => {
+    if (isDisabled) return;
     setEditingDetail(record);
     detailForm.setFieldsValue(record);
     setIsDetailModalOpen(true);
   };
 
   const handleDeleteDetail = async (id: number) => {
+    if (isDisabled) return;
     Modal.confirm({
       title: t('common.confirmDelete'),
       content: t('salesDeliveries.deleteDetailConfirm'),
@@ -660,8 +666,12 @@ export function SalesDeliveries() {
           {record.status === 'posted' && (
             <Button type="text" onClick={() => runDeliveryAction('reverse_post', record)}>{t('salesDeliveries.reversePost')}</Button>
           )}
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.status === 'posted'}>
-            {t('common.edit')}
+          <Button
+            type="text"
+            icon={record.status === 'posted' ? <EyeOutlined /> : <EditOutlined />}
+            onClick={() => handleEdit(record)}
+          >
+            {record.status === 'posted' ? t('salesDeliveries.view') : t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} disabled={record.status === 'posted'}>
             {t('common.delete')}
@@ -796,7 +806,13 @@ export function SalesDeliveries() {
         title={
           <>
             <EyeOutlined />
-            <span>{editingDelivery ? t('salesDeliveries.editTitle') : t('salesDeliveries.addTitle')}</span>
+            <span>
+              {editingDelivery
+                ? isDisabled
+                  ? t('salesDeliveries.viewTitle')
+                  : t('salesDeliveries.editTitle')
+                : t('salesDeliveries.addTitle')}
+            </span>
           </>
         }
         open={isModalOpen}
@@ -948,13 +964,15 @@ export function SalesDeliveries() {
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
-            <Button type="primary" onClick={() => form.submit()} disabled={isDisabled}>
-              {t('common.save')}
-            </Button>
+            {!isDisabled && (
+              <Button type="primary" onClick={() => form.submit()}>
+                {t('common.save')}
+              </Button>
+            )}
           </Space>
         }
         width={'80%'}
-        height={'80%'}
+        height={668}
       />
 
       <SimpleModal  

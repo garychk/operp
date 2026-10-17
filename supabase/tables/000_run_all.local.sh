@@ -173,6 +173,8 @@ ORDER=(
   deploy_130_backfill_report_operation.sql
   deploy_131_quality_inspection_doc_type.sql
   deploy_132_quality_return_creates_purchase_return.sql
+  deploy_133_quality_scrap_rework_closed_loop.sql
+  deploy_134_quality_inspection_bad_quantity.sql
 )
 
 # ---------------------------------------------------------------- 文件自检
