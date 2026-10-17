@@ -7,6 +7,7 @@ import { logWithTiming } from '../../utils/logger';
 import { generateIdempotencyKey } from '../../utils/uuid';
 import type { Tables } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
+import SimpleModal from '../../components/SimpleModal';
 import dayjs from 'dayjs';
 import { SupaModal, buildModalNav } from '../../components/SupaModal';
 import { useCurrencyRegistry, fetchExchangeRate } from '../../utils/money';
@@ -544,7 +545,7 @@ export function Receivables() {
       {/* 核销弹窗：外币单据多一个「核销汇率」，差额即汇兑损益（进 6603）。
           没有用 Modal.confirm，因为要在提交前把「折合本位币 / 预计汇兑损益」算给用户看 —— 
           汇兑损益是**看不见就会做错**的东西，必须当场可见。 */}
-      <Modal
+      <SimpleModal
         title={t('settlement.titleReceivable')}
         open={!!settleTarget}
         width={520}
@@ -608,7 +609,7 @@ export function Receivables() {
             </>
           )}
         </Form>
-      </Modal>
+      </SimpleModal>
     </div>
   );
 }

@@ -208,6 +208,14 @@ export function OtherStockDocuments() {
     await fetchAll();
   };
 
+  const statusLabels: Record<string, { text: string; color: string }> = {
+    draft: { text: t('otherStock.statusDraft'), color: 'default' },
+    pending: { text: t('otherStock.statusPending'), color: 'warning' },
+    approved: { text: t('otherStock.statusApproved'), color: 'blue' },
+    posted: { text: t('otherStock.statusPosted'), color: 'success' },
+    cancelled: { text: t('otherStock.statusCancelled'), color: 'error' },
+  };
+
   const businessTypeLabel = (type: string) => t(`otherStock.businessTypes.${type}`, { defaultValue: type });
   const directionLabel = (dir: string) =>
     dir === 'out' ? t('otherStock.directions.out') : t('otherStock.directions.in');
@@ -386,25 +394,34 @@ export function OtherStockDocuments() {
       align: 'right' as const,
       render: (v: number) => formatMoney(v),
     },
-    { title: t('common.status'), key: 'status', dataIndex: 'status' },
+    {
+      title: t('common.status'),
+      key: 'status',
+      dataIndex: 'status',
+      render: (status: string) => {
+        const config = statusLabels[status] || { text: status, color: 'default' };
+        return <Tag color={config.color}>{config.text}</Tag>;
+      },
+    },
     {
       title: t('common.actions'),
       key: 'action',
       render: (_: unknown, record: Header) => (
         <Space>
-          <Button onClick={() => void openDocument(record, true)}>
+          <Button type="text" onClick={() => void openDocument(record, true)}>
             {t('otherStock.detail')}
           </Button>
-          <Button onClick={() => void openDocument(record)}>
+          <Button type="text" icon={<EditOutlined />} onClick={() => void openDocument(record)}>
             {t('common.edit')}
           </Button>
           {record.status === 'posted' && (
-            <Button danger icon={<UndoOutlined />} onClick={() => confirmReverse([record])}>
+            <Button type="text" danger icon={<UndoOutlined />} onClick={() => confirmReverse([record])}>
               {t('otherStock.reverse')}
             </Button>
           )}
           <Button
             danger
+            type="text"
             icon={<DeleteOutlined />}
             onClick={() => void softDeleteHeader(record)}
           >
@@ -453,6 +470,7 @@ export function OtherStockDocuments() {
           <Button
             size="small"
             icon={<EditOutlined />}
+            type="text"
             disabled={isLocked}
             onClick={() => {
               setDetailEditing(record);
@@ -464,6 +482,7 @@ export function OtherStockDocuments() {
           <Button
             size="small"
             danger
+            type="text"
             icon={<DeleteOutlined />}
             disabled={isLocked}
             onClick={async () => {
@@ -505,7 +524,7 @@ export function OtherStockDocuments() {
               icon={<PlusOutlined />}
               onClick={() => void openDocument(null)}
             >
-              {t('otherStock.add')}
+              {t('common.create')}
             </Button>
             <Button
               type="primary"

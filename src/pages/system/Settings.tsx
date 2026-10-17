@@ -148,6 +148,31 @@ const settingCategories: SettingCategory[] = [
     ],
   },
   {
+    code: 'inventory',
+    name: 'settings.categories.inventory.name',
+    description: 'settings.categories.inventory.description',
+    defaults: {
+      receiptStockStatus: 'available',
+      allowNegativeStockDefault: false,
+      reserveOnOrderRelease: true,
+    },
+    fields: [
+      {
+        name: 'receiptStockStatus',
+        label: 'settings.fields.receiptStockStatus',
+        kind: 'select',
+        options: [
+          { label: 'settings.fields.receiptStockStatusAvailable', value: 'available' },
+          { label: 'settings.fields.receiptStockStatusInspection', value: 'inspection' },
+          { label: 'settings.fields.receiptStockStatusHold', value: 'hold' },
+          { label: 'settings.fields.receiptStockStatusRejected', value: 'rejected' },
+        ],
+      },
+      { name: 'allowNegativeStockDefault', label: 'settings.fields.allowNegativeStockDefault', kind: 'switch' },
+      { name: 'reserveOnOrderRelease', label: 'settings.fields.reserveOnOrderRelease', kind: 'switch' },
+    ],
+  },
+  {
     code: 'quality',
     name: 'settings.categories.quality.name',
     description: 'settings.categories.quality.description',

@@ -56,6 +56,13 @@ const POSTED_STATUS = "posted";
 // 与 deploy_57 对应：把生产订单未领的物料需求带进当前领料单
 const PULL_ORDER_LINES_RPC = "pull_order_lines_into_issue";
 
+// 生产领料只能挂在「已下达」及之后的生产订单上（排除 draft/planned/cancelled）
+const REPORTABLE_ORDER_STATUSES = [
+  "released",
+  "in_progress",
+  "completed",
+];
+
 const isPosted = (record: { status: string | null }) =>
   record.status === POSTED_STATUS;
 
@@ -182,9 +189,16 @@ export function MaterialIssues() {
     }
   };
 
+  // 已过账的领料单：表单整体只读（仍可点进弹窗查看，不可编辑保存）
+  const isLocked = !!editingIssue && isPosted(editingIssue);
+
   const handleSubmit = async (values: any) => {
     try {
       if (editingIssue) {
+        if (isLocked) {
+          message.warning(t("mrp.materialIssues.postedLocked"));
+          return;
+        }
         await logWithTiming(t("mrp.materialIssues.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(materialIssueTable)
@@ -287,10 +301,6 @@ export function MaterialIssues() {
   };
 
   const handleEdit = async (record: MaterialIssue) => {
-    if (isPosted(record)) {
-      message.warning(t("mrp.materialIssues.postedLocked"));
-      return;
-    }
     setEditingIssue(record);
     setSelectedIssue(record);
     setHeaderWarehouseId(record.warehouse_id ?? undefined);
@@ -722,10 +732,9 @@ export function MaterialIssues() {
           <Button
             type="text"
             icon={<EditOutlined />}
-            disabled={isPosted(record)}
             onClick={() => handleEdit(record)}
           >
-            {t("common.edit")}
+            {isPosted(record) ? t("mrp.materialIssues.view") : t("common.edit")}
           </Button>
           <Button
             type="text"
@@ -817,11 +826,21 @@ export function MaterialIssues() {
       width: 160,
       render: (_: any, record: MaterialIssueDetail) => (
         <Space size="small">
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
+          <Button
+            type="text"
+            icon={<EditOutlined />}
+            disabled={!!selectedIssue && isPosted(selectedIssue)}
+            onClick={() => handleEditDetail(record)}
+          >
             {t("common.edit")}
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} 
-          onClick={() => handleDeleteDetail(record.id)} />
+          <Button
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            disabled={!!selectedIssue && isPosted(selectedIssue)}
+            onClick={() => handleDeleteDetail(record.id)}
+          />
         </Space>
       ),
     },
@@ -885,7 +904,13 @@ export function MaterialIssues() {
       />
 
       <SupaModal
-        title={editingIssue ? t("mrp.materialIssues.editTitle") : t("mrp.materialIssues.addTitle")}
+        title={
+          editingIssue
+            ? isLocked
+              ? t("mrp.materialIssues.viewTitle")
+              : t("mrp.materialIssues.editTitle")
+            : t("mrp.materialIssues.addTitle")
+        }
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
@@ -899,10 +924,12 @@ export function MaterialIssues() {
         historyRecordId={editingIssue?.id || selectedIssue?.id}
         navigation={buildModalNav(filteredIssues, editingIssue?.id || selectedIssue?.id, handleEdit)}
         form={form}
+        disabled={isLocked}
         formEle={
           <Form
             form={form}
             layout="vertical"
+            disabled={isLocked}
             onFinish={handleSubmit}
           >
             <Row gutter={16}>
@@ -924,6 +951,7 @@ export function MaterialIssues() {
                 <Form.Item
                   label={t("mrp.materialIssues.productionOrder")}
                   name="production_order_id"
+                  extra={t("mrp.materialIssues.productionOrderReleasedOnly")}
                 >
                   <Select
                     placeholder={t("mrp.materialIssues.productionOrderPrompt")}
@@ -931,11 +959,17 @@ export function MaterialIssues() {
                     showSearch
                     optionFilterProp="children"
                   >
-                    {orders.map((o) => (
-                      <Option key={o.id} value={o.id}>
-                        {o.order_no}
-                      </Option>
-                    ))}
+                    {orders
+                      .filter((o) =>
+                        REPORTABLE_ORDER_STATUSES.includes(
+                          (o.status || "").toLowerCase(),
+                        ),
+                      )
+                      .map((o) => (
+                        <Option key={o.id} value={o.id}>
+                          {o.order_no}
+                        </Option>
+                      ))}
                   </Select>
                 </Form.Item>
               </Col>
@@ -1023,9 +1057,11 @@ export function MaterialIssues() {
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>{t("common.cancel")}</Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              {t("common.save")}
-            </Button>
+            {!isLocked && (
+              <Button type="primary" onClick={() => form.submit()}>
+                {t("common.save")}
+              </Button>
+            )}
           </Space>
         }
         width={"80%"}

@@ -25,7 +25,9 @@ import {
 import dayjs from "dayjs";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import SimpleModal from "../../components/SimpleModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 
 type SourceType =
   | "purchase_receipt"
@@ -55,6 +57,7 @@ type Inspection = {
   remark: string | null;
 };
 type Product = { id: number; code: string; name: string; unit: string | null };
+type Employee = { id: number; name: string; status: string | null };
 type Source = {
   key: string;
   sourceId: number;
@@ -67,6 +70,8 @@ type Source = {
   operationId?: number | null;
   label: string;
 };
+const docType = "quality_inspection";
+const formTable = "erp_quality_inspections_s_539dcf81_b";
 
 export function QualityInspections() {
   const { t } = useTranslation();
@@ -95,33 +100,47 @@ export function QualityInspections() {
     ["scrap", t("mrp.quality.dispScrap")],
     ["concession", t("mrp.quality.dispConcession")],
     ["sort", t("mrp.quality.dispSort")],
-  ].map(([value, label]) => ({ value, label }));
+  ].map(([value, label]) => ({
+    value,
+    label,
+    // 挑选（sort）暂未闭环，保留选项但禁用，不让选
+    disabled: value === "sort",
+  }));
   const [rows, setRows] = useState<Inspection[]>([]),
     [products, setProducts] = useState<Product[]>([]),
-    [sources, setSources] = useState<Source[]>([]);
+    [sources, setSources] = useState<Source[]>([]),
+    [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(false),
     [search, setSearch] = useState(""),
     [createOpen, setCreateOpen] = useState(false),
     [inspectOpen, setInspectOpen] = useState(false);
   const [sourceType, setSourceType] = useState<SourceType>("purchase_receipt"),
-    [current, setCurrent] = useState<Inspection | null>(null);
+    [current, setCurrent] = useState<Inspection | null>(null),
+    [editingInspection, setEditingInspection] = useState<Inspection | null>(null);
   const [createForm] = Form.useForm(),
     [inspectForm] = Form.useForm();
   const productMap = useMemo(
     () => new Map(products.map((p) => [p.id, p])),
     [products],
   );
+  // 已完成 / 已取消的检验单只读查看（对齐其它单据页的锁定逻辑）
+  const isLocked = !!editingInspection &&
+    ["completed", "cancelled"].includes(editingInspection.status);
   const load = async () => {
     setLoading(true);
-    const [a, b] = await Promise.all([
+    const [a, b, c] = await Promise.all([
       supabase
-        .from("erp_quality_inspections_s_539dcf81_b")
+        .from(formTable)
         .select("*")
         .eq("is_deleted", "n")
         .order("inspection_date", { ascending: false }),
       supabase
         .from("erp_products_s_539dcf81_b")
         .select("id,code,name,unit")
+        .eq("is_deleted", "n"),
+      supabase
+        .from("erp_employees_s_539dcf81_b")
+        .select("id,name,status")
         .eq("is_deleted", "n"),
     ]);
     setLoading(false);
@@ -131,6 +150,7 @@ export function QualityInspections() {
     }
     setRows((a.data || []) as Inspection[]);
     setProducts((b.data || []) as Product[]);
+    setEmployees((c.data || []) as Employee[]);
   };
   useEffect(() => {
     void load();
@@ -140,12 +160,23 @@ export function QualityInspections() {
     createForm.setFieldValue("sourceKey", undefined);
     try {
       if (type === "purchase_receipt") {
+        // 来料检验（IQC）在入库「过账后」做：只有过账后物料才进 inspection（待检）桶，
+        // 质检合格放行才转 available / 不合格走退货·报废·返工。未过账的采购入库单
+        // 库存里没有待检量，此时建质检单会「没有待检库存」无法流转，故只允许 posted。
+        const { data: headers, error: hErr } = await supabase
+          .from("erp_purchase_receipts_s_539dcf81_b")
+          .select("id")
+          .eq("is_deleted", "n")
+          .eq("status", "posted");
+        if (hErr) throw hErr;
+        const receiptIds = (headers || []).map((h: any) => h.id);
         const { data, error } = await supabase
           .from("erp_purchase_receipt_details_s_539dcf81_b")
           .select(
             "id,receipt_id,product_id,quantity,batch_no,erp_purchase_receipts_s_539dcf81_b!inner(receipt_no)",
           )
-          .eq("is_deleted", "n");
+          .eq("is_deleted", "n")
+          .in("receipt_id", receiptIds.length ? receiptIds : [-1]);
         if (error) throw error;
         setSources(
           (data || []).map((d: any) => {
@@ -163,12 +194,21 @@ export function QualityInspections() {
           }),
         );
       } else if (type === "sales_return") {
+        // 退货入库检验：同样在过账后做（过账才进待检桶）。已过账（posted）才入来源。
+        const { data: retHeaders, error: rHErr } = await supabase
+          .from("erp_sales_returns_s_539dcf81_b")
+          .select("id")
+          .eq("is_deleted", "n")
+          .eq("status", "posted");
+        if (rHErr) throw rHErr;
+        const returnIds = (retHeaders || []).map((h: any) => h.id);
         const { data, error } = await supabase
           .from("erp_sales_return_details_s_539dcf81_b")
           .select(
             "id,return_id,product_id,quantity,batch_no,erp_sales_returns_s_539dcf81_b!inner(return_no)",
           )
-          .eq("is_deleted", "n");
+          .eq("is_deleted", "n")
+          .in("return_id", returnIds.length ? returnIds : [-1]);
         if (error) throw error;
         setSources(
           (data || []).map((d: any) => {
@@ -187,10 +227,12 @@ export function QualityInspections() {
         );
       } else if (type === "production_receipt") {
         // 成品入库检验（FQC）：完工入库单是「主表即唯一明细行」，没有明细表（deploy_58）
+        // 只允许对「已过账（posted）」的完工入库单做检验，草稿/取消不入检验来源。
         const { data, error } = await supabase
           .from("erp_production_receipts_s_539dcf81_b")
           .select("id,receipt_no,product_id,quantity,batch_no")
-          .eq("is_deleted", "n");
+          .eq("is_deleted", "n")
+          .eq("status", "posted");
         if (error) throw error;
         setSources(
           (data || []).map((h: any) => {
@@ -267,9 +309,47 @@ export function QualityInspections() {
     }
   };
   useEffect(() => {
-    if (createOpen && products.length) void loadSources(sourceType);
-  }, [createOpen, sourceType, products.length]);
-  const create = async (v: any) => {
+    if (createOpen && products.length && !editingInspection)
+      void loadSources(sourceType);
+  }, [createOpen, sourceType, products.length, editingInspection]);
+  const handleAdd = async (v: any) => {
+    // 编辑态：来源已在创建时锁定，走 update 分支，只允许改日期/抽样/备注
+    if (editingInspection) {
+      if (isLocked) {
+        message.warning(t("mrp.quality.cannotEditLocked"));
+        return;
+      }
+      const payload = {
+        inspection_date: v.inspection_date
+          ? dayjs(v.inspection_date).format("YYYY-MM-DD")
+          : null,
+        sample_quantity: v.sample_quantity || editingInspection.sample_quantity,
+        remark: v.remark || null,
+      };
+      try {
+        await logWithTiming(
+          t("mrp.quality.logUpdate"),
+          "UPDATE",
+          async () => {
+            const { error } = await supabase
+              .from(formTable)
+              .update(payload)
+              .eq("id", editingInspection.id);
+            if (error) throw error;
+          },
+          { table: formTable, recordId: editingInspection.id },
+        );
+        message.success(t("common.updateSuccess"));
+        setCreateOpen(false);
+        createForm.resetFields();
+        setEditingInspection(null);
+        void load();
+      } catch (e: any) {
+        message.error(e?.message || t("common.saveFailed"));
+      }
+      return;
+    }
+    // 新增态：从来源明细构建 payload
     const s = sources.find((x) => x.key === v.sourceKey);
     if (!s) return;
     const payload = {
@@ -295,11 +375,11 @@ export function QualityInspections() {
         "INSERT",
         async () => {
           const { error } = await supabase
-            .from("erp_quality_inspections_s_539dcf81_b")
+            .from(formTable)
             .insert(payload);
           if (error) throw error;
         },
-        { table: "erp_quality_inspections_s_539dcf81_b" },
+        { table: formTable },
       );
       message.success(t("mrp.quality.taskCreated"));
       setCreateOpen(false);
@@ -312,6 +392,20 @@ export function QualityInspections() {
           : t("mrp.quality.createFailed"),
       );
     }
+  };
+  const handleEdit = (record: Inspection) => {
+    // 已完成/已取消的检验单：允许点进弹窗只读查看，表单禁用
+    setEditingInspection(record);
+    setSourceType(record.source_type);
+    createForm.setFieldsValue({
+      inspection_no: record.inspection_no,
+      inspection_date: record.inspection_date
+        ? dayjs(record.inspection_date)
+        : undefined,
+      sample_quantity: record.sample_quantity || record.inspection_quantity,
+      remark: record.remark,
+    });
+    setCreateOpen(true);
   };
   const inspect = (r: Inspection) => {
     setCurrent(r);
@@ -349,12 +443,41 @@ export function QualityInspections() {
       available_quantity?: number;
       bad_quantity?: number;
       bad_status?: string;
+      created_return?: boolean;
+      return_no?: string;
+      created_scrap?: boolean;
+      scrap_doc_no?: string;
+      created_rework?: boolean;
+      rework_order_no?: string;
     };
     if (res.skipped) {
       message.info(
         `${t("mrp.quality.stockMoveSkipped")}：${
           skipReasonLabels[res.reason || ""] || res.reason || ""
         }`,
+      );
+      return;
+    }
+    // 处置=退货：自动生成了采购退货草稿单（方案 B），库存与应付由退货单过账处理
+    if (res.created_return) {
+      message.success(
+        t("mrp.quality.returnDocCreated", { returnNo: res.return_no || "-" }),
+      );
+      return;
+    }
+    // 处置=报废：自动生成了其他出入库报废出库草稿单，过账时扣 rejected 库存 + 记报废损失
+    if (res.created_scrap) {
+      message.success(
+        t("mrp.quality.scrapDocCreated", { scrapNo: res.scrap_doc_no || "-" }),
+      );
+      return;
+    }
+    // 处置=返工：自动生成了返工生产订单草稿单，人工在生产订单页下达/领料/报工/完工入库
+    if (res.created_rework) {
+      message.success(
+        t("mrp.quality.reworkOrderCreated", {
+          reworkNo: res.rework_order_no || "-",
+        }),
       );
       return;
     }
@@ -391,7 +514,7 @@ export function QualityInspections() {
         "UPDATE",
         async () => {
           const { error } = await supabase
-            .from("erp_quality_inspections_s_539dcf81_b")
+            .from(formTable)
             .update({
               ...v,
               result: complete ? result : "pending",
@@ -401,7 +524,7 @@ export function QualityInspections() {
             .eq("id", current.id);
           if (error) throw error;
         },
-        { table: "erp_quality_inspections_s_539dcf81_b", recordId: current.id },
+        { table: formTable, recordId: current.id },
       );
       message.success(
         complete
@@ -469,9 +592,14 @@ export function QualityInspections() {
     {
       title: t("common.actions"),
       fixed: "right",
-      width: 170,
+      width: 220,
       render: (_: unknown, r: Inspection) => (
         <Space size={4}>
+          <Button type="link" onClick={() => handleEdit(r)}>
+            {r.status === "completed" || r.status === "cancelled"
+              ? t("mrp.quality.view")
+              : t("common.edit")}
+          </Button>
           <Button type="link" onClick={() => inspect(r)}>
             {r.status === "completed"
               ? t("mrp.quality.reInspect")
@@ -535,10 +663,18 @@ export function QualityInspections() {
             <Button
               type="primary"
               icon={<PlusOutlined />}
-              onClick={() => {
+              onClick={async () => {
+                let inspectionNo: string;
+                try {
+                  inspectionNo = await nextDocumentNo(docType);
+                } catch (error) {
+                  message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
+                  return;
+                }
+                setEditingInspection(null);
                 setSourceType("purchase_receipt");
                 createForm.setFieldsValue({
-                  inspection_no: `IQC${dayjs().format("YYYYMMDDHHmmss")}`,
+                  inspection_no: inspectionNo,
                   inspection_date: dayjs(),
                 });
                 setCreateOpen(true);
@@ -557,14 +693,48 @@ export function QualityInspections() {
           scroll={{ x: 1150 }}
         />
       </Card>
-      <SimpleModal
-        title={t("mrp.quality.addTask")}
+      <SupaModal
+        title={
+          !editingInspection
+            ? t("mrp.quality.addTask")
+            : isLocked
+              ? t("mrp.quality.viewTitle")
+              : t("mrp.quality.editTitle")
+        }
+        formTable={formTable}
         open={createOpen}
-        onCancel={() => setCreateOpen(false)}
-        onOk={() => createForm.submit()}
-        destroyOnHidden
+        onCancel={() => {
+          setCreateOpen(false);
+          createForm.resetFields();
+          setEditingInspection(null);
+        }}
+        historyTable={formTable}
+        historyRecordId={editingInspection?.id}
+        navigation={buildModalNav(filtered, editingInspection?.id, handleEdit)}
+        form={createForm}
+        disabled={isLocked}
+        footer={
+          <Space>
+            <Button
+              onClick={() => {
+                setCreateOpen(false);
+                createForm.resetFields();
+                setEditingInspection(null);
+              }}
+            >
+              {t("common.cancel")}
+            </Button>
+            {!isLocked && (
+              <Button type="primary" onClick={() => createForm.submit()}>
+                {t("common.save")}
+              </Button>
+            )}
+          </Space>
+        }
+        width={800}
+        height={508}
       >
-        <Form form={createForm} layout="vertical" onFinish={create}>
+        <Form form={createForm} layout="vertical" disabled={isLocked} onFinish={handleAdd} style={{ paddingRight:6, paddingTop:16}}>
           <Row gutter={12}>
             <Col span={12}>
               <Form.Item
@@ -572,7 +742,7 @@ export function QualityInspections() {
                 name="inspection_no"
                 rules={[{ required: true }]}
               >
-                <Input />
+                <Input disabled={!!editingInspection} />
               </Form.Item>
             </Col>
             <Col span={12}>
@@ -589,6 +759,7 @@ export function QualityInspections() {
             <Select
               value={sourceType}
               onChange={setSourceType}
+              disabled={!!editingInspection}
               options={Object.entries(sourceNames).map(([value, label]) => ({
                 value,
                 label,
@@ -598,7 +769,8 @@ export function QualityInspections() {
           <Form.Item
             label={t("mrp.quality.sourceDetail")}
             name="sourceKey"
-            rules={[{ required: true }]}
+            rules={[{ required: !editingInspection }]}
+            hidden={!!editingInspection}
           >
             <Select
               showSearch
@@ -611,6 +783,16 @@ export function QualityInspections() {
               }
             />
           </Form.Item>
+          {editingInspection && (
+            <Form.Item label={t("mrp.quality.sourceDetail")}>
+              <Input
+                disabled
+                value={
+                  `${editingInspection.source_no || ""} / ${productMap.get(editingInspection.product_id)?.name || editingInspection.product_id}`
+                }
+              />
+            </Form.Item>
+          )}
           <Form.Item
             label={t("mrp.quality.sampleQuantity")}
             name="sample_quantity"
@@ -625,7 +807,7 @@ export function QualityInspections() {
             <Input.TextArea />
           </Form.Item>
         </Form>
-      </SimpleModal>
+      </SupaModal>
       <SimpleModal
         title={t("mrp.quality.inspectRecord", {
           inspectionNo: current?.inspection_no || "",
@@ -673,7 +855,22 @@ export function QualityInspections() {
                 name="qualified_quantity"
                 rules={[{ required: true }]}
               >
-                <InputNumber min={0} style={{ width: "100%" }} />
+                <InputNumber
+                  min={0}
+                  style={{ width: "100%" }}
+                  onChange={(val) => {
+                    const sample = Number(
+                      inspectForm.getFieldValue("sample_quantity"),
+                    );
+                    const good = Number(val) || 0;
+                    if (sample >= 0 && good >= 0 && good <= sample) {
+                      inspectForm.setFieldValue(
+                        "unqualified_quantity",
+                        Math.max(0, sample - good),
+                      );
+                    }
+                  }}
+                />
               </Form.Item>
             </Col>
             <Col span={8}>
@@ -693,7 +890,20 @@ export function QualityInspections() {
                 name="inspector"
                 rules={[{ required: true }]}
               >
-                <Input />
+                <Select
+                  showSearch
+                  allowClear
+                  optionFilterProp="label"
+                  placeholder={t("mrp.quality.inspectorPrompt")}
+                  options={employees.map((e) => ({
+                    value: e.name,
+                    label:
+                      (e.status || "active") === "active"
+                        ? e.name
+                        : `${e.name}（${t("mrp.quality.employeeInactive")}）`,
+                    disabled: (e.status || "active") !== "active",
+                  }))}
+                />
               </Form.Item>
             </Col>
             <Col span={12}>

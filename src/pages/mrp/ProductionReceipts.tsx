@@ -30,7 +30,7 @@ import { voucherNotice, type InventoryVoucherResult } from "../../utils/inventor
 import { SuperTable } from "../../components/SuperTable";
 import type { SuperTableColumn } from "../../components/SuperTable";
 import { formatMoney } from "../../utils/money";
-import SimpleModal from "../../components/SimpleModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import dayjs from "dayjs";
 
 type ProductionReceipt = Tables["erp_production_receipts_s_539dcf81_b"]["Row"];
@@ -51,6 +51,13 @@ const POSTABLE_STATUSES = ["draft", "approved", "issued"];
 const POSTED_STATUS = "posted";
 const DRAFT_STATUS = "draft";
 const CANCELLED_STATUS = "cancelled";
+
+// 完工入库只能挂在「已下达」及之后的生产订单上（排除 draft/planned/cancelled）
+const REPORTABLE_ORDER_STATUSES = [
+  "released",
+  "in_progress",
+  "completed",
+];
 
 // 质检结论是写库取值，留在代码里；只有标签进 i18n
 const QUALITY_STATUSES = ["qualified", "unqualified", "pending"] as const;
@@ -162,8 +169,15 @@ export function ProductionReceipts() {
     }
   };
 
+  // 已过账的入库单：表单整体只读（仍可点进弹窗查看，不可编辑保存）
+  const isLocked = !!editingReceipt && isPosted(editingReceipt);
+
   const handleSubmit = async (values: any) => {
     try {
+      if (editingReceipt && isPosted(editingReceipt)) {
+        message.warning(t("mrp.productionReceipts.postedLocked"));
+        return;
+      }
       const payload: any = {
         ...values,
         receipt_date: values.receipt_date
@@ -215,10 +229,7 @@ export function ProductionReceipts() {
   };
 
   const handleEdit = (record: ProductionReceipt) => {
-    if (isPosted(record)) {
-      message.warning(t("mrp.productionReceipts.postedLocked"));
-      return;
-    }
+    // 已过账的入库单：允许点进弹窗「只读查看」，表单禁用、不可保存
     setEditingReceipt(record);
     setFormWarehouseId(record.warehouse_id ?? undefined);
     form.setFieldsValue({
@@ -434,13 +445,17 @@ export function ProductionReceipts() {
   };
 
   // 选生产订单后顺手带出产品，并在下方提示该订单的计划量；
-  // 刻意不自动填数量与仓库 —— 分次完工入库是常态，
-  // 而生产订单上的 warehouse_id 是领料仓库，与完工入库仓不一定相同。
+  // 选订单带出产品；数量默认带出订单的计划数量（仍可手改，分次入库时自行调小）。
+  // warehouse_id 仍不自动带 —— 生产订单上的 warehouse_id 是领料仓库，与完工入库仓不一定相同。
   const handleOrderChange = (orderId: number | undefined) => {
     if (!orderId) return;
     const order = orders.find((o) => o.id === orderId);
-    if (order?.product_id && !form.getFieldValue("product_id")) {
+    if (!order) return;
+    if (order.product_id && !form.getFieldValue("product_id")) {
       form.setFieldsValue({ product_id: order.product_id });
+    }
+    if (order.planned_quantity != null && !form.getFieldValue("quantity")) {
+      form.setFieldsValue({ quantity: Number(order.planned_quantity) });
     }
   };
 
@@ -616,10 +631,9 @@ export function ProductionReceipts() {
           <Button
             type="text"
             icon={<EditOutlined />}
-            disabled={isPosted(record)}
             onClick={() => handleEdit(record)}
           >
-            {t("common.edit")}
+            {isPosted(record) ? t("mrp.productionReceipts.view") : t("common.edit")}
           </Button>
           <Button
             type="text"
@@ -686,11 +700,13 @@ export function ProductionReceipts() {
         }
       />
 
-      <SimpleModal
+      <SupaModal
         title={
-          editingReceipt
-            ? t("mrp.productionReceipts.editTitle")
-            : t("mrp.productionReceipts.addTitle")
+          !editingReceipt
+            ? t("mrp.productionReceipts.addTitle")
+            : isLocked
+              ? t("mrp.productionReceipts.viewTitle")
+              : t("mrp.productionReceipts.editTitle")
         }
         open={isModalOpen}
         onCancel={() => {
@@ -699,19 +715,27 @@ export function ProductionReceipts() {
           setEditingReceipt(null);
           setFormWarehouseId(undefined);
         }}
+        historyTable={receiptTable}
+        historyRecordId={editingReceipt?.id}
+        navigation={buildModalNav(filteredReceipts, editingReceipt?.id, handleEdit)}
+        form={form}
+        disabled={isLocked}
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>
               {t("common.cancel")}
             </Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              {t("common.save")}
-            </Button>
+            {!isLocked && (
+              <Button type="primary" onClick={() => form.submit()}>
+                {t("common.save")}
+              </Button>
+            )}
           </Space>
         }
-        width={760}
-      >
-        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        width={'80%'}
+        height={668}
+        formEle={
+          <Form form={form} layout="vertical" disabled={isLocked} onFinish={handleSubmit}>
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -756,7 +780,7 @@ export function ProductionReceipts() {
                     ? t("mrp.productionReceipts.plannedQuantityHint", {
                         quantity: formatQuantity(selectedOrder.planned_quantity),
                       })
-                    : undefined
+                    : t("mrp.productionReceipts.productionOrderReleasedOnly")
                 }
               >
                 <Select
@@ -766,11 +790,17 @@ export function ProductionReceipts() {
                   optionFilterProp="children"
                   onChange={handleOrderChange}
                 >
-                  {orders.map((o) => (
-                    <Option key={o.id} value={o.id}>
-                      {o.order_no}
-                    </Option>
-                  ))}
+                  {orders
+                    .filter((o) =>
+                      REPORTABLE_ORDER_STATUSES.includes(
+                        (o.status || "").toLowerCase(),
+                      ),
+                    )
+                    .map((o) => (
+                      <Option key={o.id} value={o.id}>
+                        {o.order_no}
+                      </Option>
+                    ))}
                 </Select>
               </Form.Item>
             </Col>
@@ -942,8 +972,9 @@ export function ProductionReceipts() {
               placeholder={t("mrp.productionReceipts.remarkPrompt")}
             />
           </Form.Item>
-        </Form>
-      </SimpleModal>
+          </Form>
+        }
+      />
     </div>
   );
 }

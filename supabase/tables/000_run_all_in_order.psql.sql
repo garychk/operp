@@ -150,3 +150,10 @@
 \i supabase/tables/deploy_125_ai_token_usage.sql
 \i supabase/tables/deploy_126_ai_token_usage_menu.sql
 \i supabase/tables/deploy_127_mrp_analysis_stats.sql
+\i supabase/tables/deploy_128_doc_flow_mps_meta.sql
+\i supabase/tables/deploy_129_production_order_edit_lock.sql
+\i supabase/tables/deploy_130_backfill_report_operation.sql
+\i supabase/tables/deploy_131_quality_inspection_doc_type.sql
+\i supabase/tables/deploy_132_quality_return_creates_purchase_return.sql
+\i supabase/tables/deploy_133_quality_scrap_rework_closed_loop.sql
+\i supabase/tables/deploy_134_quality_inspection_bad_quantity.sql
