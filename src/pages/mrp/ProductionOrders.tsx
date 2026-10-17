@@ -76,6 +76,9 @@ const START_RPC = "start_production_order";
 const CLOSED_STATUSES = ["completed", "closed", "cancelled"];
 const DOC_TYPE = "production_order";
 
+// released 起业务字段锁定：仅 draft / planned 允许编辑（released 已拍工序行 + 预占库存）
+const LOCKED_STATUSES = ["released", "in_progress", "completed", "closed", "cancelled"];
+
 export function ProductionOrders() {
   const { t } = useTranslation();
   const [orders, setOrders] = useState<ProductionOrder[]>([]);
@@ -93,6 +96,8 @@ export function ProductionOrders() {
   );
   const [form] = Form.useForm();
   const [kitRows, setKitRows] = useState<KitRow[]>([]);
+  const [bomHint, setBomHint] = useState<string>("");
+  const [routingHint, setRoutingHint] = useState<string>("");
   const [kitOrderNo, setKitOrderNo] = useState("");
   const [isKitModalOpen, setIsKitModalOpen] = useState(false);
   const [kitLoading, setKitLoading] = useState(false);
@@ -630,9 +635,19 @@ export function ProductionOrders() {
     }
   };
 
+  // 已下达及之后状态的工单：表单整体只读（仍可点进弹窗查看，不可编辑保存）
+  const isLocked =
+    !!editingOrder &&
+    LOCKED_STATUSES.includes((editingOrder.status || "").toLowerCase());
+
   const handleSubmit = async (values: any) => {
     try {
       if (editingOrder) {
+        // released 起业务字段锁定：即便绕过前端直接 submit，也拦一道
+        if (LOCKED_STATUSES.includes((editingOrder.status || "").toLowerCase())) {
+          message.warning(t("mrp.productionOrders.cannotEditLocked"));
+          return;
+        }
         await logWithTiming(t("mrp.productionOrders.logUpdate"), "UPDATE", async () => {
           const { error } = await supabase
             .from(productionOrderTable)
@@ -674,7 +689,10 @@ export function ProductionOrders() {
   };
 
   const handleEdit = (record: ProductionOrder) => {
+    // released 起业务字段锁定：仍允许点进弹窗「只读查看」，但表单禁用、不可保存
     setEditingOrder(record);
+    setBomHint("");
+    setRoutingHint("");
     form.setFieldsValue({ ...record
       ,order_date: dayjs(record.order_date)
       ,planned_start_date: dayjs(record.planned_start_date)
@@ -717,6 +735,8 @@ export function ProductionOrders() {
       return;
     }
     setEditingOrder(null);
+    setBomHint("");
+    setRoutingHint("");
     form.setFieldsValue({
       order_no: orderNo,
       order_date: dayjs(new Date()),
@@ -743,6 +763,37 @@ export function ProductionOrders() {
   const getProductName = (productId: number | null) => {
     const product = products.find((p) => p.id === productId);
     return product?.name || "-";
+  };
+
+  // 选中产品后，按 product_id 自动带出匹配的 BOM 与工艺路线（优先默认、其次已启用）
+  const handleProductChange = (productId: number | undefined) => {
+    setBomHint("");
+    setRoutingHint("");
+    form.setFieldValue("bom_id", undefined);
+    form.setFieldValue("routing_id", undefined);
+    if (productId == null) return;
+
+    const matchedBoms = boms.filter(
+      (b) => b.product_id === productId && b.is_active === true,
+    );
+    const defaultBom = matchedBoms.find((b) => b.is_default === true);
+    const bom = defaultBom ?? matchedBoms[0];
+    if (bom) {
+      form.setFieldValue("bom_id", bom.id);
+    } else {
+      setBomHint(t("mrp.productionOrders.bomNotConfigured"));
+    }
+
+    const matchedRoutings = routings.filter(
+      (r) => r.product_id === productId && r.is_active === true,
+    );
+    const defaultRouting = matchedRoutings.find((r) => r.is_default === true);
+    const routing = defaultRouting ?? matchedRoutings[0];
+    if (routing) {
+      form.setFieldValue("routing_id", routing.id);
+    } else {
+      setRoutingHint(t("mrp.productionOrders.routingNotConfigured"));
+    }
   };
 
   const getWorkCenterName = (workCenterId: number | null) => {
@@ -864,7 +915,9 @@ export function ProductionOrders() {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            {t('common.edit')}
+            {LOCKED_STATUSES.includes((record.status || "").toLowerCase())
+              ? t('mrp.productionOrders.view')
+              : t('common.edit')}
           </Button>
           {record.status === "released" && (
             <Button type="text" onClick={() => void reserveStock(record.id)}>
@@ -983,21 +1036,31 @@ export function ProductionOrders() {
       </Modal>
 
       <SupaModal
-        title={editingOrder ? t('mrp.productionOrders.edit') : t('mrp.productionOrders.addTitle')}
+        title={
+          !editingOrder
+            ? t('mrp.productionOrders.addTitle')
+            : isLocked
+              ? t('mrp.productionOrders.viewTitle')
+              : t('mrp.productionOrders.edit')
+        }
         open={isModalOpen}
         onCancel={() => {
           setIsModalOpen(false);
           form.resetFields();
           setEditingOrder(null);
+          setBomHint("");
+          setRoutingHint("");
         }}
         historyTable={productionOrderTable}
         historyRecordId={editingOrder?.id}
         navigation={buildModalNav(filteredOrders, editingOrder?.id, handleEdit)}
         form={form}
+        disabled={isLocked}
         formEle={
           <Form
             form={form}
             layout="vertical"
+            disabled={isLocked}
             onFinish={handleSubmit}
           >
             <Row gutter={16}>
@@ -1021,7 +1084,10 @@ export function ProductionOrders() {
                   name="product_id"
                   rules={[{ required: true, message: t('mrp.productionOrders.productPrompt') }]}
                 >
-                  <Select placeholder={t('mrp.productionOrders.productPrompt')} disabled={!!editingOrder}>
+                  <Select
+                    placeholder={t('mrp.productionOrders.productPrompt')}
+                    onChange={handleProductChange}
+                  >
                     {products.map((p) => (
                       <Option key={p.id} value={p.id}>
                         {p.name}
@@ -1029,8 +1095,12 @@ export function ProductionOrders() {
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label={t('mrp.productionOrders.bom')} name="bom_id">
-                  <Select placeholder={t('mrp.productionOrders.bomPrompt')}>
+                <Form.Item
+                  label={t('mrp.productionOrders.bom')}
+                  name="bom_id"
+                  extra={bomHint ? <span style={{ color: "#faad14" }}>{bomHint}</span> : undefined}
+                >
+                  <Select placeholder={t('mrp.productionOrders.bomPrompt')} allowClear>
                     {boms.map((b) => (
                       <Option key={b.id} value={b.id}>
                         {b.bom_no}
@@ -1038,7 +1108,11 @@ export function ProductionOrders() {
                     ))}
                   </Select>
                 </Form.Item>
-                <Form.Item label={t('mrp.productionOrders.routing')} name="routing_id">
+                <Form.Item
+                  label={t('mrp.productionOrders.routing')}
+                  name="routing_id"
+                  extra={routingHint ? <span style={{ color: "#faad14" }}>{routingHint}</span> : undefined}
+                >
                   <Select placeholder={t('mrp.productionOrders.routingPrompt')} allowClear>
                     {routings.map((r) => (
                       <Option key={r.id} value={r.id}>
@@ -1130,7 +1204,7 @@ export function ProductionOrders() {
                   </Select>
                 </Form.Item>
                 <Form.Item label={t('common.status')} name="status" initialValue="draft">
-                  <Select>
+                  <Select disabled>
                     <Option value="draft">{t('mrp.productionOrders.statusDraft')}</Option>
                     <Option value="planned">{t('mrp.productionOrders.statusPlanned')}</Option>
                     <Option value="released">{t('mrp.productionOrders.statusReleased')}</Option>
@@ -1171,9 +1245,11 @@ export function ProductionOrders() {
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              {t('common.save')}
-            </Button>
+            {!isLocked && (
+              <Button type="primary" onClick={() => form.submit()}>
+                {t('common.save')}
+              </Button>
+            )}
           </Space>
         }
         width={'80%'}

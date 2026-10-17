@@ -168,6 +168,10 @@ ORDER=(
   deploy_125_ai_token_usage.sql
   deploy_126_ai_token_usage_menu.sql
   deploy_127_mrp_analysis_stats.sql
+  deploy_128_doc_flow_mps_meta.sql
+  deploy_129_production_order_edit_lock.sql
+  deploy_130_backfill_report_operation.sql
+  deploy_131_quality_inspection_doc_type.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

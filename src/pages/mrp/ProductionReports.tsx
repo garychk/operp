@@ -30,7 +30,7 @@ import { nextDocumentNo } from "../../utils/documentNaming";
 import { SuperTable } from "../../components/SuperTable";
 import { formatMoney } from "../../utils/money";
 import type { SuperTableColumn } from "../../components/SuperTable";
-import SimpleModal from "../../components/SimpleModal";
+import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import dayjs from "dayjs";
 
 type ProductionReport = Tables["erp_production_reports_s_539dcf81_b"]["Row"];
@@ -49,6 +49,13 @@ const DRAFT_STATUS = "draft";
 const CONFIRMED_STATUS = "confirmed";
 const CANCELLED_STATUS = "cancelled";
 
+// 报工只能挂在「已下达」及之后的生产订单上（排除 draft/planned/cancelled）
+const REPORTABLE_ORDER_STATUSES = [
+  "released",
+  "in_progress",
+  "completed",
+];
+
 /**
  * 报工只记录、不改库存、也不回写生产订单进度：
  *   · 库存以完工入库为准（post_production_document），报工若也加库存会双重计数；
@@ -58,6 +65,10 @@ const CANCELLED_STATUS = "cancelled";
  */
 const isConfirmed = (record: { status: string | null }) =>
   record.status === CONFIRMED_STATUS;
+
+// 已确认 / 已取消的报工单都锁定：不可再编辑，只能只读查看
+const isLockedReport = (record: { status: string | null }) =>
+  record.status === CONFIRMED_STATUS || record.status === CANCELLED_STATUS;
 
 const formatQuantity = (value: number | null | undefined) =>
   Number(value ?? 0).toLocaleString();
@@ -178,8 +189,15 @@ export function ProductionReports() {
     }
   };
 
+  // 已确认/已取消的报工：表单整体只读（仍可点进弹窗查看，不可编辑保存）
+  const isLocked = !!editingReport && isLockedReport(editingReport);
+
   const handleSubmit = async (values: any) => {
     try {
+      if (editingReport && isLockedReport(editingReport)) {
+        message.warning(t("mrp.productionReports.confirmedLocked"));
+        return;
+      }
       const payload: any = {
         ...values,
         report_date: values.report_date
@@ -195,6 +213,16 @@ export function ProductionReports() {
         // P0-1：报工挂到工单工序行，工序完工数与工单进度由触发器按它回写
         order_operation_id: values.order_operation_id ?? null,
       };
+
+      // 兜底：挂了工单工序行但 operation_id 为空时，从工序行回填，避免列表工序列取不到
+      if (!payload.operation_id && payload.order_operation_id) {
+        const opRow = orderOperations.find(
+          (r) => r.id === payload.order_operation_id,
+        );
+        if (opRow?.operation_id) {
+          payload.operation_id = opRow.operation_id;
+        }
+      }
 
       if (editingReport) {
         await logWithTiming(
@@ -236,10 +264,7 @@ export function ProductionReports() {
   };
 
   const handleEdit = (record: ProductionReport) => {
-    if (isConfirmed(record)) {
-      message.warning(t("mrp.productionReports.confirmedLocked"));
-      return;
-    }
+    // 已确认的报工：允许点进弹窗「只读查看」，表单禁用、不可保存
     setEditingReport(record);
     form.setFieldsValue({
       ...record,
@@ -252,7 +277,7 @@ export function ProductionReports() {
 
   const handleDelete = async (id: number) => {
     const target = reports.find((r) => r.id === id);
-    if (target && isConfirmed(target)) {
+    if (target && isLockedReport(target)) {
       message.warning(t("mrp.productionReports.confirmedLocked"));
       return;
     }
@@ -490,7 +515,7 @@ export function ProductionReports() {
     }
   };
 
-  /** 选工单工序行 → 同步带出工序与工作中心（避免与工序行自相矛盾） */
+  /** 选工单工序行 → 同步带出工序、工作中心与计划工时（人工工时=计划工时，机器工时先不填） */
   const handleOrderOperationChange = (opRowId: number | undefined) => {
     if (!opRowId) return;
     const row = orderOperations.find((r) => r.id === opRowId);
@@ -498,6 +523,8 @@ export function ProductionReports() {
     form.setFieldsValue({
       operation_id: row.operation_id ?? undefined,
       work_center_id: row.work_center_id ?? form.getFieldValue("work_center_id"),
+      // 计划工时（已含准备工时）→ 人工工时；机器工时先不填，留空待用户手填
+      labor_hours: row.planned_hours != null ? Number(row.planned_hours) : undefined,
     });
   };
 
@@ -656,16 +683,15 @@ export function ProductionReports() {
           <Button
             type="text"
             icon={<EditOutlined />}
-            disabled={isConfirmed(record)}
             onClick={() => handleEdit(record)}
           >
-            {t("common.edit")}
+            {isLockedReport(record) ? t("mrp.productionReports.view") : t("common.edit")}
           </Button>
           <Button
             type="text"
             danger
             icon={<DeleteOutlined />}
-            disabled={isConfirmed(record)}
+            disabled={isLockedReport(record)}
             onClick={() => handleDelete(record.id)}
           >
             {t("common.delete")}
@@ -726,11 +752,13 @@ export function ProductionReports() {
         }
       />
 
-      <SimpleModal
+      <SupaModal
         title={
-          editingReport
-            ? t("mrp.productionReports.editTitle")
-            : t("mrp.productionReports.addTitle")
+          !editingReport
+            ? t("mrp.productionReports.addTitle")
+            : isLocked
+              ? t("mrp.productionReports.viewTitle")
+              : t("mrp.productionReports.editTitle")
         }
         open={isModalOpen}
         onCancel={() => {
@@ -738,6 +766,11 @@ export function ProductionReports() {
           form.resetFields();
           setEditingReport(null);
         }}
+        historyTable={reportTable}
+        historyRecordId={editingReport?.id}
+        navigation={buildModalNav(filteredReports, editingReport?.id, handleEdit)}
+        form={form}
+        disabled={isLocked}
         footer={
           <Space>
             <Button
@@ -749,20 +782,23 @@ export function ProductionReports() {
             >
               {t("common.cancel")}
             </Button>
-            <Button type="primary" onClick={() => form.submit()}>
-              {t("common.save")}
-            </Button>
+            {!isLocked && (
+              <Button type="primary" onClick={() => form.submit()}>
+                {t("common.save")}
+              </Button>
+            )}
           </Space>
         }
-        width={780}
-      >
-        <Alert
-          type="info"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message={t("mrp.productionReports.costHint")}
-        />
-        <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        width={'70%'}
+        height={668}
+        formEle={
+          <Form form={form} layout="vertical" disabled={isLocked} onFinish={handleSubmit}>
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 12 }}
+            message={t("mrp.productionReports.costHint")}
+          />
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item
@@ -808,7 +844,7 @@ export function ProductionReports() {
                     message: t("mrp.productionReports.productionOrderPrompt"),
                   },
                 ]}
-                extra={t("mrp.productionReports.productionOrderHint")}
+                extra={`${t("mrp.productionReports.productionOrderHint")}；${t("mrp.productionReports.productionOrderReleasedOnly")}`}
               >
                 <Select
                   placeholder={t("mrp.productionReports.productionOrderPrompt")}
@@ -816,11 +852,17 @@ export function ProductionReports() {
                   optionFilterProp="children"
                   onChange={handleOrderChange}
                 >
-                  {orders.map((o) => (
-                    <Option key={o.id} value={o.id}>
-                      {o.order_no}
-                    </Option>
-                  ))}
+                  {orders
+                    .filter((o) =>
+                      REPORTABLE_ORDER_STATUSES.includes(
+                        (o.status || "").toLowerCase(),
+                      ),
+                    )
+                    .map((o) => (
+                      <Option key={o.id} value={o.id}>
+                        {o.order_no}
+                      </Option>
+                    ))}
                 </Select>
               </Form.Item>
             </Col>
@@ -838,15 +880,19 @@ export function ProductionReports() {
                     loading={orderOpsLoading}
                     placeholder={t("mrp.productionReports.orderOperationPrompt")}
                     onChange={handleOrderOperationChange}
-                    options={orderOperations.map((r) => ({
-                      value: r.id,
-                      label: `${r.sequence_no} · ${
-                        operations.find((o) => o.id === r.operation_id)?.name ?? "-"
-                      }（${t("mrp.productionReports.orderOperationDone", {
-                        done: Number(r.completed_quantity || 0),
-                        planned: Number(r.planned_quantity || 0),
-                      })}）`,
-                    }))}
+                    options={orderOperations.map((r) => {
+                      const isDone = (r.status || "").toLowerCase() === "completed";
+                      return {
+                        value: r.id,
+                        disabled: isDone,
+                        label: `${r.sequence_no} · ${
+                          operations.find((o) => o.id === r.operation_id)?.name ?? "-"
+                        }（${t("mrp.productionReports.orderOperationDone", {
+                          done: Number(r.completed_quantity || 0),
+                          planned: Number(r.planned_quantity || 0),
+                        })}）${isDone ? ` ${t("mrp.productionReports.orderOperationCompleted")}` : ""}`,
+                      };
+                    })}
                   />
                 </Form.Item>
               ) : (
@@ -999,15 +1045,18 @@ export function ProductionReports() {
           )}
 
           <Row gutter={16}>
-            <Col span={12}>
+            <Col span={8}>
               <Form.Item
                 label={t("common.status")}
                 name="status"
                 initialValue={DRAFT_STATUS}
               >
-                <Select>
+                <Select disabled>
                   <Option value={DRAFT_STATUS}>
                     {t("mrp.productionReports.statusDraft")}
+                  </Option>
+                  <Option value={CONFIRMED_STATUS}>
+                    {t("mrp.productionReports.statusConfirmed")}
                   </Option>
                   <Option value={CANCELLED_STATUS}>
                     {t("mrp.productionReports.statusCancelled")}
@@ -1015,16 +1064,20 @@ export function ProductionReports() {
                 </Select>
               </Form.Item>
             </Col>
-          </Row>
-
-          <Form.Item label={t("mrp.productionReports.remark")} name="remark">
+            <Col span={16}>
+              <Form.Item label={t("mrp.productionReports.remark")} name="remark">
             <Input.TextArea
-              rows={3}
+              rows={1}
               placeholder={t("mrp.productionReports.remarkPrompt")}
             />
           </Form.Item>
-        </Form>
-      </SimpleModal>
+            </Col>
+          </Row>
+
+          
+          </Form>
+        }
+      />
     </div>
   );
 }
