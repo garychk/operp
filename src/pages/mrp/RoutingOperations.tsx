@@ -28,6 +28,7 @@ import {
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { logWithTiming } from "../../utils/logger";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import type { Tables } from "../../utils/supabase";
 import { SuperTable } from "../../components/SuperTable";
 import dayjs from "dayjs";
@@ -45,6 +46,8 @@ type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
 const { Option } = Select;
 const routingTable = "erp_routing_operations_s_539dcf81_b";
 const routingDetailTable = "erp_routing_operation_details_s_539dcf81_b";
+// 与 deploy_32 注册的 sys_document_types.document_type 一致，编号规则 RT{YYYY}{####}
+const DOC_TYPE = "routing";
 
 export function RoutingOperations() {
   const { t } = useTranslation();
@@ -294,10 +297,17 @@ export function RoutingOperations() {
     });
   };
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
+    let routingNo: string;
+    try {
+      routingNo = await nextDocumentNo(DOC_TYPE);
+    } catch (error) {
+      message.error(`${t("common.documentNoFailed")}：${(error as Error).message}`);
+      return;
+    }
     setEditingRouting(null);
     form.setFieldsValue({
-      routing_no: "",
+      routing_no: routingNo,
       product_id: undefined,
       version: "1.0",
       is_default: true,

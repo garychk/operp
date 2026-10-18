@@ -17,7 +17,8 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "factory-3d": ["src/factory-3d/index.d.ts"]
     }
   },
   "include": ["src"],

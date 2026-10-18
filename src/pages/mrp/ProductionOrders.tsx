@@ -694,11 +694,12 @@ export function ProductionOrders() {
     setBomHint("");
     setRoutingHint("");
     form.setFieldsValue({ ...record
-      ,order_date: dayjs(record.order_date)
-      ,planned_start_date: dayjs(record.planned_start_date)
-      ,planned_end_date: dayjs(record.planned_end_date)
-      ,actual_start_date: dayjs(record.actual_start_date)
-      ,actual_end_date: dayjs(record.actual_end_date)
+      ,order_date: record.order_date ? dayjs(record.order_date) : undefined
+      ,planned_start_date: record.planned_start_date ? dayjs(record.planned_start_date) : undefined
+      ,planned_end_date: record.planned_end_date ? dayjs(record.planned_end_date) : undefined
+      // 空/null 直接包 dayjs 会得到 Invalid Date（DatePicker 显示 "Invalid Date"），必须判空
+      ,actual_start_date: record.actual_start_date ? dayjs(record.actual_start_date) : undefined
+      ,actual_end_date: record.actual_end_date ? dayjs(record.actual_end_date) : undefined
      });
     setIsModalOpen(true);
   };
@@ -1056,6 +1057,9 @@ export function ProductionOrders() {
         navigation={buildModalNav(filteredOrders, editingOrder?.id, handleEdit)}
         form={form}
         disabled={isLocked}
+        // 生产订单明细的物料列叫 material_id（非 product_id），不传下推弹窗会取不到物料/单位
+        docFlowProductField="material_id"
+        docFlowUsageType="production"
         formEle={
           <Form
             form={form}
@@ -1101,11 +1105,15 @@ export function ProductionOrders() {
                   extra={bomHint ? <span style={{ color: "#faad14" }}>{bomHint}</span> : undefined}
                 >
                   <Select placeholder={t('mrp.productionOrders.bomPrompt')} allowClear>
-                    {boms.map((b) => (
-                      <Option key={b.id} value={b.id}>
-                        {b.bom_no}
-                      </Option>
-                    ))}
+                    {boms.map((b) => {
+                      const product = products.find((p) => p.id === b.product_id);
+                      return (
+                        <Option key={b.id} value={b.id}>
+                          {b.bom_no}
+                          {product?.name ? `（${product.name}）` : ''}
+                        </Option>
+                      );
+                    })}
                   </Select>
                 </Form.Item>
                 <Form.Item

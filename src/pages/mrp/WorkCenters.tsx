@@ -18,6 +18,7 @@ import {
   PlusOutlined,
   DeleteOutlined,
   EditOutlined,
+  EnvironmentOutlined,
 } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import { useCurrencyRegistry } from "../../utils/money";
@@ -26,6 +27,7 @@ import type { SuperTableColumn } from "../../components/SuperTable";
 import { logWithTiming } from "../../utils/logger";
 import type { Tables } from "../../utils/supabase";
 import SimpleModal from "../../components/SimpleModal";
+import { Factory3dLayoutModal } from "../../components/Factory3dLayoutModal";
 
 type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 type Department = Tables["erp_departments_s_539dcf81_b"]["Row"];
@@ -53,6 +55,8 @@ export function WorkCenters() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // 3D 车间布局维护（deploy_135 布局表，独立组件可复用）
+  const [layoutOpen, setLayoutOpen] = useState(false);
   const [editingWorkCenter, setEditingWorkCenter] = useState<WorkCenter | null>(
     null,
   );
@@ -371,6 +375,12 @@ export function WorkCenters() {
             <Button type="primary" icon={<PlusOutlined />} onClick={handleAdd}>
               {t("mrp.workCenters.add")}
             </Button>
+            <Button
+              icon={<EnvironmentOutlined />}
+              onClick={() => setLayoutOpen(true)}
+            >
+              {t("mrp.workCenters.layout3dBtn")}
+            </Button>
             <Input.Search
               allowClear
               placeholder={t("mrp.workCenters.searchPlaceholder")}
@@ -381,6 +391,17 @@ export function WorkCenters() {
             />
           </Space>
         }
+      />
+
+      {/* 3D 车间布局维护：保存后无需刷新本页（布局表独立于工作中心字段） */}
+      <Factory3dLayoutModal
+        open={layoutOpen}
+        onClose={() => setLayoutOpen(false)}
+        workCenters={workCenters.map((w) => ({
+          id: w.id,
+          code: w.code,
+          name: w.name,
+        }))}
       />
 
       <SimpleModal
