@@ -2928,6 +2928,7 @@ const enUS = {
     "mrp.productionAnalytics.boardCapacityTitle": "Capacity load",
     "mrp.productionAnalytics.boardNoCapacity": "No capacity data",
     "mrp.productionAnalytics.avgLoadRate": "Avg load rate",
+    "mrp.productionAnalytics.overload": "Overloaded",
     "mrp.productionOrders.title": "Production Orders",
     "mrp.productionOrders.add": "Add Order",
     "mrp.productionOrders.addTitle": "Add Production Order",

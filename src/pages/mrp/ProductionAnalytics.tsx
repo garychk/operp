@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Button,
   Card,
@@ -18,6 +18,8 @@ import { message } from 'antd';
 import { supabase } from '../../utils/supabase';
 import { SuperTable } from '../../components/SuperTable';
 import { useCurrencyRegistry } from '../../utils/money';
+import { useErpDarkMode } from '../../hooks/useErpDarkMode';
+import { clamp, useElementWidth } from '../../features/page-builder/widgetUtils';
 
 /**
  * 生产报表（P0-5）。
@@ -140,6 +142,226 @@ const statusKeyOf = (s: string) => {
   const camel = (s || '').replace(/_([a-z])/g, (_, c) => c.toUpperCase());
   return STATUS_KEYS.includes(s) ? `mrp.productionOrders.status${camel.charAt(0).toUpperCase()}${camel.slice(1)}` : '';
 };
+
+/**
+ * 逾期工单 TOP —— 参考页面设计器的「实时明细流 (Live Stream)」组件视觉：
+ * LIVE 徽标（呼吸红点）+ 时间列 + 状态圆点 + 单行文案，逐条淡入。
+ * 因 page-builder.css 非全局引入，这里把样式内联，保持与设计器一致的观感。
+ */
+function OverdueStream({ items }: { items: ProgressRow[] }) {
+  const { t } = useTranslation();
+  const dark = useErpDarkMode();
+  // 暗色下 var(--text)/var(--text-h) 解析不可靠（截图里时间列几乎不可见），
+  // 与页面设计器一致改为按主题显式取色。
+  const textColor = dark ? '#e6e8eb' : '#1f2329';
+  const mutedColor = dark ? 'rgba(230, 232, 235, 0.62)' : 'rgba(31, 35, 41, 0.62)';
+  const itemBg = dark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(127, 127, 127, 0.07)';
+  // 每条逾期工单的「流入时刻」——仅用于展示；首次出现即固定，避免刷新跳变。
+  const firstSeen = useRef<Map<number, string>>(new Map());
+
+  const feed = items.map((r) => {
+    if (!firstSeen.current.has(r.order_id)) {
+      firstSeen.current.set(r.order_id, `${r.delay_days}${t('mrp.productionAnalytics.days')}`);
+    }
+    return {
+      id: r.order_id,
+      time: firstSeen.current.get(r.order_id)!,
+      text: `${r.order_no}  ${[r.product_code, r.product_name].filter(Boolean).join(' / ') || '-'}`,
+    };
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 6 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', color: '#ff4d4f' }}>
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: '#ff4d4f',
+              animation: 'erp-pb-pulse 1.4s ease-in-out infinite',
+            }}
+          />
+          {t('pageRenderer.liveBadge')}
+        </span>
+        <span style={{ fontSize: 12, color: mutedColor, fontVariantNumeric: 'tabular-nums' }}>
+          {t('pageRenderer.streamCount', { count: feed.length })}
+        </span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {feed.map((item, index) => (
+          <div
+            key={item.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 8px',
+              borderRadius: 6,
+              background: itemBg,
+              animation: `erp-pb-fade-up 0.3s ease both`,
+              animationDelay: `${Math.min(index, 6) * 45}ms`,
+            }}
+          >
+            <span style={{ flex: '0 0 auto', width: 58, fontSize: 11, color: mutedColor, fontVariantNumeric: 'tabular-nums' }}>
+              {item.time}
+            </span>
+            <span style={{ flex: '0 0 auto', width: 6, height: 6, borderRadius: '50%', background: '#ff4d4f' }} />
+            <span
+              style={{
+                flex: '1 1 auto',
+                minWidth: 0,
+                fontSize: 12.5,
+                color: textColor,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              title={item.text}
+            >
+              {item.text}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 产能负荷仪表盘 —— 参考页面设计器的「仪表盘 (Gauge)」组件：自绘 SVG，
+ * 270° 弧形 + 渐变进度 + 刻度 + 中央数值 + 标签 + 百分比。负荷率 0~100% 为
+ * 额定区间，超过 100% 即超负荷（红色告警）。颜色：<80% 正常绿 → 80~100% 黄 → >100% 红。
+ */
+function CapacityGauge({ label, loadRate }: { label: string; loadRate: number }) {
+  const { t } = useTranslation();
+  const dark = useErpDarkMode();
+  const { ref, width } = useElementWidth<HTMLDivElement>();
+  const rawId = useId();
+  const gradientId = `cap-gauge-${rawId.replace(/[^a-zA-Z0-9]/g, '')}`;
+
+  const value = num(loadRate);
+  // 仪表盘上限取 max(100, 负荷率向上取整)，保证超负荷时指针仍落在刻度内
+  const max = Math.max(100, Math.ceil(value / 50) * 50);
+  const ratio = clamp(value / max, 0, 1);
+
+  const size = Math.round(clamp(Math.min(width || 220, 220), 150, 220));
+  const stroke = clamp(size * 0.075, 10, 18);
+  const center = size / 2;
+  const radius = center - stroke / 2 - 8;
+
+  const START = 135;
+  const SWEEP = 270;
+
+  const polar = (degree: number, r: number) => {
+    const rad = (degree * Math.PI) / 180;
+    return { x: center + r * Math.cos(rad), y: center + r * Math.sin(rad) };
+  };
+  const arc = (from: number, to: number) => {
+    const a = polar(from, radius);
+    const b = polar(to, radius);
+    const large = to - from > 180 ? 1 : 0;
+    return `M ${a.x.toFixed(2)} ${a.y.toFixed(2)} A ${radius} ${radius} 0 ${large} 1 ${b.x.toFixed(2)} ${b.y.toFixed(2)}`;
+  };
+
+  // 分段着色：按负荷率区间给进度弧上色
+  const color =
+    value > 100 ? '#ff4d4f' : value >= 80 ? '#faad14' : '#52c41a';
+  const trackColor = dark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(17, 24, 39, 0.07)';
+  const tickColor = dark ? 'rgba(255, 255, 255, 0.26)' : 'rgba(17, 24, 39, 0.22)';
+  const mutedColor = dark ? 'rgba(230, 232, 235, 0.62)' : 'rgba(31, 35, 41, 0.62)';
+
+  return (
+    <div ref={ref} style={{ display: 'flex', justifyContent: 'center' }}>
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        role="img"
+        aria-label={`${label} ${value.toFixed(1)}%`}
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={color} />
+            <stop offset="100%" stopColor={color} />
+          </linearGradient>
+        </defs>
+
+        <path
+          d={arc(START, START + SWEEP)}
+          fill="none"
+          stroke={trackColor}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+        />
+
+        {ratio > 0.004 && (
+          <path
+            d={arc(START, START + SWEEP * ratio)}
+            fill="none"
+            stroke={`url(#${gradientId})`}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+          />
+        )}
+
+        {[0, 0.25, 0.5, 0.75, 1].map((step) => {
+          const degree = START + SWEEP * step;
+          const outer = polar(degree, radius + stroke / 2 + 3);
+          const inner = polar(degree, radius + stroke / 2 - 3);
+          return (
+            <line
+              key={step}
+              x1={inner.x.toFixed(2)}
+              y1={inner.y.toFixed(2)}
+              x2={outer.x.toFixed(2)}
+              y2={outer.y.toFixed(2)}
+              stroke={tickColor}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
+          );
+        })}
+
+        <text
+          x={center}
+          y={center - size * 0.02}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill={color}
+          fontSize={size * 0.2}
+          fontWeight={700}
+        >
+          {value.toFixed(1)}
+          <tspan fontSize={size * 0.1} dx={2} fill={mutedColor}>
+            %
+          </tspan>
+        </text>
+        <text
+          x={center}
+          y={center + size * 0.17}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill={mutedColor}
+          fontSize={size * 0.072}
+        >
+          {label.length > 16 ? `${label.slice(0, 15)}…` : label}
+        </text>
+        <text
+          x={center}
+          y={center + size * 0.3}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill={mutedColor}
+          fontSize={size * 0.062}
+        >
+          {value > 100 ? t('mrp.productionAnalytics.overload') : t('mrp.productionAnalytics.colLoadRate')}
+        </text>
+      </svg>
+    </div>
+  );
+}
 
 export function ProductionAnalytics() {
   const { t } = useTranslation();
@@ -430,29 +652,17 @@ export function ProductionAnalytics() {
             {board.topOverdue.length === 0 ? (
               <div style={{ color: '#8c8c8c' }}>{t('mrp.productionAnalytics.boardNoOverdue')}</div>
             ) : (
-              board.topOverdue.map((r) => (
-                <Row key={r.order_id} align="middle" style={{ padding: '6px 0', borderBottom: '1px solid #f0f0f0' }}>
-                  <Col span={8}><span style={{ fontFamily: 'monospace' }}>{r.order_no}</span></Col>
-                  <Col span={10}>{[r.product_code, r.product_name].filter(Boolean).join(' / ') || '-'}</Col>
-                  <Col span={6} style={{ textAlign: 'right' }}>
-                    <Tag color="red">{r.delay_days} {t('mrp.productionAnalytics.days')}</Tag>
-                  </Col>
-                </Row>
-              ))
+              <OverdueStream items={board.topOverdue} />
             )}
           </Card>
         </Col>
         <Col span={12}>
           <Card title={t('mrp.productionAnalytics.boardCapacityTitle')} size="small">
             {board.latestMonth ? (
-              <>
-                <Statistic
-                  title={`${String(board.latestMonth).slice(0, 7)} ${t('mrp.productionAnalytics.avgLoadRate')}`}
-                  value={num(board.avgLoadRate).toFixed(1)}
-                  suffix="%"
-                  valueStyle={{ color: board.avgLoadRate > 100 ? '#cf1322' : undefined }}
-                />
-              </>
+              <CapacityGauge
+                label={`${String(board.latestMonth).slice(0, 7)} ${t('mrp.productionAnalytics.avgLoadRate')}`}
+                loadRate={board.avgLoadRate}
+              />
             ) : (
               <div style={{ color: '#8c8c8c' }}>{t('mrp.productionAnalytics.boardNoCapacity')}</div>
             )}

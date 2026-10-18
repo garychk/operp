@@ -922,6 +922,9 @@ export function MaterialIssues() {
         detailPanelTitle={t("mrp.materialIssues.detailPanelTitle")}
         historyTable={materialIssueTable}
         historyRecordId={editingIssue?.id || selectedIssue?.id}
+        workflowDocumentType="material_issue"
+        documentNo={editingIssue?.issue_no || selectedIssue?.issue_no}
+        docFlowProductField="material_id"
         navigation={buildModalNav(filteredIssues, editingIssue?.id || selectedIssue?.id, handleEdit)}
         form={form}
         disabled={isLocked}

@@ -2928,6 +2928,7 @@ const zhCN = {
     "mrp.productionAnalytics.boardCapacityTitle": "产能负荷",
     "mrp.productionAnalytics.boardNoCapacity": "暂无产能数据",
     "mrp.productionAnalytics.avgLoadRate": "平均负荷率",
+    "mrp.productionAnalytics.overload": "超负荷",
     "mrp.productionOrders.title": "生产订单",
     "mrp.productionOrders.add": "新增订单",
     "mrp.productionOrders.addTitle": "新增生产订单",
