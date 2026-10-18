@@ -12,7 +12,7 @@ import {
   Tabs,
   Tag,
 } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ReloadOutlined, AimOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { message } from 'antd';
 import { supabase } from '../../utils/supabase';
@@ -20,6 +20,7 @@ import { SuperTable } from '../../components/SuperTable';
 import { useCurrencyRegistry } from '../../utils/money';
 import { useErpDarkMode } from '../../hooks/useErpDarkMode';
 import { clamp, useElementWidth } from '../../features/page-builder/widgetUtils';
+import { Factory3DViewer } from '../../components/Factory3DViewer';
 
 /**
  * 生产报表（P0-5）。
@@ -367,6 +368,7 @@ export function ProductionAnalytics() {
   const { t } = useTranslation();
   const { baseCurrency } = useCurrencyRegistry();
   const baseCurrencyCode = (baseCurrency || 'CNY').toUpperCase();
+  const [factory3DOpen, setFactory3DOpen] = useState(false);
 
   // ---------------------------------------------------------------- 生产进度
   const [progressRows, setProgressRows] = useState<ProgressRow[]>([]);
@@ -783,7 +785,15 @@ export function ProductionAnalytics() {
   );
 
   return (
-    <Card variant="borderless" title={t('mrp.productionAnalytics.title')}>
+    <Card
+      variant="borderless"
+      title={t('mrp.productionAnalytics.title')}
+      extra={
+        <Button icon={<AimOutlined />} onClick={() => setFactory3DOpen(true)}>
+          {t('mrp.productionAnalytics.factory3d')}
+        </Button>
+      }
+    >
       <Tabs
         items={[
           { key: 'board', label: t('mrp.productionAnalytics.tabBoard'), children: boardTab },
@@ -793,6 +803,7 @@ export function ProductionAnalytics() {
           { key: 'capacity', label: t('mrp.productionAnalytics.tabCapacity'), children: capacityTab },
         ]}
       />
+      <Factory3DViewer open={factory3DOpen} onClose={() => setFactory3DOpen(false)} />
     </Card>
   );
 }

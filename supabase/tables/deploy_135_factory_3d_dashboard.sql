@@ -14,10 +14,11 @@
 --      这是纯展示配置，3D 布局信息在既有任何表中都不存在，只能新落一张表。
 --      一行 = 一个工作中心在车间平面图上的位置（scene_x / scene_z）。
 --
---   2. 三个 security_invoker 视图（不提升权限，走底层 erp_* 的租户 RLS）：
+--   2. 四个 security_invoker 视图（不提升权限，走底层 erp_* 的租户 RLS）：
 --      · vw_factory_3d_devices          设备视图：坐标 + 当班工单/工序 + 运行状态
 --      · vw_factory_3d_orders           在制工单视图：进度 + 物料齐套汇总
 --      · vw_factory_3d_order_operations 工序明细视图：活儿跑到哪一道
+--      · vw_factory_3d_order_materials  材料明细视图：BOM 展开后的材料行（领料/需求）
 --
 -- 状态推导口径（不引入人工维护的状态字段，全部从业务事实推导）：
 --   · 设备 running   = 该工作中心上有 in_progress 的工序（且工作中心 active）
@@ -282,11 +283,42 @@ WHERE COALESCE(oo.is_deleted, 'n') = 'n'
 
 
 -- ============================================================================
+-- 4b. 材料明细视图（订单点开后的 BOM 材料清单数据源）
+--     口径：直接读 erp_production_order_details —— 它是 explode_production_order_bom()
+--     从对应 BOM（erp_bom_details）展开写库的，即「生产订单的材料来自对应 BOM」。
+-- ============================================================================
+CREATE OR REPLACE VIEW public.vw_factory_3d_order_materials
+  WITH (security_invoker = true) AS
+SELECT
+  d.tenant_id,
+  o.id                     AS order_id,
+  o.order_no,
+  d.id                     AS order_detail_id,
+  d.line_no,
+  d.material_id,
+  p.code                   AS material_code,
+  p.name                   AS material_name,
+  p.specification          AS material_spec,
+  d.planned_quantity,
+  d.issued_quantity,
+  COALESCE(d.unit, p.unit) AS unit
+FROM public.erp_production_order_details_s_539dcf81_b d
+JOIN public.erp_production_orders_s_539dcf81_b o
+  ON o.id = d.order_id AND o.tenant_id = d.tenant_id
+LEFT JOIN public.erp_products_s_539dcf81_b p
+  ON p.id = d.material_id
+WHERE COALESCE(d.is_deleted, 'n') = 'n'
+  AND COALESCE(o.is_deleted, 'n') = 'n'
+  AND o.status IN ('released', 'in_progress');
+
+
+-- ============================================================================
 -- 5. 视图授权
 -- ============================================================================
 GRANT SELECT ON public.vw_factory_3d_devices          TO authenticated;
 GRANT SELECT ON public.vw_factory_3d_orders           TO authenticated;
 GRANT SELECT ON public.vw_factory_3d_order_operations TO authenticated;
+GRANT SELECT ON public.vw_factory_3d_order_materials  TO authenticated;
 
 
 -- ============================================================================
@@ -306,8 +338,9 @@ BEGIN
   IF (SELECT COUNT(DISTINCT viewname) FROM pg_views
        WHERE schemaname = 'public'
          AND viewname  IN ('vw_factory_3d_devices', 'vw_factory_3d_orders',
-                           'vw_factory_3d_order_operations')) < 3 THEN
-    v_missing := v_missing || ' 3 个驾驶舱视图未全部创建;';
+                           'vw_factory_3d_order_operations',
+                           'vw_factory_3d_order_materials')) < 4 THEN
+    v_missing := v_missing || ' 4 个驾驶舱视图未全部创建;';
   END IF;
 
   -- 铁律：视图必须 security_invoker，否则会绕过底层 erp_* 的租户 RLS
@@ -326,6 +359,6 @@ BEGIN
     RAISE EXCEPTION 'deploy_135 自检失败：%', v_missing;
   END IF;
 
-  RAISE NOTICE 'deploy_135 自检通过：factory_3d_device_layout + 3 个 3D 驾驶舱视图就绪';
+  RAISE NOTICE 'deploy_135 自检通过：factory_3d_device_layout + 4 个 3D 驾驶舱视图就绪';
 END;
 $$;
