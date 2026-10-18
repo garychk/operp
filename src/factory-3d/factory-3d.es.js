@@ -1,9 +1,10 @@
-import { jsxs as d, jsx as i } from "react/jsx-runtime";
-import { useEffect as y } from "react";
-import { Canvas as w } from "@react-three/fiber";
-import { Grid as C, Html as q, OrbitControls as b } from "@react-three/drei";
-import { create as B } from "zustand";
-const O = [
+import { jsxs as d, jsx as o } from "react/jsx-runtime";
+import { useState as J, useRef as E, useEffect as v } from "react";
+import { useThree as $, Canvas as V } from "@react-three/fiber";
+import { Grid as Z, Html as j, OrbitControls as H } from "@react-three/drei";
+import { create as Y } from "zustand";
+import * as O from "three";
+const Q = [
   {
     device_id: 1,
     device_code: "WC-CNC01",
@@ -130,7 +131,7 @@ const O = [
     scene_x: 4.5,
     scene_z: 3
   }
-], D = [
+], ee = [
   {
     order_id: 101,
     order_no: "MO-2026-018",
@@ -191,7 +192,7 @@ const O = [
     material_line_short: 3,
     material_kit_status: "short"
   }
-], M = [
+], ne = [
   { order_operation_id: 1, order_id: 101, order_no: "MO-2026-018", line_no: 1, sequence_no: 10, operation_name: "铸造毛坯检验", work_center_id: null, work_center_name: null, assignee_name: "王强", planned_quantity: 200, completed_quantity: 200, scrapped_quantity: 2, operation_status: "completed" },
   { order_operation_id: 2, order_id: 101, order_no: "MO-2026-018", line_no: 2, sequence_no: 20, operation_name: "箱体冲压成型", work_center_id: 3, work_center_name: "冲压机 01", assignee_name: "李明", planned_quantity: 200, completed_quantity: 180, scrapped_quantity: 0, operation_status: "in_progress" },
   { order_operation_id: 3, order_id: 101, order_no: "MO-2026-018", line_no: 3, sequence_no: 30, operation_name: "精铣结合面", work_center_id: 1, work_center_name: "CNC 加工中心 01", assignee_name: "张伟", planned_quantity: 200, completed_quantity: 96, scrapped_quantity: 1, operation_status: "in_progress" },
@@ -199,7 +200,7 @@ const O = [
   { order_operation_id: 5, order_id: 102, order_no: "MO-2026-021", line_no: 1, sequence_no: 10, operation_name: "下料", work_center_id: null, work_center_name: null, assignee_name: "赵刚", planned_quantity: 500, completed_quantity: 500, scrapped_quantity: 0, operation_status: "completed" },
   { order_operation_id: 6, order_id: 102, order_no: "MO-2026-021", line_no: 2, sequence_no: 20, operation_name: "车削粗加工", work_center_id: 2, work_center_name: "CNC 加工中心 02", assignee_name: "陈浩", planned_quantity: 500, completed_quantity: 300, scrapped_quantity: 4, operation_status: "in_progress" },
   { order_operation_id: 7, order_id: 103, order_no: "MO-2026-015", line_no: 5, sequence_no: 50, operation_name: "总装", work_center_id: 5, work_center_name: "总装工位", assignee_name: "刘洋", planned_quantity: 150, completed_quantity: 42, scrapped_quantity: 0, operation_status: "in_progress" }
-], W = {
+], ge = {
   101: [
     { name: "铸件毛坯 JSX-100", required: 200, issued: 200, unit: "件" },
     { name: "轴承 6205-2RS", required: 800, issued: 800, unit: "套" },
@@ -225,7 +226,7 @@ const O = [
     { name: "铭牌", required: 150, issued: 150, unit: "张" }
   ]
 };
-function f(n) {
+function P(n) {
   return Math.max(n.length, 1), n.map((t, e) => {
     const r = {
       x: (e % 4 - 1.5) * 4.5,
@@ -247,33 +248,36 @@ function f(n) {
     };
   });
 }
-const S = O, _ = B((n, t) => ({
-  devices: f(S),
-  deviceRows: S,
-  orders: D,
-  operations: M,
+const F = Q, l = Y((n, t) => ({
+  devices: P(F),
+  deviceRows: F,
+  orders: ee,
+  operations: ne,
   selectedDeviceCode: null,
   selectedOrderId: null,
   theme: "light",
   locale: "zh",
+  layoutEditable: !1,
+  pendingLayout: {},
   onDeviceSelect: null,
   onOrderSelect: null,
+  onLayoutChange: null,
   setDeviceRows: (e) => n((r) => ({
     deviceRows: e,
-    devices: r.devices.some((a) => a.deviceId != null) ? x(r.devices, e) : f(e)
+    devices: r.devices.some((i) => i.deviceId != null) ? te(r.devices, e) : P(e)
   })),
   setDevices: (e) => n({ devices: e }),
-  updateDeviceStatus: (e, r) => n((a) => ({
-    devices: a.devices.map((o) => o.id === e ? { ...o, status: r } : o)
+  updateDeviceStatus: (e, r) => n((i) => ({
+    devices: i.devices.map((a) => a.id === e ? { ...a, status: r } : a)
   })),
   setOrders: (e) => n({ orders: e }),
   setOperations: (e) => n({ operations: e }),
   selectDevice: (e) => {
     t().onDeviceSelect?.(e), n((r) => {
-      const a = r.deviceRows.find((o) => o.device_code === e);
+      const i = r.deviceRows.find((a) => a.device_code === e);
       return {
         selectedDeviceCode: e,
-        selectedOrderId: e ? a?.current_order_id ?? r.selectedOrderId : null
+        selectedOrderId: e ? i?.current_order_id ?? r.selectedOrderId : null
       };
     });
   },
@@ -284,16 +288,25 @@ const S = O, _ = B((n, t) => ({
   setOnOrderSelect: (e) => n({ onOrderSelect: e }),
   setTheme: (e) => n({ theme: e }),
   toggleTheme: () => n((e) => ({ theme: e.theme === "light" ? "dark" : "light" })),
-  setLocale: (e) => n({ locale: e })
+  setLocale: (e) => n({ locale: e }),
+  setLayoutEditable: (e) => n(e ? { layoutEditable: e } : { layoutEditable: e, pendingLayout: {} }),
+  moveDevice: (e, r, i) => n((a) => ({
+    devices: a.devices.map(
+      (u) => u.id === e ? { ...u, position: [r, u.position[1], i] } : u
+    ),
+    pendingLayout: { ...a.pendingLayout, [e]: { sceneX: r, sceneZ: i } }
+  })),
+  clearPendingLayout: () => n({ pendingLayout: {} }),
+  setOnLayoutChange: (e) => n({ onLayoutChange: e })
 }));
-function x(n, t) {
+function te(n, t) {
   return t.map((e, r) => {
-    const a = n.find((l) => l.id === e.device_code), o = { x: (r % 4 - 1.5) * 4.5, z: Math.floor(r / 4) * 5 - 1 };
+    const i = n.find((u) => u.id === e.device_code), a = { x: (r % 4 - 1.5) * 4.5, z: Math.floor(r / 4) * 5 - 1 };
     return {
       id: e.device_code,
       name: e.device_name,
       deviceId: e.device_id,
-      position: a?.position ?? [e.scene_x ?? o.x, 0, e.scene_z ?? o.z],
+      position: i?.position ?? [e.scene_x ?? a.x, 0, e.scene_z ?? a.z],
       status: e.scene_status === "running" ? "running" : e.scene_status === "offline" ? "fault" : "idle",
       currentOrderNo: e.current_order_no ?? void 0,
       currentProduct: e.current_product_name ?? void 0,
@@ -301,7 +314,7 @@ function x(n, t) {
     };
   });
 }
-const v = {
+const x = {
   light: {
     background: "#E8EEF3",
     fog: [45, 95],
@@ -347,10 +360,10 @@ const v = {
     orderBadgeText: "#85B7EB"
   }
 };
-function A(n) {
+function re(n) {
   return n && n.toLowerCase().startsWith("en") ? "en" : "zh";
 }
-const E = {
+const oe = {
   zh: {
     status: { running: "运行中", idle: "待机", fault: "故障" },
     sceneStatus: { running: "运行中", idle: "待机", offline: "离线" },
@@ -364,15 +377,15 @@ const E = {
     kitStatus: { ready: "Kitted", short: "Short", none: "No materials" }
   }
 };
-function k() {
-  const n = _((e) => e.theme), t = v[n];
+function ie() {
+  const n = l((e) => e.theme), t = x[n];
   return /* @__PURE__ */ d("group", { children: [
     /* @__PURE__ */ d("mesh", { rotation: [-Math.PI / 2, 0, 0], receiveShadow: !0, children: [
-      /* @__PURE__ */ i("planeGeometry", { args: [48, 32] }),
-      /* @__PURE__ */ i("meshStandardMaterial", { color: t.floor })
+      /* @__PURE__ */ o("planeGeometry", { args: [48, 32] }),
+      /* @__PURE__ */ o("meshStandardMaterial", { color: t.floor })
     ] }),
-    /* @__PURE__ */ i(
-      C,
+    /* @__PURE__ */ o(
+      Z,
       {
         position: [0, 0.01, 0],
         args: [48, 32],
@@ -387,113 +400,176 @@ function k() {
       }
     ),
     /* @__PURE__ */ d("mesh", { rotation: [-Math.PI / 2, 0, 0], position: [0, 0.02, 7], children: [
-      /* @__PURE__ */ i("planeGeometry", { args: [48, 2.4] }),
-      /* @__PURE__ */ i("meshStandardMaterial", { color: t.road })
+      /* @__PURE__ */ o("planeGeometry", { args: [48, 2.4] }),
+      /* @__PURE__ */ o("meshStandardMaterial", { color: t.road })
     ] })
   ] });
 }
-function F() {
-  const n = _((o) => o.theme), t = v[n], e = 22, r = 12, a = 5;
+function ae() {
+  const n = l((a) => a.theme), t = x[n], e = 22, r = 12, i = 5;
   return /* @__PURE__ */ d("group", { position: [0, 0, -2], children: [
-    /* @__PURE__ */ d("mesh", { position: [0, a / 2, -r / 2], castShadow: !0, receiveShadow: !0, children: [
-      /* @__PURE__ */ i("boxGeometry", { args: [e, a, 0.3] }),
-      /* @__PURE__ */ i("meshStandardMaterial", { color: t.wall })
+    /* @__PURE__ */ d("mesh", { position: [0, i / 2, -r / 2], castShadow: !0, receiveShadow: !0, children: [
+      /* @__PURE__ */ o("boxGeometry", { args: [e, i, 0.3] }),
+      /* @__PURE__ */ o("meshStandardMaterial", { color: t.wall })
     ] }),
-    [-e / 2, e / 2].map((o) => /* @__PURE__ */ d("mesh", { position: [o, a / 2, 0], castShadow: !0, receiveShadow: !0, children: [
-      /* @__PURE__ */ i("boxGeometry", { args: [0.3, a, r] }),
-      /* @__PURE__ */ i("meshStandardMaterial", { color: t.wall })
-    ] }, o)),
+    [-e / 2, e / 2].map((a) => /* @__PURE__ */ d("mesh", { position: [a, i / 2, 0], castShadow: !0, receiveShadow: !0, children: [
+      /* @__PURE__ */ o("boxGeometry", { args: [0.3, i, r] }),
+      /* @__PURE__ */ o("meshStandardMaterial", { color: t.wall })
+    ] }, a)),
     [
       [-e / 2, -r / 2],
       [e / 2, -r / 2],
       [-e / 2, r / 2],
       [e / 2, r / 2]
-    ].map(([o, l]) => /* @__PURE__ */ d("mesh", { position: [o, a / 2, l], castShadow: !0, children: [
-      /* @__PURE__ */ i("boxGeometry", { args: [0.5, a, 0.5] }),
-      /* @__PURE__ */ i("meshStandardMaterial", { color: t.steel })
-    ] }, `${o},${l}`)),
-    [-r / 2, 0, r / 2].map((o) => /* @__PURE__ */ d("mesh", { position: [0, a + 0.2, o], castShadow: !0, children: [
-      /* @__PURE__ */ i("boxGeometry", { args: [e + 0.5, 0.35, 0.35] }),
-      /* @__PURE__ */ i("meshStandardMaterial", { color: t.steel })
-    ] }, o)),
-    /* @__PURE__ */ d("mesh", { position: [0, a * 0.72, -r / 2 + 0.17], children: [
-      /* @__PURE__ */ i("boxGeometry", { args: [e - 2, 0.9, 0.05] }),
-      /* @__PURE__ */ i("meshStandardMaterial", { color: t.wallBand })
+    ].map(([a, u]) => /* @__PURE__ */ d("mesh", { position: [a, i / 2, u], castShadow: !0, children: [
+      /* @__PURE__ */ o("boxGeometry", { args: [0.5, i, 0.5] }),
+      /* @__PURE__ */ o("meshStandardMaterial", { color: t.steel })
+    ] }, `${a},${u}`)),
+    [-r / 2, 0, r / 2].map((a) => /* @__PURE__ */ d("mesh", { position: [0, i + 0.2, a], castShadow: !0, children: [
+      /* @__PURE__ */ o("boxGeometry", { args: [e + 0.5, 0.35, 0.35] }),
+      /* @__PURE__ */ o("meshStandardMaterial", { color: t.steel })
+    ] }, a)),
+    /* @__PURE__ */ d("mesh", { position: [0, i * 0.72, -r / 2 + 0.17], children: [
+      /* @__PURE__ */ o("boxGeometry", { args: [e - 2, 0.9, 0.05] }),
+      /* @__PURE__ */ o("meshStandardMaterial", { color: t.wallBand })
     ] })
   ] });
 }
-const K = {
+const he = {
   running: "#3B6D11",
   idle: "#BA7517",
   offline: "#888780"
-}, T = {
+}, ce = {
   running: "#3B6D11",
   idle: "#BA7517",
   fault: "#A32D2D"
-}, J = {
+}, ye = {
   running: "运行中",
   idle: "待机",
   offline: "离线"
-}, X = {
+}, fe = {
   pending: "未开始",
   in_progress: "加工中",
   completed: "已完成",
   cancelled: "已取消"
-}, $ = {
+}, ve = {
   ready: "齐料",
   short: "缺料",
   none: "无物料需求"
 };
-function R(n) {
+function se(n) {
   return n === "fault" ? "offline" : n;
 }
-function I({ device: n }) {
-  const t = _((c) => c.theme), e = _((c) => c.locale), r = _((c) => c.selectedDeviceCode === n.id), a = _((c) => c.selectDevice), o = v[t], l = E[e], u = n.status, p = R(u), m = T[u], g = (c) => {
-    c.stopPropagation(), a(r ? null : n.id);
+const R = 21, T = 13, I = 0.5, z = (n) => Math.round(n / I) * I, N = (n, t, e) => Math.min(e, Math.max(t, n));
+function de({ device: n }) {
+  const t = l((c) => c.theme), e = l((c) => c.locale), r = l((c) => c.layoutEditable), i = l((c) => c.selectedDeviceCode === n.id), a = l((c) => c.selectDevice), u = l((c) => c.moveDevice), g = $((c) => c.controls), _ = x[t], w = oe[e], y = n.status, S = se(y), C = ce[y], [b, D] = J(n.position), f = E(b);
+  f.current = b;
+  const p = E(null), s = E(!1);
+  v(() => {
+    p.current?.active || (D(n.position), f.current = n.position);
+  }, [n.position]), v(() => {
+    !r && p.current?.active && (p.current = null, g && (g.enabled = !0), document.body.style.cursor = "auto");
+  }, [r, g]);
+  const G = (c) => {
+    if (c.stopPropagation(), s.current) {
+      s.current = !1;
+      return;
+    }
+    a(i ? null : n.id);
+  }, W = (c) => {
+    if (!r || c.button !== 0) return;
+    c.stopPropagation();
+    const m = new O.Plane(new O.Vector3(0, 1, 0), 0), h = new O.Vector3();
+    if (c.ray.intersectPlane(m, h)) {
+      g && (g.enabled = !1), p.current = {
+        active: !0,
+        moved: !1,
+        offset: new O.Vector3(h.x - n.position[0], 0, h.z - n.position[2]),
+        plane: m,
+        origin: n.position
+      };
+      try {
+        c.target?.setPointerCapture?.(
+          c.pointerId
+        );
+      } catch {
+      }
+      document.body.style.cursor = "grabbing";
+    }
+  }, U = (c) => {
+    const m = p.current;
+    if (!m?.active) return;
+    const h = new O.Vector3();
+    if (!c.ray.intersectPlane(m.plane, h)) return;
+    const q = N(z(h.x - m.offset.x), -R, R), B = N(z(h.z - m.offset.z), -T, T);
+    (Math.abs(q - m.origin[0]) > 0.01 || Math.abs(B - m.origin[2]) > 0.01) && (m.moved = !0);
+    const M = [q, m.origin[1], B];
+    f.current = M, D(M);
+  }, A = () => {
+    const c = p.current;
+    if (!c?.active || (p.current = null, g && (g.enabled = !0), document.body.style.cursor = r ? "grab" : "auto", !c.moved)) return;
+    s.current = !0;
+    const [m, , h] = f.current;
+    u(n.id, m, h);
+    const { pendingLayout: q, deviceRows: B, onLayoutChange: M } = l.getState(), X = Object.entries(q).map(([k, L]) => ({
+      deviceCode: k,
+      deviceId: B.find((K) => K.device_code === k)?.device_id,
+      sceneX: L.sceneX,
+      sceneZ: L.sceneZ
+    }));
+    M?.(X);
   };
   return /* @__PURE__ */ d(
     "group",
     {
-      position: n.position,
-      onClick: g,
+      position: b,
+      onClick: G,
+      onPointerDown: W,
+      onPointerMove: U,
+      onPointerUp: A,
+      onPointerCancel: A,
       onPointerOver: (c) => {
-        c.stopPropagation(), document.body.style.cursor = "pointer";
+        c.stopPropagation(), document.body.style.cursor = r ? "grab" : "pointer";
       },
       onPointerOut: () => {
-        document.body.style.cursor = "auto";
+        p.current?.active || (document.body.style.cursor = "auto");
       },
       children: [
         /* @__PURE__ */ d("mesh", { position: [0, 0.2, 0], castShadow: !0, receiveShadow: !0, children: [
-          /* @__PURE__ */ i("boxGeometry", { args: [1.9, 0.4, 1.5] }),
-          /* @__PURE__ */ i("meshStandardMaterial", { color: u === "fault" ? o.baseFault : o.base })
+          /* @__PURE__ */ o("boxGeometry", { args: [1.9, 0.4, 1.5] }),
+          /* @__PURE__ */ o("meshStandardMaterial", { color: y === "fault" ? _.baseFault : _.base })
         ] }),
         /* @__PURE__ */ d("mesh", { position: [0, 1.05, 0], castShadow: !0, children: [
-          /* @__PURE__ */ i("boxGeometry", { args: [1.4, 1.3, 1] }),
-          /* @__PURE__ */ i(
+          /* @__PURE__ */ o("boxGeometry", { args: [1.4, 1.3, 1] }),
+          /* @__PURE__ */ o(
             "meshStandardMaterial",
             {
-              color: r ? o.bodySelected : u === "fault" ? o.bodyFault : o.body,
-              emissive: r ? o.selectRing : "#000000",
-              emissiveIntensity: r ? 0.25 : 0
+              color: i ? _.bodySelected : y === "fault" ? _.bodyFault : _.body,
+              emissive: i ? _.selectRing : "#000000",
+              emissiveIntensity: i ? 0.25 : 0
             }
           )
         ] }),
         /* @__PURE__ */ d("mesh", { position: [0, 1.85, 0], children: [
-          /* @__PURE__ */ i("sphereGeometry", { args: [0.14, 16, 16] }),
-          /* @__PURE__ */ i(
+          /* @__PURE__ */ o("sphereGeometry", { args: [0.14, 16, 16] }),
+          /* @__PURE__ */ o(
             "meshStandardMaterial",
             {
-              color: m,
-              emissive: m,
-              emissiveIntensity: t === "dark" ? r ? 2.2 : 1.5 : r ? 1.8 : 1
+              color: C,
+              emissive: C,
+              emissiveIntensity: t === "dark" ? i ? 2.2 : 1.5 : i ? 1.8 : 1
             }
           )
         ] }),
-        r && /* @__PURE__ */ d("mesh", { position: [0, 0.03, 0], rotation: [-Math.PI / 2, 0, 0], children: [
-          /* @__PURE__ */ i("ringGeometry", { args: [1.15, 1.4, 40] }),
-          /* @__PURE__ */ i("meshBasicMaterial", { color: o.selectRing })
+        i && /* @__PURE__ */ d("mesh", { position: [0, 0.03, 0], rotation: [-Math.PI / 2, 0, 0], children: [
+          /* @__PURE__ */ o("ringGeometry", { args: [1.15, 1.4, 40] }),
+          /* @__PURE__ */ o("meshBasicMaterial", { color: _.selectRing })
         ] }),
-        /* @__PURE__ */ i(q, { position: [0, 2.4, 0], center: !0, distanceFactor: 16, zIndexRange: [20, 0], children: /* @__PURE__ */ d(
+        r && /* @__PURE__ */ d("mesh", { position: [0, 0.02, 0], rotation: [-Math.PI / 2, 0, 0], children: [
+          /* @__PURE__ */ o("ringGeometry", { args: [1.25, 1.32, 48] }),
+          /* @__PURE__ */ o("meshBasicMaterial", { color: _.selectRing, transparent: !0, opacity: 0.45 })
+        ] }),
+        /* @__PURE__ */ o(j, { position: [0, 2.4, 0], center: !0, distanceFactor: 16, zIndexRange: [20, 0], children: /* @__PURE__ */ d(
           "div",
           {
             style: {
@@ -511,9 +587,9 @@ function I({ device: n }) {
                   style: {
                     padding: "2px 10px",
                     borderRadius: 10,
-                    background: o.labelBg[p],
-                    border: `0.5px solid ${o.labelBorder[p]}`,
-                    color: o.labelText[p],
+                    background: _.labelBg[S],
+                    border: `0.5px solid ${_.labelBorder[S]}`,
+                    color: _.labelText[S],
                     fontSize: 12,
                     whiteSpace: "nowrap",
                     boxShadow: t === "dark" ? "0 2px 8px rgba(0,0,0,.4)" : "0 2px 8px rgba(15,23,42,.12)"
@@ -521,7 +597,7 @@ function I({ device: n }) {
                   children: [
                     n.name,
                     " · ",
-                    l.status[u]
+                    w.status[y]
                   ]
                 }
               ),
@@ -531,9 +607,9 @@ function I({ device: n }) {
                   style: {
                     padding: "1px 9px",
                     borderRadius: 10,
-                    background: o.orderBadgeBg,
-                    border: `0.5px solid ${o.selectRing}`,
-                    color: o.orderBadgeText,
+                    background: _.orderBadgeBg,
+                    border: `0.5px solid ${_.selectRing}`,
+                    color: _.orderBadgeText,
                     fontSize: 11,
                     whiteSpace: "nowrap"
                   },
@@ -550,19 +626,30 @@ function I({ device: n }) {
     }
   );
 }
-function U({ devices: n, onDeviceSelect: t, theme: e, locale: r, className: a, style: o }) {
-  const l = _((s) => s.devices), u = _((s) => s.theme), p = _((s) => s.setDevices), m = _((s) => s.setOnDeviceSelect), g = _((s) => s.setTheme), c = _((s) => s.setLocale), h = v[u];
-  return y(() => {
-    n && p(n);
-  }, [n, p]), y(() => {
-    e && g(e);
-  }, [e, g]), y(() => {
-    r && c(A(r));
-  }, [r, c]), y(() => (m(t ?? null), () => m(null)), [t, m]), /* @__PURE__ */ i("div", { className: a, style: { width: "100%", height: "100%", ...o }, children: /* @__PURE__ */ d(w, { shadows: !0, dpr: [1, 2], camera: { position: [15, 12, 16], fov: 42 }, children: [
-    /* @__PURE__ */ i("color", { attach: "background", args: [h.background] }, u),
-    /* @__PURE__ */ i("fog", { attach: "fog", args: [h.background, h.fog[0], h.fog[1]] }, `fog-${u}`),
-    /* @__PURE__ */ i("ambientLight", { intensity: 0.65 }),
-    /* @__PURE__ */ i(
+function Se({
+  devices: n,
+  onDeviceSelect: t,
+  theme: e,
+  locale: r,
+  layoutEditable: i,
+  onLayoutChange: a,
+  className: u,
+  style: g
+}) {
+  const _ = l((s) => s.devices), w = l((s) => s.theme), y = l((s) => s.setDevices), S = l((s) => s.setOnDeviceSelect), C = l((s) => s.setTheme), b = l((s) => s.setLocale), D = l((s) => s.setLayoutEditable), f = l((s) => s.setOnLayoutChange), p = x[w];
+  return v(() => {
+    n && y(n);
+  }, [n, y]), v(() => {
+    e && C(e);
+  }, [e, C]), v(() => {
+    r && b(re(r));
+  }, [r, b]), v(() => {
+    D(!!i);
+  }, [i, D]), v(() => (f(a ?? null), () => f(null)), [a, f]), v(() => (S(t ?? null), () => S(null)), [t, S]), /* @__PURE__ */ o("div", { className: u, style: { width: "100%", height: "100%", ...g }, children: /* @__PURE__ */ d(V, { shadows: !0, dpr: [1, 2], camera: { position: [15, 12, 16], fov: 42 }, children: [
+    /* @__PURE__ */ o("color", { attach: "background", args: [p.background] }, w),
+    /* @__PURE__ */ o("fog", { attach: "fog", args: [p.background, p.fog[0], p.fog[1]] }, `fog-${w}`),
+    /* @__PURE__ */ o("ambientLight", { intensity: 0.65 }),
+    /* @__PURE__ */ o(
       "directionalLight",
       {
         position: [12, 18, 10],
@@ -575,11 +662,11 @@ function U({ devices: n, onDeviceSelect: t, theme: e, locale: r, className: a, s
         "shadow-camera-bottom": -28
       }
     ),
-    /* @__PURE__ */ i(k, {}),
-    /* @__PURE__ */ i(F, {}),
-    l.map((s) => /* @__PURE__ */ i(I, { device: s }, s.id)),
-    /* @__PURE__ */ i(
-      b,
+    /* @__PURE__ */ o(ie, {}),
+    /* @__PURE__ */ o(ae, {}),
+    _.map((s) => /* @__PURE__ */ o(de, { device: s }, s.id)),
+    /* @__PURE__ */ o(
+      H,
       {
         target: [0, 1, 0],
         maxPolarAngle: Math.PI / 2.1,
@@ -589,29 +676,29 @@ function U({ devices: n, onDeviceSelect: t, theme: e, locale: r, className: a, s
     )
   ] }) });
 }
-function Y(n = 2500) {
+function be(n = 2500) {
   const t = ["running", "running", "running", "idle", "fault"], e = setInterval(() => {
-    const { devices: r, updateDeviceStatus: a } = _.getState();
+    const { devices: r, updateDeviceStatus: i } = l.getState();
     if (r.length === 0) return;
-    const o = r[Math.floor(Math.random() * r.length)], l = t[Math.floor(Math.random() * t.length)];
-    o.status !== l && a(o.id, l);
+    const a = r[Math.floor(Math.random() * r.length)], u = t[Math.floor(Math.random() * t.length)];
+    a.status !== u && i(a.id, u);
   }, n);
   return () => clearInterval(e);
 }
 export {
-  U as FactoryScene,
-  $ as KIT_STATUS_LABELS,
-  E as LIB_DICT,
-  O as MOCK_DEVICE_ROWS,
-  D as MOCK_ORDERS,
-  W as MOCK_ORDER_MATERIALS,
-  M as MOCK_ORDER_OPERATIONS,
-  X as OP_STATUS_LABELS,
-  v as SCENE_PALETTES,
-  K as STATUS_COLORS,
-  J as STATUS_LABELS,
-  f as fromDeviceRows,
-  A as normalizeLocale,
-  Y as startMockRealtime,
-  _ as useFactoryStore
+  Se as FactoryScene,
+  ve as KIT_STATUS_LABELS,
+  oe as LIB_DICT,
+  Q as MOCK_DEVICE_ROWS,
+  ee as MOCK_ORDERS,
+  ge as MOCK_ORDER_MATERIALS,
+  ne as MOCK_ORDER_OPERATIONS,
+  fe as OP_STATUS_LABELS,
+  x as SCENE_PALETTES,
+  he as STATUS_COLORS,
+  ye as STATUS_LABELS,
+  P as fromDeviceRows,
+  re as normalizeLocale,
+  be as startMockRealtime,
+  l as useFactoryStore
 };

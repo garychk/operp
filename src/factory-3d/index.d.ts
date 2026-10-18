@@ -81,6 +81,14 @@ export declare const MOCK_DEVICE_ROWS: DeviceRow[]
 export declare const MOCK_ORDERS: OrderData[]
 export declare const MOCK_ORDER_OPERATIONS: OrderOperation[]
 
+/** 拖拽布局后的坐标变更（宿主据此回写 factory_3d_device_layout） */
+export interface DeviceLayoutChange {
+  deviceCode: string
+  deviceId?: number
+  sceneX: number
+  sceneZ: number
+}
+
 /** 视图行 → 3D 场景设备模型（未配置坐标时按行序自动排布） */
 export declare function fromDeviceRows(rows: DeviceRow[]): DeviceData[]
 
@@ -93,6 +101,10 @@ export interface FactorySceneProps {
   theme?: 'light' | 'dark'
   /** 跟随宿主语言：'zh' | 'zh-CN' | 'en' | 'en-US'（自动归一） */
   locale?: string
+  /** 布局编辑模式：开启后设备可拖拽摆放 */
+  layoutEditable?: boolean
+  /** 拖拽落位回调：返回全部待回写坐标（宿主 upsert 布局表后清空 pendingLayout） */
+  onLayoutChange?: (changes: DeviceLayoutChange[]) => void
   className?: string
   style?: React.CSSProperties
 }
@@ -128,6 +140,9 @@ export interface FactoryState {
   setTheme: (theme: 'light' | 'dark') => void
   toggleTheme: () => void
   setLocale: (locale: 'zh' | 'en') => void
+  layoutEditable: boolean
+  setLayoutEditable: (editable: boolean) => void
+  clearPendingLayout: () => void
 }
 
 export declare const useFactoryStore: import('zustand').UseBoundStore<

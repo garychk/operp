@@ -98,6 +98,13 @@ BEGIN
       USING ERRCODE = '23502';
   END IF;
 
+  -- 工单必须指定工作中心，否则工序行会落到「无工作中心」的真空地带，
+  -- 3D 驾驶舱 / 派工 / 报工都找不到归属，下游一律断链
+  IF v_order.work_center_id IS NULL THEN
+    RAISE EXCEPTION '生产订单 % 未指定工作中心，不能下达', v_order.order_no
+      USING ERRCODE = '23502';
+  END IF;
+
   IF COALESCE(v_order.status, '') IN ('completed', 'closed', 'cancelled') THEN
     RAISE EXCEPTION 'Cannot generate operations for a production order in status %',
       v_order.status USING ERRCODE = '55000';
@@ -235,6 +242,19 @@ BEGIN
   ) s;
 
   GET DIAGNOSTICS v_op_cnt = ROW_COUNT;
+
+  -- 第二道守卫：即使工单指定了工作中心，若工艺路线里某道工序的主数据本身没配
+  -- 工作中心（此时会回落工单工作中心，见 INSERT 的 COALESCE），理论上不会出现 NULL；
+  -- 这里兜底再查一遍，防止任何一道工序落空
+  IF EXISTS (
+    SELECT 1 FROM public.erp_production_order_operations_s_539dcf81_b
+    WHERE order_id = p_order_id
+      AND is_deleted = 'n'
+      AND work_center_id IS NULL
+  ) THEN
+    RAISE EXCEPTION '生产订单 % 生成的工序存在未指定工作中心的行，请补齐工序主数据或工单的工作中心后重试',
+      v_order.order_no USING ERRCODE = '23502';
+  END IF;
 
   -- 解析出来的工艺路线回写到订单，界面上能看到实际用了哪一版
   IF v_order.routing_id IS NULL THEN
@@ -527,6 +547,12 @@ BEGIN
   IF COALESCE(v_order.status, '') NOT IN ('planned', 'released', 'in_progress') THEN
     RAISE EXCEPTION '订单尚未下达（当前 %），请先下达再开工', COALESCE(v_order.status, 'NULL')
       USING ERRCODE = '55000';
+  END IF;
+
+  -- 防御历史数据：工单必须指定工作中心（下达时已拦，此处兜底，防止老数据绕过）
+  IF v_order.work_center_id IS NULL THEN
+    RAISE EXCEPTION '生产订单 % 未指定工作中心，不能开工', v_order.order_no
+      USING ERRCODE = '23502';
   END IF;
 
   IF v_order.status IS DISTINCT FROM 'in_progress' THEN

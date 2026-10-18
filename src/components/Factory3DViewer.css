@@ -131,7 +131,27 @@
 
 .f3d-legend {
   display: flex;
+  align-items: center;
   gap: 16px;
+}
+.f3d-layout-toggle {
+  border: 1px solid var(--f3d-divider);
+  background: transparent;
+  color: var(--f3d-text-dim);
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.f3d-layout-toggle:hover {
+  color: var(--f3d-text);
+  border-color: var(--f3d-accent);
+}
+.f3d-layout-toggle.active {
+  background: var(--f3d-accent-soft);
+  color: var(--f3d-accent);
+  border-color: var(--f3d-accent);
 }
 .f3d-legend-item {
   display: inline-flex;
