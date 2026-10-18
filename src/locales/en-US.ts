@@ -2969,7 +2969,7 @@ const enUS = {
     "mrp.productionAnalytics.avgLoadRate": "Avg load rate",
     "mrp.productionAnalytics.overload": "Overloaded",
     "mrp.productionAnalytics.factory3d": "3D Production Cockpit",
-    "factory3dViewer.title": "3D Factory · Production Cockpit",
+    "factory3dViewer.title": "OPERP · 3D Factory · Production Cockpit",
     "factory3dViewer.layoutEdit": "Edit layout",
     "factory3dViewer.kpiAvgProgress": "Avg. order progress",
     "factory3dViewer.kpiDevices": "Devices running",

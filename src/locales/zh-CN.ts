@@ -2969,7 +2969,7 @@ const zhCN = {
     "mrp.productionAnalytics.avgLoadRate": "平均负荷率",
     "mrp.productionAnalytics.overload": "超负荷",
     "mrp.productionAnalytics.factory3d": "3D 生产驾驶舱",
-    "factory3dViewer.title": "3D 工厂 · 生产驾驶舱",
+    "factory3dViewer.title": "OPERP · 3D 工厂 · 生产驾驶舱",
     "factory3dViewer.layoutEdit": "编辑布局",
     "factory3dViewer.kpiAvgProgress": "平均订单进度",
     "factory3dViewer.kpiDevices": "设备运行",
