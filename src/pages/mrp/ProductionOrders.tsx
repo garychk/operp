@@ -1194,7 +1194,11 @@ export function ProductionOrders() {
                 <Form.Item label={t('mrp.productionOrders.actualEndDate')} name="actual_end_date">
                   <DatePicker style={{ width: "100%" }} />
                 </Form.Item>
-                <Form.Item label={t('mrp.productionOrders.workCenter')} name="work_center_id">
+                <Form.Item
+                  label={t('mrp.productionOrders.workCenter')}
+                  name="work_center_id"
+                  rules={[{ required: true, message: t('mrp.productionOrders.workCenterPrompt') }]}
+                >
                   <Select placeholder={t('mrp.productionOrders.workCenterPrompt')}>
                     {workCenters.map((w) => (
                       <Option key={w.id} value={w.id}>

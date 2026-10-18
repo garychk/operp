@@ -9,7 +9,16 @@ import {
   LIB_DICT,
   normalizeLocale,
 } from "factory-3d";
-import type { DeviceRow, OrderData, OrderOperation, SceneStatus } from "factory-3d";
+import type {
+  DeviceLayoutChange,
+  DeviceRow,
+  OrderData,
+  OrderOperation,
+  SceneStatus,
+  SceneObject,
+  SceneObjectKind,
+  SceneObjectChange,
+} from "factory-3d";
 import { supabase } from "../utils/supabase";
 import { useErpDarkMode } from "../hooks/useErpDarkMode";
 import "./Factory3DViewer.css";
@@ -51,11 +60,29 @@ interface OrderMaterial {
 const num = (v: number | null | undefined) => Number(v || 0);
 const round = (v: number | null | undefined) => Math.round(num(v));
 
+/** 各类型可绑定业务对象下拉清单（AGV/仓库/人员/货车） */
+type BindingOptions = Partial<Record<SceneObjectKind, { id: number | string; label: string }[]>>;
+
+/** 场景对象持久化行（factory_3d_scene_object） */
+interface SceneObjectRow {
+  id: number;
+  obj_id: string;
+  kind: SceneObjectKind;
+  name: string;
+  scene_x: number;
+  scene_z: number;
+  bind_id: string | null;
+  bind_label: string | null;
+  status: string | null;
+}
+
 export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
   const { t, i18n } = useTranslation();
   const isDark = useErpDarkMode();
   const [loaded, setLoaded] = useState(false);
   const [materials, setMaterials] = useState<OrderMaterial[]>([]);
+  const [layoutMode, setLayoutMode] = useState(false);
+  const [bindingOptions, setBindingOptions] = useState<BindingOptions>({});
 
   const deviceRows = useFactoryStore((s) => s.deviceRows);
   const orders = useFactoryStore((s) => s.orders);
@@ -75,18 +102,47 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     let dispose: (() => void) | undefined;
 
     const load = async () => {
-      const { setDeviceRows, setOrders, setOperations } =
+      const { setDeviceRows, setOrders, setOperations, setSceneObjects } =
         useFactoryStore.getState();
-      const [dev, ord, ops, mat] = await Promise.all([
+      const [dev, ord, ops, mat, agvs, whs, emps, trks, objs] = await Promise.all([
         supabase.from("vw_factory_3d_devices").select("*"),
         supabase.from("vw_factory_3d_orders").select("*"),
         supabase.from("vw_factory_3d_order_operations").select("*"),
         supabase.from("vw_factory_3d_order_materials").select("*"),
+        supabase.from("erp_agvs_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
+        supabase.from("erp_warehouses_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
+        supabase.from("erp_employees_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
+        supabase.from("erp_vehicles_s_539dcf81_b").select("id, plate_no").eq("is_deleted", "n"),
+        supabase.from("factory_3d_scene_object_s_539dcf81_b").select("*").eq("is_deleted", "n"),
       ]);
       if (dev.data) setDeviceRows(dev.data as DeviceRow[]);
       if (ord.data) setOrders(ord.data as OrderData[]);
       if (ops.data) setOperations(ops.data as OrderOperation[]);
       if (mat.data) setMaterials(mat.data as OrderMaterial[]);
+
+      // 各类型可绑定业务对象清单
+      setBindingOptions({
+        agv: (agvs.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
+        warehouse: (whs.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
+        person: (emps.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
+        truck: (trks.data ?? []).map((r) => ({ id: r.id, label: r.plate_no })),
+      });
+
+      // 已持久化的场景对象 → 还原到场景
+      const rows = (objs.data ?? []) as SceneObjectRow[];
+      if (rows.length > 0) {
+        setSceneObjects(
+          rows.map((r) => ({
+            id: r.obj_id,
+            kind: r.kind,
+            name: r.name,
+            position: [r.scene_x, 0, r.scene_z],
+            bindId: r.bind_id ?? undefined,
+            bindLabel: r.bind_label ?? undefined,
+            status: (r.status as SceneObject["status"]) ?? undefined,
+          })),
+        );
+      }
       setLoaded(true);
     };
 
@@ -118,8 +174,118 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     if (!open) {
       selectDevice(null);
       selectOrder(null);
+      setLayoutMode(false);
     }
   }, [open, selectDevice, selectOrder]);
+
+  // 重新拉设备视图（拖拽回写后刷新 scene_x/scene_z）
+  const refreshDevices = async () => {
+    const { setDeviceRows } = useFactoryStore.getState();
+    const { data } = await supabase.from("vw_factory_3d_devices").select("*");
+    if (data) setDeviceRows(data as DeviceRow[]);
+  };
+
+  // 拖拽落位回写：把待回写坐标写入布局表后清空 pendingLayout，并刷新设备坐标。
+  // 布局表唯一索引是「部分索引」(tenant_id,work_center_id WHERE is_deleted='n')，
+  // PostgreSQL 的 ON CONFLICT 不支持部分索引，故改为「先查后写」：存在则 update、否则 insert。
+  const handleLayoutChange = async (changes: DeviceLayoutChange[]) => {
+    const rows = changes
+      .filter((c) => c.deviceId != null)
+      .map((c) => ({
+        work_center_id: c.deviceId!,
+        scene_x: c.sceneX,
+        scene_z: c.sceneZ,
+      }));
+    if (rows.length === 0) return;
+
+    // 查出这些工作中心已存在的未删布局行（RLS 自动带租户隔离）
+    const ids = rows.map((r) => r.work_center_id);
+    const { data: existing, error: qErr } = await supabase
+      .from("factory_3d_device_layout_s_539dcf81_b")
+      .select("id, work_center_id")
+      .in("work_center_id", ids)
+      .eq("is_deleted", "n");
+    if (qErr) {
+      console.error("3D 布局回写失败（查询）：", qErr.message);
+      return;
+    }
+
+    const existingMap = new Map(
+      (existing ?? []).map((e) => [e.work_center_id, e.id]),
+    );
+    const toUpdate = rows.filter((r) => existingMap.has(r.work_center_id));
+    const toInsert = rows.filter((r) => !existingMap.has(r.work_center_id));
+
+    if (toUpdate.length > 0) {
+      const { error } = await supabase
+        .from("factory_3d_device_layout_s_539dcf81_b")
+        .upsert(toUpdate.map((r) => ({ id: existingMap.get(r.work_center_id), ...r })));
+      if (error) {
+        console.error("3D 布局回写失败（更新）：", error.message);
+        return;
+      }
+    }
+    if (toInsert.length > 0) {
+      const { error } = await supabase
+        .from("factory_3d_device_layout_s_539dcf81_b")
+        .insert(toInsert);
+      if (error) {
+        console.error("3D 布局回写失败（新增）：", error.message);
+        return;
+      }
+    }
+
+    useFactoryStore.getState().clearPendingLayout();
+    await refreshDevices();
+  };
+
+  // 场景对象单条变更增量持久化（add/move/rename/bind/remove）
+  const handleSceneObjectChange = async (change: SceneObjectChange) => {
+    const { action, object } = change;
+    const base = {
+      obj_id: object.id,
+      kind: object.kind,
+      name: object.name,
+      scene_x: object.position[0],
+      scene_z: object.position[2],
+      bind_id: object.bindId != null ? String(object.bindId) : null,
+      bind_label: object.bindLabel ?? null,
+      status: object.status ?? null,
+    };
+    if (action === "remove") {
+      const { error } = await supabase
+        .from("factory_3d_scene_object_s_539dcf81_b")
+        .update({ is_deleted: "y" })
+        .eq("obj_id", object.id);
+      if (error) console.error("3D 场景对象删除失败：", error.message);
+      return;
+    }
+    // add/move/rename/bind 都走 upsert（obj_id 为键，场景对象表唯一索引是
+    // 部分索引 (tenant_id,obj_id WHERE is_deleted='n')，同样不支持 ON CONFLICT，
+    // 故先查后写）
+    const { data: existing, error: qErr } = await supabase
+      .from("factory_3d_scene_object_s_539dcf81_b")
+      .select("id")
+      .eq("obj_id", object.id)
+      .eq("is_deleted", "n")
+      .maybeSingle();
+    if (qErr) {
+      console.error("3D 场景对象查询失败：", qErr.message);
+      return;
+    }
+    if (existing) {
+      const { error } = await supabase
+        .from("factory_3d_scene_object_s_539dcf81_b")
+        .update(base)
+        .eq("id", existing.id);
+      if (error) console.error("3D 场景对象更新失败：", error.message);
+    } else {
+      const { error } = await supabase
+        .from("factory_3d_scene_object_s_539dcf81_b")
+        .insert(base);
+      if (error) console.error("3D 场景对象新增失败：", error.message);
+    }
+  };
 
   // ---------------------------------------------------------------- 派生数据
   const selectedRow =
@@ -169,6 +335,10 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
               devices={deviceRows.length > 0 ? fromDeviceRows(deviceRows) : undefined}
               theme={isDark ? "dark" : "light"}
               locale={i18n.language}
+              layoutEditable={layoutMode}
+              onLayoutChange={handleLayoutChange}
+              bindingOptions={bindingOptions}
+              onSceneObjectChange={handleSceneObjectChange}
             />
           ) : (
             <div style={{ padding: 24, color: "#9aa0a9" }}>…</div>
@@ -203,6 +373,12 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
             </div>
           </div>
           <div className="f3d-legend">
+            <button
+              className={`f3d-layout-toggle${layoutMode ? " active" : ""}`}
+              onClick={() => setLayoutMode((v) => !v)}
+            >
+              {t("factory3dViewer.layoutEdit")}
+            </button>
             {SCENE_ORDER.map((s) => (
               <span key={s} className="f3d-legend-item">
                 <i style={{ background: STATUS_COLORS[s] }} />

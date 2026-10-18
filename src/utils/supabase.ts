@@ -3,6 +3,8 @@ import type {
   ErpCompaniesS539Dcf81BRow,
   ErpDepartmentsS539Dcf81BRow,
   ErpEmployeesS539Dcf81BRow,
+  ErpAgvsS539Dcf81BRow,
+  ErpVehiclesS539Dcf81BRow,
   ErpCustomersS539Dcf81BRow,
   ErpSuppliersS539Dcf81BRow,
   ErpProductCategoriesS539Dcf81BRow,
@@ -172,6 +174,8 @@ export type Tables = {
   erp_companies_s_539dcf81_b: { Row: ErpCompaniesS539Dcf81BRow };
   erp_departments_s_539dcf81_b: { Row: ErpDepartmentsS539Dcf81BRow };
   erp_employees_s_539dcf81_b: { Row: ErpEmployeesS539Dcf81BRow };
+  erp_agvs_s_539dcf81_b: { Row: ErpAgvsS539Dcf81BRow };
+  erp_vehicles_s_539dcf81_b: { Row: ErpVehiclesS539Dcf81BRow };
   erp_customers_s_539dcf81_b: { Row: ErpCustomersS539Dcf81BRow };
   erp_suppliers_s_539dcf81_b: { Row: ErpSuppliersS539Dcf81BRow };
   erp_product_categories_s_539dcf81_b: { Row: ErpProductCategoriesS539Dcf81BRow };
