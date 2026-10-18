@@ -223,6 +223,38 @@ export interface ErpEmployeesS539Dcf81BRow {
 export type ErpEmployeesS539Dcf81BInsert = Omit<ErpEmployeesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
 export type ErpEmployeesS539Dcf81BUpdate = Partial<ErpEmployeesS539Dcf81BInsert>;
 
+/** AGV 小车主数据（deploy_136）。3D 驾驶舱「AGV 小车」场景对象的绑定源 */
+export interface ErpAgvsS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  code: string;
+  name: string;
+  status: string | null;
+  remark: string | null;
+}
+export type ErpAgvsS539Dcf81BInsert = Omit<ErpAgvsS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpAgvsS539Dcf81BUpdate = Partial<ErpAgvsS539Dcf81BInsert>;
+
+/** 货车主数据（deploy_136）。3D 驾驶舱「货车」场景对象的绑定源 */
+export interface ErpVehiclesS539Dcf81BRow {
+  id: number;
+  corp_id: string | null;
+  emp_id: string | null;
+  is_deleted: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  plate_no: string;
+  name: string | null;
+  status: string | null;
+  remark: string | null;
+}
+export type ErpVehiclesS539Dcf81BInsert = Omit<ErpVehiclesS539Dcf81BRow, 'id' | 'corp_id' | 'emp_id' | 'is_deleted' | 'created_at' | 'updated_at'>;
+export type ErpVehiclesS539Dcf81BUpdate = Partial<ErpVehiclesS539Dcf81BInsert>;
+
 export interface ErpFixedAssetsS539Dcf81BRow {
   id: number;
   corp_id: string | null;

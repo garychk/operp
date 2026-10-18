@@ -377,3 +377,16 @@
 .f3d-ops .f3d-dim {
   font-size: 12px;
 }
+
+/* ---------- 场景对象绑定下拉：暗色下 option 原生渲染白底，需显式配色 ----------
+   factory-3d 的绑定下拉是原生 <select>（color:inherit），暗色模式下继承白字，
+   但展开的 <option> 列表走浏览器原生渲染（白底）→ 白字白底看不清。
+   select 本体是内联样式盖不掉，option 的配色在宿主作用域内强制修正。 */
+[data-erp-dark='true'] .f3d-canvas select option {
+  background: #1f2329;
+  color: #e8eaed;
+}
+[data-erp-dark='true'] .f3d-canvas select option:checked {
+  background: #2d3138;
+  color: #ffffff;
+}

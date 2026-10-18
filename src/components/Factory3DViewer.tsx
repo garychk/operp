@@ -15,6 +15,9 @@ import type {
   OrderData,
   OrderOperation,
   SceneStatus,
+  SceneObject,
+  SceneObjectKind,
+  SceneObjectChange,
 } from "factory-3d";
 import { supabase } from "../utils/supabase";
 import { useErpDarkMode } from "../hooks/useErpDarkMode";
@@ -57,12 +60,29 @@ interface OrderMaterial {
 const num = (v: number | null | undefined) => Number(v || 0);
 const round = (v: number | null | undefined) => Math.round(num(v));
 
+/** 各类型可绑定业务对象下拉清单（AGV/仓库/人员/货车） */
+type BindingOptions = Partial<Record<SceneObjectKind, { id: number | string; label: string }[]>>;
+
+/** 场景对象持久化行（factory_3d_scene_object） */
+interface SceneObjectRow {
+  id: number;
+  obj_id: string;
+  kind: SceneObjectKind;
+  name: string;
+  scene_x: number;
+  scene_z: number;
+  bind_id: string | null;
+  bind_label: string | null;
+  status: string | null;
+}
+
 export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
   const { t, i18n } = useTranslation();
   const isDark = useErpDarkMode();
   const [loaded, setLoaded] = useState(false);
   const [materials, setMaterials] = useState<OrderMaterial[]>([]);
   const [layoutMode, setLayoutMode] = useState(false);
+  const [bindingOptions, setBindingOptions] = useState<BindingOptions>({});
 
   const deviceRows = useFactoryStore((s) => s.deviceRows);
   const orders = useFactoryStore((s) => s.orders);
@@ -82,18 +102,47 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     let dispose: (() => void) | undefined;
 
     const load = async () => {
-      const { setDeviceRows, setOrders, setOperations } =
+      const { setDeviceRows, setOrders, setOperations, setSceneObjects } =
         useFactoryStore.getState();
-      const [dev, ord, ops, mat] = await Promise.all([
+      const [dev, ord, ops, mat, agvs, whs, emps, trks, objs] = await Promise.all([
         supabase.from("vw_factory_3d_devices").select("*"),
         supabase.from("vw_factory_3d_orders").select("*"),
         supabase.from("vw_factory_3d_order_operations").select("*"),
         supabase.from("vw_factory_3d_order_materials").select("*"),
+        supabase.from("erp_agvs_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
+        supabase.from("erp_warehouses_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
+        supabase.from("erp_employees_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
+        supabase.from("erp_vehicles_s_539dcf81_b").select("id, plate_no").eq("is_deleted", "n"),
+        supabase.from("factory_3d_scene_object_s_539dcf81_b").select("*").eq("is_deleted", "n"),
       ]);
       if (dev.data) setDeviceRows(dev.data as DeviceRow[]);
       if (ord.data) setOrders(ord.data as OrderData[]);
       if (ops.data) setOperations(ops.data as OrderOperation[]);
       if (mat.data) setMaterials(mat.data as OrderMaterial[]);
+
+      // 各类型可绑定业务对象清单
+      setBindingOptions({
+        agv: (agvs.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
+        warehouse: (whs.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
+        person: (emps.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
+        truck: (trks.data ?? []).map((r) => ({ id: r.id, label: r.plate_no })),
+      });
+
+      // 已持久化的场景对象 → 还原到场景
+      const rows = (objs.data ?? []) as SceneObjectRow[];
+      if (rows.length > 0) {
+        setSceneObjects(
+          rows.map((r) => ({
+            id: r.obj_id,
+            kind: r.kind,
+            name: r.name,
+            position: [r.scene_x, 0, r.scene_z],
+            bindId: r.bind_id ?? undefined,
+            bindLabel: r.bind_label ?? undefined,
+            status: (r.status as SceneObject["status"]) ?? undefined,
+          })),
+        );
+      }
       setLoaded(true);
     };
 
@@ -190,6 +239,54 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     await refreshDevices();
   };
 
+  // 场景对象单条变更增量持久化（add/move/rename/bind/remove）
+  const handleSceneObjectChange = async (change: SceneObjectChange) => {
+    const { action, object } = change;
+    const base = {
+      obj_id: object.id,
+      kind: object.kind,
+      name: object.name,
+      scene_x: object.position[0],
+      scene_z: object.position[2],
+      bind_id: object.bindId != null ? String(object.bindId) : null,
+      bind_label: object.bindLabel ?? null,
+      status: object.status ?? null,
+    };
+    if (action === "remove") {
+      const { error } = await supabase
+        .from("factory_3d_scene_object_s_539dcf81_b")
+        .update({ is_deleted: "y" })
+        .eq("obj_id", object.id);
+      if (error) console.error("3D 场景对象删除失败：", error.message);
+      return;
+    }
+    // add/move/rename/bind 都走 upsert（obj_id 为键，场景对象表唯一索引是
+    // 部分索引 (tenant_id,obj_id WHERE is_deleted='n')，同样不支持 ON CONFLICT，
+    // 故先查后写）
+    const { data: existing, error: qErr } = await supabase
+      .from("factory_3d_scene_object_s_539dcf81_b")
+      .select("id")
+      .eq("obj_id", object.id)
+      .eq("is_deleted", "n")
+      .maybeSingle();
+    if (qErr) {
+      console.error("3D 场景对象查询失败：", qErr.message);
+      return;
+    }
+    if (existing) {
+      const { error } = await supabase
+        .from("factory_3d_scene_object_s_539dcf81_b")
+        .update(base)
+        .eq("id", existing.id);
+      if (error) console.error("3D 场景对象更新失败：", error.message);
+    } else {
+      const { error } = await supabase
+        .from("factory_3d_scene_object_s_539dcf81_b")
+        .insert(base);
+      if (error) console.error("3D 场景对象新增失败：", error.message);
+    }
+  };
+
   // ---------------------------------------------------------------- 派生数据
   const selectedRow =
     deviceRows.find((r) => r.device_code === selectedDeviceCode) ?? null;
@@ -240,6 +337,8 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
               locale={i18n.language}
               layoutEditable={layoutMode}
               onLayoutChange={handleLayoutChange}
+              bindingOptions={bindingOptions}
+              onSceneObjectChange={handleSceneObjectChange}
             />
           ) : (
             <div style={{ padding: 24, color: "#9aa0a9" }}>…</div>

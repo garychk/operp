@@ -89,6 +89,37 @@ export interface DeviceLayoutChange {
   sceneZ: number
 }
 
+/** 场景对象类型：工作中心设备之外的可摆放对象 */
+export type SceneObjectKind = 'agv' | 'warehouse' | 'person' | 'truck'
+export declare const SCENE_OBJECT_KINDS: SceneObjectKind[]
+
+/** 可绑定的业务对象（AGV / 仓库 / 员工） */
+export interface BindingOption {
+  id: number | string
+  label: string
+}
+
+/** 场景对象：AGV 小车 / 仓储房屋 / 人员，可绑定一条业务数据 */
+export interface SceneObject {
+  id: string
+  kind: SceneObjectKind
+  name: string
+  position: [number, number, number]
+  bindId?: number | string
+  bindLabel?: string
+  status?: 'running' | 'idle' | 'fault'
+}
+
+/** 场景对象操作类型 */
+export type SceneObjectAction = 'add' | 'move' | 'rename' | 'bind' | 'remove'
+
+/** 场景对象单条变更（宿主据此增量 upsert / delete 落库） */
+export interface SceneObjectChange {
+  action: SceneObjectAction
+  /** 变更后的对象快照；remove 时为被删除对象快照 */
+  object: SceneObject
+}
+
 /** 视图行 → 3D 场景设备模型（未配置坐标时按行序自动排布） */
 export declare function fromDeviceRows(rows: DeviceRow[]): DeviceData[]
 
@@ -105,6 +136,16 @@ export interface FactorySceneProps {
   layoutEditable?: boolean
   /** 拖拽落位回调：返回全部待回写坐标（宿主 upsert 布局表后清空 pendingLayout） */
   onLayoutChange?: (changes: DeviceLayoutChange[]) => void
+  /** 场景对象（AGV / 仓储房屋 / 人员）初始数据 */
+  sceneObjects?: SceneObject[]
+  /** 各类型可绑定业务对象下拉清单 */
+  bindingOptions?: Partial<Record<SceneObjectKind, BindingOption[]>>
+  /** 左侧“添加对象”面板是否显示（默认 true，仅布局编辑模式下可见） */
+  showObjectPalette?: boolean
+  /** 场景对象增删改/绑定回调（整表覆盖，宿主在此持久化） */
+  onSceneObjectsChange?: (objects: SceneObject[]) => void
+  /** 场景对象单条变更回调（add/move/rename/bind/remove） */
+  onSceneObjectChange?: (change: SceneObjectChange) => void
   className?: string
   style?: React.CSSProperties
 }
@@ -114,6 +155,15 @@ export declare const LIB_DICT: Record<'zh' | 'en', {
   sceneStatus: Record<SceneStatus, string>
   opStatus: Record<OrderOperation['operation_status'], string>
   kitStatus: Record<OrderData['material_kit_status'], string>
+  objectKind: Record<SceneObjectKind, string>
+  palette: {
+    title: string
+    hint: string
+    binding: string
+    unbound: string
+    remove: string
+    name: string
+  }
 }>
 export declare function normalizeLocale(input?: string | null): 'zh' | 'en'
 
@@ -128,6 +178,10 @@ export interface FactoryState {
   selectedOrderId: number | null
   theme: 'light' | 'dark'
   locale: 'zh' | 'en'
+  layoutEditable: boolean
+  pendingLayout: Record<string, { sceneX: number; sceneZ: number }>
+  sceneObjects: SceneObject[]
+  selectedSceneObjectId: string | null
   setDeviceRows: (rows: DeviceRow[]) => void
   setDevices: (devices: DeviceData[]) => void
   updateDeviceStatus: (code: string, status: DeviceStatus) => void
@@ -140,13 +194,29 @@ export interface FactoryState {
   setTheme: (theme: 'light' | 'dark') => void
   toggleTheme: () => void
   setLocale: (locale: 'zh' | 'en') => void
-  layoutEditable: boolean
   setLayoutEditable: (editable: boolean) => void
+  moveDevice: (deviceCode: string, sceneX: number, sceneZ: number) => void
   clearPendingLayout: () => void
+  setOnLayoutChange: (cb: ((changes: DeviceLayoutChange[]) => void) | null) => void
+  setSceneObjects: (objects: SceneObject[]) => void
+  addSceneObject: (kind: SceneObjectKind, name?: string) => SceneObject
+  moveSceneObject: (id: string, sceneX: number, sceneZ: number) => void
+  renameSceneObject: (id: string, name: string) => void
+  bindSceneObject: (id: string, bindId?: number | string, bindLabel?: string) => void
+  removeSceneObject: (id: string) => void
+  selectSceneObject: (id: string | null) => void
+  setOnSceneObjectsChange: (cb: ((objects: SceneObject[]) => void) | null) => void
+  setOnSceneObjectChange: (cb: ((change: SceneObjectChange) => void) | null) => void
 }
 
 export declare const useFactoryStore: import('zustand').UseBoundStore<
   import('zustand').StoreApi<FactoryState>
 >
+
+export declare function ObjectPalette(props: {
+  bindingOptions?: Partial<Record<SceneObjectKind, BindingOption[]>>
+}): React.JSX.Element | null
+
+export declare const KIND_COLORS: Record<SceneObjectKind, { body: string; accent: string }>
 
 export declare function startMockRealtime(intervalMs?: number): () => void
