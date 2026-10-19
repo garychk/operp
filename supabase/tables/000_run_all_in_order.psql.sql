@@ -157,3 +157,9 @@
 \i supabase/tables/deploy_132_quality_return_creates_purchase_return.sql
 \i supabase/tables/deploy_133_quality_scrap_rework_closed_loop.sql
 \i supabase/tables/deploy_134_quality_inspection_bad_quantity.sql
+\i supabase/tables/deploy_135_factory_3d_dashboard.sql
+\i supabase/tables/deploy_135_patch_order_materials_view.sql
+\i supabase/tables/deploy_136_factory_3d_scene_objects.sql
+\i supabase/tables/deploy_136_patch_scene_object_work_center_kind.sql
+\i supabase/tables/deploy_137_agv_vehicle_menu.sql
+\i supabase/tables/deploy_138_factory_3d_bin_stock.sql
