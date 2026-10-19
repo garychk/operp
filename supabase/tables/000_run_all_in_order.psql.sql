@@ -163,3 +163,4 @@
 \i supabase/tables/deploy_136_patch_scene_object_work_center_kind.sql
 \i supabase/tables/deploy_137_agv_vehicle_menu.sql
 \i supabase/tables/deploy_138_factory_3d_bin_stock.sql
+\i supabase/tables/deploy_139_employee_workload.sql

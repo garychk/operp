@@ -34,6 +34,7 @@ import { formatQuantity } from "../../utils/money";
 import dayjs from "dayjs";
 import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { ProductionOrderOperations } from "./ProductionOrderOperations";
+import { ProductionOrderMaterialIssues } from "./ProductionOrderMaterialIssues";
 import { useTranslation } from "react-i18next";
 
 type ProductionOrder = Tables["erp_production_orders_s_539dcf81_b"]["Row"];
@@ -1240,6 +1241,13 @@ export function ProductionOrders() {
         detailItems={
           editingOrder?.id
             ? [
+                {
+                  key: "material-issues",
+                  label: t("mrp.productionOrders.tabMaterialIssues"),
+                  children: (
+                    <ProductionOrderMaterialIssues orderId={editingOrder.id} />
+                  ),
+                },
                 {
                   key: "operations",
                   label: t("mrp.productionOrders.tabOperations"),

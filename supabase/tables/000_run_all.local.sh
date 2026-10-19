@@ -181,6 +181,7 @@ ORDER=(
   deploy_136_patch_scene_object_work_center_kind.sql
   deploy_137_agv_vehicle_menu.sql
   deploy_138_factory_3d_bin_stock.sql
+  deploy_139_employee_workload.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

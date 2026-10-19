@@ -96,6 +96,8 @@ export function ProductionReports() {
   const [form] = Form.useForm();
   const [confirming, setConfirming] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  // 当前选中工单工序行的「单位标准工时」——选工序后按报工数量折算人工工时用
+  const [standardHoursPerUnit, setStandardHoursPerUnit] = useState<number>(0);
 
   useEffect(() => {
     fetchReports();
@@ -266,6 +268,8 @@ export function ProductionReports() {
   const handleEdit = (record: ProductionReport) => {
     // 已确认的报工：允许点进弹窗「只读查看」，表单禁用、不可保存
     setEditingReport(record);
+    // 编辑态不自动折算：重置单位标准工时，保留历史人工工时，除非用户重新选工序
+    setStandardHoursPerUnit(0);
     form.setFieldsValue({
       ...record,
       report_date: record.report_date ? dayjs(record.report_date) : undefined,
@@ -459,6 +463,7 @@ export function ProductionReports() {
     }
     setEditingReport(null);
     setOrderOperations([]);
+    setStandardHoursPerUnit(0);
     form.setFieldsValue({
       report_no: reportNo,
       report_date: dayjs(new Date()),
@@ -507,6 +512,7 @@ export function ProductionReports() {
   const handleOrderChange = (orderId: number | undefined) => {
     // 换工单 → 原来挂的工序行必然不再适用，先清掉，避免存出跨工单的脏关联
     form.setFieldsValue({ order_operation_id: undefined });
+    setStandardHoursPerUnit(0);
     void fetchOrderOperations(orderId);
     if (!orderId) return;
     const order = orders.find((o) => o.id === orderId);
@@ -515,16 +521,24 @@ export function ProductionReports() {
     }
   };
 
-  /** 选工单工序行 → 同步带出工序、工作中心与计划工时（人工工时=计划工时，机器工时先不填） */
+  /** 选工单工序行 → 同步带出工序、工作中心与单位标准工时；
+   *  人工工时 = 单位标准工时 × 本次报工数量（不再直接用整单 planned_hours，否则会把
+   *  整张工单的总计划工时误当成本次报工工时）。 */
   const handleOrderOperationChange = (opRowId: number | undefined) => {
-    if (!opRowId) return;
+    if (!opRowId) {
+      setStandardHoursPerUnit(0);
+      return;
+    }
     const row = orderOperations.find((r) => r.id === opRowId);
     if (!row) return;
+    const perUnit = Number(row.standard_hours_per_unit || 0);
+    setStandardHoursPerUnit(perUnit);
+    const qty = Number(form.getFieldValue("completed_quantity") || 0);
     form.setFieldsValue({
       operation_id: row.operation_id ?? undefined,
       work_center_id: row.work_center_id ?? form.getFieldValue("work_center_id"),
-      // 计划工时（已含准备工时）→ 人工工时；机器工时先不填，留空待用户手填
-      labor_hours: row.planned_hours != null ? Number(row.planned_hours) : undefined,
+      // 人工工时 = 单位标准工时 × 报工数量（报工数量还没填时先记 0，数量变化后联动折算）
+      labor_hours: Number((perUnit * qty).toFixed(2)),
     });
   };
 
@@ -591,11 +605,20 @@ export function ProductionReports() {
   const formWorkCenterId = Form.useWatch("work_center_id", form);
   const formLaborHours = Form.useWatch("labor_hours", form);
   const formMachineHours = Form.useWatch("machine_hours", form);
+  const formCompletedQuantity = Form.useWatch("completed_quantity", form);
   const estimatedCost = estimateLaborCost(
     formWorkCenterId ?? null,
     Number(formLaborHours || 0),
     Number(formMachineHours || 0),
   );
+
+  // 报工数量变化 → 按「单位标准工时 × 报工数量」联动折算人工工时
+  // （只有已选中带单位标准工时的工单工序行时才折算，避免覆盖手填工时）
+  useEffect(() => {
+    if (standardHoursPerUnit <= 0) return;
+    const qty = Number(formCompletedQuantity || 0);
+    form.setFieldsValue({ labor_hours: Number((standardHoursPerUnit * qty).toFixed(2)) });
+  }, [formCompletedQuantity, standardHoursPerUnit, form]);
 
   const columns: SuperTableColumn<ProductionReport>[] = [
     {

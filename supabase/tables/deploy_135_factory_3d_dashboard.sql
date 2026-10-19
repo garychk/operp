@@ -225,7 +225,11 @@ SELECT
   p.planned_end_date,
   -- 工序口径进度（报工驱动，deploy_115）
   o.operation_progress_percent,
-  -- 物料齐套汇总（口径：工单材料行 issued >= planned 即齐套）
+  -- 物料齐套汇总（口径：按物料聚合的「全仓现存量 >= 需求量」即齐料）。
+  -- 2026-10-19 从「issued >= planned」改为实物库存口径：issued 由草稿领料单创建即回写，
+  -- 但库存要到领料单过账才扣，导致「单子还是草稿、仓库没料」也显示齐料（假齐料）。
+  -- 这里按物料 SUM 需求、取全仓现存量（SUM quantity，与 production_kit_check 同口径），
+  -- 现存量 >= 需求量的物料算 ready；同一物料多行会被聚合，不会把同一批库存重复算成多行齐料。
   COALESCE(mat.line_total, 0)     AS material_line_total,
   COALESCE(mat.line_ready, 0)     AS material_line_ready,
   COALESCE(mat.line_total, 0) - COALESCE(mat.line_ready, 0) AS material_line_short,
@@ -238,13 +242,24 @@ FROM public.vw_erp_production_progress p
 JOIN public.erp_production_orders_s_539dcf81_b o
   ON o.id = p.order_id AND o.tenant_id = p.tenant_id
 LEFT JOIN LATERAL (
-  SELECT COUNT(*)::int                                        AS line_total,
-         COUNT(*) FILTER (WHERE d.issued_quantity >= d.planned_quantity
-                             AND COALESCE(d.planned_quantity, 0) > 0)::int AS line_ready
-    FROM public.erp_production_order_details_s_539dcf81_b d
-   WHERE d.order_id = p.order_id
-     AND d.tenant_id = p.tenant_id
-     AND COALESCE(d.is_deleted, 'n') = 'n'
+  SELECT COUNT(*)::int AS line_total,
+         COUNT(*) FILTER (WHERE m.need_qty > 0 AND m.onhand_qty >= m.need_qty)::int AS line_ready
+    FROM (
+      SELECT d.material_id,
+             SUM(COALESCE(d.planned_quantity, 0)) AS need_qty,
+             COALESCE((
+               SELECT SUM(i.quantity)
+                 FROM public.erp_inventory_s_539dcf81_b i
+                WHERE i.product_id = d.material_id
+                  AND COALESCE(i.is_deleted, 'n') = 'n'
+             ), 0) AS onhand_qty
+        FROM public.erp_production_order_details_s_539dcf81_b d
+       WHERE d.order_id = p.order_id
+         AND d.tenant_id = p.tenant_id
+         AND COALESCE(d.is_deleted, 'n') = 'n'
+         AND d.material_id IS NOT NULL
+       GROUP BY d.material_id
+    ) m
 ) mat ON TRUE
 WHERE p.status IN ('released', 'in_progress')
   AND COALESCE(o.is_deleted, 'n') = 'n';
@@ -273,7 +288,9 @@ SELECT
   oo.plan_start_date,
   oo.plan_end_date,
   oo.actual_start_date,
-  oo.actual_end_date
+  oo.actual_end_date,
+  emp.id          AS assignee_id,
+  oo.standard_hours_per_unit
 FROM public.erp_production_order_operations_s_539dcf81_b oo
 JOIN public.erp_production_orders_s_539dcf81_b o
   ON o.id = oo.order_id AND o.tenant_id = oo.tenant_id
@@ -341,12 +358,20 @@ SELECT
   p.specification          AS material_spec,
   d.planned_quantity,
   d.issued_quantity,
-  COALESCE(d.unit, p.unit) AS unit
+  COALESCE(d.unit, p.unit) AS unit,
+  -- 全仓现存量（SUM quantity，不区分库位/状态），供齐料展示：现存量 vs 需求量
+  COALESCE(inv.onhand, 0)  AS onhand_quantity
 FROM public.erp_production_order_details_s_539dcf81_b d
 JOIN public.erp_production_orders_s_539dcf81_b o
   ON o.id = d.order_id AND o.tenant_id = d.tenant_id
 LEFT JOIN public.erp_products_s_539dcf81_b p
   ON p.id = d.material_id
+LEFT JOIN LATERAL (
+  SELECT SUM(i.quantity) AS onhand
+    FROM public.erp_inventory_s_539dcf81_b i
+   WHERE i.product_id = d.material_id
+     AND COALESCE(i.is_deleted, 'n') = 'n'
+) inv ON TRUE
 WHERE COALESCE(d.is_deleted, 'n') = 'n'
   AND COALESCE(o.is_deleted, 'n') = 'n'
   AND o.status IN ('released', 'in_progress');

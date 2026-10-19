@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Button, Modal, Progress, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
-import { ReloadOutlined, RocketOutlined } from "@ant-design/icons";
+import { ReloadOutlined, RocketOutlined, FileAddOutlined } from "@ant-design/icons";
 import { supabase } from "../../utils/supabase";
 import type { Tables } from "../../utils/supabase";
 import { formatQuantity } from "../../utils/money";
 import { logWithTiming } from "../../utils/logger";
+import { nextDocumentNo } from "../../utils/documentNaming";
 import { useTranslation } from "react-i18next";
+import dayjs from "dayjs";
 
 type OrderOperation = Tables["erp_production_order_operations_s_539dcf81_b"]["Row"];
 type Operation = Tables["erp_operations_s_539dcf81_b"]["Row"];
@@ -13,6 +15,8 @@ type WorkCenter = Tables["erp_work_centers_s_539dcf81_b"]["Row"];
 type Employee = Tables["erp_employees_s_539dcf81_b"]["Row"];
 
 const OPERATIONS_TABLE = "erp_production_order_operations_s_539dcf81_b";
+const REPORTS_TABLE = "erp_production_reports_s_539dcf81_b";
+const REPORT_DOC_TYPE = "production_report";
 const RELEASE_RPC = "release_production_order";
 const STATUS_LABELS = ["pending", "in_progress", "completed", "cancelled"] as const;
 
@@ -48,6 +52,7 @@ export function ProductionOrderOperations({
   const [loading, setLoading] = useState(false);
   const [assigning, setAssigning] = useState<number | null>(null);
   const [releasing, setReleasing] = useState(false);
+  const [generatingReports, setGeneratingReports] = useState(false);
 
   const fetchRows = useCallback(async () => {
     if (!orderId) return;
@@ -193,6 +198,79 @@ export function ProductionOrderOperations({
     in_progress: { text: t("mrp.productionOrderOperations.statusInProgress"), color: "processing" },
     completed: { text: t("mrp.productionOrderOperations.statusCompleted"), color: "success" },
     cancelled: { text: t("mrp.productionOrderOperations.statusCancelled"), color: "error" },
+  };
+
+  // 把「未完成工序」的剩余计划数量生成草稿报工单。
+  // 口径：status != cancelled 且 planned_quantity > completed_quantity 的工序，
+  // 每道工序一张草稿报工单，数量 = 计划 - 已完成（报废不参与剩余计算）。
+  // 报工单只记工时、不入成本（草稿），后续到「生产报工」确认后才会回写工序完工数与进度。
+  const handleGenerateReports = () => {
+    const pendingRows = liveRows.filter(
+      (r) => Number(r.planned_quantity || 0) > Number(r.completed_quantity || 0),
+    );
+    if (pendingRows.length === 0) {
+      message.info(t("mrp.productionOrderOperations.noPendingOperation"));
+      return;
+    }
+    Modal.confirm({
+      title: t("mrp.productionOrderOperations.generateReports"),
+      content: t("mrp.productionOrderOperations.generateReportsConfirm", {
+        count: pendingRows.length,
+      }),
+      okText: t("common.continue"),
+      cancelText: t("common.cancel"),
+      onOk: async () => {
+        setGeneratingReports(true);
+        try {
+          for (const row of pendingRows) {
+            const remaining = Number(row.planned_quantity || 0) - Number(row.completed_quantity || 0);
+            const reportNo = await nextDocumentNo(REPORT_DOC_TYPE);
+            const laborHours = Number(
+              (Number(row.standard_hours_per_unit || 0) * remaining).toFixed(2),
+            );
+            await logWithTiming(
+              t("mrp.productionOrderOperations.logGenerateReports"),
+              "INSERT",
+              async () => {
+                const { error } = await supabase.from(REPORTS_TABLE).insert([
+                  {
+                    report_no: reportNo,
+                    report_date: dayjs().format("YYYY-MM-DD"),
+                    production_order_id: orderId,
+                    operation_id: row.operation_id ?? null,
+                    order_operation_id: row.id,
+                    completed_quantity: remaining,
+                    scrapped_quantity: 0,
+                    labor_hours: laborHours,
+                    machine_hours: 0,
+                    work_center_id: row.work_center_id ?? null,
+                    operator_id: row.assignee_id ?? null,
+                    status: "draft",
+                    is_deleted: "n",
+                  },
+                ]);
+                if (error) throw error;
+              },
+              { table: REPORTS_TABLE },
+            );
+          }
+          message.success(
+            t("mrp.productionOrderOperations.generateReportsSuccess", {
+              count: pendingRows.length,
+            }),
+          );
+          await fetchRows();
+          onDataChanged?.();
+        } catch (error: any) {
+          console.error("Error generating production reports:", error);
+          message.error(
+            error?.message || t("mrp.productionOrderOperations.generateReportsFailed"),
+          );
+        } finally {
+          setGeneratingReports(false);
+        }
+      },
+    });
   };
 
   const getOperationLabel = (operationId: number | null) => {
@@ -393,7 +471,6 @@ export function ProductionOrderOperations({
             <span>{t("mrp.productionOrderOperations.summary", { done: doneCount, total: liveRows.length })}</span>
             <Progress
               percent={progress}
-              size="small"
               style={{ width: 200 }}
               status={allDone ? "success" : "active"}
             />
@@ -404,9 +481,20 @@ export function ProductionOrderOperations({
             </span>
           </>
         )}
-        <Button size="small" icon={<ReloadOutlined />} onClick={() => void fetchRows()} loading={loading}>
+        <Button icon={<ReloadOutlined />} onClick={() => void fetchRows()} loading={loading}>
           {t("common.refresh")}
         </Button>
+        {liveRows.length > 0 && (
+          <Button
+            type="primary"
+            ghost
+            icon={<FileAddOutlined />}
+            loading={generatingReports}
+            onClick={handleGenerateReports}
+          >
+            {t("mrp.productionOrderOperations.generateReports")}
+          </Button>
+        )}
       </Space>
 
       {/* 口径提示：进度只认已确认报工 —— 不写清楚，车间会以为「报了没生效」。
