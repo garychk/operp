@@ -138,6 +138,24 @@ BEGIN
   END IF;
 
   -- ==========================================================================
+  -- 回写质检结论到来源完工入库单（quality_status）。
+  -- 此前入库单新建时默认 quality_status='qualified'，检验完成后无人回写，
+  -- 导致入库单列表永远显示「合格」（历史 bug，见 2026-10-19 修复）。
+  -- 映射：qualified/conditional → qualified；unqualified → unqualified。
+  -- 幂等：重复流转重复回写同值，无副作用。
+  -- ==========================================================================
+  IF v_ins.source_type = 'production_receipt' THEN
+    UPDATE public.erp_production_receipts_s_539dcf81_b r
+       SET quality_status = CASE
+             WHEN COALESCE(v_ins.result, '') = 'unqualified' THEN 'unqualified'
+             ELSE 'qualified'
+           END
+     WHERE r.id = v_ins.source_id
+       AND r.tenant_id = v_tenant
+       AND r.is_deleted = 'n';
+  END IF;
+
+  -- ==========================================================================
   -- 公共：按来源解析仓库 / 库位（供 return / scrap / rework 短路分支 + 搬库存共用）
   -- ==========================================================================
   IF v_ins.source_type = 'purchase_receipt' THEN

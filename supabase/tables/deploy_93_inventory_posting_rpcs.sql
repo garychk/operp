@@ -1114,6 +1114,8 @@ DECLARE
   v_is_out BOOLEAN; v_direction TEXT; v_target_status TEXT;
   v_inv_unit_cost NUMERIC; v_unit_cost NUMERIC; v_move JSONB; v_consumed NUMERIC;
   v_voucher_result JSONB;
+  -- 完工入库过账后回写生产订单完成数量（deploy_93 补丁，见 2026-10-19）
+  v_order_completed NUMERIC; v_order_planned NUMERIC; v_order_status VARCHAR(20);
 BEGIN
   IF p_document_type NOT IN ('material_issue', 'production_receipt', 'material_return') THEN
     RAISE EXCEPTION 'Unsupported production document type: %', p_document_type
@@ -1135,7 +1137,8 @@ BEGIN
   ELSIF p_document_type = 'production_receipt' THEN
     SELECT x.id, x.receipt_no AS document_no, x.receipt_date AS document_date,
       x.warehouse_id, x.location_id AS header_location_id,
-      x.amount AS total_amount, x.status, x.corp_id, x.posting_idempotency_key, x.tenant_id
+      x.amount AS total_amount, x.status, x.corp_id, x.posting_idempotency_key, x.tenant_id,
+      x.production_order_id, x.quantity
     INTO h FROM public.erp_production_receipts_s_539dcf81_b x
     WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
   ELSE
@@ -1161,6 +1164,29 @@ BEGIN
   END IF;
   IF h.warehouse_id IS NULL THEN
     RAISE EXCEPTION 'Production document has no warehouse' USING ERRCODE = '23502';
+  END IF;
+  -- 完工入库硬限制：累计完工入库不得超过生产订单计划数量（deploy_93 补丁，2026-10-19）。
+  -- 口径：同订单其它「已过账」入库单数量之和 + 本单数量 <= planned_quantity；
+  -- 反过账后（本单 draft）重过账时不含本单旧值，天然正确。
+  IF p_document_type = 'production_receipt' AND h.production_order_id IS NOT NULL THEN
+    SELECT o.planned_quantity INTO v_order_planned
+      FROM public.erp_production_orders_s_539dcf81_b o
+     WHERE o.id = h.production_order_id AND o.tenant_id = h.tenant_id AND o.is_deleted = 'n'
+       FOR SHARE;
+    IF FOUND AND COALESCE(v_order_planned, 0) > 0 THEN
+      SELECT COALESCE(SUM(x.quantity), 0) INTO v_order_completed
+        FROM public.erp_production_receipts_s_539dcf81_b x
+       WHERE x.production_order_id = h.production_order_id
+         AND x.status = 'posted' AND x.is_deleted = 'n'
+         AND x.id <> p_document_id;
+      IF COALESCE(v_order_completed, 0) + COALESCE(h.quantity, 0)
+           > v_order_planned + 0.000001 THEN
+        RAISE EXCEPTION
+          '完工入库超额：订单已累计入库 %，本单 %，超过计划数量 %',
+          v_order_completed, h.quantity, v_order_planned
+          USING ERRCODE = '55000';
+      END IF;
+    END IF;
   END IF;
   -- 双保险：主表状态没置 posted 但流水已存在（例如手工改回 draft），一律拒绝。
   IF EXISTS (
@@ -1327,6 +1353,28 @@ BEGIN
         reversal_idempotency_key = NULL, posted_at = NOW(), reversed_at = NULL,
         updated_at = NOW()
     WHERE id = p_document_id;
+
+    -- 回写生产订单完成数量：完工入库过账后，把本次入库数累计到订单 completed_quantity。
+    -- 累计 >= 计划数时自动置 completed（此前该字段无任何写入来源，恒为 0 —— 历史 bug）。
+    IF h.production_order_id IS NOT NULL THEN
+      UPDATE public.erp_production_orders_s_539dcf81_b o
+         SET completed_quantity = COALESCE(o.completed_quantity, 0) + COALESCE(h.quantity, 0),
+             updated_at = NOW()
+       WHERE o.id = h.production_order_id
+         AND o.tenant_id = h.tenant_id
+         AND o.is_deleted = 'n'
+      RETURNING completed_quantity, planned_quantity, status
+        INTO v_order_completed, v_order_planned, v_order_status;
+
+      IF FOUND
+         AND v_order_completed >= COALESCE(v_order_planned, 0)
+         AND v_order_planned > 0
+         AND COALESCE(v_order_status, '') NOT IN ('completed', 'closed', 'cancelled') THEN
+        UPDATE public.erp_production_orders_s_539dcf81_b
+           SET status = 'completed', updated_at = NOW()
+         WHERE id = h.production_order_id AND is_deleted = 'n';
+      END IF;
+    END IF;
   ELSE
     UPDATE public.erp_material_returns_s_539dcf81_b
     SET status = 'posted', posting_idempotency_key = p_idempotency_key,
@@ -1369,6 +1417,8 @@ DECLARE
   v_target_status TEXT;
   v_move JSONB;
   v_voucher_result JSONB;
+  -- 完工入库反过账回写生产订单（deploy_93 补丁，见 2026-10-19）
+  v_order_completed NUMERIC; v_order_planned NUMERIC; v_order_status VARCHAR(20);
 BEGIN
   IF p_document_type NOT IN ('material_issue', 'production_receipt', 'material_return') THEN
     RAISE EXCEPTION 'Unsupported production document type: %', p_document_type
@@ -1385,7 +1435,8 @@ BEGIN
     INTO h FROM public.erp_material_issues_s_539dcf81_b x
     WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
   ELSIF p_document_type = 'production_receipt' THEN
-    SELECT x.id, x.receipt_no AS document_no, x.status, x.reversal_idempotency_key, x.tenant_id
+    SELECT x.id, x.receipt_no AS document_no, x.status, x.reversal_idempotency_key, x.tenant_id,
+      x.production_order_id, x.quantity
     INTO h FROM public.erp_production_receipts_s_539dcf81_b x
     WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
   ELSE
@@ -1456,6 +1507,27 @@ BEGIN
     SET status = 'draft', reversal_idempotency_key = p_idempotency_key,
         reversed_at = NOW(), updated_at = NOW()
     WHERE id = p_document_id;
+
+    -- 对称回写：反过账把本次入库数从订单 completed_quantity 扣回；
+    -- 若订单此前因达标被自动置 completed，反过账后数量跌破计划数 → 退回 in_progress。
+    IF h.production_order_id IS NOT NULL THEN
+      UPDATE public.erp_production_orders_s_539dcf81_b o
+         SET completed_quantity = GREATEST(0, COALESCE(o.completed_quantity, 0) - COALESCE(h.quantity, 0)),
+             updated_at = NOW()
+       WHERE o.id = h.production_order_id
+         AND o.tenant_id = h.tenant_id
+         AND o.is_deleted = 'n'
+      RETURNING completed_quantity, planned_quantity, status
+        INTO v_order_completed, v_order_planned, v_order_status;
+
+      IF FOUND
+         AND COALESCE(v_order_status, '') = 'completed'
+         AND v_order_completed < COALESCE(v_order_planned, 0) THEN
+        UPDATE public.erp_production_orders_s_539dcf81_b
+           SET status = 'in_progress', updated_at = NOW()
+         WHERE id = h.production_order_id AND is_deleted = 'n';
+      END IF;
+    END IF;
   ELSE
     UPDATE public.erp_material_returns_s_539dcf81_b
     SET status = 'draft', reversal_idempotency_key = p_idempotency_key,

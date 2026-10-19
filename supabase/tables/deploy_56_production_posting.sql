@@ -140,43 +140,54 @@ ON CONFLICT (document_type_id, transaction_type_code) DO UPDATE SET
 -- ----------------------------------------------------------------------------
 -- 4. 过账
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.post_production_document(
-  p_document_type TEXT, p_document_id INTEGER, p_idempotency_key UUID
-) RETURNS JSONB
-LANGUAGE plpgsql SECURITY INVOKER SET search_path = public
-AS $$
+-- ----------------------------------------------------------------------------
+-- 4. 过账（post_production_document，含 material_return / 完工入库回写 / 超额硬限制）
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.post_production_document(p_document_type text, p_document_id integer, p_idempotency_key uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
 DECLARE
-  h RECORD; d RECORD; i RECORD;
+  h RECORD; d RECORD;
   actor_id INTEGER; line_count INTEGER := 0;
-  old_qty NUMERIC; old_available NUMERIC; old_cost NUMERIC;
-  new_qty NUMERIC; new_available NUMERIC; new_cost NUMERIC;
-  v_unit_cost NUMERIC; inventory_unit_cost NUMERIC; v_location_id INTEGER;
-  allow_negative BOOLEAN; normalized_batch TEXT; v_transaction_no TEXT;
-  v_direction TEXT; v_is_out BOOLEAN;
+  normalized_batch TEXT; v_location_id INTEGER; v_transaction_no TEXT;
+  allow_negative BOOLEAN;
+  v_is_out BOOLEAN; v_direction TEXT; v_target_status TEXT;
+  v_inv_unit_cost NUMERIC; v_unit_cost NUMERIC; v_move JSONB; v_consumed NUMERIC;
+  v_voucher_result JSONB;
+  -- 完工入库过账后回写生产订单完成数量（deploy_93 补丁，见 2026-10-19）
+  v_order_completed NUMERIC; v_order_planned NUMERIC; v_order_status VARCHAR(20);
 BEGIN
-  IF p_document_type NOT IN ('material_issue', 'production_receipt') THEN
+  IF p_document_type NOT IN ('material_issue', 'production_receipt', 'material_return') THEN
     RAISE EXCEPTION 'Unsupported production document type: %', p_document_type
       USING ERRCODE = '22023';
   END IF;
-  IF p_document_id IS NULL OR p_document_id <= 0
-     OR p_idempotency_key IS NULL THEN
+  IF p_document_id IS NULL OR p_document_id <= 0 OR p_idempotency_key IS NULL THEN
     RAISE EXCEPTION 'A positive document ID and idempotency key are required'
       USING ERRCODE = '22023';
   END IF;
   actor_id := public.current_sys_user_id();
 
-  -- 主表加锁。领料单与完工入库单都没有库位字段，header_location_id 恒为 NULL。
+  -- 主表加锁。三张主表都带 tenant_id（旧版没取，导致写入靠 GUC 兜底 —— 已修）。
   IF p_document_type = 'material_issue' THEN
     SELECT x.id, x.issue_no AS document_no, x.issue_date AS document_date,
       x.warehouse_id, NULL::INTEGER AS header_location_id,
-      x.total_amount, x.status, x.corp_id, x.posting_idempotency_key
+      x.total_amount, x.status, x.corp_id, x.posting_idempotency_key, x.tenant_id
     INTO h FROM public.erp_material_issues_s_539dcf81_b x
     WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
-  ELSE
+  ELSIF p_document_type = 'production_receipt' THEN
     SELECT x.id, x.receipt_no AS document_no, x.receipt_date AS document_date,
-      x.warehouse_id, NULL::INTEGER AS header_location_id,
-      x.amount AS total_amount, x.status, x.corp_id, x.posting_idempotency_key
+      x.warehouse_id, x.location_id AS header_location_id,
+      x.amount AS total_amount, x.status, x.corp_id, x.posting_idempotency_key, x.tenant_id,
+      x.production_order_id, x.quantity
     INTO h FROM public.erp_production_receipts_s_539dcf81_b x
+    WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
+  ELSE
+    SELECT x.id, x.return_no AS document_no, x.return_date AS document_date,
+      x.warehouse_id, x.location_id AS header_location_id,
+      x.total_amount, x.status, x.corp_id, x.posting_idempotency_key, x.tenant_id
+    INTO h FROM public.erp_material_returns_s_539dcf81_b x
     WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
   END IF;
   IF NOT FOUND THEN
@@ -196,6 +207,35 @@ BEGIN
   IF h.warehouse_id IS NULL THEN
     RAISE EXCEPTION 'Production document has no warehouse' USING ERRCODE = '23502';
   END IF;
+  -- 完工入库硬限制：累计完工入库不得超过生产订单计划数量（deploy_93 补丁，2026-10-19）。
+  -- 口径：同订单其它「已过账」入库单数量之和 + 本单数量 <= planned_quantity；
+  -- 反过账后（本单 draft）重过账时不含本单旧值，天然正确。
+  -- 注意：不能用 `IF p_document_type = 'production_receipt' AND h.production_order_id ...`
+  -- 这种写法 —— PL/pgSQL 会把整个 AND 表达式交给 SQL 求值，不保证短路顺序，
+  -- 领料单分支的 h 没有 production_order_id 字段时会直接报
+  -- "record h has no field production_order_id"。必须用嵌套 IF 隔离 RECORD 字段访问。
+  IF p_document_type = 'production_receipt' THEN
+    IF h.production_order_id IS NOT NULL THEN
+      SELECT o.planned_quantity INTO v_order_planned
+        FROM public.erp_production_orders_s_539dcf81_b o
+       WHERE o.id = h.production_order_id AND o.tenant_id = h.tenant_id AND o.is_deleted = 'n'
+         FOR SHARE;
+      IF FOUND AND COALESCE(v_order_planned, 0) > 0 THEN
+        SELECT COALESCE(SUM(x.quantity), 0) INTO v_order_completed
+          FROM public.erp_production_receipts_s_539dcf81_b x
+         WHERE x.production_order_id = h.production_order_id
+           AND x.status = 'posted' AND x.is_deleted = 'n'
+           AND x.id <> p_document_id;
+        IF COALESCE(v_order_completed, 0) + COALESCE(h.quantity, 0)
+             > v_order_planned + 0.000001 THEN
+          RAISE EXCEPTION
+            '完工入库超额：订单已累计入库 %，本单 %，超过计划数量 %',
+            v_order_completed, h.quantity, v_order_planned
+            USING ERRCODE = '55000';
+        END IF;
+      END IF;
+    END IF;
+  END IF;
   -- 双保险：主表状态没置 posted 但流水已存在（例如手工改回 draft），一律拒绝。
   IF EXISTS (
     SELECT 1 FROM public.erp_inventory_transactions_s_539dcf81_b t
@@ -206,12 +246,12 @@ BEGIN
       USING ERRCODE = '23505';
   END IF;
 
-  -- 锁明细行，避免并发过账读到改到一半的明细
   IF p_document_type = 'material_issue' THEN
-    PERFORM x.id
-    FROM public.erp_material_issue_details_s_539dcf81_b x
-    WHERE x.issue_id = p_document_id AND x.is_deleted = 'n'
-    ORDER BY x.id FOR UPDATE;
+    PERFORM x.id FROM public.erp_material_issue_details_s_539dcf81_b x
+     WHERE x.issue_id = p_document_id AND x.is_deleted = 'n' ORDER BY x.id FOR UPDATE;
+  ELSIF p_document_type = 'material_return' THEN
+    PERFORM x.id FROM public.erp_material_return_details_s_539dcf81_b x
+     WHERE x.return_id = p_document_id AND x.is_deleted = 'n' ORDER BY x.id FOR UPDATE;
   END IF;
 
   SELECT COALESCE(w.is_negative_stock_allowed, FALSE)
@@ -222,27 +262,46 @@ BEGIN
       USING ERRCODE = 'P0002';
   END IF;
 
-  -- 两张单据归一成同一形状的明细流：完工入库单没有明细表，主表即唯一明细行。
+  v_is_out := (p_document_type = 'material_issue');
+  v_direction := CASE WHEN v_is_out THEN 'out' ELSE 'in' END;
+
+  -- 领料出库只吃可用库存；完工入库按「入库即待检」开关；
+  -- 生产退料是「车间把原先领走的料还回来」，回到可用状态（不进待检 —— 料本来就是合格的）。
+  IF v_is_out THEN
+    v_target_status := 'available';
+  ELSIF p_document_type = 'material_return' THEN
+    v_target_status := 'available';
+  ELSE
+    v_target_status := public.inventory_receipt_stock_status(h.tenant_id);
+  END IF;
+
+  -- 三张单据归一成同一形状的明细流：完工入库单没有明细表，主表即唯一明细行。
   FOR d IN
     SELECT x.id AS detail_id, x.material_id AS product_id, x.quantity,
       x.unit_cost AS document_unit_cost,
-      COALESCE(NULLIF(p.cost_price, 0), NULLIF(p.purchase_price, 0), 0)
-        AS product_unit_cost,
+      COALESCE(NULLIF(p.cost_price, 0), NULLIF(p.purchase_price, 0), 0) AS product_unit_cost,
       NULLIF(BTRIM(x.batch_no), '') AS batch_no,
-      NULL::DATE AS expiry_date, NULL::INTEGER AS detail_location_id
+      NULL::DATE AS expiry_date, x.location_id AS detail_location_id
     FROM public.erp_material_issue_details_s_539dcf81_b x
     LEFT JOIN public.erp_products_s_539dcf81_b p ON p.id = x.material_id
     WHERE p_document_type = 'material_issue'
       AND x.issue_id = p_document_id AND x.is_deleted = 'n'
     UNION ALL
-    SELECT x.id, x.product_id, x.quantity,
-      x.unit_cost,
+    SELECT x.id, x.product_id, x.quantity, x.unit_cost,
       COALESCE(NULLIF(p.cost_price, 0), NULLIF(p.purchase_price, 0), 0),
-      NULLIF(BTRIM(x.batch_no), ''), NULL::DATE, NULL::INTEGER
+      NULLIF(BTRIM(x.batch_no), ''), NULL::DATE, x.location_id
     FROM public.erp_production_receipts_s_539dcf81_b x
     LEFT JOIN public.erp_products_s_539dcf81_b p ON p.id = x.product_id
     WHERE p_document_type = 'production_receipt' AND x.id = p_document_id
       AND x.is_deleted = 'n'
+    UNION ALL
+    SELECT x.id, x.material_id, x.quantity, x.unit_cost,
+      COALESCE(NULLIF(p.cost_price, 0), NULLIF(p.purchase_price, 0), 0),
+      NULLIF(BTRIM(x.batch_no), ''), NULL::DATE, x.location_id
+    FROM public.erp_material_return_details_s_539dcf81_b x
+    LEFT JOIN public.erp_products_s_539dcf81_b p ON p.id = x.material_id
+    WHERE p_document_type = 'material_return'
+      AND x.return_id = p_document_id AND x.is_deleted = 'n'
     ORDER BY product_id, batch_no NULLS FIRST, detail_id
   LOOP
     line_count := line_count + 1;
@@ -250,113 +309,78 @@ BEGIN
       RAISE EXCEPTION 'Detail % has no product or non-positive quantity',
         d.detail_id USING ERRCODE = '23514';
     END IF;
-    v_is_out := (p_document_type = 'material_issue');
-    v_direction := CASE WHEN v_is_out THEN 'out' ELSE 'in' END;
     normalized_batch := NULLIF(BTRIM(d.batch_no), '');
     v_location_id := COALESCE(d.detail_location_id, h.header_location_id);
 
     IF v_location_id IS NOT NULL THEN
       PERFORM 1 FROM public.erp_bins_s_539dcf81_b b
       WHERE b.id = v_location_id AND b.warehouse_id = h.warehouse_id
-        AND b.is_deleted = 'n';
+        AND b.tenant_id = h.tenant_id AND b.is_deleted = 'n';
       IF NOT FOUND THEN
         RAISE EXCEPTION 'Location % is not valid for warehouse %',
           v_location_id, h.warehouse_id USING ERRCODE = '23503';
       END IF;
     END IF;
 
-    PERFORM pg_advisory_xact_lock(hashtextextended(
-      format('erp_inventory:%s:%s:%s:%s', d.product_id, h.warehouse_id,
-        COALESCE(v_location_id, 0), COALESCE(normalized_batch, '')), 0));
-
-    SELECT x.* INTO i FROM public.erp_inventory_s_539dcf81_b x
-    WHERE x.product_id = d.product_id AND x.warehouse_id = h.warehouse_id
-      AND COALESCE(x.location_id, 0) = COALESCE(v_location_id, 0)
-      AND COALESCE(NULLIF(BTRIM(x.batch_no), ''), '') =
-          COALESCE(normalized_batch, '')
-      AND x.is_deleted = 'n' FOR UPDATE;
-    IF FOUND THEN
-      old_qty := COALESCE(i.quantity, 0);
-      old_available := COALESCE(i.available_quantity, 0);
-      old_cost := COALESCE(i.total_cost, 0);
-      inventory_unit_cost := COALESCE(i.unit_cost, 0);
-    ELSE
-      old_qty := 0; old_available := 0; old_cost := 0;
-      inventory_unit_cost := 0;
-    END IF;
+    v_inv_unit_cost := COALESCE((
+      SELECT x.unit_cost FROM public.erp_inventory_s_539dcf81_b x
+       WHERE x.product_id = d.product_id AND x.warehouse_id = h.warehouse_id
+         AND x.tenant_id = h.tenant_id
+         AND COALESCE(x.location_id, 0) = COALESCE(v_location_id, 0)
+         AND COALESCE(NULLIF(BTRIM(x.batch_no), ''), '') = COALESCE(normalized_batch, '')
+         AND x.stock_status = v_target_status AND x.is_deleted = 'n'), 0);
 
     IF v_is_out THEN
-      -- 出库：成本取库存移动加权单价（与 deploy_24 调拨出库口径一致）
-      v_unit_cost := COALESCE(NULLIF(inventory_unit_cost, 0),
+      -- 出库：成本取库存移动加权单价（与调拨出库口径一致）
+      v_unit_cost := COALESCE(NULLIF(v_inv_unit_cost, 0),
         NULLIF(d.document_unit_cost, 0), NULLIF(d.product_unit_cost, 0), 0);
-      new_qty := old_qty - d.quantity;
-      new_available := old_available - d.quantity;
-      new_cost := old_cost - d.quantity * v_unit_cost;
     ELSE
-      -- 入库：成本取单据单价（将来由成本卷算写入），再退物料成本价、库存单价
+      -- 入库：成本取单据单价（成本卷算写入），再退物料成本价、库存单价
       v_unit_cost := COALESCE(NULLIF(d.document_unit_cost, 0),
-        NULLIF(d.product_unit_cost, 0), NULLIF(inventory_unit_cost, 0), 0);
-      new_qty := old_qty + d.quantity;
-      new_available := old_available + d.quantity;
-      new_cost := old_cost + d.quantity * v_unit_cost;
+        NULLIF(d.product_unit_cost, 0), NULLIF(v_inv_unit_cost, 0), 0);
     END IF;
 
-    IF NOT allow_negative AND (new_qty < 0 OR new_available < 0) THEN
-      IF v_is_out AND v_location_id IS NULL THEN
-        RAISE EXCEPTION
-          'Insufficient warehouse-level stock for product %, warehouse %: available %, requested % (领料单按无库位库存行扣减；若该仓库存量都在库位上，请先做库位调整或补建无库位库存)',
-          d.product_id, h.warehouse_id, old_available, d.quantity
-          USING ERRCODE = '23514';
-      END IF;
-      RAISE EXCEPTION
-        'Insufficient stock for product %, warehouse %: available %, requested %',
-        d.product_id, h.warehouse_id, old_available, d.quantity
-        USING ERRCODE = '23514';
+    -- 出库先释放预占，再扣库存（顺序理由同 post_stock_document）
+    IF v_is_out THEN
+      v_consumed := public.inventory_consume_reservations(
+        h.tenant_id, d.product_id, h.warehouse_id, v_location_id,
+        normalized_batch, v_target_status, d.quantity);
     END IF;
 
-    IF i.id IS NULL THEN
-      INSERT INTO public.erp_inventory_s_539dcf81_b (
-        corp_id, emp_id, is_deleted, product_id, warehouse_id, location_id,
-        quantity, available_quantity, locked_quantity, unit_cost,
-        total_cost, batch_no, expiry_date
-      ) VALUES (
-        h.corp_id, actor_id::TEXT, 'n', d.product_id, h.warehouse_id,
-        v_location_id,
-        new_qty, new_available, 0,
-        CASE WHEN new_qty = 0 THEN v_unit_cost ELSE ABS(new_cost / new_qty) END,
-        new_cost, normalized_batch, d.expiry_date
-      ) RETURNING * INTO i;
-    ELSE
-      UPDATE public.erp_inventory_s_539dcf81_b
-      SET quantity = new_qty, available_quantity = new_available,
-          unit_cost = CASE WHEN new_qty = 0 THEN v_unit_cost
-                           ELSE ABS(new_cost / new_qty) END,
-          total_cost = new_cost,
-          expiry_date = COALESCE(d.expiry_date, expiry_date),
-          updated_at = NOW()
-      WHERE id = i.id;
-    END IF;
+    v_move := public.inventory_apply_move(
+      p_tenant_id      => h.tenant_id,
+      p_corp_id        => h.corp_id,
+      p_actor_id       => actor_id,
+      p_product_id     => d.product_id,
+      p_warehouse_id   => h.warehouse_id,
+      p_location_id    => v_location_id,
+      p_batch_no       => normalized_batch,
+      p_stock_status   => v_target_status,
+      p_qty_delta      => CASE WHEN v_is_out THEN -d.quantity ELSE d.quantity END,
+      p_unit_cost      => v_unit_cost,
+      p_cost_delta     => NULL,
+      p_expiry_date    => d.expiry_date,
+      p_allow_negative => allow_negative);
+    v_unit_cost := COALESCE((v_move ->> 'unit_cost')::NUMERIC, v_unit_cost);
 
     v_transaction_no := 'IT' || TO_CHAR(clock_timestamp(), 'YYYYMMDDHH24MISSMS')
       || LPAD(d.detail_id::TEXT, 6, '0');
     INSERT INTO public.erp_inventory_transactions_s_539dcf81_b (
       corp_id, emp_id, is_deleted, transaction_no, transaction_type,
-      transaction_date, product_id, warehouse_id, location_id, batch_no, quantity,
-      unit_cost, total_cost, reference_type, reference_id,
-      reference_detail_id, posting_idempotency_key, remark
+      transaction_date, product_id, warehouse_id, location_id, batch_no,
+      stock_status, quantity, unit_cost, total_cost, reference_type, reference_id,
+      reference_detail_id, posting_idempotency_key, remark, tenant_id
     ) VALUES (
       h.corp_id, actor_id::TEXT, 'n', LEFT(v_transaction_no, 50),
       public.resolve_inventory_transaction_type(p_document_type, v_direction),
       h.document_date, d.product_id, h.warehouse_id, v_location_id,
-      normalized_batch,
+      normalized_batch, v_target_status,
       CASE WHEN v_is_out THEN -d.quantity ELSE d.quantity END,
       v_unit_cost,
-      CASE WHEN v_is_out THEN -(d.quantity * v_unit_cost)
-           ELSE d.quantity * v_unit_cost END,
+      COALESCE((v_move ->> 'cost_delta')::NUMERIC, 0),
       p_document_type, p_document_id, d.detail_id, p_idempotency_key,
-      CASE WHEN v_is_out
-           THEN format('生产领料单 %s 过账', h.document_no)
-           ELSE format('生产完工入库单 %s 过账', h.document_no) END
+      format('%s %s 过账', p_document_type, h.document_no),
+      h.tenant_id
     );
   END LOOP;
 
@@ -371,55 +395,100 @@ BEGIN
         reversal_idempotency_key = NULL, posted_at = NOW(), reversed_at = NULL,
         updated_at = NOW()
     WHERE id = p_document_id;
-  ELSE
+  ELSIF p_document_type = 'production_receipt' THEN
     UPDATE public.erp_production_receipts_s_539dcf81_b
+    SET status = 'posted', posting_idempotency_key = p_idempotency_key,
+        reversal_idempotency_key = NULL, posted_at = NOW(), reversed_at = NULL,
+        updated_at = NOW()
+    WHERE id = p_document_id;
+
+    -- 回写生产订单完成数量：完工入库过账后，把本次入库数累计到订单 completed_quantity。
+    -- 累计 >= 计划数时自动置 completed（此前该字段无任何写入来源，恒为 0 —— 历史 bug）。
+    IF h.production_order_id IS NOT NULL THEN
+      UPDATE public.erp_production_orders_s_539dcf81_b o
+         SET completed_quantity = COALESCE(o.completed_quantity, 0) + COALESCE(h.quantity, 0),
+             updated_at = NOW()
+       WHERE o.id = h.production_order_id
+         AND o.tenant_id = h.tenant_id
+         AND o.is_deleted = 'n'
+      RETURNING completed_quantity, planned_quantity, status
+        INTO v_order_completed, v_order_planned, v_order_status;
+
+      IF FOUND
+         AND v_order_completed >= COALESCE(v_order_planned, 0)
+         AND v_order_planned > 0
+         AND COALESCE(v_order_status, '') NOT IN ('completed', 'closed', 'cancelled') THEN
+        UPDATE public.erp_production_orders_s_539dcf81_b
+           SET status = 'completed', updated_at = NOW()
+         WHERE id = h.production_order_id AND is_deleted = 'n';
+      END IF;
+    END IF;
+  ELSE
+    UPDATE public.erp_material_returns_s_539dcf81_b
     SET status = 'posted', posting_idempotency_key = p_idempotency_key,
         reversal_idempotency_key = NULL, posted_at = NOW(), reversed_at = NULL,
         updated_at = NOW()
     WHERE id = p_document_id;
   END IF;
 
+  -- ---- 库存 -> 总账勾稽（deploy_87 / deploy_92）--------------------------
+  v_voucher_result := public.inventory_sync_voucher(
+    p_source_type   => p_document_type,
+    p_source_id     => p_document_id,
+    p_document_no   => h.document_no,
+    p_document_date => h.document_date,
+    p_tenant_id     => h.tenant_id,
+    p_remark        => format('%s %s', p_document_type, h.document_no));
+
   RETURN jsonb_build_object('ok', TRUE, 'idempotent', FALSE,
     'document_type', p_document_type, 'document_id', p_document_id,
     'status', 'posted', 'line_count', line_count,
+    'stock_status', v_target_status,
+    'voucher', v_voucher_result,
     'idempotency_key', p_idempotency_key);
 END;
-$$;
-
+$function$
 
 -- ----------------------------------------------------------------------------
--- 5. 反过账
+-- 5. 反过账（reverse_production_document）
 -- ----------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION public.reverse_production_document(
-  p_document_type TEXT, p_document_id INTEGER, p_idempotency_key UUID
-) RETURNS JSONB
-LANGUAGE plpgsql SECURITY INVOKER SET search_path = public
-AS $$
+CREATE OR REPLACE FUNCTION public.reverse_production_document(p_document_type text, p_document_id integer, p_idempotency_key uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
 DECLARE
-  h RECORD; t RECORD; i RECORD;
-  allow_negative BOOLEAN; normalized_batch TEXT;
-  new_qty NUMERIC; new_available NUMERIC; new_cost NUMERIC;
-  restored_unit_cost NUMERIC; line_count INTEGER := 0;
+  h RECORD; t RECORD;
+  actor_id INTEGER;
+  line_count INTEGER := 0;
+  v_target_status TEXT;
+  v_move JSONB;
+  v_voucher_result JSONB;
+  -- 完工入库反过账回写生产订单（deploy_93 补丁，见 2026-10-19）
+  v_order_completed NUMERIC; v_order_planned NUMERIC; v_order_status VARCHAR(20);
 BEGIN
-  IF p_document_type NOT IN ('material_issue', 'production_receipt') THEN
+  IF p_document_type NOT IN ('material_issue', 'production_receipt', 'material_return') THEN
     RAISE EXCEPTION 'Unsupported production document type: %', p_document_type
       USING ERRCODE = '22023';
   END IF;
-  IF p_document_id IS NULL OR p_document_id <= 0
-     OR p_idempotency_key IS NULL THEN
+  IF p_document_id IS NULL OR p_document_id <= 0 OR p_idempotency_key IS NULL THEN
     RAISE EXCEPTION 'A positive document ID and idempotency key are required'
       USING ERRCODE = '22023';
   END IF;
+  actor_id := public.current_sys_user_id();
 
   IF p_document_type = 'material_issue' THEN
-    SELECT x.id, x.issue_no AS document_no, x.status,
-      x.reversal_idempotency_key
+    SELECT x.id, x.issue_no AS document_no, x.status, x.reversal_idempotency_key, x.tenant_id
     INTO h FROM public.erp_material_issues_s_539dcf81_b x
     WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
-  ELSE
-    SELECT x.id, x.receipt_no AS document_no, x.status,
-      x.reversal_idempotency_key
+  ELSIF p_document_type = 'production_receipt' THEN
+    SELECT x.id, x.receipt_no AS document_no, x.status, x.reversal_idempotency_key, x.tenant_id,
+      x.production_order_id, x.quantity
     INTO h FROM public.erp_production_receipts_s_539dcf81_b x
+    WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
+  ELSE
+    SELECT x.id, x.return_no AS document_no, x.status, x.reversal_idempotency_key, x.tenant_id
+    INTO h FROM public.erp_material_returns_s_539dcf81_b x
     WHERE x.id = p_document_id AND x.is_deleted = 'n' FOR UPDATE;
   END IF;
   IF NOT FOUND THEN
@@ -441,55 +510,28 @@ BEGIN
     WHERE x.reference_type = p_document_type
       AND x.reference_id = p_document_id AND x.is_deleted = 'n'
     ORDER BY x.product_id, x.warehouse_id, COALESCE(x.location_id, 0),
-             x.batch_no NULLS FIRST, x.id FOR UPDATE
+             x.batch_no NULLS FIRST, COALESCE(x.stock_status, 'available'), x.id
+    FOR UPDATE
   LOOP
     line_count := line_count + 1;
-    normalized_batch := NULLIF(BTRIM(t.batch_no), '');
-    PERFORM pg_advisory_xact_lock(hashtextextended(
-      format('erp_inventory:%s:%s:%s:%s', t.product_id, t.warehouse_id,
-        COALESCE(t.location_id, 0), COALESCE(normalized_batch, '')), 0));
-    SELECT x.* INTO i FROM public.erp_inventory_s_539dcf81_b x
-    WHERE x.product_id = t.product_id AND x.warehouse_id = t.warehouse_id
-      AND COALESCE(x.location_id, 0) = COALESCE(t.location_id, 0)
-      AND COALESCE(NULLIF(BTRIM(x.batch_no), ''), '') =
-          COALESCE(normalized_batch, '')
-      AND x.is_deleted = 'n' FOR UPDATE;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION
-        'Inventory missing for transaction %, product %, warehouse %, location %',
-        t.id, t.product_id, t.warehouse_id, COALESCE(t.location_id, 0)
-        USING ERRCODE = 'P0002';
-    END IF;
-
-    SELECT COALESCE(w.is_negative_stock_allowed, FALSE)
-    INTO allow_negative FROM public.erp_warehouses_s_539dcf81_b w
-    WHERE w.id = t.warehouse_id AND w.is_deleted = 'n' FOR SHARE;
-    IF NOT FOUND THEN
-      RAISE EXCEPTION 'Warehouse does not exist or is deleted'
-        USING ERRCODE = 'P0002';
-    END IF;
+    v_target_status := COALESCE(NULLIF(BTRIM(t.stock_status), ''), 'available');
 
     -- 流水里的 quantity / total_cost 带符号：出库为负，入库为正。
     -- 减去流水即「撤销该笔影响」，方向自动正确。
-    new_qty := COALESCE(i.quantity, 0) - COALESCE(t.quantity, 0);
-    new_available := COALESCE(i.available_quantity, 0) -
-      COALESCE(t.quantity, 0);
-    new_cost := COALESCE(i.total_cost, 0) - COALESCE(t.total_cost, 0);
-    IF NOT allow_negative AND (new_qty < 0 OR new_available < 0) THEN
-      RAISE EXCEPTION
-        'Cannot reverse: stock was consumed for product %, warehouse %',
-        t.product_id, t.warehouse_id USING ERRCODE = '23514';
-    END IF;
-
-    restored_unit_cost := CASE
-      WHEN new_qty = 0 THEN COALESCE(t.unit_cost, i.unit_cost, 0)
-      ELSE ABS(new_cost / new_qty)
-    END;
-    UPDATE public.erp_inventory_s_539dcf81_b
-    SET quantity = new_qty, available_quantity = new_available,
-        unit_cost = restored_unit_cost, total_cost = new_cost,
-        updated_at = NOW()
-    WHERE id = i.id;
+    v_move := public.inventory_apply_move(
+      p_tenant_id      => t.tenant_id,
+      p_corp_id        => t.corp_id,
+      p_actor_id       => actor_id,
+      p_product_id     => t.product_id,
+      p_warehouse_id   => t.warehouse_id,
+      p_location_id    => t.location_id,
+      p_batch_no       => t.batch_no,
+      p_stock_status   => v_target_status,
+      p_qty_delta      => -COALESCE(t.quantity, 0),
+      p_unit_cost      => t.unit_cost,
+      p_cost_delta     => -COALESCE(t.total_cost, 0),
+      p_expiry_date    => NULL,
+      p_allow_negative => NULL);
   END LOOP;
   IF line_count = 0 THEN
     RAISE EXCEPTION 'No active inventory transactions found'
@@ -507,19 +549,52 @@ BEGIN
     SET status = 'draft', reversal_idempotency_key = p_idempotency_key,
         reversed_at = NOW(), updated_at = NOW()
     WHERE id = p_document_id;
-  ELSE
+  ELSIF p_document_type = 'production_receipt' THEN
     UPDATE public.erp_production_receipts_s_539dcf81_b
+    SET status = 'draft', reversal_idempotency_key = p_idempotency_key,
+        reversed_at = NOW(), updated_at = NOW()
+    WHERE id = p_document_id;
+
+    -- 对称回写：反过账把本次入库数从订单 completed_quantity 扣回；
+    -- 若订单此前因达标被自动置 completed，反过账后数量跌破计划数 → 退回 in_progress。
+    IF h.production_order_id IS NOT NULL THEN
+      UPDATE public.erp_production_orders_s_539dcf81_b o
+         SET completed_quantity = GREATEST(0, COALESCE(o.completed_quantity, 0) - COALESCE(h.quantity, 0)),
+             updated_at = NOW()
+       WHERE o.id = h.production_order_id
+         AND o.tenant_id = h.tenant_id
+         AND o.is_deleted = 'n'
+      RETURNING completed_quantity, planned_quantity, status
+        INTO v_order_completed, v_order_planned, v_order_status;
+
+      IF FOUND
+         AND COALESCE(v_order_status, '') = 'completed'
+         AND v_order_completed < COALESCE(v_order_planned, 0) THEN
+        UPDATE public.erp_production_orders_s_539dcf81_b
+           SET status = 'in_progress', updated_at = NOW()
+         WHERE id = h.production_order_id AND is_deleted = 'n';
+      END IF;
+    END IF;
+  ELSE
+    UPDATE public.erp_material_returns_s_539dcf81_b
     SET status = 'draft', reversal_idempotency_key = p_idempotency_key,
         reversed_at = NOW(), updated_at = NOW()
     WHERE id = p_document_id;
   END IF;
 
+  v_voucher_result := public.inventory_void_voucher(
+    p_source_type     => p_document_type,
+    p_source_id       => p_document_id,
+    p_tenant_id       => h.tenant_id,
+    p_idempotency_key => p_idempotency_key);
+
   RETURN jsonb_build_object('ok', TRUE, 'idempotent', FALSE,
     'document_type', p_document_type, 'document_id', p_document_id,
     'status', 'draft', 'line_count', line_count,
+    'voucher', v_voucher_result,
     'idempotency_key', p_idempotency_key);
 END;
-$$;
+$function$
 
 
 REVOKE ALL ON FUNCTION public.post_production_document(TEXT, INTEGER, UUID) FROM PUBLIC;

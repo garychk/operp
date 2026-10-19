@@ -13,6 +13,7 @@
 --       禁止修改业务结构字段，仅放行：
 --         · remark / priority        —— 用户可改的非业务字段
 --         · status                   —— 状态流转（走 release/start/完工入库 RPC）
+--         · completed_quantity       —— 系统回写（完工入库过账累计，见 deploy_93 补丁）
 --         · reported_quantity / operation_progress_percent / actual_start_date /
 --           actual_end_date          —— 系统回写（报工进度、首次开工补日期）
 --         · is_deleted / updated_at / created_at / corp_id / emp_id —— 框架字段
@@ -78,10 +79,6 @@ BEGIN
   IF v_changed IS NULL THEN
     v_changed :=
       CASE WHEN NEW.planned_quantity  IS DISTINCT FROM OLD.planned_quantity  THEN 'planned_quantity' ELSE NULL END;
-  END IF;
-  IF v_changed IS NULL THEN
-    v_changed :=
-      CASE WHEN NEW.completed_quantity IS DISTINCT FROM OLD.completed_quantity THEN 'completed_quantity' ELSE NULL END;
   END IF;
   IF v_changed IS NULL THEN
     v_changed :=

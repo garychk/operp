@@ -54,6 +54,7 @@ interface OrderMaterial {
   material_spec: string | null;
   planned_quantity: number | null;
   issued_quantity: number | null;
+  onhand_quantity: number | null;
   unit: string | null;
 }
 
@@ -915,13 +916,15 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
                     t("factory3dViewer.shortCount", { n: num(selectedOrder.material_line_short) })}
                 </span>
               </div>
-              {/* 材料清单：来自该工单对应 BOM 展开的材料行（领料数 / 需求数） */}
+              {/* 材料清单：来自该工单对应 BOM 展开的材料行（现存量 / 需求量）。
+                  齐料看实物库存（onhand），不看已领数（issued）：草稿领料单就会回写 issued，
+                  但库存要过账才扣，用 issued 会假齐料。 */}
               {selectedOrderMaterials.length > 0 ? (
                 <ul className="f3d-materials">
                   {selectedOrderMaterials.map((m) => {
-                    const issued = num(m.issued_quantity);
+                    const onhand = num(m.onhand_quantity);
                     const planned = num(m.planned_quantity);
-                    const complete = planned > 0 && issued >= planned;
+                    const complete = planned > 0 && onhand >= planned;
                     return (
                       <li key={m.order_detail_id}>
                         <i
@@ -936,7 +939,7 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
                           ) : null}
                         </span>
                         <span className="f3d-dim">
-                          {issued}/{planned} {m.unit}
+                          {onhand}/{planned} {m.unit}
                         </span>
                       </li>
                     );

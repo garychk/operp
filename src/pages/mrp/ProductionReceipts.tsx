@@ -494,6 +494,24 @@ export function ProductionReceipts() {
     (o) => o.id === form.getFieldValue("production_order_id"),
   );
 
+  // 未完工数量 = 计划数量 − 同订单已过账入库累计（编辑时排除本单旧值）。
+  // 完工入库硬限制（2026-10-19）：数量不允许超过该值，后端过账 RPC 同口径硬拦。
+  const formOrderId = Form.useWatch("production_order_id", form);
+  const remainingQuantity = useMemo(() => {
+    if (formOrderId == null) return null;
+    const order = orders.find((o) => o.id === formOrderId);
+    if (!order || order.planned_quantity == null) return null;
+    const posted = receipts
+      .filter(
+        (r) =>
+          r.production_order_id === formOrderId &&
+          r.status === "posted" &&
+          r.id !== editingReceipt?.id,
+      )
+      .reduce((sum, r) => sum + Number(r.quantity || 0), 0);
+    return Number(order.planned_quantity) - posted;
+  }, [formOrderId, orders, receipts, editingReceipt]);
+
   const filteredReceipts = receipts.filter(
     (r) =>
       (r.receipt_no || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -889,15 +907,41 @@ export function ProductionReceipts() {
                 label={t("mrp.productionReceipts.quantity")}
                 name="quantity"
                 initialValue={0}
+                extra={
+                  remainingQuantity != null
+                    ? t("mrp.productionReceipts.remainingQuantityHint", {
+                        quantity: formatQuantity(remainingQuantity),
+                      })
+                    : undefined
+                }
                 rules={[
                   {
                     required: true,
                     message: t("mrp.productionReceipts.quantityPrompt"),
                   },
+                  {
+                    validator: async () => {
+                      // 硬限制：不允许超过订单未完工数量（后端过账 RPC 同口径硬拦）
+                      if (remainingQuantity != null) {
+                        const val = Number(form.getFieldValue("quantity") || 0);
+                        if (val > remainingQuantity + 0.000001) {
+                          return Promise.reject(
+                            new Error(
+                              t("mrp.productionReceipts.quantityExceeds", {
+                                quantity: formatQuantity(remainingQuantity),
+                              }),
+                            ),
+                          );
+                        }
+                      }
+                      return Promise.resolve();
+                    },
+                  },
                 ]}
               >
                 <InputNumber
                   min={0}
+                  max={remainingQuantity ?? undefined}
                   step={0.000001}
                   precision={6}
                   style={{ width: "100%" }}
