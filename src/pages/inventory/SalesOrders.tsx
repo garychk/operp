@@ -33,6 +33,7 @@ import { SuperTable } from "../../components/SuperTable";
 import type { SuperTableColumn } from "../../components/SuperTable";
 import { formatMoney, useCurrencyRegistry, currencyLabel, fetchExchangeRate } from "../../utils/money";
 import { ProductUnit } from "../../components/ProductUnit";
+import { ProductSearchSelect } from "../../components/ProductSearchSelect";
 import SimpleModal from "../../components/SimpleModal";
 
 type SalesOrder = Tables["erp_sales_orders_s_539dcf81_b"]["Row"];
@@ -1082,19 +1083,14 @@ export function SalesOrders() {
             name="product_id"
             rules={[{ required: true, message: t("salesOrders.productRequired") }]}
           >
-            <Select
+            <ProductSearchSelect
+              valueField="id"
               placeholder={t("salesOrders.productPlaceholder")}
               onChange={(value) => {
                 const price = getProductPrice(value as number);
                 detailForm.setFieldsValue({ unit_price: price });
               }}
-            >
-              {products.map((p) => (
-                <Option key={p.id} value={p.id}>
-                  {p.code} - {p.name}
-                </Option>
-              ))}
-            </Select>
+            />
           </Form.Item>
           <Row gutter={16}>
             <Col span={12}>

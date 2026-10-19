@@ -10,6 +10,7 @@ import {
 } from '../../constants/inventoryTransactionTypes';
 import { useInventoryTransactionTypes } from '../../hooks/useInventoryTransactionTypes';
 import { SuperTable } from '../../components/SuperTable';
+import { ProductSearchSelect } from '../../components/ProductSearchSelect';
 import { formatMoney } from '../../utils/money';
 
 type InventoryTransaction = Tables['erp_inventory_transactions_s_539dcf81_b']['Row'];
@@ -295,18 +296,13 @@ export function InventoryTransactions() {
               }))}
               style={{ width: 140 }}
             />
-            <Select
-              allowClear
-              showSearch
-              optionFilterProp="label"
-              placeholder={t("inventoryTransactions.productPlaceholder")}
+            <ProductSearchSelect
               value={selectedProduct}
-              onChange={(value) => setSelectedProduct(value)}
-              options={products.map((p) => ({
-                value: p.id,
-                label: `${p.code} ${p.name}`,
-              }))}
-              style={{ width: 160 }}
+              onChange={(v) => setSelectedProduct(v as number | undefined)}
+              valueField="id"
+              allowClear
+              placeholder={t("inventoryTransactions.productPlaceholder")}
+              style={{ width: 180 }}
             />
             <Select
               allowClear

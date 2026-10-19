@@ -36,6 +36,7 @@ import {
   fetchExchangeRate,
 } from "../../utils/money";
 import { ProductUnit } from "../../components/ProductUnit";
+import { ProductSearchSelect } from "../../components/ProductSearchSelect";
 import dayjs from "dayjs";
 import SimpleModal from "../../components/SimpleModal";
 
@@ -1084,19 +1085,14 @@ export function PurchaseOrders() {
             name="product_id"
             rules={[{ required: true, message: t('purchaseOrders.productRequired') }]}
           >
-            <Select
+            <ProductSearchSelect
+              valueField="id"
               placeholder={t('purchaseOrders.productPlaceholder')}
               onChange={(value) => {
                 const price = getProductPrice(value as number);
                 detailForm.setFieldsValue({ unit_price: price });
               }}
-            >
-              {products.map((p) => (
-                <Option key={p.id} value={p.id}>
-                  {p.code} - {p.name}
-                </Option>
-              ))}
-            </Select>
+            />
           </Form.Item>
           <Row gutter={16}>
             <Col span={12}>

@@ -36,6 +36,7 @@ import { BizAttachments } from "../../components/BizAttachments";
 import { useUoms, buildUomOptions, productUnitText, normalizeUnitText } from "../../hooks/useUoms";
 import { BomEditableTreeGraph } from "../../components/BomEditableTreeGraph";
 import SimpleModal from "../../components/SimpleModal";
+import { ProductSearchSelect } from "../../components/ProductSearchSelect";
 
 // is_phantom 已在线上表中（mrpEngine/mrpService 也在消费），但生成的
 // src/types/database.ts 里没同步这一列，先用交叉类型补上，避免改动生成文件。
@@ -429,12 +430,18 @@ export function Boms() {
     setIsDetailModalOpen(true);
   };
 
-  const handleMaterialChange = (materialId: number) => {
-    const unit = getMaterialUnit(materialId);
+  const handleMaterialChange = (materialId: string | number | (string | number)[] | null) => {
+    // 清空选择时无需带出单位
+    if (materialId == null || Array.isArray(materialId)) {
+      detailForm.setFieldValue('unit', '');
+      return;
+    }
+    const mid = Number(materialId);
+    const unit = getMaterialUnit(mid);
     detailForm.setFieldValue('unit', unit);
 
     // 验证物料不能与 BOM 主档相同
-    if (selectedBom && materialId === selectedBom.product_id) {
+    if (selectedBom && mid === selectedBom.product_id) {
       message.error(t('mrp.boms.materialSameAsHeader'));
       detailForm.setFieldValue('material_id', undefined);
       detailForm.setFieldValue('unit', '');
@@ -857,7 +864,9 @@ export function Boms() {
                   name="product_id"
                   rules={[{ required: true, message: t("mrp.boms.productPrompt") }]}
                 >
-                  <Select
+                  <ProductSearchSelect
+                    valueField="id"
+                    manufacturedOnly
                     placeholder={t("mrp.boms.productPrompt")}
                     disabled={!!editingBom}
                     onChange={(value) => {
@@ -871,13 +880,7 @@ export function Boms() {
                         form.setFieldValue("unit", productUnitText(product, uomMap));
                       }
                     }}
-                  >
-                    {products.map((p) => (
-                      <Option key={p.id} value={p.id}>
-                        {p.name}
-                      </Option>
-                    ))}
-                  </Select>
+                  />
                 </Form.Item>
                 <Form.Item label={t("mrp.boms.version")} name="version" initialValue="1.0">
                   <Input placeholder={t("mrp.boms.versionPrompt")} />
@@ -1064,20 +1067,12 @@ export function Boms() {
                 name="material_id"
                 rules={[{ required: true, message: t("mrp.boms.materialPrompt") }]}
               >
-                <Select
+                <ProductSearchSelect
+                  valueField="id"
                   placeholder={t("mrp.boms.materialPrompt")}
+                  excludeProductId={selectedBom?.product_id}
                   onChange={handleMaterialChange}
-                >
-                  {allProducts.map((p) => (
-                    <Option
-                      key={p.id}
-                      value={p.id}
-                      disabled={selectedBom && p.id === selectedBom.product_id}
-                    >
-                      {p.name}
-                    </Option>
-                  ))}
-                </Select>
+                />
               </Form.Item>
               <Form.Item label={t("mrp.boms.quantity")} name="quantity" initialValue={0}>
                 <InputNumber
