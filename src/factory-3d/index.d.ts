@@ -90,7 +90,7 @@ export interface DeviceLayoutChange {
 }
 
 /** 场景对象类型：工作中心设备之外的可摆放对象 */
-export type SceneObjectKind = 'agv' | 'warehouse' | 'person' | 'truck'
+export type SceneObjectKind = 'work_center' | 'agv' | 'warehouse' | 'person' | 'truck'
 export declare const SCENE_OBJECT_KINDS: SceneObjectKind[]
 
 /** 可绑定的业务对象（AGV / 仓库 / 员工） */

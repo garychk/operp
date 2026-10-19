@@ -21,8 +21,10 @@
 --      · vw_factory_3d_order_materials  材料明细视图：BOM 展开后的材料行（领料/需求）
 --
 -- 状态推导口径（不引入人工维护的状态字段，全部从业务事实推导）：
---   · 设备 running   = 该工作中心上有 in_progress 的工序（且工作中心 active）
---   · 设备 idle      = 工作中心 active 但当前无在制工序
+--   · 设备 running   = 该工作中心上存在「已指派到本工作中心且订单已 in_progress」的工序
+--                     （开工 = 订单头 in_progress，工序可能仍 pending，故按订单头判定，
+--                       与「开工」动作对齐，避免开工后设备仍显示待机）
+--   · 设备 idle      = 工作中心 active 但当前无在制订单工序
 --   · 设备 offline   = 工作中心非 active
 --   · 物料齐套       = 工单材料行 issued_quantity >= planned_quantity
 --     （口径与 erp_production_order_details 一致：领料过账回写 issued_quantity）
@@ -149,12 +151,13 @@ SELECT
   wc.capacity_per_day,
   wc.status                        AS wc_status,
   -- 推导状态：running / idle / offline（口径见文件头）
+  -- running = 存在「已指派到本工作中心且订单已 in_progress」的工序
   CASE
     WHEN COALESCE(wc.status, 'active') <> 'active' THEN 'offline'
     WHEN cur.order_id IS NOT NULL                  THEN 'running'
     ELSE 'idle'
   END                              AS scene_status,
-  -- 当班信息（取最新一道 in_progress 工序所在工单）
+  -- 当班信息（取最新一道已指派到本工作中心、且订单 in_progress 的工序所在工单）
   cur.order_id                     AS current_order_id,
   cur.order_no                     AS current_order_no,
   cur.product_name                 AS current_product_name,
@@ -186,10 +189,13 @@ LEFT JOIN LATERAL (
       ON op.id = oo.operation_id
    WHERE oo.work_center_id = wc.id
      AND COALESCE(oo.is_deleted, 'n') = 'n'
-     AND oo.status = 'in_progress'
      AND COALESCE(o.is_deleted, 'n') = 'n'
      AND o.status = 'in_progress'
-   ORDER BY oo.line_no
+   -- 当班工单优先级：有 in_progress 工序的 > 无的；再按订单实际开工日取最新；
+   -- line_no/id 兜底保证排序确定性（line_no 相同时 LIMIT 1 不漂移）
+   ORDER BY (oo.status = 'in_progress') DESC,
+            o.actual_start_date DESC NULLS LAST,
+            oo.line_no, oo.id
    LIMIT 1
 ) cur ON COALESCE(wc.status, 'active') = 'active'
 WHERE COALESCE(wc.is_deleted, 'n') = 'n';
@@ -283,6 +289,40 @@ WHERE COALESCE(oo.is_deleted, 'n') = 'n'
 
 
 -- ============================================================================
+-- 4a. 工作中心当班订单视图（设备详情面板「当班任务」列表数据源）
+--     口径：按「工序的 work_center_id」匹配 —— 只要某道工序绑定了该工作中心、
+--           且订单已 in_progress，这张订单就算该工作中心的当班任务，
+--           **不看订单头的 work_center_id**（订单头可能为空或指向别处）。
+--     一个工作中心 → 多行（每行一张在制订单，订单去重）。
+-- ============================================================================
+CREATE OR REPLACE VIEW public.vw_factory_3d_work_center_orders
+  WITH (security_invoker = true) AS
+SELECT DISTINCT ON (oo.work_center_id, o.id)
+  oo.work_center_id,
+  o.tenant_id,
+  o.id                          AS order_id,
+  o.order_no,
+  pr.name                       AS product_name,
+  o.planned_quantity,
+  o.operation_progress_percent,
+  o.actual_start_date,
+  -- 该订单在这个工作中心上的工序数 / 在制工序数
+  COUNT(*) OVER (PARTITION BY oo.work_center_id, o.id)::int               AS wc_op_total,
+  COUNT(*) FILTER (WHERE oo.status = 'in_progress')
+        OVER (PARTITION BY oo.work_center_id, o.id)::int                  AS wc_op_in_progress
+FROM public.erp_production_order_operations_s_539dcf81_b oo
+JOIN public.erp_production_orders_s_539dcf81_b o
+  ON o.id = oo.order_id AND o.tenant_id = oo.tenant_id
+LEFT JOIN public.erp_products_s_539dcf81_b pr
+  ON pr.id = o.product_id
+WHERE COALESCE(oo.is_deleted, 'n') = 'n'
+  AND COALESCE(o.is_deleted, 'n') = 'n'
+  AND o.status = 'in_progress'
+  AND oo.work_center_id IS NOT NULL
+ORDER BY oo.work_center_id, o.id, o.actual_start_date DESC NULLS LAST;
+
+
+-- ============================================================================
 -- 4b. 材料明细视图（订单点开后的 BOM 材料清单数据源）
 --     口径：直接读 erp_production_order_details —— 它是 explode_production_order_bom()
 --     从对应 BOM（erp_bom_details）展开写库的，即「生产订单的材料来自对应 BOM」。
@@ -319,6 +359,7 @@ GRANT SELECT ON public.vw_factory_3d_devices          TO authenticated;
 GRANT SELECT ON public.vw_factory_3d_orders           TO authenticated;
 GRANT SELECT ON public.vw_factory_3d_order_operations TO authenticated;
 GRANT SELECT ON public.vw_factory_3d_order_materials  TO authenticated;
+GRANT SELECT ON public.vw_factory_3d_work_center_orders TO authenticated;
 
 
 -- ============================================================================

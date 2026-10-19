@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Drawer } from "antd";
+import { Drawer, Modal, Select, Button, message } from "antd";
 import { useTranslation } from "react-i18next";
 import {
   FactoryScene,
@@ -57,6 +57,19 @@ interface OrderMaterial {
   unit: string | null;
 }
 
+/** 工作中心当班订单行（来自 vw_factory_3d_work_center_orders，按工序 work_center_id 匹配） */
+interface WorkCenterOrder {
+  work_center_id: number;
+  order_id: number;
+  order_no: string;
+  product_name: string | null;
+  planned_quantity: number | null;
+  operation_progress_percent: number | null;
+  actual_start_date: string | null;
+  wc_op_total: number;
+  wc_op_in_progress: number;
+}
+
 const num = (v: number | null | undefined) => Number(v || 0);
 const round = (v: number | null | undefined) => Math.round(num(v));
 
@@ -76,13 +89,79 @@ interface SceneObjectRow {
   status: string | null;
 }
 
+/** 可指派的未开工生产订单（有工序且全部 pending） */
+interface AssignableOrder {
+  order_id: number;
+  order_no: string;
+  product_name: string | null;
+  planned_quantity: number | null;
+}
+
+/** 待指派的工序行 */
+interface AssignableOperation {
+  id: number;
+  sequence_no: number;
+  operation_name: string | null;
+  work_center_id: number | null;
+}
+
+/** 可开工的已下达生产订单（released 且已把工序指派到当前工作中心） */
+interface StartableOrder {
+  order_id: number;
+  order_no: string;
+  product_name: string | null;
+  planned_quantity: number | null;
+}
+
+/** 产能负荷行（来自 vw_erp_capacity_load，每个工作中心 + 月份一行） */
+interface CapacityLoad {
+  work_center_id: number;
+  work_center_name: string | null;
+  month_start: string | null;
+  load_rate: number | null;
+}
+
+/** 库位库存行（来自 vw_factory_3d_bin_stock，按仓库 + 库位聚合） */
+interface BinStock {
+  warehouse_id: number;
+  warehouse_code: string | null;
+  warehouse_name: string | null;
+  bin_id: number | null;
+  bin_code: string | null;
+  bin_name: string | null;
+  bin_location: string | null;
+  on_hand_quantity: number | null;
+  locked_quantity: number | null;
+  available_quantity: number | null;
+}
+
 export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
   const { t, i18n } = useTranslation();
   const isDark = useErpDarkMode();
   const [loaded, setLoaded] = useState(false);
   const [materials, setMaterials] = useState<OrderMaterial[]>([]);
+  const [workCenterOrders, setWorkCenterOrders] = useState<WorkCenterOrder[]>([]);
+  const [capacityLoads, setCapacityLoads] = useState<CapacityLoad[]>([]);
+  const [binStocks, setBinStocks] = useState<BinStock[]>([]);
   const [layoutMode, setLayoutMode] = useState(false);
   const [bindingOptions, setBindingOptions] = useState<BindingOptions>({});
+
+  // 指派工作中心到未开工生产订单
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignLoading, setAssignLoading] = useState(false);
+  const [assignableOrders, setAssignableOrders] = useState<AssignableOrder[]>([]);
+  const [assignOrdersLoading, setAssignOrdersLoading] = useState(false);
+  const [selectedAssignOrderId, setSelectedAssignOrderId] = useState<number | null>(null);
+  const [assignableOps, setAssignableOps] = useState<AssignableOperation[]>([]);
+  const [opsLoading, setOpsLoading] = useState(false);
+  const [selectedOpIds, setSelectedOpIds] = useState<number[]>([]);
+
+  // 开工已下达生产订单
+  const [startOpen, setStartOpen] = useState(false);
+  const [startLoading, setStartLoading] = useState(false);
+  const [startableOrders, setStartableOrders] = useState<StartableOrder[]>([]);
+  const [startOrdersLoading, setStartOrdersLoading] = useState(false);
+  const [selectedStartOrderId, setSelectedStartOrderId] = useState<number | null>(null);
 
   const deviceRows = useFactoryStore((s) => s.deviceRows);
   const orders = useFactoryStore((s) => s.orders);
@@ -91,6 +170,9 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
   const selectedOrderId = useFactoryStore((s) => s.selectedOrderId);
   const selectDevice = useFactoryStore((s) => s.selectDevice);
   const selectOrder = useFactoryStore((s) => s.selectOrder);
+  const sceneObjects = useFactoryStore((s) => s.sceneObjects);
+  const selectedSceneObjectId = useFactoryStore((s) => s.selectedSceneObjectId);
+  const selectSceneObject = useFactoryStore((s) => s.selectSceneObject);
 
   const locale = normalizeLocale(i18n.language);
   const dict = LIB_DICT[locale];
@@ -104,24 +186,40 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     const load = async () => {
       const { setDeviceRows, setOrders, setOperations, setSceneObjects } =
         useFactoryStore.getState();
-      const [dev, ord, ops, mat, agvs, whs, emps, trks, objs] = await Promise.all([
+      const [dev, ord, ops, mat, wco, cap, bst, agvs, whs, emps, trks, wcs, objs] = await Promise.all([
         supabase.from("vw_factory_3d_devices").select("*"),
         supabase.from("vw_factory_3d_orders").select("*"),
         supabase.from("vw_factory_3d_order_operations").select("*"),
         supabase.from("vw_factory_3d_order_materials").select("*"),
+        supabase.from("vw_factory_3d_work_center_orders").select("*"),
+        supabase.from("vw_erp_capacity_load").select("*"),
+        supabase.from("vw_factory_3d_bin_stock").select("*"),
         supabase.from("erp_agvs_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
         supabase.from("erp_warehouses_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
         supabase.from("erp_employees_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
         supabase.from("erp_vehicles_s_539dcf81_b").select("id, plate_no").eq("is_deleted", "n"),
+        supabase.from("erp_work_centers_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
         supabase.from("factory_3d_scene_object_s_539dcf81_b").select("*").eq("is_deleted", "n"),
       ]);
-      if (dev.data) setDeviceRows(dev.data as DeviceRow[]);
+      const deviceRowsData = (dev.data ?? []) as DeviceRow[];
+      if (dev.data) setDeviceRows(deviceRowsData);
       if (ord.data) setOrders(ord.data as OrderData[]);
       if (ops.data) setOperations(ops.data as OrderOperation[]);
       if (mat.data) setMaterials(mat.data as OrderMaterial[]);
+      if (wco.data) setWorkCenterOrders(wco.data as WorkCenterOrder[]);
+      if (cap.data) setCapacityLoads(cap.data as CapacityLoad[]);
+      if (bst.data) setBinStocks(bst.data as BinStock[]);
 
-      // 各类型可绑定业务对象清单
+      // 已在场景中作为「设备」出现的工作中心 id 集合（设备视图本身就是工作中心）
+      const existingWcIds = new Set(
+        deviceRowsData.map((r) => r.device_id).filter((id): id is number => id != null),
+      );
+
+      // 各类型可绑定业务对象清单；work_center 过滤掉场景中已存在的工作中心
       setBindingOptions({
+        work_center: (wcs.data ?? [])
+          .filter((r) => !existingWcIds.has(r.id))
+          .map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
         agv: (agvs.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
         warehouse: (whs.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
         person: (emps.data ?? []).map((r) => ({ id: r.id, label: `${r.code} · ${r.name}` })),
@@ -174,9 +272,12 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     if (!open) {
       selectDevice(null);
       selectOrder(null);
+      selectSceneObject(null);
       setLayoutMode(false);
+      setAssignOpen(false);
+      setStartOpen(false);
     }
-  }, [open, selectDevice, selectOrder]);
+  }, [open, selectDevice, selectOrder, selectSceneObject]);
 
   // 重新拉设备视图（拖拽回写后刷新 scene_x/scene_z）
   const refreshDevices = async () => {
@@ -287,11 +388,265 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     }
   };
 
-  // ---------------------------------------------------------------- 派生数据
+  // ---------------------------------------------------------------- 指派工作中心
+
+  // 打开指派弹窗：加载「已下达(released)」生产订单
+  const openAssign = async () => {
+    setAssignOpen(true);
+    setAssignOrdersLoading(true);
+    setSelectedAssignOrderId(null);
+    setAssignableOps([]);
+    setSelectedOpIds([]);
+    try {
+      // 已下达订单：status = 'released' 且未删除
+      const { data: ordRows, error: ordErr } = await supabase
+        .from("erp_production_orders_s_539dcf81_b")
+        .select("id, order_no, planned_quantity, product_id")
+        .eq("is_deleted", "n")
+        .eq("status", "released");
+      if (ordErr) {
+        console.error("加载可指派订单失败：", ordErr.message);
+        setAssignableOrders([]);
+        return;
+      }
+      if (!ordRows || ordRows.length === 0) {
+        setAssignableOrders([]);
+        return;
+      }
+      // 产品名：查产品表
+      const productIds = Array.from(
+        new Set((ordRows ?? []).map((r) => r.product_id).filter((id): id is number => id != null)),
+      );
+      let productNameMap = new Map<number, string>();
+      if (productIds.length > 0) {
+        const { data: prods } = await supabase
+          .from("erp_products_s_539dcf81_b")
+          .select("id, name")
+          .in("id", productIds);
+        productNameMap = new Map(
+          (prods ?? []).map((p) => [p.id as number, p.name as string]),
+        );
+      }
+
+      const list: AssignableOrder[] = (ordRows ?? []).map((r) => ({
+        order_id: r.id as number,
+        order_no: r.order_no as string,
+        product_name: productNameMap.get(r.product_id as number) ?? null,
+        planned_quantity: r.planned_quantity as number | null,
+      }));
+      setAssignableOrders(list);
+    } finally {
+      setAssignOrdersLoading(false);
+    }
+  };
+
+  // 选中订单后加载其 pending 工序
+  const loadAssignableOps = async (orderId: number) => {
+    setSelectedAssignOrderId(orderId);
+    setAssignableOps([]);
+    setSelectedOpIds([]);
+    setOpsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("erp_production_order_operations_s_539dcf81_b")
+        .select("id, sequence_no, work_center_id, operation_id")
+        .eq("order_id", orderId)
+        .eq("is_deleted", "n")
+        .eq("status", "pending")
+        .order("sequence_no", { ascending: true });
+      if (error) {
+        console.error("加载待排工序失败：", error.message);
+        return;
+      }
+      // 工序名：查工序表
+      const opIds = Array.from(
+        new Set((data ?? []).map((r) => r.operation_id).filter((id): id is number => id != null)),
+      );
+      let opNameMap = new Map<number, string>();
+      if (opIds.length > 0) {
+        const { data: opRows } = await supabase
+          .from("erp_operations_s_539dcf81_b")
+          .select("id, name")
+          .in("id", opIds);
+        opNameMap = new Map((opRows ?? []).map((o) => [o.id as number, o.name as string]));
+      }
+      setAssignableOps(
+        (data ?? []).map((r) => ({
+          id: r.id as number,
+          sequence_no: r.sequence_no as number,
+          operation_name: opNameMap.get(r.operation_id as number) ?? null,
+          work_center_id: r.work_center_id as number | null,
+        })),
+      );
+    } finally {
+      setOpsLoading(false);
+    }
+  };
+
+  // 提交指派：把选中工序的 work_center_id 更新为当前工作中心 id
+  const submitAssign = async () => {
+    if (selectedOpIds.length === 0) {
+      message.warning(t("factory3dViewer.assignEmptyOps"));
+      return;
+    }
+    const wcId = selectedRow?.device_id;
+    if (wcId == null) return;
+    setAssignLoading(true);
+    try {
+      const { error } = await supabase
+        .from("erp_production_order_operations_s_539dcf81_b")
+        .update({ work_center_id: wcId })
+        .in("id", selectedOpIds);
+      if (error) {
+        console.error("指派失败：", error.message);
+        message.error(error.message);
+        return;
+      }
+      message.success(t("factory3dViewer.assignOk", { n: selectedOpIds.length }));
+      setAssignOpen(false);
+      // 刷新数据：订单/工序/设备视图（postgres_changes 也会触发，这里显式刷新确保即时）
+      void refreshDevices();
+      const [ord, ops] = await Promise.all([
+        supabase.from("vw_factory_3d_orders").select("*"),
+        supabase.from("vw_factory_3d_order_operations").select("*"),
+      ]);
+      const { setOrders, setOperations } = useFactoryStore.getState();
+      if (ord.data) setOrders(ord.data as OrderData[]);
+      if (ops.data) setOperations(ops.data as OrderOperation[]);
+    } finally {
+      setAssignLoading(false);
+    }
+  };
+
+  // ---------------------------------------------------------------- 开工生产订单
+
+  // 打开开工弹窗：加载「已下达(released)且已把工序指派到当前工作中心」的订单
+  const openStart = async () => {
+    const wcId = selectedRow?.device_id;
+    if (wcId == null) return;
+    setStartOpen(true);
+    setStartOrdersLoading(true);
+    setSelectedStartOrderId(null);
+    try {
+      // 已指派到本工作中心：存在 work_center_id = 当前设备 id 的工序行（未删）
+      const { data: opRows, error: opErr } = await supabase
+        .from("erp_production_order_operations_s_539dcf81_b")
+        .select("order_id")
+        .eq("is_deleted", "n")
+        .eq("work_center_id", wcId);
+      if (opErr) {
+        console.error("加载可开工订单失败：", opErr.message);
+        setStartableOrders([]);
+        return;
+      }
+      const assignedOrderIds = Array.from(
+        new Set((opRows ?? []).map((r) => r.order_id as number)),
+      );
+      if (assignedOrderIds.length === 0) {
+        setStartableOrders([]);
+        return;
+      }
+      // 再查这些订单中状态为 released 的（开工前置条件）
+      const { data: ordRows, error: ordErr } = await supabase
+        .from("erp_production_orders_s_539dcf81_b")
+        .select("id, order_no, planned_quantity, product_id, status")
+        .eq("is_deleted", "n")
+        .eq("status", "released")
+        .in("id", assignedOrderIds);
+      if (ordErr) {
+        console.error("加载可开工订单失败：", ordErr.message);
+        setStartableOrders([]);
+        return;
+      }
+      // 产品名
+      const productIds = Array.from(
+        new Set((ordRows ?? []).map((r) => r.product_id).filter((id): id is number => id != null)),
+      );
+      let productNameMap = new Map<number, string>();
+      if (productIds.length > 0) {
+        const { data: prods } = await supabase
+          .from("erp_products_s_539dcf81_b")
+          .select("id, name")
+          .in("id", productIds);
+        productNameMap = new Map((prods ?? []).map((p) => [p.id as number, p.name as string]));
+      }
+      setStartableOrders(
+        (ordRows ?? []).map((r) => ({
+          order_id: r.id as number,
+          order_no: r.order_no as string,
+          product_name: productNameMap.get(r.product_id as number) ?? null,
+          planned_quantity: r.planned_quantity as number | null,
+        })),
+      );
+    } finally {
+      setStartOrdersLoading(false);
+    }
+  };
+
+  // 提交开工：调 RPC start_production_order
+  const submitStart = async () => {
+    if (selectedStartOrderId == null) return;
+    setStartLoading(true);
+    try {
+      const { data, error } = await supabase.rpc("start_production_order", {
+        p_order_id: selectedStartOrderId,
+      });
+      if (error) {
+        console.error("开工失败：", error.message);
+        message.error(error.message);
+        return;
+      }
+      const result = data as { order_no?: string } | null;
+      const target = startableOrders.find((o) => o.order_id === selectedStartOrderId);
+      message.success(
+        t("factory3dViewer.startOk", { no: result?.order_no ?? target?.order_no ?? "" }),
+      );
+      setStartOpen(false);
+      // 刷新订单/工序/设备视图
+      void refreshDevices();
+      const [ord, ops] = await Promise.all([
+        supabase.from("vw_factory_3d_orders").select("*"),
+        supabase.from("vw_factory_3d_order_operations").select("*"),
+      ]);
+      const { setOrders, setOperations } = useFactoryStore.getState();
+      if (ord.data) setOrders(ord.data as OrderData[]);
+      if (ops.data) setOperations(ops.data as OrderOperation[]);
+    } finally {
+      setStartLoading(false);
+    }
+  };
+
   const selectedRow =
     deviceRows.find((r) => r.device_code === selectedDeviceCode) ?? null;
   const selectedOrder: OrderData | null =
     orders.find((o) => o.order_id === selectedOrderId) ?? null;
+  // 当前工作中心的全部当班订单（按工序 work_center_id 匹配，不只看订单头）
+  const selectedWorkCenterOrders: WorkCenterOrder[] = useMemo(
+    () =>
+      workCenterOrders
+        .filter((o) => o.work_center_id === selectedRow?.device_id)
+        .sort((a, b) => num(b.operation_progress_percent) - num(a.operation_progress_percent)),
+    [workCenterOrders, selectedRow?.device_id],
+  );
+  // 当前工作中心的产能负荷（取最近一个月的 load_rate）
+  const selectedCapacityLoad: CapacityLoad | null = useMemo(() => {
+    const rows = capacityLoads
+      .filter((c) => c.work_center_id === selectedRow?.device_id)
+      .sort((a, b) => (b.month_start ?? "").localeCompare(a.month_start ?? ""));
+    return rows[0] ?? null;
+  }, [capacityLoads, selectedRow?.device_id]);
+  // 当前选中的场景对象（仓储房屋等）
+  const selectedSceneObject: SceneObject | null = useMemo(
+    () => sceneObjects.find((o) => o.id === selectedSceneObjectId) ?? null,
+    [sceneObjects, selectedSceneObjectId],
+  );
+  // 选中仓储对象时，该仓库下所有库位的库存（bindId = 仓库 id）
+  const selectedWarehouseBins: BinStock[] = useMemo(() => {
+    if (!selectedSceneObject || selectedSceneObject.kind !== "warehouse") return [];
+    const wid = selectedSceneObject.bindId;
+    if (wid == null) return [];
+    return binStocks.filter((b) => b.warehouse_id === Number(wid));
+  }, [selectedSceneObject, binStocks]);
   const selectedOrderOps: OrderOperation[] = useMemo(
     () =>
       operations
@@ -389,9 +744,43 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
           </div>
         </header>
 
-        {/* 右侧面板：订单列表 / 订单详情 / 设备详情 */}
+        {/* 右侧面板：仓储详情 / 订单列表 / 订单详情 / 设备详情 */}
         <aside className="f3d-hud f3d-hud-right">
-          {selectedRow ? (
+          {selectedSceneObject?.kind === "warehouse" ? (
+            <>
+              <button className="f3d-back" onClick={() => selectSceneObject(null)}>
+                {t("factory3dViewer.backToOrders")}
+              </button>
+              <h2>{selectedSceneObject.bindLabel ?? selectedSceneObject.name}</h2>
+              <p className="f3d-dim">{t("factory3dViewer.warehouse")}</p>
+              {selectedWarehouseBins.length > 0 ? (
+                <>
+                  <div className="f3d-section-title">
+                    {t("factory3dViewer.bins")}（{selectedWarehouseBins.length}）
+                  </div>
+                  <ul className="f3d-orders">
+                    {selectedWarehouseBins.map((b) => (
+                      <li key={b.bin_id ?? b.warehouse_id} className="f3d-order-item">
+                        <div className="f3d-order-line1">
+                          <b>{b.bin_name ?? b.bin_code ?? "—"}</b>
+                          <span className="f3d-dim">
+                            {b.bin_location ? ` · ${b.bin_location}` : ""}
+                          </span>
+                        </div>
+                        <div className="f3d-order-line2">
+                          <span>{t("factory3dViewer.onHand")}：{round(b.on_hand_quantity)}</span>
+                          <span>{t("factory3dViewer.locked")}：{round(b.locked_quantity)}</span>
+                          <span>{t("factory3dViewer.available")}：{round(b.available_quantity)}</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              ) : (
+                <p className="f3d-dim f3d-tip">{t("factory3dViewer.noBins")}</p>
+              )}
+            </>
+          ) : selectedRow ? (
             <>
               <button className="f3d-back" onClick={() => selectDevice(null)}>
                 {t("factory3dViewer.backToOrders")}
@@ -412,26 +801,74 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
                   </span>
                 )}
               </p>
-              {selectedRow.current_order_no ? (
-                <>
-                  <div className="f3d-section-title">{t("factory3dViewer.currentJob")}</div>
-                  <p>
-                    <b>{selectedRow.current_order_no}</b> · {selectedRow.current_product_name}
-                  </p>
-                  <p className="f3d-dim">
-                    {t("factory3dViewer.currentOp")}：{selectedRow.current_operation_name}
-                    （{round(selectedRow.current_op_completed)}/
-                    {round(selectedRow.current_op_planned)}）
-                  </p>
-                  {selectedOrder && (
-                    <ProgressBar
-                      pct={num(selectedOrder.progress_pct)}
-                      label={t("factory3dViewer.orderProgress")}
-                    />
+              {selectedCapacityLoad && (
+                <p>
+                  <span className="f3d-dim">{t("factory3dViewer.capacityLoad")}：</span>
+                  <b
+                    style={{
+                      color: num(selectedCapacityLoad.load_rate) >= 80 ? "#ff4d4f" : undefined,
+                    }}
+                  >
+                    {round(selectedCapacityLoad.load_rate)}%
+                  </b>
+                  {num(selectedCapacityLoad.load_rate) >= 80 && (
+                    <span style={{ color: "#ff4d4f", marginLeft: 6 }}>
+                      {t("factory3dViewer.capacityOverload")}
+                    </span>
                   )}
+                </p>
+              )}
+              {selectedWorkCenterOrders.length > 0 ? (
+                <>
+                  <div className="f3d-section-title">
+                    {t("factory3dViewer.currentJobs")}（{selectedWorkCenterOrders.length}）
+                  </div>
+                  <ul className="f3d-orders">
+                    {selectedWorkCenterOrders.map((o) => (
+                      <li
+                        key={o.order_id}
+                        onClick={() => selectOrder(o.order_id)}
+                        className="f3d-order-item"
+                      >
+                        <div className="f3d-order-line1">
+                          <b>{o.order_no}</b>
+                          <span className="f3d-dim">{o.product_name ?? "—"}</span>
+                        </div>
+                        <div className="f3d-order-line2">
+                          <span className="f3d-dim">
+                            {t("factory3dViewer.wcOpInProgress", {
+                              done: o.wc_op_in_progress,
+                              total: o.wc_op_total,
+                            })}
+                          </span>
+                          <span className="f3d-dim">
+                            {round(o.operation_progress_percent)}%
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
                 </>
               ) : (
                 <p className="f3d-dim f3d-tip">{t("factory3dViewer.noActiveJob")}</p>
+              )}
+              {/* 指派 / 开工：运行中与待机都可操作（一个工作中心可同时挂多个订单） */}
+              {selectedRow.scene_status !== "offline" && (
+                <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+                  <Button
+                    type="primary"
+                    block
+                    onClick={() => void openAssign()}
+                  >
+                    {t("factory3dViewer.assign")}
+                  </Button>
+                  <Button
+                    block
+                    onClick={() => void openStart()}
+                  >
+                    {t("factory3dViewer.start")}
+                  </Button>
+                </div>
               )}
             </>
           ) : selectedOrder ? (
@@ -574,6 +1011,97 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
           )}
         </aside>
       </div>
+
+      {/* 指派工作中心到未开工生产订单的弹窗 */}
+      <Modal
+        title={t("factory3dViewer.assignTitle")}
+        open={assignOpen}
+        onCancel={() => setAssignOpen(false)}
+        onOk={() => void submitAssign()}
+        confirmLoading={assignLoading}
+        okText={t("factory3dViewer.assignConfirm")}
+        destroyOnClose
+      >
+        <p className="f3d-dim" style={{ marginBottom: 12 }}>
+          {t("factory3dViewer.assignTo")}{" "}
+          <b>
+            {selectedRow?.device_code} · {selectedRow?.device_name}
+          </b>
+        </p>
+        <div style={{ marginBottom: 12 }}>
+          <div className="f3d-section-title">{t("factory3dViewer.assignSelectOrder")}</div>
+          <Select
+            style={{ width: "100%" }}
+            placeholder={t("factory3dViewer.assignSelectOrder")}
+            loading={assignOrdersLoading}
+            value={selectedAssignOrderId}
+            onChange={(v) => void loadAssignableOps(v as number)}
+            options={assignableOrders.map((o) => ({
+              value: o.order_id,
+              label: `${o.order_no}${o.product_name ? ` · ${o.product_name}` : ""}${
+                o.planned_quantity != null ? ` ×${round(o.planned_quantity)}` : ""
+              }`,
+            }))}
+            notFoundContent={t("factory3dViewer.assignNoOrders")}
+            showSearch
+            optionFilterProp="label"
+          />
+        </div>
+        <div>
+          <div className="f3d-section-title">{t("factory3dViewer.assignSelectOps")}</div>
+          <Select
+            mode="multiple"
+            style={{ width: "100%" }}
+            placeholder={t("factory3dViewer.assignSelectOps")}
+            loading={opsLoading}
+            disabled={selectedAssignOrderId == null}
+            value={selectedOpIds}
+            onChange={(v) => setSelectedOpIds(v as number[])}
+            options={assignableOps.map((op) => ({
+              value: op.id,
+              label: `${op.sequence_no}. ${op.operation_name ?? "—"}${
+                op.work_center_id != null ? `（已指派）` : ""
+              }`,
+            }))}
+          />
+        </div>
+      </Modal>
+
+      {/* 开工已下达生产订单的弹窗 */}
+      <Modal
+        title={t("factory3dViewer.startTitle")}
+        open={startOpen}
+        onCancel={() => setStartOpen(false)}
+        onOk={() => void submitStart()}
+        confirmLoading={startLoading}
+        okText={t("factory3dViewer.startConfirm")}
+        okButtonProps={{ disabled: selectedStartOrderId == null }}
+        destroyOnClose
+      >
+        <p className="f3d-dim" style={{ marginBottom: 12 }}>
+          {t("factory3dViewer.startTo")}{" "}
+          <b>
+            {selectedRow?.device_code} · {selectedRow?.device_name}
+          </b>
+        </p>
+        <div className="f3d-section-title">{t("factory3dViewer.startSelectOrder")}</div>
+        <Select
+          style={{ width: "100%" }}
+          placeholder={t("factory3dViewer.startSelectOrder")}
+          loading={startOrdersLoading}
+          value={selectedStartOrderId}
+          onChange={(v) => setSelectedStartOrderId(v as number)}
+          options={startableOrders.map((o) => ({
+            value: o.order_id,
+            label: `${o.order_no}${o.product_name ? ` · ${o.product_name}` : ""}${
+              o.planned_quantity != null ? ` ×${round(o.planned_quantity)}` : ""
+            }`,
+          }))}
+          notFoundContent={t("factory3dViewer.startNoOrders")}
+          showSearch
+          optionFilterProp="label"
+        />
+      </Modal>
     </Drawer>
   );
 }

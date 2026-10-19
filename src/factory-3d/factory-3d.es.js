@@ -1,10 +1,10 @@
 import { jsxs as c, jsx as t } from "react/jsx-runtime";
-import { useState as Y, useRef as A, useEffect as w } from "react";
-import { useThree as T, useFrame as Z, Canvas as Q } from "@react-three/fiber";
-import { Grid as ee, Html as X, OrbitControls as ne } from "@react-three/drei";
-import { create as te } from "zustand";
-import * as I from "three";
-const re = [
+import { useState as Z, useRef as I, useEffect as w } from "react";
+import { useThree as L, useFrame as Q, Canvas as ee } from "@react-three/fiber";
+import { Grid as ne, Html as J, OrbitControls as te } from "@react-three/drei";
+import { create as re } from "zustand";
+import * as A from "three";
+const oe = [
   {
     device_id: 1,
     device_code: "WC-CNC01",
@@ -131,7 +131,7 @@ const re = [
     scene_x: 4.5,
     scene_z: 3
   }
-], oe = [
+], ie = [
   {
     order_id: 101,
     order_no: "MO-2026-018",
@@ -192,7 +192,7 @@ const re = [
     material_line_short: 3,
     material_kit_status: "short"
   }
-], ie = [
+], ae = [
   { order_operation_id: 1, order_id: 101, order_no: "MO-2026-018", line_no: 1, sequence_no: 10, operation_name: "铸造毛坯检验", work_center_id: null, work_center_name: null, assignee_name: "王强", planned_quantity: 200, completed_quantity: 200, scrapped_quantity: 2, operation_status: "completed" },
   { order_operation_id: 2, order_id: 101, order_no: "MO-2026-018", line_no: 2, sequence_no: 20, operation_name: "箱体冲压成型", work_center_id: 3, work_center_name: "冲压机 01", assignee_name: "李明", planned_quantity: 200, completed_quantity: 180, scrapped_quantity: 0, operation_status: "in_progress" },
   { order_operation_id: 3, order_id: 101, order_no: "MO-2026-018", line_no: 3, sequence_no: 30, operation_name: "精铣结合面", work_center_id: 1, work_center_name: "CNC 加工中心 01", assignee_name: "张伟", planned_quantity: 200, completed_quantity: 96, scrapped_quantity: 1, operation_status: "in_progress" },
@@ -226,7 +226,7 @@ const re = [
     { name: "铭牌", required: 150, issued: 150, unit: "张" }
   ]
 };
-function W(n) {
+function $(n) {
   return Math.max(n.length, 1), n.map((r, e) => {
     const o = {
       x: (e % 4 - 1.5) * 4.5,
@@ -248,85 +248,85 @@ function W(n) {
     };
   });
 }
-const q = 21, L = 13, K = 0.5, V = (n) => Math.round(n / K) * K, H = (n, r, e) => Math.min(e, Math.max(r, n));
-function J({
+const j = 21, q = 13, K = 0.5, V = (n) => Math.round(n / K) * K, H = (n, r, e) => Math.min(e, Math.max(r, n));
+function U({
   position: n,
   editable: r,
   onDrop: e
 }) {
-  const o = T((y) => y.controls), i = T((y) => y.camera), a = T((y) => y.gl), [s, d] = Y(n), S = A(s);
-  S.current = s;
-  const b = A(null), m = A(null), h = A(!1), x = A(new I.Raycaster()), M = A(new I.Vector2());
+  const o = L((m) => m.controls), i = L((m) => m.camera), a = L((m) => m.gl), [s, d] = Z(n), b = I(s);
+  b.current = s;
+  const y = I(null), g = I(null), S = I(!1), O = I(new A.Raycaster()), C = I(new A.Vector2());
   w(() => {
-    b.current?.active || (d(n), S.current = n);
+    y.current?.active || (d(n), b.current = n);
   }, [n]);
-  const _ = () => {
-    m.current?.(), m.current = null;
+  const h = () => {
+    g.current?.(), g.current = null;
   };
   w(() => {
-    !r && b.current?.active && (b.current = null, _(), o && (o.enabled = !0), document.body.style.cursor = "auto");
-  }, [r, o]), w(() => _, []);
-  const v = (y, O) => {
-    const f = a.domElement.getBoundingClientRect();
-    M.current.set(
-      (y.clientX - f.left) / f.width * 2 - 1,
-      -((y.clientY - f.top) / f.height) * 2 + 1
-    ), x.current.setFromCamera(M.current, i);
-    const C = new I.Vector3();
-    return x.current.ray.intersectPlane(O, C) ? C : null;
-  }, g = () => {
-    const y = b.current;
-    if (!y?.active || (b.current = null, _(), o && (o.enabled = !0), document.body.style.cursor = r ? "grab" : "auto", !y.moved)) return;
-    h.current = !0;
-    const [O, , f] = S.current;
-    e(O, f);
+    !r && y.current?.active && (y.current = null, h(), o && (o.enabled = !0), document.body.style.cursor = "auto");
+  }, [r, o]), w(() => h, []);
+  const _ = (m, f) => {
+    const v = a.domElement.getBoundingClientRect();
+    C.current.set(
+      (m.clientX - v.left) / v.width * 2 - 1,
+      -((m.clientY - v.top) / v.height) * 2 + 1
+    ), O.current.setFromCamera(C.current, i);
+    const M = new A.Vector3();
+    return O.current.ray.intersectPlane(f, M) ? M : null;
+  }, x = () => {
+    const m = y.current;
+    if (!m?.active || (y.current = null, h(), o && (o.enabled = !0), document.body.style.cursor = r ? "grab" : "auto", !m.moved)) return;
+    S.current = !0;
+    const [f, , v] = b.current;
+    e(f, v);
   };
   return {
     pos: s,
-    handlers: { onPointerDown: (y) => {
-      if (!r || y.button !== 0) return;
-      y.stopPropagation();
-      const O = new I.Plane(new I.Vector3(0, 1, 0), 0), f = new I.Vector3();
-      if (!y.ray.intersectPlane(O, f)) return;
+    handlers: { onPointerDown: (m) => {
+      if (!r || m.button !== 0) return;
+      m.stopPropagation();
+      const f = new A.Plane(new A.Vector3(0, 1, 0), 0), v = new A.Vector3();
+      if (!m.ray.intersectPlane(f, v)) return;
       o && (o.enabled = !1);
-      const C = {
+      const M = {
         active: !0,
         moved: !1,
-        offset: new I.Vector3(f.x - n[0], 0, f.z - n[2]),
-        plane: O,
+        offset: new A.Vector3(v.x - n[0], 0, v.z - n[2]),
+        plane: f,
         origin: n
       };
-      b.current = C, document.body.style.cursor = "grabbing";
-      const D = (F) => {
-        const E = b.current;
+      y.current = M, document.body.style.cursor = "grabbing";
+      const B = (F) => {
+        const E = y.current;
         if (!E?.active) return;
-        const p = v(F, E.plane);
+        const p = _(F, E.plane);
         if (!p) return;
-        const z = H(V(p.x - E.offset.x), -q, q), N = H(V(p.z - E.offset.z), -L, L);
+        const z = H(V(p.x - E.offset.x), -j, j), N = H(V(p.z - E.offset.z), -q, q);
         (Math.abs(z - E.origin[0]) > 0.01 || Math.abs(N - E.origin[2]) > 0.01) && (E.moved = !0);
-        const $ = [z, E.origin[1], N];
-        S.current = $, d($);
-      }, k = () => g();
-      window.addEventListener("pointermove", D), window.addEventListener("pointerup", k), window.addEventListener("pointercancel", k), m.current = () => {
-        window.removeEventListener("pointermove", D), window.removeEventListener("pointerup", k), window.removeEventListener("pointercancel", k);
+        const W = [z, E.origin[1], N];
+        b.current = W, d(W);
+      }, D = () => x();
+      window.addEventListener("pointermove", B), window.addEventListener("pointerup", D), window.addEventListener("pointercancel", D), g.current = () => {
+        window.removeEventListener("pointermove", B), window.removeEventListener("pointerup", D), window.removeEventListener("pointercancel", D);
       };
     } },
-    shouldSkipClick: () => h.current ? (h.current = !1, !0) : !1,
-    isDragging: () => !!b.current?.active
+    shouldSkipClick: () => S.current ? (S.current = !1, !0) : !1,
+    isDragging: () => !!y.current?.active
   };
 }
-function ae(n, r = 3) {
+function ce(n, r = 3) {
   const e = (o, i) => n.some((a) => Math.abs(a[0] - o) < r * 0.9 && Math.abs(a[2] - i) < r * 0.9);
-  for (let o = -L + 3; o <= L - 3; o += r)
-    for (let i = -q + 3; i <= q - 3; i += r)
+  for (let o = -q + 3; o <= q - 3; o += r)
+    for (let i = -j + 3; i <= j - 3; i += r)
       if (!e(i, o)) return [i, 0, o];
   return [0, 0, 0];
 }
-const U = re, u = te((n, r) => ({
-  devices: W(U),
-  deviceRows: U,
-  orders: oe,
-  operations: ie,
+const X = oe, u = re((n, r) => ({
+  devices: $(X),
+  deviceRows: X,
+  orders: ie,
+  operations: ae,
   selectedDeviceCode: null,
   selectedOrderId: null,
   theme: "light",
@@ -342,7 +342,7 @@ const U = re, u = te((n, r) => ({
   onSceneObjectChange: null,
   setDeviceRows: (e) => n((o) => ({
     deviceRows: e,
-    devices: o.devices.some((i) => i.deviceId != null) ? ce(o.devices, e) : W(e)
+    devices: o.devices.some((i) => i.deviceId != null) ? se(o.devices, e) : $(e)
   })),
   setDevices: (e) => n({ devices: e }),
   updateDeviceStatus: (e, o) => n((i) => ({
@@ -379,22 +379,23 @@ const U = re, u = te((n, r) => ({
   setOnLayoutChange: (e) => n({ onLayoutChange: e }),
   setSceneObjects: (e) => n({ sceneObjects: e }),
   addSceneObject: (e, o) => {
-    const i = r(), a = i.sceneObjects.filter((m) => m.kind === e).length, s = [
-      ...i.devices.map((m) => m.position),
-      ...i.sceneObjects.map((m) => m.position)
+    const i = r(), a = i.sceneObjects.filter((g) => g.kind === e).length, s = [
+      ...i.devices.map((g) => g.position),
+      ...i.sceneObjects.map((g) => g.position)
     ], d = {
+      work_center: "工作中心",
       agv: "AGV",
       warehouse: "仓库",
       person: "人员",
       truck: "货车"
-    }, S = {
+    }, b = {
       id: `obj_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
       kind: e,
       name: o ?? `${d[e]}-${String(a + 1).padStart(2, "0")}`,
-      position: ae(s),
+      position: ce(s),
       status: e === "agv" || e === "truck" ? "idle" : void 0
-    }, b = [...i.sceneObjects, S];
-    return n({ sceneObjects: b, selectedSceneObjectId: S.id, selectedDeviceCode: null }), P(r(), b, "add", S), S;
+    }, y = [...i.sceneObjects, b];
+    return n({ sceneObjects: y, selectedSceneObjectId: b.id, selectedDeviceCode: null }), P(r(), y, "add", b), b;
   },
   moveSceneObject: (e, o, i) => {
     const a = r().sceneObjects.map(
@@ -432,7 +433,7 @@ const U = re, u = te((n, r) => ({
 function P(n, r, e, o) {
   n.onSceneObjectsChange?.(r), n.onSceneObjectChange?.({ action: e, object: o });
 }
-function ce(n, r) {
+function se(n, r) {
   return r.map((e, o) => {
     const i = n.find((s) => s.id === e.device_code), a = { x: (o % 4 - 1.5) * 4.5, z: Math.floor(o / 4) * 5 - 1 };
     return {
@@ -447,7 +448,7 @@ function ce(n, r) {
     };
   });
 }
-const j = {
+const G = {
   light: {
     background: "#E8EEF3",
     fog: [45, 95],
@@ -493,16 +494,22 @@ const j = {
     orderBadgeText: "#85B7EB"
   }
 };
-function se(n) {
+function de(n) {
   return n && n.toLowerCase().startsWith("en") ? "en" : "zh";
 }
-const G = {
+const T = {
   zh: {
     status: { running: "运行中", idle: "待机", fault: "故障" },
     sceneStatus: { running: "运行中", idle: "待机", offline: "离线" },
     opStatus: { pending: "未开始", in_progress: "加工中", completed: "已完成", cancelled: "已取消" },
     kitStatus: { ready: "齐料", short: "缺料", none: "无物料需求" },
-    objectKind: { agv: "AGV 小车", warehouse: "仓储房屋", person: "人员", truck: "货车" },
+    objectKind: {
+      work_center: "工作中心",
+      agv: "AGV 小车",
+      warehouse: "仓储房屋",
+      person: "人员",
+      truck: "货车"
+    },
     palette: {
       title: "添加对象",
       hint: "点击添加 · 拖动摆放",
@@ -517,7 +524,13 @@ const G = {
     sceneStatus: { running: "Running", idle: "Idle", offline: "Offline" },
     opStatus: { pending: "Pending", in_progress: "In progress", completed: "Completed", cancelled: "Cancelled" },
     kitStatus: { ready: "Kitted", short: "Short", none: "No materials" },
-    objectKind: { agv: "AGV", warehouse: "Warehouse", person: "Person", truck: "Truck" },
+    objectKind: {
+      work_center: "Work center",
+      agv: "AGV",
+      warehouse: "Warehouse",
+      person: "Person",
+      truck: "Truck"
+    },
     palette: {
       title: "Add object",
       hint: "Click to add · drag to place",
@@ -528,15 +541,15 @@ const G = {
     }
   }
 };
-function de() {
-  const n = u((e) => e.theme), r = j[n];
+function le() {
+  const n = u((e) => e.theme), r = G[n];
   return /* @__PURE__ */ c("group", { children: [
     /* @__PURE__ */ c("mesh", { rotation: [-Math.PI / 2, 0, 0], receiveShadow: !0, children: [
       /* @__PURE__ */ t("planeGeometry", { args: [48, 32] }),
       /* @__PURE__ */ t("meshStandardMaterial", { color: r.floor })
     ] }),
     /* @__PURE__ */ t(
-      ee,
+      ne,
       {
         position: [0, 0.01, 0],
         args: [48, 32],
@@ -556,8 +569,8 @@ function de() {
     ] })
   ] });
 }
-function le() {
-  const n = u((a) => a.theme), r = j[n], e = 22, o = 12, i = 5;
+function ue() {
+  const n = u((a) => a.theme), r = G[n], e = 22, o = 12, i = 5;
   return /* @__PURE__ */ c("group", { position: [0, 0, -2], children: [
     /* @__PURE__ */ c("mesh", { position: [0, i / 2, -o / 2], castShadow: !0, receiveShadow: !0, children: [
       /* @__PURE__ */ t("boxGeometry", { args: [e, i, 0.3] }),
@@ -586,164 +599,107 @@ function le() {
     ] })
   ] });
 }
-const Ee = {
-  running: "#3B6D11",
-  idle: "#BA7517",
-  offline: "#888780"
-}, ue = {
-  running: "#3B6D11",
-  idle: "#BA7517",
-  fault: "#A32D2D"
-}, De = {
-  running: "运行中",
-  idle: "待机",
-  offline: "离线"
-}, Be = {
-  pending: "未开始",
-  in_progress: "加工中",
-  completed: "已完成",
-  cancelled: "已取消"
-}, Ie = {
-  ready: "齐料",
-  short: "缺料",
-  none: "无物料需求"
-}, pe = ["agv", "warehouse", "person", "truck"];
-function _e(n) {
-  return n === "fault" ? "offline" : n;
-}
-function me({ device: n }) {
-  const r = u((g) => g.theme), e = u((g) => g.locale), o = u((g) => g.layoutEditable), i = u((g) => g.selectedDeviceCode === n.id), a = u((g) => g.selectDevice), s = u((g) => g.moveDevice), d = j[r], S = G[e], b = n.status, m = _e(b), h = ue[b], { pos: x, handlers: M, shouldSkipClick: _ } = J({
-    position: n.position,
-    editable: o,
-    onDrop: (g, l) => {
-      s(n.id, g, l);
-      const { pendingLayout: B, deviceRows: y, onLayoutChange: O } = u.getState(), f = Object.entries(B).map(([C, D]) => ({
-        deviceCode: C,
-        deviceId: y.find((k) => k.device_code === C)?.device_id,
-        sceneX: D.sceneX,
-        sceneZ: D.sceneZ
-      }));
-      O?.(f);
-    }
-  });
-  return /* @__PURE__ */ c(
-    "group",
-    {
-      position: x,
-      onClick: (g) => {
-        g.stopPropagation(), !_() && a(i ? null : n.id);
-      },
-      ...M,
-      onPointerOver: (g) => {
-        g.stopPropagation(), document.body.style.cursor = o ? "grab" : "pointer";
-      },
-      onPointerOut: () => {
-        document.body.style.cursor = "auto";
-      },
-      children: [
-        /* @__PURE__ */ c("mesh", { position: [0, 0.2, 0], castShadow: !0, receiveShadow: !0, children: [
-          /* @__PURE__ */ t("boxGeometry", { args: [1.9, 0.4, 1.5] }),
-          /* @__PURE__ */ t("meshStandardMaterial", { color: b === "fault" ? d.baseFault : d.base })
-        ] }),
-        /* @__PURE__ */ c("mesh", { position: [0, 1.05, 0], castShadow: !0, children: [
-          /* @__PURE__ */ t("boxGeometry", { args: [1.4, 1.3, 1] }),
-          /* @__PURE__ */ t(
-            "meshStandardMaterial",
-            {
-              color: i ? d.bodySelected : b === "fault" ? d.bodyFault : d.body,
-              emissive: i ? d.selectRing : "#000000",
-              emissiveIntensity: i ? 0.25 : 0
-            }
-          )
-        ] }),
-        /* @__PURE__ */ c("mesh", { position: [0, 1.85, 0], children: [
-          /* @__PURE__ */ t("sphereGeometry", { args: [0.14, 16, 16] }),
-          /* @__PURE__ */ t(
-            "meshStandardMaterial",
-            {
-              color: h,
-              emissive: h,
-              emissiveIntensity: r === "dark" ? i ? 2.2 : 1.5 : i ? 1.8 : 1
-            }
-          )
-        ] }),
-        i && /* @__PURE__ */ c("mesh", { position: [0, 0.03, 0], rotation: [-Math.PI / 2, 0, 0], children: [
-          /* @__PURE__ */ t("ringGeometry", { args: [1.15, 1.4, 40] }),
-          /* @__PURE__ */ t("meshBasicMaterial", { color: d.selectRing })
-        ] }),
-        o && /* @__PURE__ */ c("mesh", { position: [0, 0.02, 0], rotation: [-Math.PI / 2, 0, 0], children: [
-          /* @__PURE__ */ t("ringGeometry", { args: [1.25, 1.32, 48] }),
-          /* @__PURE__ */ t("meshBasicMaterial", { color: d.selectRing, transparent: !0, opacity: 0.45 })
-        ] }),
-        /* @__PURE__ */ t(X, { position: [0, 2.4, 0], center: !0, distanceFactor: 16, zIndexRange: [20, 0], children: /* @__PURE__ */ c(
-          "div",
-          {
-            style: {
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: 3,
-              pointerEvents: "none",
-              fontFamily: "system-ui, sans-serif"
-            },
-            children: [
-              /* @__PURE__ */ c(
-                "div",
-                {
-                  style: {
-                    padding: "2px 10px",
-                    borderRadius: 10,
-                    background: d.labelBg[m],
-                    border: `0.5px solid ${d.labelBorder[m]}`,
-                    color: d.labelText[m],
-                    fontSize: 12,
-                    whiteSpace: "nowrap",
-                    boxShadow: r === "dark" ? "0 2px 8px rgba(0,0,0,.4)" : "0 2px 8px rgba(15,23,42,.12)"
-                  },
-                  children: [
-                    n.name,
-                    " · ",
-                    S.status[b]
-                  ]
-                }
-              ),
-              n.currentOrderNo && /* @__PURE__ */ c(
-                "div",
-                {
-                  style: {
-                    padding: "1px 9px",
-                    borderRadius: 10,
-                    background: d.orderBadgeBg,
-                    border: `0.5px solid ${d.selectRing}`,
-                    color: d.orderBadgeText,
-                    fontSize: 11,
-                    whiteSpace: "nowrap"
-                  },
-                  children: [
-                    n.currentOrderNo,
-                    n.currentProduct ? ` · ${n.currentProduct}` : ""
-                  ]
-                }
-              )
-            ]
-          }
-        ) })
-      ]
-    }
-  );
-}
 const R = {
+  work_center: { body: "#B4B2A9", accent: "#185FA5" },
   agv: { body: "#F2C14E", accent: "#1D9A6C" },
   warehouse: { body: "#9AA6B2", accent: "#185FA5" },
   person: { body: "#E8ECF1", accent: "#3B6D11" },
   truck: { body: "#E9EDF2", accent: "#1F6FB2" }
 };
-function he({ p: n, selected: r, running: e }) {
-  const o = A(null);
-  Z((a, s) => {
-    o.current && e && (o.current.rotation.y += s * 2.4);
+function Y({
+  p: n,
+  selected: r,
+  status: e
+}) {
+  const o = r ? n.bodySelected : "#8A93A0", i = r ? n.bodySelected : "#6F7885", a = (s, d) => /* @__PURE__ */ t(
+    "meshStandardMaterial",
+    {
+      color: s ? d : "#3A3E46",
+      emissive: s ? d : "#000000",
+      emissiveIntensity: s ? 1.6 : 0
+    }
+  );
+  return /* @__PURE__ */ c("group", { children: [
+    /* @__PURE__ */ c("mesh", { position: [0.05, 0.16, 0], castShadow: !0, receiveShadow: !0, children: [
+      /* @__PURE__ */ t("boxGeometry", { args: [2.3, 0.32, 1.7] }),
+      /* @__PURE__ */ t("meshStandardMaterial", { color: r ? n.bodySelected : i })
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [0.55, 0.42, 0], castShadow: !0, children: [
+      /* @__PURE__ */ t("boxGeometry", { args: [1.05, 0.16, 1] }),
+      /* @__PURE__ */ t("meshStandardMaterial", { color: i })
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [0.55, 0.64, 0], castShadow: !0, children: [
+      /* @__PURE__ */ t("boxGeometry", { args: [0.42, 0.3, 0.42] }),
+      /* @__PURE__ */ t("meshStandardMaterial", { color: "#C8A24B", metalness: 0.4, roughness: 0.5 })
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [-0.78, 1, 0], castShadow: !0, receiveShadow: !0, children: [
+      /* @__PURE__ */ t("boxGeometry", { args: [0.55, 1.7, 1.5] }),
+      /* @__PURE__ */ t(
+        "meshStandardMaterial",
+        {
+          color: o,
+          emissive: r ? n.selectRing : "#000000",
+          emissiveIntensity: r ? 0.25 : 0
+        }
+      )
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [-0.32, 1.62, 0], castShadow: !0, children: [
+      /* @__PURE__ */ t("boxGeometry", { args: [1, 0.52, 0.68] }),
+      /* @__PURE__ */ t(
+        "meshStandardMaterial",
+        {
+          color: o,
+          emissive: r ? n.selectRing : "#000000",
+          emissiveIntensity: r ? 0.25 : 0
+        }
+      )
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [0.08, 1.28, 0], rotation: [Math.PI, 0, 0], children: [
+      /* @__PURE__ */ t("coneGeometry", { args: [0.09, 0.3, 12] }),
+      /* @__PURE__ */ t("meshStandardMaterial", { color: "#4A5160", metalness: 0.5, roughness: 0.4 })
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [1.1, 0.82, -0.28], castShadow: !0, children: [
+      /* @__PURE__ */ t("boxGeometry", { args: [0.42, 1, 0.85] }),
+      /* @__PURE__ */ t("meshStandardMaterial", { color: i })
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [1.1, 1.12, 0.18], rotation: [-0.35, 0, 0], children: [
+      /* @__PURE__ */ t("boxGeometry", { args: [0.3, 0.2, 0.03] }),
+      /* @__PURE__ */ t("meshStandardMaterial", { color: "#1B2733", emissive: "#2E5E8F", emissiveIntensity: 0.35 })
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [-0.78, 1.93, 0.5], children: [
+      /* @__PURE__ */ t("cylinderGeometry", { args: [0.03, 0.03, 0.16, 8] }),
+      /* @__PURE__ */ t("meshStandardMaterial", { color: "#3A3E46" })
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [-0.78, 2.09, 0.5], children: [
+      /* @__PURE__ */ t("cylinderGeometry", { args: [0.095, 0.095, 0.15, 12] }),
+      a(e === "running", "#3B6D11")
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [-0.78, 2.24, 0.5], children: [
+      /* @__PURE__ */ t("cylinderGeometry", { args: [0.095, 0.095, 0.15, 12] }),
+      a(e === "idle", "#BA7517")
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [-0.78, 2.39, 0.5], children: [
+      /* @__PURE__ */ t("cylinderGeometry", { args: [0.095, 0.095, 0.15, 12] }),
+      a(e === "fault", "#A32D2D")
+    ] }),
+    /* @__PURE__ */ c("mesh", { position: [-0.78, 2.49, 0.5], children: [
+      /* @__PURE__ */ t("cylinderGeometry", { args: [0.06, 0.095, 0.06, 12] }),
+      /* @__PURE__ */ t("meshStandardMaterial", { color: "#3A3E46" })
+    ] })
+  ] });
+}
+function pe({ p: n, selected: r, running: e }) {
+  const o = I([]);
+  Q((s, d) => {
+    if (e)
+      for (const b of o.current) b && (b.rotation.y -= d * 3);
   });
-  const i = R.agv;
+  const i = R.agv, a = [
+    [-0.55, 0.5],
+    [-0.55, -0.5],
+    [0.55, 0.5],
+    [0.55, -0.5]
+  ];
   return /* @__PURE__ */ c("group", { children: [
     /* @__PURE__ */ c("mesh", { position: [0, 0.42, 0], castShadow: !0, receiveShadow: !0, children: [
       /* @__PURE__ */ t("boxGeometry", { args: [1.6, 0.36, 1.05] }),
@@ -771,19 +727,37 @@ function he({ p: n, selected: r, running: e }) {
         }
       )
     ] }),
-    /* @__PURE__ */ t("group", { ref: o, children: [-0.55, 0.55].map(
-      (a) => [-0.5, 0.5].map((s) => /* @__PURE__ */ c("mesh", { position: [a, 0.18, s], rotation: [Math.PI / 2, 0, 0], castShadow: !0, children: [
-        /* @__PURE__ */ t("cylinderGeometry", { args: [0.18, 0.18, 0.14, 16] }),
-        /* @__PURE__ */ t("meshStandardMaterial", { color: "#26282D" })
-      ] }, `${a}-${s}`))
-    ) }),
+    a.map(([s, d], b) => /* @__PURE__ */ c(
+      "mesh",
+      {
+        ref: (y) => {
+          y && (o.current[b] = y);
+        },
+        position: [s, 0.18, d],
+        rotation: [Math.PI / 2, 0, 0],
+        castShadow: !0,
+        children: [
+          /* @__PURE__ */ t("cylinderGeometry", { args: [0.18, 0.18, 0.14, 16] }),
+          /* @__PURE__ */ t("meshStandardMaterial", { color: "#26282D" }),
+          /* @__PURE__ */ c("mesh", { children: [
+            /* @__PURE__ */ t("boxGeometry", { args: [0.37, 0.17, 0.03] }),
+            /* @__PURE__ */ t("meshStandardMaterial", { color: "#B8C0CA" })
+          ] }),
+          /* @__PURE__ */ c("mesh", { rotation: [0, Math.PI / 2, 0], children: [
+            /* @__PURE__ */ t("boxGeometry", { args: [0.37, 0.17, 0.03] }),
+            /* @__PURE__ */ t("meshStandardMaterial", { color: "#B8C0CA" })
+          ] })
+        ]
+      },
+      `${s}-${d}`
+    )),
     /* @__PURE__ */ c("mesh", { position: [0.86, 0.42, 0], rotation: [0, 0, -Math.PI / 2], children: [
       /* @__PURE__ */ t("coneGeometry", { args: [0.13, 0.22, 12] }),
       /* @__PURE__ */ t("meshStandardMaterial", { color: i.accent })
     ] })
   ] });
 }
-function ge({ p: n, selected: r }) {
+function _e({ p: n, selected: r }) {
   const e = R.warehouse;
   return /* @__PURE__ */ c("group", { children: [
     /* @__PURE__ */ c("mesh", { position: [0, 1.3, 0], castShadow: !0, receiveShadow: !0, children: [
@@ -811,7 +785,7 @@ function ge({ p: n, selected: r }) {
     ] })
   ] });
 }
-function be({ p: n, selected: r }) {
+function me({ p: n, selected: r }) {
   const e = R.person;
   return /* @__PURE__ */ c("group", { children: [
     /* @__PURE__ */ c("mesh", { position: [0, 1.5, 0], castShadow: !0, children: [
@@ -839,7 +813,7 @@ function be({ p: n, selected: r }) {
     ] })
   ] });
 }
-function ye({
+function he({
   p: n,
   selected: r,
   running: e
@@ -904,26 +878,32 @@ function ye({
     ] }, `${a}-${s}`))
   ] });
 }
-const Se = {
-  agv: 1.35,
-  warehouse: 3.5,
-  person: 2.05,
-  truck: 2.15
-};
-function ve({ object: n }) {
-  const r = u((_) => _.theme), e = u((_) => _.locale), o = u((_) => _.layoutEditable), i = u((_) => _.selectedSceneObjectId === n.id), a = u((_) => _.selectSceneObject), s = u((_) => _.moveSceneObject), d = j[r], S = G[e], b = R[n.kind].accent, { pos: m, handlers: h, shouldSkipClick: x } = J({
+function ge(n) {
+  return n === "fault" ? "offline" : n;
+}
+function be({ device: n }) {
+  const r = u((_) => _.theme), e = u((_) => _.locale), o = u((_) => _.layoutEditable), i = u((_) => _.selectedDeviceCode === n.id), a = u((_) => _.selectDevice), s = u((_) => _.moveDevice), d = G[r], b = T[e], y = n.status, g = ge(y), { pos: S, handlers: O, shouldSkipClick: C } = U({
     position: n.position,
     editable: o,
-    onDrop: (_, v) => s(n.id, _, v)
+    onDrop: (_, x) => {
+      s(n.id, _, x);
+      const { pendingLayout: l, deviceRows: k, onLayoutChange: m } = u.getState(), f = Object.entries(l).map(([v, M]) => ({
+        deviceCode: v,
+        deviceId: k.find((B) => B.device_code === v)?.device_id,
+        sceneX: M.sceneX,
+        sceneZ: M.sceneZ
+      }));
+      m?.(f);
+    }
   });
   return /* @__PURE__ */ c(
     "group",
     {
-      position: m,
+      position: S,
       onClick: (_) => {
-        _.stopPropagation(), !x() && a(i ? null : n.id);
+        _.stopPropagation(), !C() && a(i ? null : n.id);
       },
-      ...h,
+      ...O,
       onPointerOver: (_) => {
         _.stopPropagation(), document.body.style.cursor = o ? "grab" : "pointer";
       },
@@ -931,15 +911,110 @@ function ve({ object: n }) {
         document.body.style.cursor = "auto";
       },
       children: [
-        n.kind === "agv" && /* @__PURE__ */ t(he, { p: d, selected: i, running: n.status === "running" }),
-        n.kind === "warehouse" && /* @__PURE__ */ t(ge, { p: d, selected: i }),
-        n.kind === "person" && /* @__PURE__ */ t(be, { p: d, selected: i }),
-        n.kind === "truck" && /* @__PURE__ */ t(ye, { p: d, selected: i, running: n.status === "running" }),
+        /* @__PURE__ */ t(Y, { p: d, selected: i, status: y }),
+        i && /* @__PURE__ */ c("mesh", { position: [0, 0.03, 0], rotation: [-Math.PI / 2, 0, 0], children: [
+          /* @__PURE__ */ t("ringGeometry", { args: [1.15, 1.4, 40] }),
+          /* @__PURE__ */ t("meshBasicMaterial", { color: d.selectRing })
+        ] }),
+        o && /* @__PURE__ */ c("mesh", { position: [0, 0.02, 0], rotation: [-Math.PI / 2, 0, 0], children: [
+          /* @__PURE__ */ t("ringGeometry", { args: [1.25, 1.32, 48] }),
+          /* @__PURE__ */ t("meshBasicMaterial", { color: d.selectRing, transparent: !0, opacity: 0.45 })
+        ] }),
+        /* @__PURE__ */ t(J, { position: [0, 2.4, 0], center: !0, distanceFactor: 16, zIndexRange: [20, 0], children: /* @__PURE__ */ c(
+          "div",
+          {
+            style: {
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 3,
+              pointerEvents: "none",
+              fontFamily: "system-ui, sans-serif"
+            },
+            children: [
+              /* @__PURE__ */ c(
+                "div",
+                {
+                  style: {
+                    padding: "2px 10px",
+                    borderRadius: 10,
+                    background: d.labelBg[g],
+                    border: `0.5px solid ${d.labelBorder[g]}`,
+                    color: d.labelText[g],
+                    fontSize: 12,
+                    whiteSpace: "nowrap",
+                    boxShadow: r === "dark" ? "0 2px 8px rgba(0,0,0,.4)" : "0 2px 8px rgba(15,23,42,.12)"
+                  },
+                  children: [
+                    n.name,
+                    " · ",
+                    b.status[y]
+                  ]
+                }
+              ),
+              n.currentOrderNo && /* @__PURE__ */ c(
+                "div",
+                {
+                  style: {
+                    padding: "1px 9px",
+                    borderRadius: 10,
+                    background: d.orderBadgeBg,
+                    border: `0.5px solid ${d.selectRing}`,
+                    color: d.orderBadgeText,
+                    fontSize: 11,
+                    whiteSpace: "nowrap"
+                  },
+                  children: [
+                    n.currentOrderNo,
+                    n.currentProduct ? ` · ${n.currentProduct}` : ""
+                  ]
+                }
+              )
+            ]
+          }
+        ) })
+      ]
+    }
+  );
+}
+const ye = {
+  work_center: 2.4,
+  agv: 1.35,
+  warehouse: 3.5,
+  person: 2.05,
+  truck: 2.15
+};
+function Se({ object: n }) {
+  const r = u((h) => h.theme), e = u((h) => h.locale), o = u((h) => h.layoutEditable), i = u((h) => h.selectedSceneObjectId === n.id), a = u((h) => h.selectSceneObject), s = u((h) => h.moveSceneObject), d = G[r], b = T[e], y = R[n.kind].accent, { pos: g, handlers: S, shouldSkipClick: O } = U({
+    position: n.position,
+    editable: o,
+    onDrop: (h, _) => s(n.id, h, _)
+  });
+  return /* @__PURE__ */ c(
+    "group",
+    {
+      position: g,
+      onClick: (h) => {
+        h.stopPropagation(), !O() && a(i ? null : n.id);
+      },
+      ...S,
+      onPointerOver: (h) => {
+        h.stopPropagation(), document.body.style.cursor = o ? "grab" : "pointer";
+      },
+      onPointerOut: () => {
+        document.body.style.cursor = "auto";
+      },
+      children: [
+        n.kind === "work_center" && /* @__PURE__ */ t(Y, { p: d, selected: i, status: n.status }),
+        n.kind === "agv" && /* @__PURE__ */ t(pe, { p: d, selected: i, running: n.status === "running" }),
+        n.kind === "warehouse" && /* @__PURE__ */ t(_e, { p: d, selected: i }),
+        n.kind === "person" && /* @__PURE__ */ t(me, { p: d, selected: i }),
+        n.kind === "truck" && /* @__PURE__ */ t(he, { p: d, selected: i, running: n.status === "running" }),
         o && /* @__PURE__ */ c("mesh", { position: [0, 0.015, 0], rotation: [-Math.PI / 2, 0, 0], children: [
           /* @__PURE__ */ t("ringGeometry", { args: [0.9, 0.96, 40] }),
           /* @__PURE__ */ t("meshBasicMaterial", { color: d.selectRing, transparent: !0, opacity: 0.4 })
         ] }),
-        /* @__PURE__ */ t(X, { position: [0, Se[n.kind], 0], center: !0, distanceFactor: 16, zIndexRange: [20, 0], children: /* @__PURE__ */ c(
+        /* @__PURE__ */ t(J, { position: [0, ye[n.kind], 0], center: !0, distanceFactor: 16, zIndexRange: [20, 0], children: /* @__PURE__ */ c(
           "div",
           {
             style: {
@@ -958,7 +1033,7 @@ function ve({ object: n }) {
                     padding: "2px 10px",
                     borderRadius: 10,
                     background: r === "dark" ? "#26282D" : "#FFFFFF",
-                    border: `0.5px solid ${i ? d.selectRing : b}`,
+                    border: `0.5px solid ${i ? d.selectRing : y}`,
                     color: r === "dark" ? "#E8EAEE" : "#23262B",
                     fontSize: 12,
                     whiteSpace: "nowrap",
@@ -966,7 +1041,7 @@ function ve({ object: n }) {
                   },
                   children: [
                     n.name,
-                    n.kind === "agv" && n.status ? ` · ${S.status[n.status]}` : ""
+                    n.kind === "agv" && n.status ? ` · ${b.status[n.status]}` : ""
                   ]
                 }
               ),
@@ -982,7 +1057,7 @@ function ve({ object: n }) {
                     fontSize: 11,
                     whiteSpace: "nowrap"
                   },
-                  children: n.bindLabel ?? S.palette.unbound
+                  children: n.bindLabel ?? b.palette.unbound
                 }
               )
             ]
@@ -992,10 +1067,34 @@ function ve({ object: n }) {
     }
   );
 }
+const Ee = {
+  running: "#3B6D11",
+  idle: "#BA7517",
+  offline: "#888780"
+}, Be = {
+  running: "运行中",
+  idle: "待机",
+  offline: "离线"
+}, De = {
+  pending: "未开始",
+  in_progress: "加工中",
+  completed: "已完成",
+  cancelled: "已取消"
+}, Ae = {
+  ready: "齐料",
+  short: "缺料",
+  none: "无物料需求"
+}, ve = [
+  "work_center",
+  "agv",
+  "warehouse",
+  "person",
+  "truck"
+];
 function fe({ bindingOptions: n }) {
-  const r = u((l) => l.layoutEditable), e = u((l) => l.theme), o = u((l) => l.locale), i = u((l) => l.sceneObjects), a = u((l) => l.selectedSceneObjectId), s = u((l) => l.addSceneObject), d = u((l) => l.renameSceneObject), S = u((l) => l.bindSceneObject), b = u((l) => l.removeSceneObject), m = G[o];
+  const r = u((l) => l.layoutEditable), e = u((l) => l.theme), o = u((l) => l.locale), i = u((l) => l.sceneObjects), a = u((l) => l.selectedSceneObjectId), s = u((l) => l.addSceneObject), d = u((l) => l.renameSceneObject), b = u((l) => l.bindSceneObject), y = u((l) => l.removeSceneObject), g = T[o];
   if (!r) return null;
-  const h = e === "dark", x = {
+  const S = e === "dark", O = {
     position: "absolute",
     left: 20,
     top: "50%",
@@ -1003,23 +1102,23 @@ function fe({ bindingOptions: n }) {
     width: 188,
     padding: 10,
     borderRadius: 12,
-    background: h ? "rgba(22,25,31,.92)" : "rgba(255,255,255,.94)",
-    border: `0.5px solid ${h ? "rgba(255,255,255,.12)" : "rgba(15,23,42,.10)"}`,
-    boxShadow: h ? "0 12px 32px rgba(0,0,0,.5)" : "0 12px 32px rgba(15,23,42,.14)",
+    background: S ? "rgba(22,25,31,.92)" : "rgba(255,255,255,.94)",
+    border: `0.5px solid ${S ? "rgba(255,255,255,.12)" : "rgba(15,23,42,.10)"}`,
+    boxShadow: S ? "0 12px 32px rgba(0,0,0,.5)" : "0 12px 32px rgba(15,23,42,.14)",
     backdropFilter: "blur(12px)",
     WebkitBackdropFilter: "blur(12px)",
-    color: h ? "#E8EAEE" : "#23262B",
+    color: S ? "#E8EAEE" : "#23262B",
     fontFamily: "system-ui, sans-serif",
     fontSize: 12,
     pointerEvents: "auto",
-    zIndex: 10
-  }, M = {
+    zIndex: 30
+  }, C = {
     fontSize: 11,
     letterSpacing: ".04em",
     opacity: 0.6,
     margin: "0 2px 8px",
     textTransform: "uppercase"
-  }, _ = (l) => ({
+  }, h = (l) => ({
     display: "flex",
     alignItems: "center",
     gap: 8,
@@ -1027,23 +1126,31 @@ function fe({ bindingOptions: n }) {
     padding: "7px 9px",
     marginBottom: 6,
     borderRadius: 8,
-    border: `0.5px solid ${h ? "rgba(255,255,255,.10)" : "rgba(15,23,42,.08)"}`,
-    background: h ? "rgba(255,255,255,.04)" : "#fff",
+    border: `0.5px solid ${S ? "rgba(255,255,255,.10)" : "rgba(15,23,42,.08)"}`,
+    background: S ? "rgba(255,255,255,.04)" : "#fff",
     color: "inherit",
     fontSize: 12,
     cursor: "pointer",
     textAlign: "left",
     transition: "border-color .15s ease, transform .15s ease"
-  }), v = i.find((l) => l.id === a) ?? null, g = v ? n?.[v.kind] ?? [] : [];
-  return /* @__PURE__ */ c("div", { style: x, onPointerDown: (l) => l.stopPropagation(), children: [
-    /* @__PURE__ */ t("div", { style: M, children: m.palette.title }),
-    pe.map((l) => /* @__PURE__ */ c(
+  }), _ = i.find((l) => l.id === a) ?? null;
+  let x = _ ? n?.[_.kind] ?? [] : [];
+  if (_?.kind === "work_center") {
+    const l = u.getState().devices, k = /* @__PURE__ */ new Set([
+      ...l.map((m) => m.deviceId != null ? String(m.deviceId) : "").filter(Boolean),
+      ...i.filter((m) => m.kind === "work_center" && m.bindId != null).map((m) => String(m.bindId))
+    ]);
+    x = x.filter((m) => !k.has(String(m.id)));
+  }
+  return /* @__PURE__ */ c("div", { style: O, onPointerDown: (l) => l.stopPropagation(), children: [
+    /* @__PURE__ */ t("div", { style: C, children: g.palette.title }),
+    ve.map((l) => /* @__PURE__ */ c(
       "button",
       {
         type: "button",
-        style: _(),
+        style: h(),
         onClick: () => s(l),
-        title: m.palette.hint,
+        title: g.palette.hint,
         children: [
           /* @__PURE__ */ t(
             "span",
@@ -1057,64 +1164,64 @@ function fe({ bindingOptions: n }) {
               }
             }
           ),
-          /* @__PURE__ */ t("span", { style: { flex: 1 }, children: m.objectKind[l] }),
+          /* @__PURE__ */ t("span", { style: { flex: 1 }, children: g.objectKind[l] }),
           /* @__PURE__ */ t("span", { style: { opacity: 0.5, fontSize: 14, lineHeight: 1 }, children: "+" })
         ]
       },
       l
     )),
-    /* @__PURE__ */ t("div", { style: { marginTop: 6, fontSize: 10.5, opacity: 0.55, lineHeight: 1.5 }, children: m.palette.hint }),
-    v && /* @__PURE__ */ c(
+    /* @__PURE__ */ t("div", { style: { marginTop: 6, fontSize: 10.5, opacity: 0.55, lineHeight: 1.5 }, children: g.palette.hint }),
+    _ && /* @__PURE__ */ c(
       "div",
       {
         style: {
           marginTop: 10,
           paddingTop: 10,
-          borderTop: `0.5px dashed ${h ? "rgba(255,255,255,.14)" : "rgba(15,23,42,.12)"}`
+          borderTop: `0.5px dashed ${S ? "rgba(255,255,255,.14)" : "rgba(15,23,42,.12)"}`
         },
         children: [
-          /* @__PURE__ */ t("div", { style: M, children: m.objectKind[v.kind] }),
+          /* @__PURE__ */ t("div", { style: C, children: g.objectKind[_.kind] }),
           /* @__PURE__ */ t(
             "input",
             {
-              value: v.name,
-              onChange: (l) => d(v.id, l.target.value),
-              placeholder: m.palette.name,
+              value: _.name,
+              onChange: (l) => d(_.id, l.target.value),
+              placeholder: g.palette.name,
               style: {
                 width: "100%",
                 padding: "5px 8px",
                 marginBottom: 8,
                 borderRadius: 7,
-                border: `0.5px solid ${h ? "rgba(255,255,255,.14)" : "rgba(15,23,42,.12)"}`,
-                background: h ? "rgba(255,255,255,.05)" : "#fff",
+                border: `0.5px solid ${S ? "rgba(255,255,255,.14)" : "rgba(15,23,42,.12)"}`,
+                background: S ? "rgba(255,255,255,.05)" : "#fff",
                 color: "inherit",
                 fontSize: 12,
                 outline: "none"
               }
             }
           ),
-          /* @__PURE__ */ t("div", { style: { fontSize: 10.5, opacity: 0.55, marginBottom: 4 }, children: m.palette.binding }),
+          /* @__PURE__ */ t("div", { style: { fontSize: 10.5, opacity: 0.55, marginBottom: 4 }, children: g.palette.binding }),
           /* @__PURE__ */ c(
             "select",
             {
-              value: v.bindId != null ? String(v.bindId) : "",
+              value: _.bindId != null ? String(_.bindId) : "",
               onChange: (l) => {
-                const B = l.target.value, y = g.find((O) => String(O.id) === B);
-                S(v.id, y?.id, y?.label);
+                const k = l.target.value, m = x.find((f) => String(f.id) === k);
+                b(_.id, m?.id, m?.label);
               },
               style: {
                 width: "100%",
                 padding: "5px 8px",
                 borderRadius: 7,
-                border: `0.5px solid ${h ? "rgba(255,255,255,.14)" : "rgba(15,23,42,.12)"}`,
-                background: h ? "rgba(255,255,255,.05)" : "#fff",
+                border: `0.5px solid ${S ? "rgba(255,255,255,.14)" : "rgba(15,23,42,.12)"}`,
+                background: S ? "rgba(255,255,255,.05)" : "#fff",
                 color: "inherit",
                 fontSize: 12,
                 outline: "none"
               },
               children: [
-                /* @__PURE__ */ t("option", { value: "", children: m.palette.unbound }),
-                g.map((l) => /* @__PURE__ */ t("option", { value: String(l.id), children: l.label }, String(l.id)))
+                /* @__PURE__ */ t("option", { value: "", children: g.palette.unbound }),
+                x.map((l) => /* @__PURE__ */ t("option", { value: String(l.id), children: l.label }, String(l.id)))
               ]
             }
           ),
@@ -1122,19 +1229,19 @@ function fe({ bindingOptions: n }) {
             "button",
             {
               type: "button",
-              onClick: () => b(v.id),
+              onClick: () => y(_.id),
               style: {
                 width: "100%",
                 marginTop: 8,
                 padding: "6px 0",
                 borderRadius: 7,
-                border: `0.5px solid ${h ? "rgba(226,75,74,.45)" : "rgba(163,45,45,.35)"}`,
+                border: `0.5px solid ${S ? "rgba(226,75,74,.45)" : "rgba(163,45,45,.35)"}`,
                 background: "transparent",
-                color: h ? "#E24B4A" : "#A32D2D",
+                color: S ? "#E24B4A" : "#A32D2D",
                 fontSize: 12,
                 cursor: "pointer"
               },
-              children: m.palette.remove
+              children: g.palette.remove
             }
           )
         ]
@@ -1142,7 +1249,7 @@ function fe({ bindingOptions: n }) {
     )
   ] });
 }
-function Ae({
+function Ie({
   devices: n,
   onDeviceSelect: r,
   theme: e,
@@ -1151,24 +1258,24 @@ function Ae({
   onLayoutChange: a,
   className: s,
   style: d,
-  sceneObjects: S,
-  bindingOptions: b,
-  showObjectPalette: m = !0,
-  onSceneObjectsChange: h,
-  onSceneObjectChange: x
+  sceneObjects: b,
+  bindingOptions: y,
+  showObjectPalette: g = !0,
+  onSceneObjectsChange: S,
+  onSceneObjectChange: O
 }) {
-  const M = u((p) => p.devices), _ = u((p) => p.theme), v = u((p) => p.sceneObjects), g = u((p) => p.setDevices), l = u((p) => p.setSceneObjects), B = u((p) => p.setOnDeviceSelect), y = u((p) => p.setTheme), O = u((p) => p.setLocale), f = u((p) => p.setLayoutEditable), C = u((p) => p.setOnLayoutChange), D = u((p) => p.setOnSceneObjectsChange), k = u((p) => p.setOnSceneObjectChange), F = j[_];
+  const C = u((p) => p.devices), h = u((p) => p.theme), _ = u((p) => p.sceneObjects), x = u((p) => p.setDevices), l = u((p) => p.setSceneObjects), k = u((p) => p.setOnDeviceSelect), m = u((p) => p.setTheme), f = u((p) => p.setLocale), v = u((p) => p.setLayoutEditable), M = u((p) => p.setOnLayoutChange), B = u((p) => p.setOnSceneObjectsChange), D = u((p) => p.setOnSceneObjectChange), F = G[h];
   w(() => {
-    n && g(n);
-  }, [n, g]), w(() => {
-    S && l(S);
-  }, [S, l]), w(() => {
-    e && y(e);
-  }, [e, y]), w(() => {
-    o && O(se(o));
-  }, [o, O]), w(() => {
-    f(!!i);
-  }, [i, f]), w(() => (C(a ?? null), () => C(null)), [a, C]), w(() => (D(h ?? null), () => D(null)), [h, D]), w(() => (k(x ?? null), () => k(null)), [x, k]), w(() => (B(r ?? null), () => B(null)), [r, B]);
+    n && x(n);
+  }, [n, x]), w(() => {
+    b && l(b);
+  }, [b, l]), w(() => {
+    e && m(e);
+  }, [e, m]), w(() => {
+    o && f(de(o));
+  }, [o, f]), w(() => {
+    v(!!i);
+  }, [i, v]), w(() => (M(a ?? null), () => M(null)), [a, M]), w(() => (B(S ?? null), () => B(null)), [S, B]), w(() => (D(O ?? null), () => D(null)), [O, D]), w(() => (k(r ?? null), () => k(null)), [r, k]);
   const E = () => {
     const p = u.getState();
     p.selectDevice(null), p.selectSceneObject(null);
@@ -1180,15 +1287,15 @@ function Ae({
       style: { width: "100%", height: "100%", position: "relative", ...d },
       children: [
         /* @__PURE__ */ c(
-          Q,
+          ee,
           {
             shadows: !0,
             dpr: [1, 2],
             camera: { position: [15, 12, 16], fov: 42 },
             onPointerMissed: E,
             children: [
-              /* @__PURE__ */ t("color", { attach: "background", args: [F.background] }, _),
-              /* @__PURE__ */ t("fog", { attach: "fog", args: [F.background, F.fog[0], F.fog[1]] }, `fog-${_}`),
+              /* @__PURE__ */ t("color", { attach: "background", args: [F.background] }, h),
+              /* @__PURE__ */ t("fog", { attach: "fog", args: [F.background, F.fog[0], F.fog[1]] }, `fog-${h}`),
               /* @__PURE__ */ t("ambientLight", { intensity: 0.65 }),
               /* @__PURE__ */ t(
                 "directionalLight",
@@ -1203,12 +1310,12 @@ function Ae({
                   "shadow-camera-bottom": -28
                 }
               ),
-              /* @__PURE__ */ t(de, {}),
               /* @__PURE__ */ t(le, {}),
-              M.map((p) => /* @__PURE__ */ t(me, { device: p }, p.id)),
-              v.map((p) => /* @__PURE__ */ t(ve, { object: p }, p.id)),
+              /* @__PURE__ */ t(ue, {}),
+              C.map((p) => /* @__PURE__ */ t(be, { device: p }, p.id)),
+              _.map((p) => /* @__PURE__ */ t(Se, { object: p }, p.id)),
               /* @__PURE__ */ t(
-                ne,
+                te,
                 {
                   makeDefault: !0,
                   target: [0, 1, 0],
@@ -1220,7 +1327,7 @@ function Ae({
             ]
           }
         ),
-        m && /* @__PURE__ */ t(fe, { bindingOptions: b })
+        g && /* @__PURE__ */ t(fe, { bindingOptions: y })
       ]
     }
   );
@@ -1270,6 +1377,12 @@ const Re = [
     status: "running"
   }
 ], Pe = {
+  // 工作中心清单只传"尚未摆放"的（已在场景里的由组件自动过滤，双保险）
+  work_center: [
+    { id: 8, label: "WC-08 · CNC 加工中心 08" },
+    { id: 9, label: "WC-09 · 焊接工作站 02" },
+    { id: 10, label: "WC-10 · 测试台 02" }
+  ],
   agv: [
     { id: "AGV-001", label: "AGV-001 · 3 号搬运车" },
     { id: "AGV-002", label: "AGV-002 · 5 号搬运车" },
@@ -1292,28 +1405,28 @@ const Re = [
   ]
 };
 export {
-  he as AgvModel,
-  Ae as FactoryScene,
+  pe as AgvModel,
+  Ie as FactoryScene,
   R as KIND_COLORS,
-  Ie as KIT_STATUS_LABELS,
-  G as LIB_DICT,
+  Ae as KIT_STATUS_LABELS,
+  T as LIB_DICT,
   Pe as MOCK_BINDING_OPTIONS,
-  re as MOCK_DEVICE_ROWS,
-  oe as MOCK_ORDERS,
+  oe as MOCK_DEVICE_ROWS,
+  ie as MOCK_ORDERS,
   ke as MOCK_ORDER_MATERIALS,
-  ie as MOCK_ORDER_OPERATIONS,
+  ae as MOCK_ORDER_OPERATIONS,
   Re as MOCK_SCENE_OBJECTS,
-  Be as OP_STATUS_LABELS,
+  De as OP_STATUS_LABELS,
   fe as ObjectPalette,
-  be as PersonModel,
-  pe as SCENE_OBJECT_KINDS,
-  j as SCENE_PALETTES,
+  me as PersonModel,
+  ve as SCENE_OBJECT_KINDS,
+  G as SCENE_PALETTES,
   Ee as STATUS_COLORS,
-  De as STATUS_LABELS,
-  ye as TruckModel,
-  ge as WarehouseModel,
-  W as fromDeviceRows,
-  se as normalizeLocale,
+  Be as STATUS_LABELS,
+  he as TruckModel,
+  _e as WarehouseModel,
+  $ as fromDeviceRows,
+  de as normalizeLocale,
   Fe as startMockRealtime,
   u as useFactoryStore
 };
