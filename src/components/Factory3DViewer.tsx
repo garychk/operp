@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Drawer, Modal, Select, Button, message } from "antd";
+import { Drawer, Modal, Select, Button, InputNumber, message } from "antd";
 import { useTranslation } from "react-i18next";
 import {
   FactoryScene,
@@ -136,6 +136,66 @@ interface BinStock {
   available_quantity: number | null;
 }
 
+/** 员工信息（来自 erp_employees，含排班外键） */
+interface EmployeeInfo {
+  id: number;
+  code: string;
+  name: string;
+  department_id: number | null;
+  department_name: string | null;
+  position: string | null;
+  phone: string | null;
+  email: string | null;
+  entry_date: string | null;
+  status: string | null;
+  shift_id: number | null;
+  work_center_id: number | null;
+  work_center_name: string | null;
+}
+
+/** 班次（来自 erp_shifts） */
+interface ShiftInfo {
+  id: number;
+  shift_name: string;
+  start_time: string | null;
+  end_time: string | null;
+  cross_midnight: boolean;
+  net_hours: number | null;
+}
+
+/** 员工工作负荷（来自 vw_erp_employee_load，按员工 × 月一行） */
+interface EmployeeLoad {
+  employee_id: number;
+  employee_code: string;
+  employee_name: string;
+  shift_name: string | null;
+  shift_net_hours: number | null;
+  month_start: string | null;
+  labor_hours: number | null;
+  machine_hours: number | null;
+  load_hours: number | null;
+  capacity_hours: number | null;
+  load_rate: number | null;
+  work_day_count: number | null;
+}
+
+/** 未确认报工单（来自 erp_production_reports，status='draft'） */
+interface DraftReport {
+  id: number;
+  report_no: string;
+  report_date: string | null;
+  production_order_id: number | null;
+  order_operation_id: number | null;
+  operation_id: number | null;
+  operator_id: number | null;
+  completed_quantity: number | null;
+  scrapped_quantity: number | null;
+  labor_hours: number | null;
+  machine_hours: number | null;
+  status: string | null;
+}
+
+
 export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
   const { t, i18n } = useTranslation();
   const isDark = useErpDarkMode();
@@ -144,6 +204,10 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
   const [workCenterOrders, setWorkCenterOrders] = useState<WorkCenterOrder[]>([]);
   const [capacityLoads, setCapacityLoads] = useState<CapacityLoad[]>([]);
   const [binStocks, setBinStocks] = useState<BinStock[]>([]);
+  const [employees, setEmployees] = useState<EmployeeInfo[]>([]);
+  const [shifts, setShifts] = useState<ShiftInfo[]>([]);
+  const [employeeLoads, setEmployeeLoads] = useState<EmployeeLoad[]>([]);
+  const [draftReports, setDraftReports] = useState<DraftReport[]>([]);
   const [layoutMode, setLayoutMode] = useState(false);
   const [bindingOptions, setBindingOptions] = useState<BindingOptions>({});
 
@@ -163,6 +227,13 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
   const [startableOrders, setStartableOrders] = useState<StartableOrder[]>([]);
   const [startOrdersLoading, setStartOrdersLoading] = useState(false);
   const [selectedStartOrderId, setSelectedStartOrderId] = useState<number | null>(null);
+
+  // 人员派工：从未确认报工单里选一条，填完工/报废数量提交，并把状态改为 confirmed
+  const [assignReportOpen, setAssignReportOpen] = useState(false);
+  const [assignReportLoading, setAssignReportLoading] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState<number | null>(null);
+  const [assignCompletedQty, setAssignCompletedQty] = useState<number | null>(null);
+  const [assignScrappedQty, setAssignScrappedQty] = useState<number | null>(null);
 
   const deviceRows = useFactoryStore((s) => s.deviceRows);
   const orders = useFactoryStore((s) => s.orders);
@@ -187,7 +258,7 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     const load = async () => {
       const { setDeviceRows, setOrders, setOperations, setSceneObjects } =
         useFactoryStore.getState();
-      const [dev, ord, ops, mat, wco, cap, bst, agvs, whs, emps, trks, wcs, objs] = await Promise.all([
+      const [dev, ord, ops, mat, wco, cap, bst, agvs, whs, emps, trks, wcs, objs, shfts, depts, eld, drf] = await Promise.all([
         supabase.from("vw_factory_3d_devices").select("*"),
         supabase.from("vw_factory_3d_orders").select("*"),
         supabase.from("vw_factory_3d_order_operations").select("*"),
@@ -197,10 +268,21 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
         supabase.from("vw_factory_3d_bin_stock").select("*"),
         supabase.from("erp_agvs_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
         supabase.from("erp_warehouses_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
-        supabase.from("erp_employees_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
+        supabase
+          .from("erp_employees_s_539dcf81_b")
+          .select("id, code, name, department_id, position, phone, email, entry_date, status, shift_id, work_center_id")
+          .eq("is_deleted", "n"),
         supabase.from("erp_vehicles_s_539dcf81_b").select("id, plate_no").eq("is_deleted", "n"),
         supabase.from("erp_work_centers_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
         supabase.from("factory_3d_scene_object_s_539dcf81_b").select("*").eq("is_deleted", "n"),
+        supabase.from("erp_shifts_s_539dcf81_b").select("id, shift_name, start_time, end_time, cross_midnight, net_hours").eq("is_deleted", "n"),
+        supabase.from("erp_departments_s_539dcf81_b").select("id, code, name").eq("is_deleted", "n"),
+        supabase.from("vw_erp_employee_load").select("*"),
+        supabase
+          .from("erp_production_reports_s_539dcf81_b")
+          .select("id, report_no, report_date, production_order_id, order_operation_id, operation_id, operator_id, completed_quantity, scrapped_quantity, labor_hours, machine_hours, status")
+          .eq("is_deleted", "n")
+          .eq("status", "draft"),
       ]);
       const deviceRowsData = (dev.data ?? []) as DeviceRow[];
       if (dev.data) setDeviceRows(deviceRowsData);
@@ -210,6 +292,42 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
       if (wco.data) setWorkCenterOrders(wco.data as WorkCenterOrder[]);
       if (cap.data) setCapacityLoads(cap.data as CapacityLoad[]);
       if (bst.data) setBinStocks(bst.data as BinStock[]);
+      if (eld.data) setEmployeeLoads(eld.data as EmployeeLoad[]);
+      if (drf.data) setDraftReports(drf.data as DraftReport[]);
+
+      // 员工 / 班次 / 部门：前端 join（部门名、工位名）
+      const deptMap = new Map((depts.data ?? []).map((d) => [d.id, d.name]));
+      const wcMap = new Map((wcs.data ?? []).map((w) => [w.id, w.name]));
+      const empRows = (emps.data ?? []) as Array<{
+        id: number;
+        code: string;
+        name: string;
+        department_id: number | null;
+        position: string | null;
+        phone: string | null;
+        email: string | null;
+        entry_date: string | null;
+        status: string | null;
+        shift_id: number | null;
+        work_center_id: number | null;
+      }>;
+      setEmployees(
+        empRows.map((e) => ({
+          ...e,
+          department_name: e.department_id != null ? deptMap.get(e.department_id) ?? null : null,
+          work_center_name:
+            e.work_center_id != null ? wcMap.get(e.work_center_id) ?? null : null,
+        })),
+      );
+      if (shfts.data) {
+        setShifts(
+          (shfts.data as ShiftInfo[]).map((s) => ({
+            ...s,
+            start_time: typeof s.start_time === "string" ? s.start_time.slice(0, 5) : s.start_time,
+            end_time: typeof s.end_time === "string" ? s.end_time.slice(0, 5) : s.end_time,
+          })),
+        );
+      }
 
       // 已在场景中作为「设备」出现的工作中心 id 集合（设备视图本身就是工作中心）
       const existingWcIds = new Set(
@@ -617,6 +735,77 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     }
   };
 
+  // 打开人员派工弹窗：重置选择，列出该员工的未确认报工单
+  const openAssignReport = () => {
+    setSelectedReportId(null);
+    setAssignCompletedQty(null);
+    setAssignScrappedQty(null);
+    setAssignReportOpen(true);
+  };
+
+  // 提交派工：更新完工/报废数量，人工工时=完工数量×工序标准工时，并把报工单状态改为 confirmed
+  const submitAssignReport = async () => {
+    if (selectedReportId == null) {
+      message.warning(t("factory3dViewer.assignReportEmpty"));
+      return;
+    }
+    // 找到所选报工单及其关联的工单工序，取单位标准工时
+    const report = selectedEmployeeDraftReports.find((r) => r.id === selectedReportId);
+    const op = report
+      ? operations.find((o) => o.order_operation_id === report.order_operation_id)
+      : undefined;
+    const standardHoursPerUnit = num(op?.standard_hours_per_unit);
+    const completedQty = Number(assignCompletedQty || 0);
+    // 人工工时 = 完工数量 × 工序单位标准工时
+    const laborHours = completedQty * standardHoursPerUnit;
+
+    setAssignReportLoading(true);
+    try {
+      const { error } = await supabase
+        .from("erp_production_reports_s_539dcf81_b")
+        .update({
+          completed_quantity: completedQty,
+          scrapped_quantity: Number(assignScrappedQty || 0),
+          labor_hours: laborHours,
+          status: "confirmed",
+          // 报工人改为当前派工的人员
+          operator_id: selectedEmployee?.id ?? null,
+        })
+        .eq("id", selectedReportId);
+      if (error) throw error;
+
+      // 同时把这道工序的派工对象 assignee_id 改为当前人员，
+      // 这样人员详情「所在工单工序」、按 assignee 的工作负荷归属都正确
+      if (report?.order_operation_id != null && selectedEmployee?.id != null) {
+        const { error: opErr } = await supabase
+          .from("erp_production_order_operations_s_539dcf81_b")
+          .update({ assignee_id: selectedEmployee.id })
+          .eq("id", report.order_operation_id);
+        if (opErr) throw opErr;
+      }
+
+      message.success(t("factory3dViewer.assignReportOk"));
+      setAssignReportOpen(false);
+      // 刷新 draft 报工单列表
+      const { data } = await supabase
+        .from("erp_production_reports_s_539dcf81_b")
+        .select("id, report_no, report_date, production_order_id, order_operation_id, operation_id, operator_id, completed_quantity, scrapped_quantity, labor_hours, machine_hours, status")
+        .eq("is_deleted", "n")
+        .eq("status", "draft");
+      if (data) setDraftReports(data as DraftReport[]);
+      // 刷新工序视图（assignee_id 变更 + 报工确认后的完工数/进度变化）
+      const { data: opsData } = await supabase
+        .from("vw_factory_3d_order_operations")
+        .select("*");
+      if (opsData) useFactoryStore.getState().setOperations(opsData as OrderOperation[]);
+    } catch (err) {
+      console.error("派工失败：", (err as Error).message);
+      message.error((err as Error).message);
+    } finally {
+      setAssignReportLoading(false);
+    }
+  };
+
   const selectedRow =
     deviceRows.find((r) => r.device_code === selectedDeviceCode) ?? null;
   const selectedOrder: OrderData | null =
@@ -648,6 +837,46 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
     if (wid == null) return [];
     return binStocks.filter((b) => b.warehouse_id === Number(wid));
   }, [selectedSceneObject, binStocks]);
+
+  // 选中人员对象时，该员工信息（bindId = 员工 id）
+  const selectedEmployee: EmployeeInfo | null = useMemo(() => {
+    if (!selectedSceneObject || selectedSceneObject.kind !== "person") return null;
+    const eid = selectedSceneObject.bindId;
+    if (eid == null) return null;
+    return employees.find((e) => e.id === Number(eid)) ?? null;
+  }, [selectedSceneObject, employees]);
+
+  // 选中人员的当前班次
+  const selectedEmployeeShift: ShiftInfo | null = useMemo(() => {
+    if (!selectedEmployee || selectedEmployee.shift_id == null) return null;
+    return shifts.find((s) => s.id === selectedEmployee.shift_id) ?? null;
+  }, [selectedEmployee, shifts]);
+
+  // 选中人员的当月工作负荷（取最近一个月的负荷行）
+  const selectedEmployeeLoad: EmployeeLoad | null = useMemo(() => {
+    if (!selectedEmployee) return null;
+    const rows = employeeLoads
+      .filter((l) => l.employee_id === selectedEmployee.id)
+      .sort((a, b) => (b.month_start ?? "").localeCompare(a.month_start ?? ""));
+    return rows[0] ?? null;
+  }, [selectedEmployee, employeeLoads]);
+
+  // 未确认（draft）报工单，供派工选择（不过滤当前员工，所有未确认报工单均可选）
+  const selectedEmployeeDraftReports: DraftReport[] = useMemo(() => {
+    return draftReports;
+  }, [draftReports]);
+
+  // 选中人员被派工的工序（按 assignee_id 匹配，含工单号/工序名/状态/进度）
+  const selectedEmployeeOperations: OrderOperation[] = useMemo(() => {
+    if (!selectedEmployee) return [];
+    return operations
+      .filter((op) => op.assignee_id === selectedEmployee.id)
+      .sort((a, b) => {
+        if (a.order_no !== b.order_no) return a.order_no.localeCompare(b.order_no);
+        return a.sequence_no - b.sequence_no;
+      });
+  }, [selectedEmployee, operations]);
+
   const selectedOrderOps: OrderOperation[] = useMemo(
     () =>
       operations
@@ -780,6 +1009,151 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
               ) : (
                 <p className="f3d-dim f3d-tip">{t("factory3dViewer.noBins")}</p>
               )}
+            </>
+          ) : selectedSceneObject?.kind === "person" ? (
+            <>
+              <button className="f3d-back" onClick={() => selectSceneObject(null)}>
+                {t("factory3dViewer.backToOrders")}
+              </button>
+              <h2>{selectedSceneObject.bindLabel ?? selectedSceneObject.name}</h2>
+              <p className="f3d-dim">{t("factory3dViewer.person")}</p>
+
+              {/* 员工基本信息 */}
+              {selectedEmployee ? (
+                <div className="f3d-emp-info">
+                  <p>
+                    <span className="f3d-dim">{t("factory3dViewer.empCode")}：</span>
+                    <b>{selectedEmployee.code}</b>
+                  </p>
+                  {selectedEmployee.department_name && (
+                    <p>
+                      <span className="f3d-dim">{t("factory3dViewer.empDepartment")}：</span>
+                      {selectedEmployee.department_name}
+                    </p>
+                  )}
+                  {selectedEmployee.position && (
+                    <p>
+                      <span className="f3d-dim">{t("factory3dViewer.empPosition")}：</span>
+                      {selectedEmployee.position}
+                    </p>
+                  )}
+                  {selectedEmployee.work_center_name && (
+                    <p>
+                      <span className="f3d-dim">{t("factory3dViewer.empWorkCenter")}：</span>
+                      {selectedEmployee.work_center_name}
+                    </p>
+                  )}
+                  {selectedEmployee.phone && (
+                    <p>
+                      <span className="f3d-dim">{t("factory3dViewer.empPhone")}：</span>
+                      {selectedEmployee.phone}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="f3d-dim f3d-tip">{t("factory3dViewer.noEmpInfo")}</p>
+              )}
+
+              {/* 当前排班 */}
+              <div className="f3d-section-title">{t("factory3dViewer.currentShift")}</div>
+              {selectedEmployeeShift ? (
+                <div className="f3d-emp-info">
+                  <p>
+                    <span className="f3d-dim">{t("factory3dViewer.shiftName")}：</span>
+                    <b>{selectedEmployeeShift.shift_name}</b>
+                  </p>
+                  <p>
+                    <span className="f3d-dim">{t("factory3dViewer.shiftTime")}：</span>
+                    {selectedEmployeeShift.start_time} - {selectedEmployeeShift.end_time}
+                    {selectedEmployeeShift.cross_midnight
+                      ? ` ${t("factory3dViewer.shiftCrossMidnight")}`
+                      : ""}
+                  </p>
+                </div>
+              ) : (
+                <p className="f3d-dim f3d-tip">{t("factory3dViewer.noShift")}</p>
+              )}
+
+              {/* 工作负荷（当月 confirmed 报工工时 ÷ 排班可用工时） */}
+              <div className="f3d-section-title">{t("factory3dViewer.workload")}</div>
+              {selectedEmployeeLoad ? (
+                <div className="f3d-emp-info">
+                  <p>
+                    <span className="f3d-dim">{t("factory3dViewer.workloadRate")}：</span>
+                    <b
+                      style={{
+                        color: num(selectedEmployeeLoad.load_rate) >= 100 ? "#ff4d4f" : undefined,
+                      }}
+                    >
+                      {round(selectedEmployeeLoad.load_rate)}%
+                    </b>
+                    {num(selectedEmployeeLoad.load_rate) >= 100 && (
+                      <span style={{ color: "#ff4d4f", marginLeft: 6 }}>
+                        {t("factory3dViewer.workloadOverload")}
+                      </span>
+                    )}
+                  </p>
+                  <p>
+                    <span className="f3d-dim">{t("factory3dViewer.workloadHours")}：</span>
+                    {round(selectedEmployeeLoad.load_hours)}
+                    {" / "}
+                    {round(selectedEmployeeLoad.capacity_hours)} h
+                    {selectedEmployeeLoad.work_day_count != null && (
+                      <span className="f3d-dim">
+                        {" "}
+                        · {t("factory3dViewer.workloadDays", { d: num(selectedEmployeeLoad.work_day_count) })}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              ) : (
+                <p className="f3d-dim f3d-tip">{t("factory3dViewer.noWorkload")}</p>
+              )}
+
+              {/* 所在工单工序 */}
+              <div className="f3d-section-title">
+                {t("factory3dViewer.empAssignments")}（{selectedEmployeeOperations.length}）
+              </div>
+              {selectedEmployeeOperations.length > 0 ? (
+                <ul className="f3d-orders">
+                  {selectedEmployeeOperations.map((op) => (
+                    <li
+                      key={op.order_operation_id}
+                      onClick={() => selectOrder(op.order_id)}
+                      className="f3d-order-item"
+                    >
+                      <div className="f3d-order-line1">
+                        <b>{op.order_no}</b>
+                        <span className="f3d-dim">{op.operation_name ?? "—"}</span>
+                      </div>
+                      <div className="f3d-order-line2">
+                        <span className="f3d-dim">
+                          {t("factory3dViewer.opSeq", { seq: op.sequence_no })}
+                        </span>
+                        <span className="f3d-dim">
+                          {dict.opStatus[op.operation_status]}
+                        </span>
+                        <span className="f3d-dim">
+                          {round(op.completed_quantity)}/{round(op.planned_quantity)}
+                        </span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="f3d-dim f3d-tip">{t("factory3dViewer.noAssignments")}</p>
+              )}
+
+              {/* 派工：从未确认报工单里选一条，补填完工/报废数量，提交后确认 */}
+              <div style={{ marginTop: 12 }}>
+                <Button
+                  type="primary"
+                  block
+                  onClick={openAssignReport}
+                >
+                  {t("factory3dViewer.assignReport")}
+                </Button>
+              </div>
             </>
           ) : selectedRow ? (
             <>
@@ -1104,6 +1478,75 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
           showSearch
           optionFilterProp="label"
         />
+      </Modal>
+
+      {/* 人员派工弹窗：从未确认报工单选一条，填完工/报废数量提交，状态改为 confirmed */}
+      <Modal
+        title={t("factory3dViewer.assignReportTitle")}
+        open={assignReportOpen}
+        onCancel={() => setAssignReportOpen(false)}
+        onOk={() => void submitAssignReport()}
+        confirmLoading={assignReportLoading}
+        okText={t("factory3dViewer.assignReportConfirm")}
+        okButtonProps={{ disabled: selectedReportId == null }}
+        destroyOnClose
+      >
+        <p className="f3d-dim" style={{ marginBottom: 12 }}>
+          {t("factory3dViewer.assignReportTo")}{" "}
+          <b>
+            {selectedEmployee?.code} · {selectedEmployee?.name}
+          </b>
+        </p>
+        <div className="f3d-section-title">{t("factory3dViewer.assignReportSelect")}</div>
+        <Select
+          style={{ width: "100%" }}
+          placeholder={t("factory3dViewer.assignReportSelect")}
+          value={selectedReportId}
+          onChange={(v) => {
+            setSelectedReportId(v as number);
+            const r = selectedEmployeeDraftReports.find((x) => x.id === v);
+            if (r) {
+              setAssignCompletedQty(num(r.completed_quantity));
+              setAssignScrappedQty(num(r.scrapped_quantity));
+            }
+          }}
+          options={selectedEmployeeDraftReports.map((r) => {
+            const op = operations.find((o) => o.order_operation_id === r.order_operation_id);
+            const emp = employees.find((e) => e.id === r.operator_id);
+            const empName = emp ? `${emp.name ?? ""}` : "";
+            const label = `${r.report_no}${empName ? ` · ${empName}` : ""}${op ? ` · ${op.order_no} · ${op.operation_name ?? ""}` : ""}`;
+            return { value: r.id, label };
+          })}
+          notFoundContent={t("factory3dViewer.assignReportNoReports")}
+          showSearch
+          optionFilterProp="label"
+        />
+        <div style={{ marginTop: 16, display: "flex", gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div className="f3d-dim" style={{ marginBottom: 4 }}>
+              {t("factory3dViewer.assignReportCompleted")}
+            </div>
+            <InputNumber
+              style={{ width: "100%" }}
+              min={0}
+              precision={0}
+              value={assignCompletedQty}
+              onChange={(v) => setAssignCompletedQty(v as number | null)}
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div className="f3d-dim" style={{ marginBottom: 4 }}>
+              {t("factory3dViewer.assignReportScrapped")}
+            </div>
+            <InputNumber
+              style={{ width: "100%" }}
+              min={0}
+              precision={0}
+              value={assignScrappedQty}
+              onChange={(v) => setAssignScrappedQty(v as number | null)}
+            />
+          </div>
+        </div>
       </Modal>
     </Drawer>
   );

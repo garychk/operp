@@ -251,6 +251,16 @@
   border-radius: 999px;
 }
 
+/* ---------- 人员详情（员工信息 / 排班） ---------- */
+.f3d-emp-info {
+  font-size: 13px;
+  line-height: 1.9;
+  color: var(--f3d-text);
+}
+.f3d-emp-info p {
+  margin: 2px 0;
+}
+
 /* ---------- 进度条 ---------- */
 .f3d-pb {
   display: flex;

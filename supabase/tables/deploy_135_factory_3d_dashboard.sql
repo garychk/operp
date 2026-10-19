@@ -288,7 +288,9 @@ SELECT
   oo.plan_start_date,
   oo.plan_end_date,
   oo.actual_start_date,
-  oo.actual_end_date
+  oo.actual_end_date,
+  emp.id          AS assignee_id,
+  oo.standard_hours_per_unit
 FROM public.erp_production_order_operations_s_539dcf81_b oo
 JOIN public.erp_production_orders_s_539dcf81_b o
   ON o.id = oo.order_id AND o.tenant_id = oo.tenant_id

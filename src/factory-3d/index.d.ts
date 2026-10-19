@@ -56,9 +56,11 @@ export interface OrderOperation {
   work_center_id: number | null
   work_center_name: string | null
   assignee_name: string | null
+  assignee_id: number | null
   planned_quantity: number
   completed_quantity: number
   scrapped_quantity: number
+  standard_hours_per_unit: number | null
   operation_status: 'pending' | 'in_progress' | 'completed' | 'cancelled'
 }
 
