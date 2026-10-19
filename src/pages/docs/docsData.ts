@@ -546,6 +546,83 @@ export const docCategories: DocCategory[] = [
 </table>
 <div class="docs-warn">⚠️ 已知限制：<strong>委外结算目前不生成会计凭证</strong>，请通过手工凭证处理加工费入账。</div>`,
       },
+      {
+        id: "factory-3d",
+        title: "3D 工厂生产驾驶舱",
+        html: `
+<p>OPERP 提供一套 <strong>3D 可视化工厂生产驾驶舱</strong>，把车间里的工作中心、在制工单、工序进度、物料齐套、产能负荷等生产数据，投射到一块<strong>可旋转、可缩放、可拖拽布局</strong>的三维车间场景里，让你「一眼看到车间正在发生什么」。</p>
+<p><strong>入口</strong>：生产制造 → 生产报表 → 卡片标题栏右侧「<strong>3D 生产驾驶舱</strong>」按钮，点击后以<strong>全屏抽屉</strong>打开。</p>
+
+<h3>驾驶舱布局</h3>
+<table>
+  <thead><tr><th>区域</th><th>内容</th></tr></thead>
+  <tbody>
+    <tr><td>3D 场景</td><td>车间平面：各工作中心（设备）以立体模型摆放在三维坐标上，颜色/铭牌随实时状态变化</td></tr>
+    <tr><td>顶部 KPI 条</td><td>平均订单进度、设备运行数（运行/总数）、在制订单数、缺料订单数、逾期订单数</td></tr>
+    <tr><td>状态图例</td><td>运行中 / 待机 / 离线 三色图例，各带实时计数</td></tr>
+    <tr><td>右侧面板</td><td>三态切换：在制订单列表 → 订单详情（点订单）/ 设备详情（点设备）</td></tr>
+  </tbody>
+</table>
+
+<h3>设备三态推导口径</h3>
+<p>设备状态<strong>全部从业务事实自动推导</strong>，无人工维护字段：</p>
+<table>
+  <thead><tr><th>状态</th><th>含义</th><th>触发条件</th></tr></thead>
+  <tbody>
+    <tr><td>🟢 运行中</td><td>正有活儿在做</td><td>该工作中心上存在 <code>in_progress</code>（进行中）的工序</td></tr>
+    <tr><td>🟡 待机</td><td>启用但无在制工序</td><td>工作中心 active，但没有进行中的工序</td></tr>
+    <tr><td>⚪ 离线</td><td>停用</td><td>工作中心状态非 active</td></tr>
+  </tbody>
+</table>
+<div class="docs-tip">💡 <strong>设备要亮成「运行中」，需要报工</strong>：光「下达 + 开工」工单还不够——只有某道工序收到<strong>合格数 &gt; 0 的已确认报工</strong>后，它才会从「待开工」进入「进行中」，对应工作中心才会亮起并显示当班任务。</div>
+
+<h3>订单详情与材料清单</h3>
+<p>点右侧列表里的某个订单进入<strong>订单详情</strong>：</p>
+<ul>
+  <li><strong>产品 × 计划数量</strong>、优先级、完工数、逾期天数</li>
+  <li><strong>双口径进度条</strong>：完工入库口径（完工数 ÷ 计划数）+ 报工口径（工序完工进度）</li>
+  <li><strong>物料齐套</strong>：该工单对应 BOM 展开的<strong>逐行材料清单</strong>（物料名 + 编码 + 已领数/需求数 + 单位），齐套显绿点、缺料显红点</li>
+  <li><strong>工序进度时间线</strong>：每道工序的名称、所属工作中心、状态与完工/计划数</li>
+</ul>
+<div class="docs-tip">💡 <strong>材料来自对应 BOM</strong>：工单下达时系统按所选 BOM 展开生成材料行，领料过账回写已领数，这里展示的就是这套展开结果。</div>
+
+<h3>场景对象（AGV / 仓储房屋 / 人员 / 货车）</h3>
+<p>除了工作中心设备，车间场景还能摆放四类<strong>场景对象</strong>：</p>
+<table>
+  <thead><tr><th>对象</th><th>说明</th><th>绑定业务对象</th></tr></thead>
+  <tbody>
+    <tr><td>AGV 小车</td><td>自动导引运输车</td><td>「AGV小车」主数据（生产制造 → AGV小车）</td></tr>
+    <tr><td>仓储房屋</td><td>仓库模型</td><td>「仓库」主数据（进销存 → 仓库管理）</td></tr>
+    <tr><td>人员</td><td>员工模型</td><td>「员工」主数据（生产制造 → 员工管理）</td></tr>
+    <tr><td>货车</td><td>运输车辆</td><td>「货车」主数据（生产制造 → 货车管理）</td></tr>
+  </tbody>
+</table>
+<p>在布局编辑模式下，可<strong>新增、拖拽摆放、重命名、绑定业务数据、删除</strong>这些对象，位置与绑定关系都会<strong>持久化保存</strong>。</p>
+
+<h3>布局编辑（拖拽摆放）</h3>
+<p>点顶部 KPI 条左侧的「<strong>编辑布局</strong>」按钮进入布局编辑模式：</p>
+<ol>
+  <li><strong>拖动</strong>工作中心设备或场景对象到任意位置（松手即自动保存坐标）。</li>
+  <li>左侧「添加对象」面板可新增 AGV / 仓储房屋 / 人员 / 货车四类对象。</li>
+  <li>选中对象后可在面板里<strong>绑定业务数据</strong>、<strong>重命名</strong>、<strong>删除</strong>。</li>
+  <li>再次点「编辑布局」退出，位置与绑定已持久化。</li>
+</ol>
+<div class="docs-tip">💡 布局坐标、场景对象都按<strong>租户隔离</strong>存储，各企业维护各自的车间平面图，互不可见。</div>
+
+<h3>使用前置条件</h3>
+<table>
+  <thead><tr><th>前置项</th><th>维护入口</th></tr></thead>
+  <tbody>
+    <tr><td>工作中心（设备）</td><td>生产制造 → 工作中心</td></tr>
+    <tr><td>工艺路线 + 工序</td><td>生产制造 → 工艺路线 / 工序管理</td></tr>
+    <tr><td>BOM（材料清单）</td><td>生产制造 → BOM 管理</td></tr>
+    <tr><td>员工（场景对象绑定源）</td><td>生产制造 → 员工管理</td></tr>
+    <tr><td>仓库（场景对象绑定源）</td><td>进销存 → 仓库管理</td></tr>
+    <tr><td>AGV / 货车（场景对象绑定源）</td><td>生产制造 → AGV小车 / 货车管理</td></tr>
+  </tbody>
+</table>
+<div class="docs-warn">⚠️ <strong>工作中心必须先维护</strong>：设备视图以工作中心为主数据源，工作中心为空时 3D 场景里没有设备可显示。</div>`,
+      },
     ],
   },
   {

@@ -175,6 +175,12 @@ ORDER=(
   deploy_132_quality_return_creates_purchase_return.sql
   deploy_133_quality_scrap_rework_closed_loop.sql
   deploy_134_quality_inspection_bad_quantity.sql
+  deploy_135_factory_3d_dashboard.sql
+  deploy_135_patch_order_materials_view.sql
+  deploy_136_factory_3d_scene_objects.sql
+  deploy_136_patch_scene_object_work_center_kind.sql
+  deploy_137_agv_vehicle_menu.sql
+  deploy_138_factory_3d_bin_stock.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

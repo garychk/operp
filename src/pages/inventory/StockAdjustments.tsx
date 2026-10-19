@@ -10,6 +10,7 @@ import { voucherNotice, type InventoryVoucherResult } from '../../utils/inventor
 import { SuperTable } from '../../components/SuperTable';
 import type { Tables } from '../../utils/supabase';
 import SimpleModal from '../../components/SimpleModal';
+import { WarehouseBinSelect } from '../../components/WarehouseBinSelect';
 
 type Warehouse = Tables['erp_warehouses_s_539dcf81_b']['Row'];
 type Bin = Tables['erp_bins_s_539dcf81_b']['Row'];
@@ -37,6 +38,7 @@ export function StockAdjustments() {
   const [detailForm] = Form.useForm();
   const [selectedRowKeys, setSelectedRowKeys] = useState<Key[]>([]);
   const [posting, setPosting] = useState(false);
+  const watchedWarehouseId = Form.useWatch('warehouse_id', form);
 
   useEffect(() => { void fetchAll(); }, []);
   const fetchAll = async () => {
@@ -314,10 +316,7 @@ export function StockAdjustments() {
             />
           </Form.Item>
           <Form.Item name="location_id" label={t('stockAdjustments.bin')}>
-            <Select
-              allowClear
-              options={bins.filter((b) => b.warehouse_id === form.getFieldValue('warehouse_id')).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))}
-            />
+            <WarehouseBinSelect warehouseId={watchedWarehouseId} />
           </Form.Item>
           <Form.Item name="reason" label={t('stockAdjustments.adjustReason')}>
             <Input />
@@ -426,7 +425,7 @@ export function StockAdjustments() {
             />
           </Form.Item>
           <Form.Item name="location_id" label={t('stockAdjustments.bin')}>
-            <Select allowClear options={bins.filter((b) => b.warehouse_id === selected?.warehouse_id).map((b) => ({ value: b.id, label: `${b.code} ${b.name}` }))} />
+            <WarehouseBinSelect warehouseId={selected?.warehouse_id} />
           </Form.Item>
           <Form.Item name="quantity" label={t('stockAdjustments.quantity')} rules={[{ required: true }]}>
             <InputNumber style={{ width: "100%" }} min={0.0001} />

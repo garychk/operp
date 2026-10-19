@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS public.factory_3d_scene_object_s_539dcf81_b (
     status VARCHAR(20),
     tenant_id BIGINT NOT NULL DEFAULT public.current_tenant_id(),
     CONSTRAINT ck_factory_3d_scene_object_kind
-      CHECK (kind IN ('agv', 'warehouse', 'person', 'truck'))
+      CHECK (kind IN ('work_center', 'agv', 'warehouse', 'person', 'truck'))
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS uq_factory_3d_scene_object_obj

@@ -117,6 +117,9 @@ DECLARE
   v_unit_price NUMERIC;
   v_base_unit_price NUMERIC;
   v_detail RECORD;
+  -- 返工分支「生成工单后继续搬库存」用的标志
+  v_rework_no TEXT;
+  v_rework_id INTEGER;
 BEGIN
   IF p_inspection_id IS NULL THEN
     RAISE EXCEPTION '需要 inspection_id' USING ERRCODE = '23502';
@@ -304,48 +307,45 @@ BEGIN
   -- ==========================================================================
   -- 处置=返工：生成返工生产订单草稿单（复用生产订单通道）
   -- ==========================================================================
+  -- 说明：返工与 return/scrap 不同，**生成工单后不提前 RETURN**，而是继续落回
+  --   下方「搬库存」逻辑——合格品仍要 inspection→available、不合格品按
+  --   rework 走 inspection→hold（hold = 待返工桶）。因为返工只是「把不合格品
+  --   标记为待返工」，并不等于库存已经搬走；若在此处直接 RETURN，合格品会
+  --   永远滞留在 inspection 桶无法放行（历史 bug，见 2026-10-19 修复）。
+  -- ==========================================================================
   IF v_ins.disposition = 'rework' THEN
-    IF EXISTS (
-      SELECT 1 FROM public.erp_production_orders_s_539dcf81_b o
-       WHERE o.tenant_id = v_tenant
-         AND o.source_inspection_id = p_inspection_id
-         AND o.is_deleted = 'n'
-    ) THEN
-      RETURN jsonb_build_object('ok', TRUE, 'idempotent', TRUE,
-        'inspection_id', p_inspection_id, 'created_rework', FALSE);
+    -- 幂等：同一张质检单只生成一次返工工单；已存在则仅回填单号，不重复建单
+    SELECT o.order_no, o.id
+      INTO v_rework_no, v_rework_id
+      FROM public.erp_production_orders_s_539dcf81_b o
+     WHERE o.tenant_id = v_tenant
+       AND o.source_inspection_id = p_inspection_id
+       AND o.is_deleted = 'n'
+     ORDER BY o.id
+     LIMIT 1;
+
+    IF v_rework_id IS NULL AND COALESCE(v_ins.unqualified_quantity, 0) > 0 THEN
+      v_no := public.generate_document_no_for_tenant(
+        'production_order', COALESCE(v_ins.completed_at, CURRENT_DATE)::DATE, v_tenant);
+
+      -- 返工工单：product_id = 原物料，数量 = 不合格数，仓库沿用来源仓库。
+      -- BOM / 工艺路线不自动带（返工路径因物料而异，人工在生产订单页选）。
+      INSERT INTO public.erp_production_orders_s_539dcf81_b (
+        order_no, order_date, product_id, planned_quantity, completed_quantity,
+        scrapped_quantity, planned_start_date, planned_end_date, warehouse_id,
+        priority, remark, status, source_inspection_id, tenant_id
+      ) VALUES (
+        v_no, COALESCE(v_ins.completed_at, CURRENT_DATE)::DATE,
+        v_ins.product_id, v_ins.unqualified_quantity, 0, 0,
+        COALESCE(v_ins.completed_at, CURRENT_DATE)::DATE,
+        COALESCE(v_ins.completed_at, CURRENT_DATE)::DATE,
+        v_wh, 5,
+        format('由质检单 %s 自动生成（处置=返工，数量 %s）',
+               v_ins.inspection_no, v_ins.unqualified_quantity),
+        'draft', p_inspection_id, v_tenant
+      )
+      RETURNING order_no, id INTO v_rework_no, v_rework_id;
     END IF;
-
-    IF COALESCE(v_ins.unqualified_quantity, 0) <= 0 THEN
-      RETURN jsonb_build_object('ok', TRUE, 'skipped', TRUE,
-        'reason', 'nothing_to_move', 'inspection_id', p_inspection_id);
-    END IF;
-
-    v_no := public.generate_document_no_for_tenant(
-      'production_order', COALESCE(v_ins.completed_at, CURRENT_DATE)::DATE, v_tenant);
-
-    -- 返工工单：product_id = 原物料，数量 = 不合格数，仓库沿用来源仓库。
-    -- BOM / 工艺路线不自动带（返工路径因物料而异，人工在生产订单页选）。
-    INSERT INTO public.erp_production_orders_s_539dcf81_b (
-      order_no, order_date, product_id, planned_quantity, completed_quantity,
-      scrapped_quantity, planned_start_date, planned_end_date, warehouse_id,
-      priority, remark, status, source_inspection_id, tenant_id
-    ) VALUES (
-      v_no, COALESCE(v_ins.completed_at, CURRENT_DATE)::DATE,
-      v_ins.product_id, v_ins.unqualified_quantity, 0, 0,
-      COALESCE(v_ins.completed_at, CURRENT_DATE)::DATE,
-      COALESCE(v_ins.completed_at, CURRENT_DATE)::DATE,
-      v_wh, 5,
-      format('由质检单 %s 自动生成（处置=返工，数量 %s）',
-             v_ins.inspection_no, v_ins.unqualified_quantity),
-      'draft', p_inspection_id, v_tenant
-    )
-    RETURNING id INTO v_doc_id;
-
-    RETURN jsonb_build_object(
-      'ok', TRUE, 'idempotent', FALSE, 'created_rework', TRUE,
-      'inspection_id', p_inspection_id, 'inspection_no', v_ins.inspection_no,
-      'rework_order_id', v_doc_id, 'rework_order_no', v_no,
-      'rework_quantity', v_ins.unqualified_quantity);
   END IF;
 
   -- ==========================================================================
@@ -450,6 +450,8 @@ BEGIN
     'product_id', v_ins.product_id, 'warehouse_id', v_wh, 'location_id', v_loc,
     'batch_no', v_ins.batch_no, 'inspection_on_hand', v_on_hand,
     'available_quantity', v_good, 'bad_quantity', v_bad, 'bad_status', v_bad_status,
+    'created_rework', v_rework_id IS NOT NULL,
+    'rework_order_id', v_rework_id, 'rework_order_no', v_rework_no,
     'moves', v_moves);
 END;
 $$;

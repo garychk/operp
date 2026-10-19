@@ -61,8 +61,7 @@
   border-radius: 16px;
   overflow: hidden;
   border: 0.5px solid var(--f3d-panel-border);
-  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.14);
-  background: #0d0f12;
+  box-shadow: 0 20px 48px rgba(15, 23, 42, 0.14);  
 }
 [data-erp-dark='true'] .f3d-canvas {
   box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
