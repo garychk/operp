@@ -1454,6 +1454,11 @@ function CostVarianceTab() {
         }
       />
 
+      <div style={{ marginTop: 16, color: "#888", fontSize: 13, lineHeight: 1.8 }}>
+        <p style={{ marginBottom: 6 }}>💡 {t("mrp.costVariance.footerHint")}</p>
+        <p style={{ margin: 0 }}>💡 {t("mrp.costVariance.rateHint")}</p>
+      </div>
+
       <SimpleModal
         title={
           detailFor

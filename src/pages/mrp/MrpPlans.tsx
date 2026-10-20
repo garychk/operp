@@ -35,6 +35,8 @@ interface ConversionCandidate {
   target: ConversionTarget;
   bomId: number | null;
   unitPrice: number;
+  /** 采购单位换算系数：1 采购单位 = 该值个基准单位；null = 无采购单位配置 */
+  purchaseConversionFactor: number | null;
   warnings: string[];
 }
 
@@ -313,6 +315,8 @@ export function MrpPlans() {
   const [convertResult, setConvertResult] = useState<ConversionResultState | null>(null);
   const [previewingPlanId, setPreviewingPlanId] = useState<number | null>(null);
   const [converting, setConverting] = useState(false);
+  /** 转单预览弹窗勾选的计划行 id（默认全选；只转勾选的行） */
+  const [selectedReqIds, setSelectedReqIds] = useState<number[]>([]);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -594,6 +598,8 @@ export function MrpPlans() {
           .filter((c) => c.target === 'purchase_order')
           .reduce((sum, c) => sum + c.quantity * c.unitPrice, 0),
       });
+      // 默认全选
+      setSelectedReqIds(candidates.map((c) => c.requirementId));
     } catch (error) {
       console.error('Error previewing MRP conversion:', error);
       message.error(`${t('mrp.plans.convertPreviewFailed')}：${(error as Error).message}`);
@@ -604,6 +610,10 @@ export function MrpPlans() {
 
   const handleApplyConvert = async () => {
     if (!convertPreview || !user?.profile.id || !user?.tenantId) return;
+    if (selectedReqIds.length === 0) {
+      message.warning(t('mrp.plans.convertNoSelection'));
+      return;
+    }
     try {
       setConverting(true);
       const response = await fetch(`${resolveMrpApiBaseUrl()}/convert`, {
@@ -618,6 +628,7 @@ export function MrpPlans() {
           plan_id: convertPreview.planId,
           mode: 'apply',
           filter: 'all',
+          requirement_ids: selectedReqIds,
         }),
       });
       const data = (await response.json()) as {
@@ -955,14 +966,20 @@ export function MrpPlans() {
       <Modal
         title={`${t('mrp.plans.convertTitle')} - ${convertPreview?.planNo ?? ''}`}
         open={!!convertPreview}
-        onCancel={() => setConvertPreview(null)}
-        width={880}
+        onCancel={() => {
+          setConvertPreview(null);
+          setSelectedReqIds([]);
+        }}
+        width={1024}
         footer={[
-          <Button key="cancel" onClick={() => setConvertPreview(null)}>
+          <Button key="cancel" onClick={() => {
+            setConvertPreview(null);
+            setSelectedReqIds([]);
+          }}>
             {t('common.cancel')}
           </Button>,
           <Button key="ok" type="primary" loading={converting} onClick={handleApplyConvert}>
-            {t('mrp.plans.convertConfirm', { count: convertPreview?.candidates.length ?? 0 })}
+            {t('mrp.plans.convertConfirm', { count: selectedReqIds.length })}
           </Button>,
         ]}
       >
@@ -987,6 +1004,10 @@ export function MrpPlans() {
           pagination={false}
           scroll={{ y: 320 }}
           dataSource={convertPreview?.candidates ?? []}
+          rowSelection={{
+            selectedRowKeys: selectedReqIds,
+            onChange: (keys) => setSelectedReqIds(keys as number[]),
+          }}
           columns={[
             {
               title: t('mrp.plans.convertProduct'),
@@ -1007,8 +1028,24 @@ export function MrpPlans() {
             {
               title: t('mrp.plans.convertQuantity'),
               dataIndex: 'quantity',
+              width: 110,
               align: 'right' as const,
-              render: (qty: number) => Number(qty).toLocaleString(),
+              render: (qty: number, row: ConversionCandidate) => {
+                // 采购件：同时显示基准单位数量与换算后的采购单位数量（基准 ÷ factor）
+                const f = row.purchaseConversionFactor;
+                if (row.target === 'purchase_order' && f && f > 0) {
+                  const converted = Number((qty / f).toFixed(4)).toLocaleString();
+                  return (
+                    <span>
+                      {Number(qty).toLocaleString()}
+                      <span style={{ color: '#999', fontSize: 12 }}>
+                        {' → '}{converted} ({t('mrp.plans.convertConvertedQty')})
+                      </span>
+                    </span>
+                  );
+                }
+                return Number(qty).toLocaleString();
+              },
             },
             {
               title: t('mrp.plans.convertRequirementDate'),
@@ -1017,12 +1054,14 @@ export function MrpPlans() {
             {
               title: t('mrp.plans.convertUnitPrice'),
               dataIndex: 'unitPrice',
+              width: 120,
               align: 'right' as const,
               render: (price: number) => formatMoney(price),
             },
             {
               title: t('mrp.plans.convertWarnings'),
               dataIndex: 'warnings',
+              ellipsis: true,
               render: (warnings: string[]) =>
                 warnings.length === 0 ? (
                   '-'

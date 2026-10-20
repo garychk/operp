@@ -27,6 +27,7 @@ const T = {
   purchaseOrders: "erp_purchase_orders_s_539dcf81_b",
   purchaseOrderDetails: "erp_purchase_order_details_s_539dcf81_b",
   productionOrders: "erp_production_orders_s_539dcf81_b",
+  productUoms: "erp_product_uoms_s_539dcf81_b",
 } as const;
 
 const num = (v: unknown): number => {
@@ -60,6 +61,8 @@ export interface ConversionCandidate {
    */
   supplierId: number | null;
   unitPrice: number;
+  /** 采购单位换算系数：1 采购单位 = 该值个基准单位（取自 erp_product_uoms.usage_type='purchase'）。null = 无采购单位配置，按基准单位 1:1。 */
+  purchaseConversionFactor: number | null;
   warnings: string[];
 }
 
@@ -131,6 +134,7 @@ export async function buildConversionPreview(
   tenantId: number,
   planId: number,
   filter: ConversionFilter = "all",
+  requirementIds?: number[] | null,
 ): Promise<ConversionPreview> {
   const plan = await loadPlan(tenantId, planId);
   if (plan.status !== "completed") {
@@ -139,7 +143,7 @@ export async function buildConversionPreview(
     );
   }
 
-  const { data: reqData, error: reqErr } = await supabase
+  let query = supabase
     .from(T.requirements)
     .select("id, product_id, requirement_date, planned_order_receipt, order_release_date")
     .eq("tenant_id", tenantId)
@@ -148,6 +152,13 @@ export async function buildConversionPreview(
     .is("converted_document_id", null)
     .gt("planned_order_receipt", 0)
     .order("requirement_date", { ascending: true });
+
+  // 指定计划行（转单弹窗勾选）：只转这些行；未指定 = 全转（兼容旧行为）
+  if (requirementIds && requirementIds.length > 0) {
+    query = query.in("id", requirementIds);
+  }
+
+  const { data: reqData, error: reqErr } = await query;
   if (reqErr) throw reqErr;
 
   const rows = asRows(reqData);
@@ -265,6 +276,31 @@ export async function buildConversionPreview(
     }
   }
 
+  // 采购单位换算系数：erp_product_uoms 里 usage_type='purchase' 的 conversion_factor，
+  // 语义为「1 采购单位 = 该值个基准单位」。采购建议单的数量要从基准单位换算过去。
+  const purchaseFactorByProduct = new Map<number, number>();
+  {
+    const { data: uomData, error: uomErr } = await supabase
+      .from(T.productUoms)
+      .select("product_id, conversion_factor, is_default")
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n")
+      .eq("usage_type", "purchase")
+      .in("product_id", productIds);
+    if (uomErr) throw uomErr;
+    for (const u of asRows(uomData)) {
+      const pid = num(u.product_id);
+      const factor = num(u.conversion_factor);
+      if (pid <= 0 || factor <= 0) continue;
+      const existing = purchaseFactorByProduct.get(pid);
+      if (existing === undefined) {
+        purchaseFactorByProduct.set(pid, factor);
+      } else if (u.is_default === true || u.is_default === "true") {
+        purchaseFactorByProduct.set(pid, factor);
+      }
+    }
+  }
+
   const candidates: ConversionCandidate[] = [];
   const skipped: SkippedRequirement[] = [];
 
@@ -343,6 +379,8 @@ export async function buildConversionPreview(
       bomId,
       supplierId,
       unitPrice: round4(product.purchasePrice > 0 ? product.purchasePrice : product.costPrice),
+      purchaseConversionFactor:
+        target === "purchase_order" ? (purchaseFactorByProduct.get(productId) ?? null) : null,
       warnings,
     });
   }
@@ -404,29 +442,42 @@ async function nextDocumentNo(
 
 async function createPurchaseOrder(
   tenantId: number,
-  candidate: ConversionCandidate,
+  candidates: ConversionCandidate[],
   planNo: string,
 ): Promise<{ id: number; no: string; warnings: string[] }> {
   const warnings: string[] = [];
-  const orderNo = await nextDocumentNo(tenantId, "purchase_order", candidate.orderDate);
-  const amount = round4(candidate.quantity * candidate.unitPrice);
+  // 同一物料合并：单头取第一行的下单日/需求日，明细每行一条计划订单
+  const head = candidates[0];
+  const orderNo = await nextDocumentNo(tenantId, "purchase_order", head.orderDate);
+
+  // 采购单位换算：MRP 需求是基准单位口径，采购单明细要落「采购单位」的数量。
+  // conversion_factor 语义 = 1 采购单位 = factor 个基准单位 → 采购数量 = 基准数量 / factor。
+  // 单价 purchase_price 是「每采购单位」的价格，故金额 = 采购数量 × 单价，换算后金额才正确。
+  const toPurchaseQty = (c: ConversionCandidate): number => {
+    const factor = c.purchaseConversionFactor;
+    if (factor === null || factor === undefined || factor <= 0) return round4(c.quantity);
+    return round4(c.quantity / factor);
+  };
+
+  const totalQty = round4(candidates.reduce((s, c) => s + toPurchaseQty(c), 0));
+  const amount = round4(candidates.reduce((s, c) => s + toPurchaseQty(c) * c.unitPrice, 0));
 
   const { data, error } = await supabase
     .from(T.purchaseOrders)
     .insert({
       order_no: orderNo,
-      order_date: candidate.orderDate || todayStr(),
+      order_date: head.orderDate || todayStr(),
       // deploy_120：回填默认供应商（物料显式 → 类别默认，建单前已校验启用）；
       // null = 留空由人工指定
-      supplier_id: candidate.supplierId,
-      delivery_date: candidate.requirementDate || candidate.orderDate,
+      supplier_id: head.supplierId,
+      delivery_date: head.requirementDate || head.orderDate,
       total_amount: amount,
       tax_amount: 0,
       discount_amount: 0,
       payable_amount: amount,
       currency: "CNY",
       exchange_rate: 1,
-      remark: `由 MRP 计划 ${planNo} 自动生成（计划订单 ${candidate.requirementDate}）`,
+      remark: `由 MRP 计划 ${planNo} 自动生成（合并 ${candidates.length} 条计划订单）`,
       status: "draft",
       tenant_id: tenantId,
       is_deleted: "n",
@@ -437,20 +488,25 @@ async function createPurchaseOrder(
 
   const orderId = num((data as { id?: unknown } | null)?.id);
 
-  const { error: dErr } = await supabase.from(T.purchaseOrderDetails).insert({
-    order_id: orderId,
-    line_no: 1,
-    product_id: candidate.productId,
-    quantity: candidate.quantity,
-    unit_price: candidate.unitPrice,
-    amount,
-    tax_rate: 0,
-    tax_amount: 0,
-    received_quantity: 0,
-    remark: `MRP 计划订单：需求日 ${candidate.requirementDate}`,
-    tenant_id: tenantId,
-    is_deleted: "n",
+  // 明细：每个候选一行（同一物料不同需求日合并进一张单），数量已换算成采购单位
+  const detailRows = candidates.map((c, i) => {
+    const qty = toPurchaseQty(c);
+    return {
+      order_id: orderId,
+      line_no: i + 1,
+      product_id: c.productId,
+      quantity: qty,
+      unit_price: c.unitPrice,
+      amount: round4(qty * c.unitPrice),
+      tax_rate: 0,
+      tax_amount: 0,
+      received_quantity: 0,
+      remark: `MRP 计划订单：需求日 ${c.requirementDate}`,
+      tenant_id: tenantId,
+      is_deleted: "n",
+    };
   });
+  const { error: dErr } = await supabase.from(T.purchaseOrderDetails).insert(detailRows);
   if (dErr) {
     // 明细写失败则整单作废，避免留下没有明细的空单
     await supabase
@@ -461,7 +517,7 @@ async function createPurchaseOrder(
     throw dErr;
   }
 
-  if (candidate.supplierId === null) {
+  if (head.supplierId === null) {
     warnings.push("supplier_missing");
   }
   return { id: orderId, no: orderNo, warnings };
@@ -469,27 +525,32 @@ async function createPurchaseOrder(
 
 async function createProductionOrder(
   tenantId: number,
-  candidate: ConversionCandidate,
+  candidates: ConversionCandidate[],
   planNo: string,
 ): Promise<{ id: number; no: string; warnings: string[] }> {
   const warnings: string[] = [];
-  const orderNo = await nextDocumentNo(tenantId, "production_order", candidate.orderDate);
+  const head = candidates[0];
+  const orderNo = await nextDocumentNo(tenantId, "production_order", head.orderDate);
+  const totalQty = round4(candidates.reduce((s, c) => s + c.quantity, 0));
 
   const { data, error } = await supabase
     .from(T.productionOrders)
     .insert({
       order_no: orderNo,
-      order_date: candidate.orderDate || todayStr(),
-      product_id: candidate.productId,
-      bom_id: candidate.bomId,
-      planned_quantity: candidate.quantity,
+      order_date: head.orderDate || todayStr(),
+      product_id: head.productId,
+      bom_id: head.bomId,
+      planned_quantity: totalQty,
       completed_quantity: 0,
       scrapped_quantity: 0,
-      planned_start_date: candidate.orderDate || candidate.requirementDate,
-      planned_end_date: candidate.requirementDate,
+      planned_start_date: head.orderDate || head.requirementDate,
+      planned_end_date: candidates.reduce(
+        (max, c) => (c.requirementDate > max ? c.requirementDate : max),
+        candidates[0].requirementDate,
+      ),
       status: "draft",
       priority: 5,
-      remark: `由 MRP 计划 ${planNo} 自动生成（计划订单 ${candidate.requirementDate}）`,
+      remark: `由 MRP 计划 ${planNo} 自动生成（合并 ${candidates.length} 条计划订单）`,
       tenant_id: tenantId,
       is_deleted: "n",
     })
@@ -499,7 +560,7 @@ async function createProductionOrder(
 
   const orderId = num((data as { id?: unknown } | null)?.id);
 
-  if (candidate.bomId === null) {
+  if (head.bomId === null) {
     warnings.push("no_default_bom");
     return { id: orderId, no: orderNo, warnings };
   }
@@ -576,43 +637,60 @@ export async function convertPlanToDocuments(
   planId: number,
   userId: number,
   filter: ConversionFilter = "all",
+  requirementIds?: number[] | null,
 ): Promise<ConversionOutcome> {
-  const preview = await buildConversionPreview(tenantId, planId, filter);
+  const preview = await buildConversionPreview(tenantId, planId, filter, requirementIds);
   const items: ConversionItemResult[] = [];
 
-  // 串行执行：逐条容错，单条失败不影响其余（ERP 场景允许部分成功）
-  for (const candidate of preview.candidates) {
+  // 同一物料 + 同一去向（采购/生产）合并成一张单：
+  //   多个需求日/多个计划行 → 同一张单据的多条明细。
+  // 分组键 = `${target}:${productId}`（供应商不同的采购件仍归同一物料，供应商以首行为准）。
+  const groups = new Map<string, ConversionCandidate[]>();
+  for (const c of preview.candidates) {
+    const key = `${c.target}:${c.productId}`;
+    const list = groups.get(key) ?? [];
+    list.push(c);
+    groups.set(key, list);
+  }
+
+  // 串行执行：逐组容错，单组失败不影响其余（ERP 场景允许部分成功）
+  for (const groupCandidates of groups.values()) {
+    const representative = groupCandidates[0];
     const base: ConversionItemResult = {
-      requirementId: candidate.requirementId,
-      productCode: candidate.productCode,
-      productName: candidate.productName,
-      target: candidate.target,
-      quantity: candidate.quantity,
+      requirementId: representative.requirementId,
+      productCode: representative.productCode,
+      productName: representative.productName,
+      target: representative.target,
+      quantity: round4(groupCandidates.reduce((s, c) => s + c.quantity, 0)),
       ok: false,
-      warnings: [...candidate.warnings],
+      warnings: Array.from(new Set(groupCandidates.flatMap((c) => c.warnings))),
     };
 
     try {
       const created =
-        candidate.target === "purchase_order"
-          ? await createPurchaseOrder(tenantId, candidate, preview.plan.plan_no)
-          : await createProductionOrder(tenantId, candidate, preview.plan.plan_no);
+        representative.target === "purchase_order"
+          ? await createPurchaseOrder(tenantId, groupCandidates, preview.plan.plan_no)
+          : await createProductionOrder(tenantId, groupCandidates, preview.plan.plan_no);
 
       base.warnings.push(...created.warnings);
-      base.warnings = Array.from(new Set(base.warnings)); // 候选阶段与建单阶段可能报同一警告
-      await markConverted(
-        tenantId,
-        candidate.requirementId,
-        candidate.target,
-        created.id,
-        created.no,
-        userId,
-      );
+      base.warnings = Array.from(new Set(base.warnings));
+
+      // 合并成一张单后，组内每条计划行都要标记已转单（指向同一单据）
+      for (const c of groupCandidates) {
+        await markConverted(
+          tenantId,
+          c.requirementId,
+          c.target,
+          created.id,
+          created.no,
+          userId,
+        );
+      }
 
       items.push({
         ...base,
         ok: true,
-        documentType: candidate.target,
+        documentType: representative.target,
         documentId: created.id,
         documentNo: created.no,
       });

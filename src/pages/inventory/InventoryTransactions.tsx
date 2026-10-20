@@ -11,6 +11,7 @@ import {
 import { useInventoryTransactionTypes } from '../../hooks/useInventoryTransactionTypes';
 import { SuperTable } from '../../components/SuperTable';
 import { ProductSearchSelect } from '../../components/ProductSearchSelect';
+import { ProductUnit } from '../../components/ProductUnit';
 import { formatMoney } from '../../utils/money';
 
 type InventoryTransaction = Tables['erp_inventory_transactions_s_539dcf81_b']['Row'];
@@ -191,9 +192,16 @@ export function InventoryTransactions() {
       title: t('inventoryTransactions.columns.quantity'),
       dataIndex: 'quantity',
       key: 'quantity',
-      width: 120,
+      width: 140,
       align: 'right' as const,
-      render: (value: number | null) => (Number(value) || 0).toLocaleString(),
+      render: (value: number | null, record: InventoryTransaction) => (
+        <span>
+          {(Number(value) || 0).toLocaleString()}
+          <span style={{ color: '#999', marginLeft: 4, fontSize: 12 }}>
+            <ProductUnit productId={record.product_id} usageType="inventory" />
+          </span>
+        </span>
+      ),
     },
     {
       title: t('inventoryTransactions.columns.unitCost'),
