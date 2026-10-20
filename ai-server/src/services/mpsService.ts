@@ -24,12 +24,13 @@
  *   · forecast_qty 不接入 MRP 需求源（MRP 仍是订单驱动），只做展示 —— 预测与销售订单的
  *     去重策略（组合预测、消耗规则）没有业务输入前硬凑只会误导。
  *   · 不做周/月桶：日桶与 MRP 引擎粒度一致，页面按日期排序即可读。
- *   · RCCP 按月产能 = capacity_per_day × 当月**自然日**数。
- *     ⚠️ 这里与 `vw_erp_capacity_load` 已经不一致：deploy_119 起该视图改按
- *     当月**工作日**数（读工作日历）并支持「班次净工时 × 每天班次数」推导日产能，
- *     而 RCCP 尚未接入日历/班次 —— 同一份产能数据在 MPS 页与生产报表页会不同。
- *     对齐 RCCP 需要一个「按租户 + 月份区间统计工作日数」的查询，
- *     属于独立改动，故此处先如实标注而不是假装一致。
+ *   · RCCP 按月产能 = 日产能 × 当月**工作日**数。
+ *     口径与 `vw_erp_capacity_load`（deploy_119 起是唯一真相源）逐位对齐：
+ *       · 日产能：优先「班次净工时 × 每天班次数」（net_hours × shift_count），
+ *         仅当工作中心未配启用班次（或乘积 ≤ 0）时回退 `capacity_per_day`；
+ *       · 当月工作日数：读租户「默认 + 启用」日历逐日判定（例外日优先于周规律），
+ *         无日历（或未配置默认启用日历）时退化为当月自然日数 —— 与视图一致，
+ *         保证老租户不维护班次/日历时，RCCP 数值与升级前逐位一致。
  */
 import { supabase } from "../config/supabase.js";
 
@@ -44,6 +45,10 @@ const T = {
   operations: "erp_operations_s_539dcf81_b",
   workCenters: "erp_work_centers_s_539dcf81_b",
   productionOrders: "erp_production_orders_s_539dcf81_b",
+  // deploy_119（班次）＋ deploy_114（工作日历）—— RCCP 产能口径对齐所需
+  shifts: "erp_shifts_s_539dcf81_b",
+  workCalendars: "erp_work_calendars_s_539dcf81_b",
+  workCalendarDays: "erp_work_calendar_days_s_539dcf81_b",
 } as const;
 
 const num = (v: unknown): number => {
@@ -346,8 +351,10 @@ export interface RccpRow {
   work_center_code: string;
   work_center_name: string;
   month: string;
+  /** 实际参与计算的日产能：班次净工时 × 每天班次数（配了启用班次）或回退 capacity_per_day */
   capacity_per_day: number;
   load_hours: number;
+  /** 月产能 = capacity_per_day × 当月工作日数（无日历退化自然日） */
   capacity_hours: number;
   load_ratio: number;
 }
@@ -484,11 +491,87 @@ async function loadRoutingRequirements(
 
 const monthKey = (date: string) => (date || "").slice(0, 7);
 
+/** DATE 列 → 'YYYY-MM-DD' 键（node-pg 会把 date 解成本地零点 Date，须走本地分量，见 mrpService.toDateKey 同源注释） */
+const toDateKey = (v: unknown): string => {
+  if (v instanceof Date) {
+    const y = v.getFullYear();
+    const m = String(v.getMonth() + 1).padStart(2, "0");
+    const d = String(v.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return String(v ?? "").slice(0, 10);
+};
+
+/** 某年某月的天数（自然日）—— 无日历时的工作日数退化值 */
 const daysInMonth = (month: string) => {
   const [y, m] = month.split("-").map(Number);
   if (!y || !m) return 0;
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
 };
+
+/** 租户的「默认 + 启用」日历（例外日优先于周规律）；无则返回 null（退化自然日） */
+interface RccpWorkCalendar {
+  workDays: number[]; // ISO 星期 1..7（周一=1 … 周日=7）
+  exceptions: Map<string, boolean>; // 'YYYY-MM-DD' → is_workday
+}
+
+async function loadWorkCalendar(
+  tenantId: number,
+): Promise<RccpWorkCalendar | null> {
+  const { data: calendarRows, error } = await supabase
+    .from(T.workCalendars)
+    .select("id, work_days, is_default")
+    .eq("tenant_id", tenantId)
+    .eq("is_deleted", "n")
+    .eq("is_active", true);
+  if (error) throw error;
+
+  const chosen = asRows(calendarRows).find((c) => c.is_default === true);
+  if (!chosen) return null;
+
+  const calendarId = num(chosen.id);
+  const { data: dayRows, error: dayErr } = await supabase
+    .from(T.workCalendarDays)
+    .select("calendar_date, is_workday")
+    .eq("tenant_id", tenantId)
+    .eq("calendar_id", calendarId)
+    .eq("is_deleted", "n");
+  if (dayErr) throw dayErr;
+
+  const exceptions = new Map<string, boolean>();
+  for (const d of asRows(dayRows)) {
+    const key = toDateKey(d.calendar_date);
+    if (key) exceptions.set(key, Boolean(d.is_workday));
+  }
+
+  return {
+    workDays: (Array.isArray(chosen.work_days) ? chosen.work_days : []).map((v) => num(v)),
+    exceptions,
+  };
+}
+
+/** 当月工作日数：例外日优先于周规律；无日历时退化当月自然日数（与 vw_erp_capacity_load 逐位一致） */
+function workDaysInMonth(
+  month: string,
+  calendar: RccpWorkCalendar | null,
+): number {
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return 0;
+  if (!calendar) return daysInMonth(month);
+
+  let count = 0;
+  const total = daysInMonth(month);
+  for (let d = 1; d <= total; d++) {
+    const key = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    const isoDow = new Date(Date.UTC(y, m - 1, d)).getUTCDay() || 7; // 周日=0 → 7
+    // 例外日优先（含 is_workday=false 的休息日例外），否则按周规律
+    const isWorkday = calendar.exceptions.has(key)
+      ? calendar.exceptions.get(key)!
+      : calendar.workDays.includes(isoDow);
+    if (isWorkday) count++;
+  }
+  return count;
+}
 
 export async function computeRccp(
   tenantId: number,
@@ -545,11 +628,14 @@ export async function computeRccp(
     Array.from(loadByWcMonth.keys()).map((k) => Number(k.split("|")[0])),
   )).filter((id) => id > 0);
 
-  const wcMap = new Map<number, { code: string; name: string; capacity: number }>();
+  const wcMap = new Map<
+    number,
+    { code: string; name: string; capacity: number; shiftId: number; shiftCount: number }
+  >();
   if (wcIds.length > 0) {
     const { data, error } = await supabase
       .from(T.workCenters)
-      .select("id, code, name, capacity_per_day")
+      .select("id, code, name, capacity_per_day, shift_id, shift_count")
       .eq("tenant_id", tenantId)
       .eq("is_deleted", "n")
       .in("id", wcIds);
@@ -559,9 +645,33 @@ export async function computeRccp(
         code: String(w.code ?? ""),
         name: String(w.name ?? ""),
         capacity: num(w.capacity_per_day),
+        shiftId: num(w.shift_id),
+        shiftCount: num(w.shift_count) || 1,
       });
     }
   }
+
+  // 班次净工时（只认启用班次，与 vw_erp_capacity_load 一致）
+  const shiftIds = Array.from(new Set(
+    Array.from(wcMap.values()).map((w) => w.shiftId),
+  )).filter((id) => id > 0);
+  const netHoursByShift = new Map<number, number>();
+  if (shiftIds.length > 0) {
+    const { data, error } = await supabase
+      .from(T.shifts)
+      .select("id, net_hours")
+      .eq("tenant_id", tenantId)
+      .eq("is_deleted", "n")
+      .eq("is_active", true)
+      .in("id", shiftIds);
+    if (error) throw error;
+    for (const s of asRows(data)) {
+      netHoursByShift.set(num(s.id), num(s.net_hours));
+    }
+  }
+
+  // 默认启用日历（无则退化自然日）
+  const workCalendar = await loadWorkCalendar(tenantId);
 
   const rows: RccpRow[] = [];
   const sortedMonths = Array.from(months).sort();
@@ -570,8 +680,14 @@ export async function computeRccp(
     const wcId = Number(wcRaw);
     const load = round4(loadByWcMonth.get(key) ?? 0);
     const wc = wcId > 0 ? wcMap.get(wcId) : undefined;
-    const capacityPerDay = wc?.capacity ?? 0;
-    const capacityHours = round4(capacityPerDay * daysInMonth(month));
+
+    // 日产能：优先 班次净工时 × 每天班次数，未配启用班次（或乘积 ≤ 0）回退 capacity_per_day
+    const shiftNetHours = wc ? netHoursByShift.get(wc.shiftId) ?? 0 : 0;
+    const derived = wc ? shiftNetHours * wc.shiftCount : 0;
+    const capacityPerDay = derived > 0 ? derived : (wc?.capacity ?? 0);
+
+    // 月产能 = 日产能 × 当月工作日数（无日历退化自然日）
+    const capacityHours = round4(capacityPerDay * workDaysInMonth(month, workCalendar));
     rows.push({
       work_center_id: wcId > 0 ? wcId : null,
       work_center_code: wc?.code ?? "",

@@ -167,7 +167,7 @@ function WidgetBody({ widget }: { widget: PageWidget }) {
   if (widget.type === 'scatter') return <ScatterWidget widget={widget} data={data} />;
   if (widget.type === 'linkage') return <LinkageWidget widget={widget} data={data} />;
   if (widget.type === 'ranking') return <RankingWidget widget={widget} data={data} />;
-  if (widget.type === 'carouselTable') return <CarouselTableWidget widget={widget} data={data} />;
+  if (widget.type === 'carouselTable') return <CarouselTableWidget widget={widget} data={data} columnOrder={columnOrder} />;
   if (widget.type === 'liveStream') return <LiveStreamWidget widget={widget} data={data} onRefresh={() => setReloadTick((tick) => tick + 1)} />;
   if (widget.type === 'marquee') return <MarqueeWidget widget={widget} data={data} />;
   if (widget.type === 'alertBanner') return <AlertBannerWidget widget={widget} data={data} />;

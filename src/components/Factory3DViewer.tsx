@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Drawer, Modal, Select, Button, InputNumber, message } from "antd";
+import { Modal, Select, Button, InputNumber, message } from "antd";
 import { useTranslation } from "react-i18next";
 import {
   FactoryScene,
@@ -904,14 +904,7 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
 
   // ---------------------------------------------------------------- 渲染
   return (
-    <Drawer
-      title={t("factory3dViewer.title")}
-      open={open}
-      onClose={onClose}
-      width="100%"
-      styles={{ body: { padding: 0, height: "100%" } }}
-      destroyOnClose
-    >
+    <>
       <div className="f3d-viewer">
         {/* 3D 场景 */}
         <div className="f3d-canvas">
@@ -1548,7 +1541,7 @@ export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
           </div>
         </div>
       </Modal>
-    </Drawer>
+    </>
   );
 }
 

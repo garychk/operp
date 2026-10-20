@@ -376,6 +376,18 @@ export function RoutingOperations() {
     return operation?.name || "-";
   };
 
+  // 选择工序后，自动带出工序维护的标准工时等默认值
+  const handleOperationChange = (operationId: number | undefined) => {
+    const operation = operations.find((op) => op.id === operationId);
+    if (!operation) return;
+    detailForm.setFieldsValue({
+      standard_hours: operation.standard_hours ?? 0,
+      setup_hours: operation.setup_hours ?? 0,
+      labor_rate: operation.labor_rate ?? 0,
+      overhead_rate: operation.overhead_rate ?? 0,
+    });
+  };
+
   const filteredRoutings = routings.filter(
     (r) =>
       r.routing_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -783,7 +795,10 @@ export function RoutingOperations() {
                 name="operation_id"
                 rules={[{ required: true, message: t('mrp.routingOperations.operationPrompt') }]}
               >
-                <Select placeholder={t('mrp.routingOperations.operationPrompt')}>
+                <Select
+                  placeholder={t('mrp.routingOperations.operationPrompt')}
+                  onChange={handleOperationChange}
+                >
                   {operations.map((op) => (
                     <Option key={op.id} value={op.id}>
                       {op.name}

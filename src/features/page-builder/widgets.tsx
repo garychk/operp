@@ -33,6 +33,8 @@ import {
 export interface WidgetProps {
   widget: PageWidget;
   data: Record<string, unknown>[];
+  /** 远程数据源（BAQ）返回的列顺序；优先于行对象的 key 枚举顺序 */
+  columnOrder?: string[];
   /** 远程数据源下由宿主组件触发的重新拉取 */
   onRefresh?: () => void;
 }
@@ -595,7 +597,7 @@ export function RankingWidget({ widget, data }: WidgetProps) {
 // 轮播表
 // ===========================================================================
 
-export function CarouselTableWidget({ widget, data }: WidgetProps) {
+export function CarouselTableWidget({ widget, data, columnOrder }: WidgetProps) {
   const { t } = useTranslation();
   const locale = useLocale();
 
@@ -621,7 +623,7 @@ export function CarouselTableWidget({ widget, data }: WidgetProps) {
 
   const columns = useMemo(
     () =>
-      Object.keys(data[0] ?? {})
+      (columnOrder && columnOrder.length ? columnOrder : Object.keys(data[0] ?? {}))
         .slice(0, 6)
         .map((key) => ({
           title: key,
@@ -632,7 +634,7 @@ export function CarouselTableWidget({ widget, data }: WidgetProps) {
             <span className="pb-cell">{formatCell(value, locale)}</span>
           ),
         })),
-    [data, locale],
+    [data, columnOrder, locale],
   );
 
   const rows = useMemo(

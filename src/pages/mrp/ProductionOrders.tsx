@@ -35,6 +35,7 @@ import dayjs from "dayjs";
 import { SupaModal, buildModalNav } from "../../components/SupaModal";
 import { ProductionOrderOperations } from "./ProductionOrderOperations";
 import { ProductionOrderMaterialIssues } from "./ProductionOrderMaterialIssues";
+import { ProductionOrderDetails } from "./ProductionOrderDetails";
 import { useTranslation } from "react-i18next";
 
 type ProductionOrder = Tables["erp_production_orders_s_539dcf81_b"]["Row"];
@@ -1123,11 +1124,15 @@ export function ProductionOrders() {
                   extra={routingHint ? <span style={{ color: "#faad14" }}>{routingHint}</span> : undefined}
                 >
                   <Select placeholder={t('mrp.productionOrders.routingPrompt')} allowClear>
-                    {routings.map((r) => (
-                      <Option key={r.id} value={r.id}>
-                        {r.routing_no}
-                      </Option>
-                    ))}
+                    {routings.map((r) => {
+                      const product = products.find((p) => p.id === r.product_id);
+                      return (
+                        <Option key={r.id} value={r.id}>
+                          {r.routing_no}
+                          {product?.name ? `（${product.name}）` : ''}
+                        </Option>
+                      );
+                    })}
                   </Select>
                 </Form.Item>
                 <Form.Item
@@ -1241,6 +1246,13 @@ export function ProductionOrders() {
         detailItems={
           editingOrder?.id
             ? [
+                {
+                  key: "order-details",
+                  label: t("mrp.productionOrders.tabOrderDetails"),
+                  children: (
+                    <ProductionOrderDetails orderId={editingOrder.id} />
+                  ),
+                },
                 {
                   key: "material-issues",
                   label: t("mrp.productionOrders.tabMaterialIssues"),

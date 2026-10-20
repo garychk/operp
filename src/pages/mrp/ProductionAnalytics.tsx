@@ -3,6 +3,7 @@ import {
   Button,
   Card,
   Col,
+  Drawer,
   Input,
   Progress,
   Row,
@@ -783,7 +784,6 @@ export function ProductionAnalytics() {
       }
     />
   );
-
   return (
     <Card
       variant="borderless"
@@ -803,7 +803,16 @@ export function ProductionAnalytics() {
           { key: 'capacity', label: t('mrp.productionAnalytics.tabCapacity'), children: capacityTab },
         ]}
       />
-      <Factory3DViewer open={factory3DOpen} onClose={() => setFactory3DOpen(false)} />
+      <Drawer
+        title={t('factory3dViewer.title')}
+        open={factory3DOpen}
+        onClose={() => setFactory3DOpen(false)}
+        width="100%"
+        styles={{ body: { padding: 0, height: '100%' } }}
+        destroyOnClose
+      >
+        <Factory3DViewer open={factory3DOpen} onClose={() => setFactory3DOpen(false)} />
+      </Drawer>
     </Card>
   );
 }

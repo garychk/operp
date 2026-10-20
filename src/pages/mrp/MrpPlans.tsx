@@ -3,7 +3,7 @@ import type { Key } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button, Input, Tag, Modal, Form, Select, Space, message, DatePicker, Alert, Table, Card, Col, Row, Statistic } from 'antd';
 import { PlusOutlined, DeleteOutlined, PlayCircleOutlined, FileTextOutlined, SwapOutlined, EditOutlined } from '@ant-design/icons';
-import { Pie, Line } from '@ant-design/charts';
+import { Bar } from '@ant-design/charts';
 import { supabase } from '../../utils/supabase';
 import { nextDocumentNo } from '../../utils/documentNaming';
 import type { Tables } from '../../utils/supabase';
@@ -102,6 +102,13 @@ interface DailyNetReq {
   name: string;
   date: string;
   value: number;
+  gross: number;
+  scheduled: number;
+  projectedOnHand: number;
+  plannedReceipt: number;
+  plannedRelease: number;
+  releaseDate: string | null;
+  sourceType: string | null;
 }
 
 interface MrpRunResponse {
@@ -128,24 +135,6 @@ function ReportCharts({
 }) {
   const isDark = useErpDarkMode();
   const chartTheme = isDark ? 'classicDark' : 'classic';
-  const shortages = [...stats.shortages].sort(
-    (a, b) => b.totalNetRequirement - a.totalNetRequirement,
-  );
-  const topShortages = shortages.slice(0, 10);
-
-  const topData = topShortages.map((s) => ({
-    name: s.code ? `${s.code} ${s.name}` : s.name || `#${s.productId}`,
-    value: s.totalNetRequirement,
-  }));
-
-  // 逐日净需求（来自 erp_mrp_requirements 表，按物料分序列），折线图数据源
-  const dateData = [...dailyNetReq]
-    .sort((a, b) => (a.date < b.date ? -1 : a.name < b.name ? -1 : 1))
-    .map((r) => ({
-      series: r.code ? `${r.code} ${r.name}` : r.name,
-      date: r.date,
-      value: r.value,
-    }));
 
   const summaryItems = [
     { label: t('mrp.plans.reportStatsRelevant'), value: stats.relevantProducts },
@@ -158,16 +147,88 @@ function ReportCharts({
     },
   ];
 
-  const topColumns = [
+  // ---- 物料维度供需汇总（把逐日行聚合到物料） ----
+  interface SupplyRow {
+    productId: number;
+    name: string;
+    gross: number;
+    scheduled: number;
+    net: number;
+    plannedReceipt: number;
+    plannedRelease: number;
+    projectedOnHand: number;
+    releaseDate: string | null;
+    sourceTypes: string[];
+    lastDate: string;
+  }
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+  const supplyRows: SupplyRow[] = [];
+  const supplyMap = new Map<number, SupplyRow>();
+  for (const r of dailyNetReq) {
+    let row = supplyMap.get(r.productId);
+    if (!row) {
+      row = {
+        productId: r.productId,
+        name: r.code ? `${r.code} ${r.name}` : r.name,
+        gross: 0,
+        scheduled: 0,
+        net: 0,
+        plannedReceipt: 0,
+        plannedRelease: 0,
+        projectedOnHand: 0,
+        releaseDate: null,
+        sourceTypes: [],
+        lastDate: '',
+      };
+      supplyMap.set(r.productId, row);
+      supplyRows.push(row);
+    }
+    row.gross += r.gross;
+    row.scheduled += r.scheduled;
+    row.net += r.value;
+    row.plannedReceipt += r.plannedReceipt;
+    row.plannedRelease += r.plannedRelease;
+    if (r.releaseDate && (!row.releaseDate || r.releaseDate < row.releaseDate)) {
+      row.releaseDate = r.releaseDate;
+    }
+    if (r.sourceType && !row.sourceTypes.includes(r.sourceType)) row.sourceTypes.push(r.sourceType);
+    // 预计可用库存是逐日累计值：取最晚需求日那行作为期末水位
+    if (r.date >= row.lastDate) {
+      row.lastDate = r.date;
+      row.projectedOnHand = r.projectedOnHand;
+    }
+  }
+  for (const row of supplyRows) {
+    row.gross = round(row.gross);
+    row.scheduled = round(row.scheduled);
+    row.net = round(row.net);
+    row.plannedReceipt = round(row.plannedReceipt);
+    row.plannedRelease = round(row.plannedRelease);
+  }
+  supplyRows.sort((a, b) => b.net - a.net || a.name.localeCompare(b.name));
+
+  const sourceLabel = (types: string[]) =>
+    types.length === 0
+      ? '-'
+      : types.map((tp) => t(`mrp.plans.src.${tp}`)).join(' / ');
+
+  const supplyColumns = [
     { title: t('mrp.plans.reportColMaterial'), dataIndex: 'name', key: 'name', ellipsis: true },
-    { title: t('mrp.plans.reportColNetReq'), dataIndex: 'value', key: 'value', align: 'right' as const },
+    { title: t('mrp.plans.reportColGross'), dataIndex: 'gross', key: 'gross', align: 'right' as const },
+    { title: t('mrp.plans.reportColScheduled'), dataIndex: 'scheduled', key: 'scheduled', align: 'right' as const },
+    { title: t('mrp.plans.reportColNetReq'), dataIndex: 'net', key: 'net', align: 'right' as const },
+    { title: t('mrp.plans.reportColOnHand'), dataIndex: 'projectedOnHand', key: 'projectedOnHand', align: 'right' as const },
+    { title: t('mrp.plans.reportColPlannedReceipt'), dataIndex: 'plannedReceipt', key: 'plannedReceipt', align: 'right' as const },
+    { title: t('mrp.plans.reportColPlannedRelease'), dataIndex: 'plannedRelease', key: 'plannedRelease', align: 'right' as const },
+    { title: t('mrp.plans.reportColReleaseDate'), dataIndex: 'releaseDate', key: 'releaseDate' },
+    { title: t('mrp.plans.reportColSource'), dataIndex: 'sourceTypes', key: 'sourceTypes', ellipsis: true, render: (_: unknown, record: SupplyRow) => sourceLabel(record.sourceTypes) },
   ];
 
-  const dateColumns = [
-    { title: t('mrp.plans.reportColMaterial'), dataIndex: 'series', key: 'series', ellipsis: true },
-    { title: t('mrp.plans.reportColDate'), dataIndex: 'date', key: 'date' },
-    { title: t('mrp.plans.reportColNetReq'), dataIndex: 'value', key: 'value', align: 'right' as const },
-  ];
+  // 供需对比柱状图：净需求 vs 预约收入，按物料分组
+  const supplyBarData = supplyRows.flatMap((row) => [
+    { material: row.name, type: t('mrp.plans.reportColNetReq'), value: row.net },
+    { material: row.name, type: t('mrp.plans.reportColScheduled'), value: row.scheduled },
+  ]);
 
   return (
     <div style={{ marginBottom: 16 }}>
@@ -185,73 +246,40 @@ function ReportCharts({
         </Row>
       </Card>
 
-      {topShortages.length > 0 ? (
+      {supplyRows.length > 0 && (
         <Card
           size="small"
-          title={t('mrp.plans.reportShortageChart')}
+          title={t('mrp.plans.reportSupplyChart')}
           style={{ marginBottom: 12 }}
         >
-          <Row gutter={[12, 12]} align="middle">
-            <Col xs={24} lg={8}>
-              <Pie
-                data={topData}
-                angleField="value"
-                colorField="name"
-                innerRadius={0.5}
-                height={280}
-                theme={chartTheme}
-                label={{ text: 'value', style: { fontSize: 11 } }}
-                legend={{ color: { position: 'bottom' } }}
-              />
-            </Col>
-            <Col xs={24} lg={16}>
-              <Table
-                size="small"
-                rowKey="name"
-                columns={topColumns}
-                dataSource={topData}
-                pagination={false}
-              />
-            </Col>
-          </Row>
+          <Bar
+            data={supplyBarData}
+            xField="material"
+            yField="value"
+            colorField="type"
+            group={true}
+            height={280}
+            theme={chartTheme}
+            axis={{ x: { title: false, labelAutoRotate: false, labelAutoHide: true }, y: { title: false } }}
+            legend={{ color: { position: 'bottom' } }}
+          />
         </Card>
-      ) : (
-        <Alert
-          type="success"
-          showIcon
-          style={{ marginBottom: 12 }}
-          message={t('mrp.plans.reportShortageEmpty')}
-        />
       )}
 
-      {dateData.length > 0 && (
-        <Card size="small" title={t('mrp.plans.reportShortageDateChart')}>
-          <Row gutter={[0, 12]}>
-            <Col span={24}>
-              <Line
-                data={dateData}
-                xField="date"
-                yField="value"
-                colorField="series"
-                height={220}
-                theme={chartTheme}
-                style={{ lineWidth: 2, shape: 'smooth' }}
-                point={{ style: { r: 3 } }}
-                axis={{ x: { title: false }, y: { title: false } }}
-                legend={{ color: { position: 'bottom' } }}
-              />
-            </Col>
-            <Col span={24}>
-              <Table
-                size="small"
-                rowKey={(r) => `${r.series}__${r.date}`}
-                columns={dateColumns}
-                dataSource={dateData}
-                pagination={false}
-                scroll={{ y: 300 }}
-              />
-            </Col>
-          </Row>
+      {supplyRows.length > 0 && (
+        <Card
+          size="small"
+          title={t('mrp.plans.reportSupplySummary')}
+          style={{ marginBottom: 12 }}
+        >
+          <Table
+            size="small"
+            rowKey="productId"
+            columns={supplyColumns}
+            dataSource={supplyRows}
+            pagination={false}
+            scroll={{ x: 'max-content' }}
+          />
         </Card>
       )}
     </div>
@@ -298,7 +326,7 @@ export function MrpPlans() {
         .from(mrpPlanTable)
         .select('*')
         .eq('is_deleted', 'n')
-        .order('plan_date', { ascending: false });
+        .order('plan_no', { ascending: false });
 
       if (error) throw error;
       setPlans(data || []);
@@ -316,7 +344,9 @@ export function MrpPlans() {
     try {
       const { data, error } = await supabase
         .from('erp_mrp_requirements_s_539dcf81_b')
-        .select('product_id, requirement_date, net_requirement')
+        .select(
+          'product_id, requirement_date, net_requirement, gross_requirement, scheduled_receipts, projected_on_hand, planned_order_receipt, planned_order_release, order_release_date, source_type',
+        )
         .eq('plan_id', planId)
         .eq('is_deleted', 'n')
         .gt('net_requirement', 0);
@@ -351,6 +381,13 @@ export function MrpPlans() {
           name: meta?.name ?? `#${pid ?? 0}`,
           date,
           value: Number(row.net_requirement) || 0,
+          gross: Number(row.gross_requirement) || 0,
+          scheduled: Number(row.scheduled_receipts) || 0,
+          projectedOnHand: Number(row.projected_on_hand) || 0,
+          plannedReceipt: Number(row.planned_order_receipt) || 0,
+          plannedRelease: Number(row.planned_order_release) || 0,
+          releaseDate: row.order_release_date ? String(row.order_release_date).slice(0, 10) : null,
+          sourceType: row.source_type ?? null,
         });
       }
       return rows.sort((a, b) => (a.date < b.date ? -1 : 1));
