@@ -28,6 +28,15 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL}
       LLM_MODEL: ${LLM_MODEL:-gpt-5.1}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-https://operp.oplug.cn,http://localhost:5173,http://127.0.0.1:5173}
+      # Waffo 订阅收款（deploy_84）：值写在宿主机根目录 .env，compose 读取后透传进容器。
+      # 未配置时订阅端点返回 503（前端显示"订阅收款未启用"），不影响其它功能。
+      WAFFO_MERCHANT_ID: ${WAFFO_MERCHANT_ID:-}
+      WAFFO_PRIVATE_KEY: ${WAFFO_PRIVATE_KEY:-}
+      WAFFO_PRIVATE_KEY_BASE64: ${WAFFO_PRIVATE_KEY_BASE64:-}
+      WAFFO_STORE_ID: ${WAFFO_STORE_ID:-}
+      WAFFO_MONTHLY_PRODUCT_ID: ${WAFFO_MONTHLY_PRODUCT_ID:-}
+      WAFFO_ENVIRONMENT: ${WAFFO_ENVIRONMENT:-test}
+      WAFFO_CHECKOUT_CURRENCY: ${WAFFO_CHECKOUT_CURRENCY:-USD}
     expose:
       - "3001"
     restart: unless-stopped
