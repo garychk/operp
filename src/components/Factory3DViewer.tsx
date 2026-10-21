@@ -196,7 +196,7 @@ interface DraftReport {
 }
 
 
-export function Factory3DViewer({ open, onClose }: Factory3DViewerProps) {
+export function Factory3DViewer({ open }: Factory3DViewerProps) {
   const { t, i18n } = useTranslation();
   const isDark = useErpDarkMode();
   const [loaded, setLoaded] = useState(false);
