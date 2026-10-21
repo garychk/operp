@@ -164,3 +164,4 @@
 \i supabase/tables/deploy_137_agv_vehicle_menu.sql
 \i supabase/tables/deploy_138_factory_3d_bin_stock.sql
 \i supabase/tables/deploy_139_employee_workload.sql
+\i supabase/tables/deploy_140_purchase_receipt_uom_conversion.sql

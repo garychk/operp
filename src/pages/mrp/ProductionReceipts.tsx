@@ -750,7 +750,7 @@ export function ProductionReceipts() {
             )}
           </Space>
         }
-        width={'80%'}
+        width={1024}
         height={668}
         formEle={
           <Form form={form} layout="vertical" disabled={isLocked} onFinish={handleSubmit}>

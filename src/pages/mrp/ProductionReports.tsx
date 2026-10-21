@@ -265,17 +265,22 @@ export function ProductionReports() {
     }
   };
 
-  const handleEdit = (record: ProductionReport) => {
+  const handleEdit = async (record: ProductionReport) => {
     // 已确认的报工：允许点进弹窗「只读查看」，表单禁用、不可保存
     setEditingReport(record);
-    // 编辑态不自动折算：重置单位标准工时，保留历史人工工时，除非用户重新选工序
-    setStandardHoursPerUnit(0);
+    // 编辑态也要联动：先拉工序行，再按报工单挂的工序行回填单位标准工时，
+    // 这样改「完工数量」时能同步折算人工工时（未挂工序行/无标准工时则不折算，保留手填工时）
+    const opRows = await fetchOrderOperations(
+      record.production_order_id ?? undefined,
+    );
+    const opRow = record.order_operation_id
+      ? opRows.find((r) => r.id === record.order_operation_id)
+      : undefined;
+    setStandardHoursPerUnit(Number(opRow?.standard_hours_per_unit || 0));
     form.setFieldsValue({
       ...record,
       report_date: record.report_date ? dayjs(record.report_date) : undefined,
     });
-    // P0-1：把该工单的工序行拉出来，编辑时仍能挂/换工序
-    void fetchOrderOperations(record.production_order_id ?? undefined);
     setIsModalOpen(true);
   };
 
@@ -483,10 +488,12 @@ export function ProductionReports() {
   };
 
   /** P0-1：拉取该工单的工序行 —— 报工挂工序后，完工数与进度才会被回写 */
-  const fetchOrderOperations = async (orderId: number | undefined) => {
+  const fetchOrderOperations = async (
+    orderId: number | undefined,
+  ): Promise<OrderOperation[]> => {
     if (!orderId) {
       setOrderOperations([]);
-      return;
+      return [];
     }
     try {
       setOrderOpsLoading(true);
@@ -500,9 +507,11 @@ export function ProductionReports() {
         .order("line_no");
       if (error) throw error;
       setOrderOperations(data || []);
+      return (data || []) as OrderOperation[];
     } catch (error) {
       console.error("Error fetching order operations:", error);
       setOrderOperations([]);
+      return [];
     } finally {
       setOrderOpsLoading(false);
     }
@@ -605,20 +614,23 @@ export function ProductionReports() {
   const formWorkCenterId = Form.useWatch("work_center_id", form);
   const formLaborHours = Form.useWatch("labor_hours", form);
   const formMachineHours = Form.useWatch("machine_hours", form);
-  const formCompletedQuantity = Form.useWatch("completed_quantity", form);
   const estimatedCost = estimateLaborCost(
     formWorkCenterId ?? null,
     Number(formLaborHours || 0),
     Number(formMachineHours || 0),
   );
 
-  // 报工数量变化 → 按「单位标准工时 × 报工数量」联动折算人工工时
+  // 完工数量变化 → 按「单位标准工时 × 完工数量」联动折算人工工时。
+  // 用 onChange 而非 useWatch：只在用户手动改数量时联动，弹窗打开时的
+  // setFieldsValue 初始化不会误覆盖历史人工工时。
   // （只有已选中带单位标准工时的工单工序行时才折算，避免覆盖手填工时）
-  useEffect(() => {
+  const handleCompletedQuantityChange = (value: number | null) => {
     if (standardHoursPerUnit <= 0) return;
-    const qty = Number(formCompletedQuantity || 0);
-    form.setFieldsValue({ labor_hours: Number((standardHoursPerUnit * qty).toFixed(2)) });
-  }, [formCompletedQuantity, standardHoursPerUnit, form]);
+    const qty = Number(value || 0);
+    form.setFieldsValue({
+      labor_hours: Number((standardHoursPerUnit * qty).toFixed(2)),
+    });
+  };
 
   const columns: SuperTableColumn<ProductionReport>[] = [
     {
@@ -953,6 +965,7 @@ export function ProductionReports() {
                   step={0.000001}
                   precision={6}
                   style={{ width: "100%" }}
+                  onChange={handleCompletedQuantityChange}
                 />
               </Form.Item>
             </Col>

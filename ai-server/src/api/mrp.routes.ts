@@ -50,6 +50,8 @@ const runSchema = z.object({
 const convertSchema = runSchema.extend({
   mode: z.enum(["preview", "apply"]).default("preview"),
   filter: z.enum(["all", "purchased", "manufactured"]).default("all"),
+  /** 转单弹窗勾选的具体计划行 id（未传 = 全部候选） */
+  requirement_ids: z.array(z.coerce.number().int().positive()).optional(),
 });
 
 const costSchema = z.object({
@@ -127,7 +129,7 @@ mrpRouter.post("/convert", async (req, res) => {
   }
 
   try {
-    const { plan_id, mode, filter } = parsed.data;
+    const { plan_id, mode, filter, requirement_ids } = parsed.data;
     const identity = getIdentity(req);
 
     const allowed = await userHasRole(identity.userId, MRP_RUN_ROLES);
@@ -144,6 +146,7 @@ mrpRouter.post("/convert", async (req, res) => {
         identity.tenantId,
         plan_id,
         filter as ConversionFilter,
+        requirement_ids ?? null,
       );
       res.json({
         ok: true,
@@ -162,6 +165,7 @@ mrpRouter.post("/convert", async (req, res) => {
       plan_id,
       identity.userId,
       filter as ConversionFilter,
+      requirement_ids ?? null,
     );
     res.json({
       ok: true,

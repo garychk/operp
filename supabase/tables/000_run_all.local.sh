@@ -182,6 +182,7 @@ ORDER=(
   deploy_137_agv_vehicle_menu.sql
   deploy_138_factory_3d_bin_stock.sql
   deploy_139_employee_workload.sql
+  deploy_140_purchase_receipt_uom_conversion.sql
 )
 
 # ---------------------------------------------------------------- 文件自检

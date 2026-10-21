@@ -50,6 +50,8 @@ export function PurchaseReceipts() {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState<PurchaseReceipt | null>(null);
   const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null);
+  // 只读模式：过账后仍可打开查看详情，但禁止修改单据与明细。
+  const [isDisabled, setIsDisabled] = useState(false);
 
   // 币别：入库单币种从来源采购订单流转继承（deploy_69 已配字段映射）。
   // 金额一律按单据币种展示；本位币金额由过账时折汇落定并写入 base_total_amount。
@@ -305,6 +307,7 @@ export function PurchaseReceipts() {
     setEditingReceipt(record);
     setSelectedReceipt(record);
     setSelectedOrderId(record.order_id || null);
+    setIsDisabled(record.status === 'posted');
     if (record.order_id) {
       fetchPurchaseOrderDetails(record.order_id);
     }
@@ -352,6 +355,7 @@ export function PurchaseReceipts() {
     setEditingReceipt(null);
     setSelectedReceipt(null);
     setSelectedOrderId(null);
+    setIsDisabled(false);
     setPurchaseOrderDetails([]);
     setDetails([]);
     form.setFieldsValue({
@@ -593,7 +597,7 @@ export function PurchaseReceipts() {
           {record.status === 'posted' && (
             <Button type="text" onClick={() => runReceiptAction('reverse_post', record)}>{t('purchaseReceipts.reversePost')}</Button>
           )}
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)} disabled={record.status === 'posted'}>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('common.edit')}
           </Button>
           <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record.id)} disabled={record.status === 'posted'}>
@@ -678,10 +682,10 @@ export function PurchaseReceipts() {
       key: 'action',
       render: (_: any, record: PurchaseReceiptDetail) => (
         <Space size="middle">
-          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)}>
+          <Button type="text" icon={<EditOutlined />} onClick={() => handleEditDetail(record)} disabled={isDisabled}>
             {t('common.edit')}
           </Button>
-          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)}>
+          <Button type="text" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDetail(record.id)} disabled={isDisabled}>
             {t('common.delete')}
           </Button>
         </Space>
@@ -757,10 +761,10 @@ export function PurchaseReceipts() {
         form={form}
         detailData={details}
         detailExtra={
-         <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail}>{t('purchaseReceipts.addDetail')}</Button>
+         <Button type="link" size='small' icon={<PlusOutlined />} onClick={handleAddDetail} disabled={isDisabled}>{t('purchaseReceipts.addDetail')}</Button>
         }
         formEle={
-          <Form form={form} layout="vertical" onFinish={handleSubmit} style={{ marginRight: 16 }}>
+          <Form form={form} layout="vertical" onFinish={handleSubmit} disabled={isDisabled} style={{ marginRight: 16 }}>
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
@@ -860,7 +864,7 @@ export function PurchaseReceipts() {
         footer={
           <Space>
             <Button onClick={() => setIsModalOpen(false)}>{t('common.cancel')}</Button>
-            <Button type="primary" onClick={() => form.submit()}>
+            <Button type="primary" onClick={() => form.submit()} disabled={isDisabled}>
               {t('common.save')}
             </Button>
           </Space>

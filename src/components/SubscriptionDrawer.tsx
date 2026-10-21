@@ -206,8 +206,9 @@ export function SubscriptionDrawer({
             label: t("subscription.plan"),
             children: (
               <Space>
-                <Tag color="blue">{t("subscription.plan.monthly")}</Tag>
+                <Tag color="blue">{t("subscription.plan.monthly")}</Tag>                
                 {status?.plan.currency ? <Tag>{status.plan.currency}</Tag> : null}
+                <Tag color="gold">19.9 / {t("common.monthly")}</Tag>
                 {status?.environment ? (
                   <Tag color={status.environment === "prod" ? "green" : "gold"}>
                     {t(`subscription.env.${status.environment}`)}
