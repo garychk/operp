@@ -7,7 +7,7 @@ import type { LegalDoc } from './types';
 
 const CONTACT_BLOCKS = [
   { kind: 'list' as const, items: [
-    '运营主体：OPERP',
+    '运营主体：无锡恩尔普信息服务有限公司',
     '注册地址：中国江苏无锡',
     '隐私与数据保护：privacy@oplug.cn',
     '客户支持：support@oplug.cn',

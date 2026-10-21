@@ -9,7 +9,7 @@ import type { LegalDoc } from './types';
 
 const CONTACT_BLOCKS = [
   { kind: 'list' as const, items: [
-    'Operating entity: OPERP',
+    'Operating entity: Wuxi Enelup Information Service Co., Ltd.',
     'Registered address: Wuxi.JiangSu.China',
     'Privacy & data protection: privacy@oplug.cn',
     'Customer support: support@oplug.cn',
